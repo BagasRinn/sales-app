@@ -14,7 +14,9 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_size=20,
-    max_overflow=10
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=1800,
 )
 
 # Membuat SessionLocal yang akan digunakan setiap kali ada request datang

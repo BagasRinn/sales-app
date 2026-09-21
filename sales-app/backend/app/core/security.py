@@ -14,7 +14,11 @@ try:
 except ImportError:
     pass
 
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-insecure-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY env var is required. Refusing to start with an unset/missing signing key."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7

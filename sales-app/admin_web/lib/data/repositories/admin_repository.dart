@@ -68,21 +68,18 @@ class AdminRepository {
   }
 
   Future<Map<String, int>> getDashboardStats() async {
-    final orders = await getAllOrders();
-    final products = await getProducts();
-
-    int totalOrders = orders.length;
-    int pendingOrders = orders.where((o) => o.status == 'PENDING').length;
-    int approvedOrders = orders.where((o) => o.status == 'APPROVED').length;
-    int rejectedOrders = orders.where((o) => o.status == 'REJECTED').length;
-    int totalProducts = products.length;
-
+    // Use the server-side /products/stats endpoint so the count is never
+    // limited by a client-side 50-order window.
+    final data = await _api.get('/products/stats');
     return {
-      'total_orders': totalOrders,
-      'pending_orders': pendingOrders,
-      'approved_orders': approvedOrders,
-      'rejected_orders': rejectedOrders,
-      'total_products': totalProducts,
+      'total_orders': data['total_orders'] ?? 0,
+      'pending_orders': data['pending_orders'] ?? 0,
+      'approved_orders': data['approved_orders'] ?? 0,
+      'rejected_orders': data['rejected_orders'] ?? 0,
+      'expired_orders': data['expired_orders'] ?? 0,
+      'cancelled_orders': data['cancelled_orders'] ?? 0,
+      'total_products': data['total_products'] ?? 0,
+      'needs_review': data['needs_review'] ?? 0,
     };
   }
 }

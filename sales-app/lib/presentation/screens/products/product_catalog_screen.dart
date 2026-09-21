@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
@@ -14,6 +15,7 @@ class ProductCatalogScreen extends StatefulWidget {
 
 class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
   final _searchController = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -28,6 +30,7 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -59,9 +62,12 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
             ),
             onChanged: (value) {
               setState(() {});
-              if (value.length >= 2 || value.isEmpty) {
-                context.read<ProductProvider>().search(value);
-              }
+              _debounce?.cancel();
+              _debounce = Timer(const Duration(milliseconds: 300), () {
+                if (value.length >= 2 || value.isEmpty) {
+                  context.read<ProductProvider>().search(value);
+                }
+              });
             },
           ),
         ),

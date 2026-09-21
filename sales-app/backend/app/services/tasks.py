@@ -8,7 +8,7 @@ def process_bulk_products(db: Session, products_data: list[ProductCreate]):
         db_products = [
             Product(
                 id=item.id,
-                nama_produk=item.nama_produk,
+                nama_barang=item.nama_barang,
                 harga=item.harga,
                 stok_sistem=item.stok_sistem,
                 stok_booking=item.stok_booking

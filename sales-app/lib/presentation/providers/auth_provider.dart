@@ -57,8 +57,22 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Force logout without API call — used when token expires or 401 received.
-  void forceLogout([String? message]) {
+  /// Attempt token refresh first; force logout only if refresh fails.
+  Future<void> forceLogout([String? message]) async {
+    final refreshToken = await _authRepo.getRefreshToken();
+    if (refreshToken != null) {
+      try {
+        await _authRepo.refreshTokens(refreshToken);
+        // Refresh succeeded — tokens are updated in storage and ApiService.
+        // Rebuild will pick up the new token.
+        _state = AuthState.authenticated;
+        _errorMessage = null;
+        notifyListeners();
+        return;
+      } catch (_) {
+        // Refresh failed — fall through to logout.
+      }
+    }
     _authRepo.logoutSync();
     _state = AuthState.unauthenticated;
     _errorMessage = message;

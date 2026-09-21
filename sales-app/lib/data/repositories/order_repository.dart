@@ -14,9 +14,9 @@ class OrderRepository {
   }) async {
     final data = await _api.post('/orders', body: {
       'items': items,
-      'store_name': ?storeName,
-      'store_contact': ?storeContact,
-      'store_address': ?storeAddress,
+      'store_name': storeName ?? '',
+      'store_contact': storeContact ?? '',
+      'store_address': storeAddress ?? '',
     });
     return Order.fromJson(data);
   }

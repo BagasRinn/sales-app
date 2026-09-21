@@ -1,40 +1,37 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthStorage {
-  static const String _key = 'admin_auth';
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  static const String _accessKey = 'admin_access_token';
+  static const String _refreshKey = 'admin_refresh_token';
+  static const String _usernameKey = 'admin_username';
 
   Future<void> saveTokens({
     required String accessToken,
     required String refreshToken,
     required String username,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode({
-      'access_token': accessToken,
-      'refresh_token': refreshToken,
-      'username': username,
-    }));
+    await _storage.write(key: _accessKey, value: accessToken);
+    await _storage.write(key: _refreshKey, value: refreshToken);
+    await _storage.write(key: _usernameKey, value: username);
   }
 
   Future<Map<String, String?>?> getTokens() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_key);
-    if (data == null) return null;
-    try {
-      final map = jsonDecode(data) as Map<String, dynamic>;
-      return {
-        'access_token': map['access_token'] as String?,
-        'refresh_token': map['refresh_token'] as String?,
-        'username': map['username'] as String?,
-      };
-    } catch (_) {
-      return null;
-    }
+    final access = await _storage.read(key: _accessKey);
+    if (access == null) return null;
+    return {
+      'access_token': access,
+      'refresh_token': await _storage.read(key: _refreshKey),
+      'username': await _storage.read(key: _usernameKey),
+    };
   }
 
   Future<void> clearTokens() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    await _storage.delete(key: _accessKey);
+    await _storage.delete(key: _refreshKey);
+    await _storage.delete(key: _usernameKey);
   }
 }

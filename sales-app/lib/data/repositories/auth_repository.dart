@@ -50,6 +50,29 @@ class AuthRepository {
     return _storage.read(key: AppConfig.tokenKey);
   }
 
+  Future<String?> getRefreshToken() async {
+    return _storage.read(key: AppConfig.refreshTokenKey);
+  }
+
+  Future<void> saveTokens(String accessToken, String refreshToken) async {
+    _storage.write(key: AppConfig.tokenKey, value: accessToken);
+    _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
+  }
+
+  Future<Map<String, dynamic>?> refreshTokens(String refreshToken) async {
+    final data = await _api.post('/auth/refresh', body: {
+      'refresh_token': refreshToken,
+    });
+    final newAccessToken = data['access_token'] as String;
+    final newRefreshToken = data['refresh_token'] as String?;
+    _api.setAccessToken(newAccessToken);
+    await _storage.write(key: AppConfig.tokenKey, value: newAccessToken);
+    if (newRefreshToken != null) {
+      await _storage.write(key: AppConfig.refreshTokenKey, value: newRefreshToken);
+    }
+    return data;
+  }
+
   Future<Map<String, dynamic>?> register({
     required String username,
     required String password,

@@ -69,3 +69,14 @@ class StokLog(Base):
     actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SyncValidationError(Base):
+    """Persisted validation errors from a sync run — used by GET /products/sync/errors."""
+    __tablename__ = "sync_validation_errors"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    row_number = Column(Integer)
+    sku = Column(String, nullable=True)
+    reason = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

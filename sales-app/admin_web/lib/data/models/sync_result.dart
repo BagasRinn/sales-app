@@ -18,7 +18,7 @@ class SyncResult {
   factory SyncResult.fromJson(Map<String, dynamic> json) {
     return SyncResult(
       message: json['message'] ?? json['detail'] ?? 'Sync completed',
-      totalProducts: json['total_products'] ?? json['total'] ?? 0,
+      totalProducts: json['total_rows'] ?? json['total_products'] ?? json['total'] ?? 0,
       inserted: json['inserted'] ?? 0,
       updated: json['updated'] ?? 0,
       skipped: json['skipped'] ?? 0,

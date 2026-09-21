@@ -84,6 +84,7 @@ class SyncResultResponse(BaseModel):
     updated: int
     skipped: int
     errors: List[SyncErrorItem]
+    needs_review: bool = False
 
 
 # ==================== ORDERS ====================

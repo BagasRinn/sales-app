@@ -13,7 +13,7 @@
 |----------|----------|
 | Backend FastAPI | **93%** |
 | Flutter Mobile (Sales) | **80%** (UI selesai, perlu test integration) |
-| Flutter Web (Admin) | **0%** |
+| Flutter Web (Admin) | **~90%** | Login, dashboard, orders, products, sync tabs complete |
 | **Overall** | **~60%** |
 
 ---

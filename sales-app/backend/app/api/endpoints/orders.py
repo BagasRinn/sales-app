@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import List, Optional
 
@@ -76,8 +76,8 @@ def create_order(
         id=uuid4(),
         sales_id=UUID(current_user["user_id"]),
         status="PENDING",
-        created_at=datetime.now(),
-        expired_at=datetime.now() + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        expired_at=datetime.now(timezone.utc) + timedelta(hours=24),
         store_name=order_req.store_name,
         store_contact=order_req.store_contact,
         store_address=order_req.store_address,
@@ -144,6 +144,7 @@ def cancel_order(
             Order.id == order_id,
             Order.sales_id == UUID(current_user["user_id"]),
         )
+        .with_for_update()
         .first()
     )
 
@@ -159,27 +160,36 @@ def cancel_order(
             ),
         )
 
-    items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-    for item in items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product:
-            old_booking = product.stok_booking or 0
-            product.stok_booking = max(0, old_booking - item.qty)
-
-            log_stock_change(
-                db=db,
-                product_id=item.product_id,
-                sumber="CANCEL",
-                field_terdampak="stok_booking",
-                delta=-item.qty,
-                nilai_sebelum=old_booking,
-                nilai_sesudah=product.stok_booking,
-                actor_id=UUID(current_user["user_id"]),
-                order_id=order.id,
+    try:
+        items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        for item in items:
+            product = (
+                db.query(Product)
+                .filter(Product.id == item.product_id)
+                .with_for_update()
+                .first()
             )
+            if product:
+                old_booking = product.stok_booking or 0
+                product.stok_booking = max(0, old_booking - item.qty)
 
-    order.status = "CANCELLED"
-    db.commit()
+                log_stock_change(
+                    db=db,
+                    product_id=item.product_id,
+                    sumber="CANCEL",
+                    field_terdampak="stok_booking",
+                    delta=-item.qty,
+                    nilai_sebelum=old_booking,
+                    nilai_sesudah=product.stok_booking,
+                    actor_id=UUID(current_user["user_id"]),
+                    order_id=order.id,
+                )
+
+        order.status = "CANCELLED"
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Pesanan berhasil dibatalkan",

@@ -1,0 +1,6 @@
+# Local ignores for sales-app/backend/
+# NOTE: .env.example is intentionally tracked (see !.env.example below).
+# All other .env files should be ignored.
+.env
+.env.*
+!.env.example

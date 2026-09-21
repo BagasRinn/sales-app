@@ -5,7 +5,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.models.database import get_db
-from app.models.models import Product, User
+from app.models.models import Product, Order, User
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
@@ -98,7 +98,12 @@ def update_product_stock(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .with_for_update()
+        .first()
+    )
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
 
@@ -141,6 +146,9 @@ def sync_products(
     _current_user: CurrentUser = Depends(require_admin),
 ):
     sync_result = sync_products_from_sheets(db)
+    needs_review = db.query(Product).filter(
+        Product.stok_sistem < Product.stok_booking
+    ).count() > 0
     return SyncResultResponse(
         success=sync_result["success"],
         total_rows=sync_result["total_rows"],
@@ -148,6 +156,7 @@ def sync_products(
         updated=sync_result["updated"],
         skipped=sync_result["skipped"],
         errors=sync_result["errors"],
+        needs_review=needs_review,
     )
 
 
@@ -156,7 +165,13 @@ def get_sync_errors(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    result = db.execute(
+    # Return persisted validation skips (empty SKU, negative, duplicate) first
+    from app.models.models import SyncValidationError
+    val_errors = db.query(SyncValidationError).order_by(
+        SyncValidationError.created_at.desc()
+    ).limit(100).all()
+    # Then include SYNC audit log rows for reference
+    stock_changes = db.execute(
         text(
             "SELECT id, product_id, sumber, field_terdampak, delta, "
             "nilai_sebelum, nilai_sesudah, created_at "
@@ -165,16 +180,47 @@ def get_sync_errors(
         )
     ).fetchall()
 
-    return [
-        {
-            "id": str(row.id),
-            "product_id": row.product_id,
-            "sumber": row.sumber,
-            "field_terdampak": row.field_terdampak,
-            "delta": row.delta,
-            "nilai_sebelum": row.nilai_sebelum,
-            "nilai_sesudah": row.nilai_sesudah,
-            "created_at": str(row.created_at),
-        }
-        for row in result
+    val_rows = [
+        {"id": str(e.id), "row": e.row_number, "sku": e.sku,
+         "reason": e.reason, "source": "validation"}
+        for e in val_errors
     ]
+    audit_rows = [
+        {"id": str(r.id), "product_id": r.product_id,
+         "sumber": r.sumber, "field_terdampak": r.field_terdampak,
+         "delta": r.delta, "nilai_sebelum": r.nilai_sebelum,
+         "nilai_sesudah": r.nilai_sesudah, "created_at": str(r.created_at),
+         "source": "audit"}
+        for r in stock_changes
+    ]
+    return val_rows + audit_rows
+
+
+@router.get("/stats")
+def get_admin_stats(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    """Server-side dashboard stats — avoids loading all orders into the Flutter client."""
+    from sqlalchemy import func
+
+    status_counts = dict(
+        db.query(Order.status, func.count(Order.id))
+        .group_by(Order.status).all()
+    )
+    total_orders = sum(status_counts.values())
+    total_products = db.query(func.count(Product.id)).scalar() or 0
+    needs_review = db.query(func.count(Product.id)).filter(
+        Product.stok_sistem < Product.stok_booking
+    ).scalar() or 0
+
+    return {
+        "total_orders": total_orders,
+        "pending_orders": status_counts.get("PENDING", 0),
+        "approved_orders": status_counts.get("APPROVED", 0),
+        "rejected_orders": status_counts.get("REJECTED", 0),
+        "expired_orders": status_counts.get("EXPIRED", 0),
+        "cancelled_orders": status_counts.get("CANCELLED", 0),
+        "total_products": total_products,
+        "needs_review": needs_review,
+    }

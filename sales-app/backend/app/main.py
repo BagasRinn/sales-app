@@ -1,8 +1,15 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
@@ -24,6 +31,7 @@ def expire_pending_orders():
         expired = (
             db.query(Order)
             .filter(Order.status == "PENDING", Order.expired_at < datetime.now(timezone.utc))
+            .with_for_update(skip_locked=True)
             .all()
         )
 
@@ -31,28 +39,37 @@ def expire_pending_orders():
             return
 
         for order in expired:
-            items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-            for item in items:
-                product = db.query(Product).filter(Product.id == item.product_id).first()
-                if product:
-                    old_booking = product.stok_booking or 0
-                    product.stok_booking = max(0, old_booking - item.qty)
-                    log_stock_change(
-                        db=db,
-                        product_id=item.product_id,
-                        sumber="EXPIRE",
-                        field_terdampak="stok_booking",
-                        delta=-item.qty,
-                        nilai_sebelum=old_booking,
-                        nilai_sesudah=product.stok_booking,
-                        actor_id=None,
-                        order_id=order.id,
+            try:
+                items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+                for item in items:
+                    product = (
+                        db.query(Product)
+                        .filter(Product.id == item.product_id)
+                        .with_for_update()
+                        .first()
                     )
-            order.status = "EXPIRED"
-            db.commit()
-            print(f"[AUTO-EXPIRE] Order {order.id} expired and booking released.")
+                    if product:
+                        old_booking = product.stok_booking or 0
+                        product.stok_booking = max(0, old_booking - item.qty)
+                        log_stock_change(
+                            db=db,
+                            product_id=item.product_id,
+                            sumber="EXPIRE",
+                            field_terdampak="stok_booking",
+                            delta=-item.qty,
+                            nilai_sebelum=old_booking,
+                            nilai_sesudah=product.stok_booking,
+                            actor_id=None,
+                            order_id=order.id,
+                        )
+                order.status = "EXPIRED"
+                db.commit()
+                logger.info(f"[AUTO-EXPIRE] Order {order.id} expired and booking released.")
+            except Exception as inner_e:
+                db.rollback()
+                logger.error(f"[AUTO-EXPIRE] Failed to expire order {order.id}: {inner_e}")
 
-        print(f"[AUTO-EXPIRE] Processed {len(expired)} expired orders.")
+        logger.info(f"[AUTO-EXPIRE] Processed {len(expired)} expired orders.")
     except Exception as e:
         db.rollback()
         print(f"[AUTO-EXPIRE] Error: {e}")
@@ -75,7 +92,7 @@ def seed_initial_data():
             )
             db.add(admin)
             db.commit()
-            print("[SEED] Admin user created: admin / admin")
+            logger.info("[SEED] Admin user created: admin / admin")
         if db.query(User).filter(User.role == "SALES").count() == 0:
             sales = User(
                 username="sales",
@@ -84,10 +101,10 @@ def seed_initial_data():
             )
             db.add(sales)
             db.commit()
-            print("[SEED] Sales user created: sales / sales")
+            logger.info("[SEED] Sales user created: sales / sales")
     except Exception as e:
         db.rollback()
-        print(f"[SEED] Warning: {e}")
+        logger.error(f"[SEED] Warning: {e}")
     finally:
         db.close()
 
@@ -95,13 +112,22 @@ def seed_initial_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    seed_initial_data()
-    scheduler.add_job(expire_pending_orders, "interval", minutes=5, id="auto_expire")
-    scheduler.start()
-    print("[STARTUP] Auto-expire scheduler started.")
+    if os.getenv("SEED_DEMO_USERS", "false").lower() == "true":
+        seed_initial_data()
+    else:
+        logger.info("[STARTUP] SEED_DEMO_USERS not enabled — skipping demo user seeding.")
+
+    run_scheduler = os.getenv("RUN_SCHEDULER", "true").lower() == "true"
+    if run_scheduler:
+        scheduler.add_job(expire_pending_orders, "interval", minutes=5, id="auto_expire")
+        scheduler.start()
+        logger.info("[STARTUP] Auto-expire scheduler started.")
+    else:
+        logger.info("[STARTUP] RUN_SCHEDULER disabled — auto-expire will not run in this process.")
     yield
-    scheduler.shutdown()
-    print("[SHUTDOWN] Scheduler stopped.")
+    if run_scheduler:
+        scheduler.shutdown()
+        logger.info("[SHUTDOWN] Scheduler stopped.")
 
 
 app = FastAPI(
@@ -110,10 +136,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_allowed_origins = os.getenv("CORS_ORIGINS", "").split(",")
+if not _allowed_origins or _allowed_origins == [""]:
+    _allowed_origins = ["*"]  # dev fallback — set CORS_ORIGINS in production
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

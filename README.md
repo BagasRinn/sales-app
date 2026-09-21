@@ -8,16 +8,16 @@ Aplikasi sales internal: mobile app (sales), admin web panel, dan backend API.
 
 ```
 .
-├── PRD.md / PRD-rev.md          # Dokumen requirements
+├── PRD.md / PRD-rev.md
 └── sales-app/
-    ├── lib/                     # Flutter mobile (sales)
-    ├── android/  ios/           # Platform build files
-    ├── admin_web/               # Flutter web (admin panel)
+    ├── lib/
+    ├── android/  ios/
+    ├── admin_web/
     │   └── lib/
-    └── backend/                 # Python API backend
+    └── backend/
         ├── app/
         ├── requirements.txt
-        └── .env                 # ⚠️ tidak di-push (lihat .gitignore)
+        └── .env     
 ```
 
 ## Komponen
@@ -34,10 +34,10 @@ Aplikasi sales internal: mobile app (sales), admin web panel, dan backend API.
 ```bash
 cd sales-app/backend
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+source venv/bin/activate          
 pip install -r requirements.txt
-cp .env.example .env              # isi credentials (JANGAN commit .env)
-python -m app                     # atau sesuaikan entrypoint
+cp .env.example .env              
+python -m app                     
 ```
 
 ### 2. Admin Web (Flutter)
