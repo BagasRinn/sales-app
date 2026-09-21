@@ -1,0 +1,98 @@
+# ---------- Secrets / credentials ----------
+# JANGAN PERNAH push file ini ke repo publik.
+.env
+.env.*
+!.env.example
+credentials.json
+*.service-account.json
+*.pem
+*.key
+secrets.yaml
+secrets.yml
+
+# ---------- Python ----------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+.python-version
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- Flutter / Dart ----------
+.dart_tool/
+.flutter-plugins-dependencies
+.flutter-plugins
+.packages
+.pub-cache/
+.pub/
+build/
+**/build/
+*.iml
+*.ipr
+*.iws
+.metadata
+pubspec.lock
+
+# ---------- Android ----------
+*.jks
+*.keystore
+**/android/local.properties
+**/android/key.properties
+**/android/.gradle/
+**/android/app/release/
+**/android/captures/
+
+# ---------- iOS ----------
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner.xcworkspace/xcuserdata/
+**/ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+
+# ---------- Web (admin_web) ----------
+**/lib/generated_plugin_registrant.dart
+
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.history/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# ---------- Claude / agent artifacts ----------
+.claude/
+Untitled-1.json
+*.review.json
+code_review_output.json
+
+# ---------- Data / binary dumps (not source) ----------
+*.xlsx
+*.xls
+*.csv
+*.sqlite
+*.db
+*.sqlite3
+*.bak
+*.tmp
+*.log
+
+# ---------- Env-specific overlays ----------
+**/coverage/
+**/.fvm/
+**/l10n.yaml.local

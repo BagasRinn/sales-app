@@ -1,0 +1,43 @@
+class Product {
+  final String id;
+  final String namaBarang;
+  final int harga;
+  final int stokSistem;
+  final int stokBooking;
+  final int stokTersedia;
+  final bool? perluDitinjau;
+
+  Product({
+    required this.id,
+    required this.namaBarang,
+    required this.harga,
+    required this.stokSistem,
+    required this.stokBooking,
+    required this.stokTersedia,
+    this.perluDitinjau,
+  });
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as String,
+      namaBarang: json['nama_barang'] as String,
+      harga: json['harga'] as int,
+      stokSistem: json['stok_sistem'] as int,
+      stokBooking: json['stok_booking'] as int,
+      stokTersedia: json['stok_tersedia'] as int,
+      perluDitinjau: json['perlu_ditinjau'] as bool?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'nama_barang': namaBarang,
+      'harga': harga,
+      'stok_sistem': stokSistem,
+      'stok_booking': stokBooking,
+      'stok_tersedia': stokTersedia,
+      'perlu_ditinjau': perluDitinjau,
+    };
+  }
+}

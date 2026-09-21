@@ -1,0 +1,38 @@
+# sales-app Flutter mobile - project-specific ignores
+# (Most generic patterns live in the root .gitignore. This file
+# only adds rules specific to the Flutter mobile subproject.)
+
+# Backend-related (Python helper that lives next to the Flutter project)
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Credentials (defense in depth - also covered by root .gitignore)
+.env
+.env.*
+credentials.json
+
+# Flutter mobile build artifacts
+.dart_tool/
+.flutter-plugins-dependencies
+.flutter-plugins
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+
+# Android
+/android/.gradle/
+/android/local.properties
+/android/key.properties
+/android/app/release/
+/android/app/debug/
+/android/captures/
+
+# iOS
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec

@@ -1,0 +1,88 @@
+import '../repositories/api_service.dart';
+import '../models/order.dart';
+import '../models/product.dart';
+import '../models/sync_result.dart';
+
+class AdminRepository {
+  final ApiService _api;
+
+  AdminRepository(this._api);
+
+  Future<void> login(String username, String password) async {
+    final resp = await _api.post('/auth/login', body: {'username': username, 'password': password});
+    _api.setTokens(
+      access: resp['access_token'],
+      refresh: resp['refresh_token'],
+    );
+  }
+
+  void setTokens(String access, String refresh) => _api.setTokens(access: access, refresh: refresh);
+  void clearTokens() => _api.clearTokens();
+  bool get hasToken => _api.hasToken;
+
+  Future<List<Order>> getPendingOrders() async {
+    final data = await _api.get('/orders/pending');
+    return (data as List).map((e) => Order.fromJson(e)).toList();
+  }
+
+  Future<List<Order>> getAllOrders({String? status}) async {
+    final data = await _api.get('/orders${status != null ? '?status=$status' : ''}');
+    return (data as List).map((e) => Order.fromJson(e)).toList();
+  }
+
+  Future<Order> getOrderDetail(String orderId) async {
+    final data = await _api.get('/orders/$orderId');
+    return Order.fromJson(data);
+  }
+
+  Future<void> approveOrder(String orderId) async {
+    await _api.post('/orders/$orderId/approve');
+  }
+
+  Future<void> rejectOrder(String orderId) async {
+    await _api.post('/orders/$orderId/reject');
+  }
+
+  Future<List<Product>> getProducts() async {
+    final data = await _api.get('/products');
+    return (data as List).map((e) => Product.fromJson(e)).toList();
+  }
+
+  Future<Product> getProduct(String productId) async {
+    final data = await _api.get('/products/$productId');
+    return Product.fromJson(data);
+  }
+
+  Future<void> overrideStock(String productId, int stokSistem) async {
+    await _api.put('/products/$productId/stock', body: {'stok_sistem': stokSistem});
+  }
+
+  Future<SyncResult> syncProducts() async {
+    final data = await _api.post('/products/sync');
+    return SyncResult.fromJson(data);
+  }
+
+  Future<List<SyncError>> getSyncErrors() async {
+    final data = await _api.get('/products/sync/errors');
+    return (data as List).map((e) => SyncError.fromJson(e)).toList();
+  }
+
+  Future<Map<String, int>> getDashboardStats() async {
+    final orders = await getAllOrders();
+    final products = await getProducts();
+
+    int totalOrders = orders.length;
+    int pendingOrders = orders.where((o) => o.status == 'PENDING').length;
+    int approvedOrders = orders.where((o) => o.status == 'APPROVED').length;
+    int rejectedOrders = orders.where((o) => o.status == 'REJECTED').length;
+    int totalProducts = products.length;
+
+    return {
+      'total_orders': totalOrders,
+      'pending_orders': pendingOrders,
+      'approved_orders': approvedOrders,
+      'rejected_orders': rejectedOrders,
+      'total_products': totalProducts,
+    };
+  }
+}
