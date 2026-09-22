@@ -26,6 +26,8 @@ class Product(Base):
     harga = Column(Integer)
     stok_sistem = Column(Integer, default=0)
     stok_booking = Column(Integer, default=0)
+    kategori = Column(String, nullable=True)
+    satuan = Column(String, nullable=True)
 
 
 class Order(Base):
@@ -40,8 +42,17 @@ class Order(Base):
     store_contact = Column(String(50), nullable=True)
     store_address = Column(String(500), nullable=True)
 
+    __table_args__ = (
+        Index("ix_orders_status", "status"),
+        Index("ix_orders_created_at", "created_at"),
+        Index("ix_orders_expired_at", "expired_at"),
+        Index("ix_orders_status_created_at", "status", "created_at"),
+        Index("ix_orders_sales_id", "sales_id"),
+        Index("ix_products_stok", "stok_sistem", "stok_booking"),
+    )
+
     sales = relationship("User", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order", lazy="joined")
+    items = relationship("OrderItem", back_populates="order", lazy="select")
 
 
 class OrderItem(Base):
@@ -79,4 +90,19 @@ class SyncValidationError(Base):
     row_number = Column(Integer)
     sku = Column(String, nullable=True)
     reason = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ImportLog(Base):
+    """Tracks every Excel import run."""
+    __tablename__ = "import_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, nullable=True)
+    username = Column(String, nullable=True)
+    total_rows = Column(Integer, default=0)
+    inserted = Column(Integer, default=0)
+    updated = Column(Integer, default=0)
+    skipped = Column(Integer, default=0)
+    file_name = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

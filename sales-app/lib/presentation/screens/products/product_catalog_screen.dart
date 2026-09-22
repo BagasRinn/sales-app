@@ -218,6 +218,16 @@ class _ProductCard extends StatelessWidget {
                         'SKU: ${product.id}',
                         style: AppTextStyles.mono,
                       ),
+                      if (product.satuan != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Satuan: ${product.satuan}',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -268,6 +278,7 @@ class _ProductCard extends StatelessWidget {
                   _InlineCartControls(
                     productId: product.id,
                     available: available,
+                    satuan: product.satuan,
                   )
                 else
                   FilledButton.icon(
@@ -302,8 +313,9 @@ class _ProductCard extends StatelessWidget {
 class _InlineCartControls extends StatelessWidget {
   final String productId;
   final int available;
+  final String? satuan;
 
-  const _InlineCartControls({required this.productId, required this.available});
+  const _InlineCartControls({required this.productId, required this.available, this.satuan});
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +356,16 @@ class _InlineCartControls extends StatelessWidget {
             color: AppColors.primaryLight,
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
+          if (satuan != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                satuan!,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
         ],
       ),
     );

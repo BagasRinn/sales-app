@@ -3,6 +3,7 @@ class CartItem {
   final String namaBarang;
   final int harga;
   final int stokTersedia;
+  final String? satuan;
   int qty;
 
   CartItem({
@@ -10,6 +11,7 @@ class CartItem {
     required this.namaBarang,
     required this.harga,
     required this.stokTersedia,
+    this.satuan,
     required this.qty,
   });
 

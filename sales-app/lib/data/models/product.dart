@@ -6,6 +6,8 @@ class Product {
   final int stokBooking;
   final int stokTersedia;
   final bool? perluDitinjau;
+  final String? kategori;
+  final String? satuan;
 
   Product({
     required this.id,
@@ -15,6 +17,8 @@ class Product {
     required this.stokBooking,
     required this.stokTersedia,
     this.perluDitinjau,
+    this.kategori,
+    this.satuan,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -26,6 +30,8 @@ class Product {
       stokBooking: json['stok_booking'] as int,
       stokTersedia: json['stok_tersedia'] as int,
       perluDitinjau: json['perlu_ditinjau'] as bool?,
+      kategori: json['kategori'] as String?,
+      satuan: json['satuan'] as String?,
     );
   }
 
@@ -38,6 +44,8 @@ class Product {
       'stok_booking': stokBooking,
       'stok_tersedia': stokTersedia,
       'perlu_ditinjau': perluDitinjau,
+      'kategori': kategori,
+      'satuan': satuan,
     };
   }
 }

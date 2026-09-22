@@ -162,13 +162,14 @@ def cancel_order(
 
     try:
         items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-        for item in items:
-            product = (
-                db.query(Product)
-                .filter(Product.id == item.product_id)
-                .with_for_update()
-                .first()
-            )
+    product_ids = [item.product_id for item in items]
+    products = {
+        p.id: p for p in
+        db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
+    }
+
+    for item in items:
+        product = products.get(item.product_id)
             if product:
                 old_booking = product.stok_booking or 0
                 product.stok_booking = max(0, old_booking - item.qty)
@@ -304,9 +305,14 @@ def approve_order(
         )
 
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    product_ids = [item.product_id for item in items]
+    products = {
+        p.id: p for p in
+        db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
+    }
 
     for item in items:
-        product = db.query(Product).filter(Product.id == item.product_id).with_for_update().first()
+        product = products.get(item.product_id)
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -369,9 +375,14 @@ def reject_order(
         )
 
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    product_ids = [item.product_id for item in items]
+    products = {
+        p.id: p for p in
+        db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
+    }
 
     for item in items:
-        product = db.query(Product).filter(Product.id == item.product_id).with_for_update().first()
+        product = products.get(item.product_id)
         if product:
             old_booking = product.stok_booking or 0
             product.stok_booking = max(0, old_booking - item.qty)

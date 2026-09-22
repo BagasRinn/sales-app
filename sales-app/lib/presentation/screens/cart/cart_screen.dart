@@ -375,6 +375,13 @@ class _CartItemCard extends StatelessWidget {
                     currencyFormat.format(item.harga),
                     style: AppTextStyles.bodyMedium,
                   ),
+                  if (item.satuan != null)
+                    Text(
+                      'Satuan: ${item.satuan}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   const SizedBox(height: 4),
                   Text(
                     'Subtotal: ${currencyFormat.format(item.subtotal)}',

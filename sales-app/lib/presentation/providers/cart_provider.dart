@@ -27,6 +27,7 @@ class CartProvider extends ChangeNotifier {
         namaBarang: product.namaBarang,
         harga: product.harga,
         stokTersedia: product.stokTersedia,
+        satuan: product.satuan,
         qty: qty > product.stokTersedia ? product.stokTersedia : qty,
       );
     }

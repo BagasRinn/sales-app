@@ -65,6 +65,36 @@ class ApiService {
     }
   }
 
+  Future<dynamic> postFile(String endpoint, List<int> fileBytes, String fileName) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+        ),
+      });
+      // Override Content-Type for multipart
+      final resp = await _dio.post(
+        endpoint,
+        data: formData,
+        options: Options(
+          headers: {'Content-Type': 'multipart/form-data'},
+        ),
+      );
+      return resp.data;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<void> delete(String endpoint) async {
+    try {
+      await _dio.delete(endpoint);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   ApiException _handleError(DioException e) {
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||

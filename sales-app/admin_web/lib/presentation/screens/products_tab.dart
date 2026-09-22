@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/product.dart';
-
-String _fmt(int amount) =>
-    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(amount);
 
 class ProductsTab extends StatefulWidget {
   const ProductsTab({super.key});
@@ -19,16 +15,22 @@ class _ProductsTabState extends State<ProductsTab> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<AdminProvider>();
+      // Only fetch if products aren't already loaded
+      if (provider.products.isEmpty) {
+        provider.loadProducts();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<AdminProvider>();
     final products = provider.products;
     final isLoading = provider.isLoading;
-
-    final filtered = products.where((p) {
-      if (_searchQuery.isEmpty) return true;
-      return p.namaBarang.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          p.id.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
 
     return Column(
       children: [
@@ -46,12 +48,18 @@ class _ProductsTabState extends State<ProductsTab> {
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear),
-                            onPressed: () => setState(() => _searchQuery = ''),
+                            onPressed: () {
+                              setState(() => _searchQuery = '');
+                              provider.clearSearch();
+                            },
                           )
                         : null,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                  onChanged: (v) {
+                    setState(() => _searchQuery = v);
+                    provider.searchProducts(v);
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -64,7 +72,7 @@ class _ProductsTabState extends State<ProductsTab> {
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Text(
-                  '${filtered.length} produk',
+                  '${provider.productTotal} produk',
                   style: AppTextStyles.bodySmall,
                 ),
               ),
@@ -76,7 +84,7 @@ class _ProductsTabState extends State<ProductsTab> {
         Expanded(
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
-              : filtered.isEmpty
+              : products.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -94,7 +102,40 @@ class _ProductsTabState extends State<ProductsTab> {
                         ],
                       ),
                     )
-                  : _buildDataTable(context, filtered),
+                  : _buildDataTable(context, products),
+        ),
+        // Pagination controls
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border(top: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: provider.hasPrevProductPage
+                    ? () => provider.prevProductPage()
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+                tooltip: 'Halaman sebelumnya',
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Halaman ${provider.productPage + 1} dari ${provider.productTotalPages}',
+                style: AppTextStyles.bodySmall,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: provider.hasNextProductPage
+                    ? () => provider.nextProductPage()
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+                tooltip: 'Halaman berikutnya',
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -105,18 +146,19 @@ class _ProductsTabState extends State<ProductsTab> {
       scrollDirection: Axis.horizontal,
       child: SingleChildScrollView(
         child: DataTable(
-          columnSpacing: 24,
+          columnSpacing: 28,
           horizontalMargin: 20,
           headingRowHeight: 48,
-          dataRowMinHeight: 56,
-          dataRowMaxHeight: 56,
+          dataRowMinHeight: 60,
+          dataRowMaxHeight: 60,
           columns: const [
             DataColumn(label: Text('SKU')),
-            DataColumn(label: Text('Nama Barang')),
-            DataColumn(label: Text('Harga')),
+            DataColumn(label: Text('KATEGORI')),
+            DataColumn(label: Text('Nama Item')),
             DataColumn(label: Text('Stok Sistem')),
+            DataColumn(label: Text('Satuan')),
             DataColumn(label: Text('Stok Booking')),
-            DataColumn(label: Text('Tersedia')),
+            DataColumn(label: Text('Stok Tersedia')),
             DataColumn(label: Text('Status')),
             DataColumn(label: Text('Aksi')),
           ],
@@ -125,52 +167,89 @@ class _ProductsTabState extends State<ProductsTab> {
             final status = stockStatusFromValue(p.stokTersedia);
             return DataRow(
               cells: [
-                DataCell(Text(p.id, style: AppTextStyles.mono)),
                 DataCell(
                   SizedBox(
-                    width: 220,
+                    width: 100,
+                    child: Text(p.id, style: AppTextStyles.mono, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 130,
+                    child: Text(
+                      p.kategori ?? '-',
+                      style: AppTextStyles.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 240,
                     child: Text(
                       p.namaBarang,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
                     ),
                   ),
                 ),
-                DataCell(Text(_fmt(p.harga))),
                 DataCell(
-                  Text(
-                    p.stokSistem.toString(),
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: needsReview ? AppColors.error : null,
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      '${p.stokSistem}',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: needsReview ? AppColors.error : null,
+                      ),
                     ),
                   ),
                 ),
-                DataCell(Text(p.stokBooking.toString())),
                 DataCell(
-                  Text(
-                    p.stokTersedia.toString(),
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: statusColor(status),
+                  SizedBox(
+                    width: 80,
+                    child: Text(p.satuan ?? '-', style: AppTextStyles.bodySmall),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 110,
+                    child: Text('${p.stokBooking}', style: AppTextStyles.bodySmall),
+                  ),
+                ),
+                DataCell(
+                  SizedBox(
+                    width: 110,
+                    child: Text(
+                      '${p.stokTersedia}',
+                      style: AppTextStyles.labelLarge.copyWith(color: statusColor(status)),
                     ),
                   ),
                 ),
                 DataCell(StockChip(available: p.stokTersedia)),
                 DataCell(
-                  SizedBox(
-                    height: 36,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _showStockDialog(context, p),
-                      icon: const Icon(Icons.edit, size: 16),
-                      label: const Text('Ubah'),
-                      style: OutlinedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        textStyle: AppTextStyles.labelMedium,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _showStockDialog(context, p),
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: const Text('Ubah'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                          textStyle: AppTextStyles.labelMedium,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        onPressed: () => _confirmDelete(context, p),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        color: AppColors.error,
+                        tooltip: 'Hapus produk',
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -313,6 +392,57 @@ class _ProductsTabState extends State<ProductsTab> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Hapus Produk'),
+        content: Text(
+          'Yakin ingin menghapus "${product.namaBarang}" (${product.id})?\n\nTindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final success = await context.read<AdminProvider>().deleteProduct(product.id);
+    if (success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Text('Produk "${product.namaBarang}" berhasil dihapus'),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else if (!success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.read<AdminProvider>().errorMessage ?? 'Gagal menghapus produk'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 

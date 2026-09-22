@@ -7,10 +7,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Mengambil URL database
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+# psycopg v3 requires postgresql+psycopg:// prefix; add it if missing
+if SQLALCHEMY_DATABASE_URL and "+psycopg" not in SQLALCHEMY_DATABASE_URL:
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg://", 1
+    )
 
 # Membuat Engine (Mesin Koneksi)
-# pool_size dan max_overflow diatur untuk menangani koneksi konkuren dari sales
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_size=20,

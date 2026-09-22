@@ -43,9 +43,21 @@ class AdminRepository {
     await _api.post('/orders/$orderId/reject');
   }
 
-  Future<List<Product>> getProducts() async {
-    final data = await _api.get('/products');
+  Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search}) async {
+    final queryParams = {
+      'skip': (page * limit).toString(),
+      'limit': limit.toString(),
+      if (search != null && search.isNotEmpty) 'search': search,
+    };
+    final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
+    final data = await _api.get('/products?$queryString');
     return (data as List).map((e) => Product.fromJson(e)).toList();
+  }
+
+  Future<int> getProductCount({String? search}) async {
+    final queryString = search != null && search.isNotEmpty ? '?search=$search' : '';
+    final data = await _api.get('/products/count$queryString');
+    return data['total'] as int;
   }
 
   Future<Product> getProduct(String productId) async {
@@ -57,14 +69,32 @@ class AdminRepository {
     await _api.put('/products/$productId/stock', body: {'stok_sistem': stokSistem});
   }
 
+  Future<void> deleteProduct(String productId) async {
+    await _api.delete('/products/$productId');
+  }
+
   Future<SyncResult> syncProducts() async {
     final data = await _api.post('/products/sync');
+    return SyncResult.fromJson(data);
+  }
+
+  Future<SyncResult> importExcel(List<int> fileBytes, String fileName) async {
+    final data = await _api.postFile('/products/import-excel', fileBytes, fileName);
     return SyncResult.fromJson(data);
   }
 
   Future<List<SyncError>> getSyncErrors() async {
     final data = await _api.get('/products/sync/errors');
     return (data as List).map((e) => SyncError.fromJson(e)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getImportLogs() async {
+    final data = await _api.get('/products/import-logs');
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> clearImportErrors() async {
+    await _api.delete('/products/import-errors');
   }
 
   Future<Map<String, int>> getDashboardStats() async {

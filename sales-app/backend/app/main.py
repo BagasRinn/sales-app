@@ -31,23 +31,31 @@ def expire_pending_orders():
         expired = (
             db.query(Order)
             .filter(Order.status == "PENDING", Order.expired_at < datetime.now(timezone.utc))
-            .with_for_update(skip_locked=True)
+            .with_for_update(skip_locked=True, of=Order)
             .all()
         )
 
         if not expired:
             return
 
+        # Batch-fetch all items and products to eliminate N+1
+        order_ids = [o.id for o in expired]
+        all_items = db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).all()
+        items_by_order = {}
+        for item in all_items:
+            items_by_order.setdefault(item.order_id, []).append(item)
+
+        all_product_ids = [item.product_id for item in all_items]
+        products = {
+            p.id: p for p in
+            db.query(Product).filter(Product.id.in_(all_product_ids)).with_for_update().all()
+        }
+
         for order in expired:
             try:
-                items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+                items = items_by_order.get(order.id, [])
                 for item in items:
-                    product = (
-                        db.query(Product)
-                        .filter(Product.id == item.product_id)
-                        .with_for_update()
-                        .first()
-                    )
+                    product = products.get(item.product_id)
                     if product:
                         old_booking = product.stok_booking or 0
                         product.stok_booking = max(0, old_booking - item.qty)

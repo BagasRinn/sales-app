@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/sync_result.dart';
 
-class SyncTab extends StatelessWidget {
+class SyncTab extends StatefulWidget {
   const SyncTab({super.key});
+
+  @override
+  State<SyncTab> createState() => _SyncTabState();
+}
+
+class _SyncTabState extends State<SyncTab> {
+  final _historyKey = GlobalKey<_ImportHistorySectionState>();
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +27,7 @@ class SyncTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Main sync card
+          // Main import card
           Card(
             child: Padding(
               padding: const EdgeInsets.all(28),
@@ -34,7 +43,7 @@ class SyncTab extends StatelessWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child:
-                            const Icon(Icons.cloud_sync, size: 32, color: AppColors.info),
+                            const Icon(Icons.upload_file, size: 32, color: AppColors.info),
                       ),
                       const SizedBox(width: 20),
                       Expanded(
@@ -42,12 +51,12 @@ class SyncTab extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Sinkronisasi Google Sheets',
+                              'Import Excel',
                               style: AppTextStyles.headlineMedium,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Tarik data stok terbaru dari spreadsheet ke sistem',
+                              'Upload file .xlsx untuk import atau update data produk',
                               style: AppTextStyles.bodyMedium,
                             ),
                           ],
@@ -66,12 +75,48 @@ class SyncTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _infoRow(Icons.table_chart, 'Sumber', 'Google Sheets API'),
+                        _infoRow(Icons.merge_type, 'Metode', 'Upsert — insert baru, update yang sudah ada'),
                         const SizedBox(height: 8),
-                        _infoRow(Icons.storage, 'Metode', 'Bulk Upsert (< 5 detik)'),
+                        _infoRow(Icons.security, 'Transaksi', 'Atomic — gagal sebagian = rollback semua'),
                         const SizedBox(height: 8),
-                        _infoRow(Icons.check_circle_outline, 'Akses',
-                            'Service Account (Read-only)'),
+                        _infoRow(Icons.notes, 'Format Stok', 'Ambil angka depan (cth: "880 Pcs" → 880)'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Column reference
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: AppColors.primaryLight),
+                            const SizedBox(width: 6),
+                            Text('Kolom yang harus ada di file Excel',
+                                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            _colChip('code'),
+                            _colChip('KATEGORI'),
+                            _colChip('NAME ITEM'),
+                            _colChip('STOK'),
+                            _colChip('OUM'),
+                            _colChip('FIX'),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -82,25 +127,7 @@ class SyncTab extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: isLoading
                           ? null
-                          : () async {
-                              final success = await provider.syncProducts();
-                              if (success && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Row(
-                                      children: [
-                                        const Icon(Icons.check_circle,
-                                            color: Colors.white, size: 20),
-                                        const SizedBox(width: 10),
-                                        Text(syncResult?.message ??
-                                            'Sinkronisasi berhasil'),
-                                      ],
-                                    ),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                              }
-                            },
+                          : () => _pickAndImport(context, provider),
                       icon: isLoading
                           ? const SizedBox(
                               width: 20,
@@ -108,9 +135,9 @@ class SyncTab extends StatelessWidget {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.cloud_download),
+                          : const Icon(Icons.folder_open),
                       label: Text(
-                          isLoading ? 'Menyinkronkan...' : 'Jalankan Sinkronisasi'),
+                          isLoading ? 'Mengimport...' : 'Pilih File Excel (.xlsx)'),
                     ),
                   ),
                 ],
@@ -121,11 +148,17 @@ class SyncTab extends StatelessWidget {
           // Result cards
           if (syncResult != null) ...[
             const SizedBox(height: 32),
-            const Text('Hasil Sinkronisasi Terakhir',
+            const Text('Hasil Import Terakhir',
                 style: AppTextStyles.headlineLarge),
             const SizedBox(height: 16),
             _SyncResultGrid(result: syncResult),
           ],
+
+          const SizedBox(height: 32),
+          // Import history
+          const Text('Histori Import', style: AppTextStyles.headlineLarge),
+          const SizedBox(height: 16),
+          _ImportHistorySection(key: _historyKey),
 
           const SizedBox(height: 32),
           // Error history
@@ -149,6 +182,69 @@ class SyncTab extends StatelessWidget {
                 fontWeight: FontWeight.w500)),
       ],
     );
+  }
+
+  Widget _colChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
+      ),
+    );
+  }
+
+  Future<void> _pickAndImport(BuildContext context, AdminProvider provider) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal membaca file'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    final success = await provider.importExcel(file.bytes!, file.name);
+    if (success && context.mounted) {
+      final result_ = provider.lastSyncResult;
+      _historyKey.currentState?._refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Text(result_?.message ?? 'Import berhasil'),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else if (!success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Import gagal'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 }
 
@@ -266,7 +362,7 @@ class _SyncErrorsSection extends StatelessWidget {
                 size: 20, color: AppColors.textMuted),
             const SizedBox(width: 8),
             const Expanded(
-              child: Text('Daftar baris yang dilewati saat sinkronisasi',
+              child: Text('Daftar baris yang dilewati saat import',
                   style: AppTextStyles.bodyMedium),
             ),
             OutlinedButton.icon(
@@ -314,9 +410,9 @@ class _SyncErrorsSection extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Error Sinkronisasi',
+                          Text('Error Import',
                               style: AppTextStyles.headlineSmall),
-                          Text('Baris yang dilewati saat proses sync',
+                          Text('Baris yang dilewati saat proses import',
                               style: AppTextStyles.bodySmall),
                         ],
                       ),
@@ -413,6 +509,185 @@ class _SyncErrorsSection extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ImportHistorySection extends StatefulWidget {
+  const _ImportHistorySection({super.key});
+
+  @override
+  State<_ImportHistorySection> createState() => _ImportHistorySectionState();
+}
+
+class _ImportHistorySectionState extends State<_ImportHistorySection> {
+  late Future<List<Map<String, dynamic>>> _logsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _logsFuture = context.read<AdminProvider>().getImportLogs();
+  }
+
+  void _refresh() {
+    setState(() {
+      _logsFuture = context.read<AdminProvider>().getImportLogs();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _logsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final logs = snapshot.data ?? [];
+
+        if (logs.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.history, size: 36, color: AppColors.textMuted.withValues(alpha: 0.4)),
+                    const SizedBox(height: 8),
+                    const Text('Belum ada histori import', style: AppTextStyles.bodyMedium),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                // Header row
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      _col('Waktu', flex: 2),
+                      _col('User', flex: 1),
+                      _col('File', flex: 2),
+                      _col('Baru', flex: 1),
+                      _col('Update', flex: 1),
+                      _col('Error', flex: 1),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...logs.map((log) => _ImportLogRow(log: log, dateFormat: dateFormat)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _col(String label, {int flex = 1}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportLogRow extends StatelessWidget {
+  final Map<String, dynamic> log;
+  final DateFormat dateFormat;
+
+  const _ImportLogRow({required this.log, required this.dateFormat});
+
+  @override
+  Widget build(BuildContext context) {
+    final createdAt = log['created_at'] != null
+        ? DateTime.tryParse(log['created_at'].toString())
+        : null;
+    final skipped = log['skipped'] as int? ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: skipped > 0 ? AppColors.errorBg.withValues(alpha: 0.3) : null,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              createdAt != null ? dateFormat.format(createdAt.toLocal()) : '-',
+              style: AppTextStyles.mono.copyWith(fontSize: 12),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              log['username']?.toString() ?? 'Admin',
+              style: AppTextStyles.bodySmall,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              log['file_name']?.toString() ?? '-',
+              style: AppTextStyles.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${log['inserted'] ?? 0}',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${log['updated'] ?? 0}',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryLight),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '$skipped',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: skipped > 0 ? AppColors.error : AppColors.textMuted,
+                fontWeight: skipped > 0 ? FontWeight.w600 : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

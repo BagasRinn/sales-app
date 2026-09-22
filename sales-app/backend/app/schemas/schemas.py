@@ -47,11 +47,15 @@ class ProductBase(BaseModel):
     id: str
     nama_barang: str
     harga: int
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
 
 
 class ProductCreate(ProductBase):
     stok_sistem: int = 0
     stok_booking: int = 0
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
 
 
 class ProductUpdateStock(BaseModel):
@@ -66,6 +70,8 @@ class ProductResponse(BaseModel):
     stok_booking: int
     stok_tersedia: int
     perlu_ditinjau: Optional[bool] = None
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -172,6 +178,20 @@ class StokLogResponse(BaseModel):
     nilai_sesudah: int
     actor_id: Optional[UUID]
     order_id: Optional[UUID]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ImportLogResponse(BaseModel):
+    id: UUID
+    username: Optional[str]
+    total_rows: int
+    inserted: int
+    updated: int
+    skipped: int
+    file_name: Optional[str]
     created_at: datetime
 
     class Config:

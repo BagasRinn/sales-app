@@ -1,18 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from typing import List, Optional
 from uuid import UUID
+import io
 
 from app.models.database import get_db
-from app.models.models import Product, Order, User
+from app.models.models import Product, Order, User, ImportLog, SyncValidationError
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
     SyncResultResponse,
+    ImportLogResponse,
 )
 from app.core.security import require_admin, require_auth, CurrentUser
-from app.services.sheets_sync import sync_products_from_sheets
+from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -21,7 +24,7 @@ router = APIRouter(prefix="/products", tags=["Products"])
 @router.get("", response_model=List[ProductResponse])
 def list_products(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 20,
     search: Optional[str] = None,
     needs_review: Optional[bool] = None,
     db: Session = Depends(get_db),
@@ -57,6 +60,8 @@ def list_products(
             (p.stok_sistem or 0) < (p.stok_booking or 0)
             if current_user["role"] == "ADMIN" else None
         ),
+                kategori=p.kategori,
+                satuan=p.satuan,
             )
         )
 
@@ -75,9 +80,7 @@ def get_product(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-
     stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
-    is_review_needed = (product.stok_sistem or 0) < (product.stok_booking or 0)
     return ProductResponse(
         id=product.id,
         nama_barang=product.nama_barang,
@@ -86,9 +89,29 @@ def get_product(
         stok_booking=product.stok_booking or 0,
         stok_tersedia=stok_tersedia,
         perlu_ditinjau=(
-            is_review_needed if current_user["role"] == "ADMIN" else None
+            (product.stok_sistem or 0) < (product.stok_booking or 0)
+            if current_user["role"] == "ADMIN" else None
         ),
+        kategori=product.kategori,
+        satuan=product.satuan,
     )
+
+
+@router.delete("/{product_id}", status_code=204)
+def delete_product(
+    product_id: str,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    from app.models.models import OrderItem
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    # Hapus relasi order_items dulu, baru produknya
+    db.query(OrderItem).filter(OrderItem.product_id == product_id).delete()
+    db.delete(product)
+    db.commit()
 
 
 @router.put("/{product_id}/stock", response_model=ProductResponse)
@@ -136,6 +159,8 @@ def update_product_stock(
         stok_booking=product.stok_booking or 0,
         stok_tersedia=stok_tersedia,
         perlu_ditinjau=is_review_needed,
+        kategori=product.kategori,
+        satuan=product.satuan,
     )
 
 
@@ -145,7 +170,7 @@ def sync_products(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    sync_result = sync_products_from_sheets(db)
+    sync_result = sync_products_from_excel(None, db)
     needs_review = db.query(Product).filter(
         Product.stok_sistem < Product.stok_booking
     ).count() > 0
@@ -158,6 +183,74 @@ def sync_products(
         errors=sync_result["errors"],
         needs_review=needs_review,
     )
+
+
+@router.post("/import-excel", response_model=SyncResultResponse)
+def import_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    """
+    Upload file Excel (.xlsx) untuk import / update data produk.
+    Semua perubahan dijalankan dalam 1 transaksi database.
+    """
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(
+            status_code=400,
+            detail="Format file harus .xlsx"
+        )
+
+    contents = file.file.read()
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="File kosong")
+
+    sync_result = sync_products_from_excel(contents, db)
+
+    # Catat ke histori import
+    db.add(ImportLog(
+        user_id=current_user["user_id"],
+        username=current_user.get("username"),
+        total_rows=sync_result["total_rows"],
+        inserted=sync_result["inserted"],
+        updated=sync_result["updated"],
+        skipped=sync_result["skipped"],
+        file_name=file.filename,
+    ))
+    db.commit()
+
+    needs_review = db.query(Product).filter(
+        Product.stok_sistem < Product.stok_booking
+    ).count() > 0
+    return SyncResultResponse(
+        success=sync_result["success"],
+        total_rows=sync_result["total_rows"],
+        inserted=sync_result["inserted"],
+        updated=sync_result["updated"],
+        skipped=sync_result["skipped"],
+        errors=sync_result["errors"],
+        needs_review=needs_review,
+    )
+
+
+@router.get("/import-logs", response_model=List[ImportLogResponse])
+def get_import_logs(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    """Ambil histori import Excel."""
+    logs = db.query(ImportLog).order_by(ImportLog.created_at.desc()).limit(50).all()
+    return logs
+
+
+@router.delete("/import-errors", status_code=204)
+def clear_import_errors(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    """Hapus semua histori error import."""
+    db.query(SyncValidationError).delete()
+    db.commit()
 
 
 @router.get("/sync/errors", response_model=List[dict])
@@ -203,16 +296,22 @@ def get_admin_stats(
 ):
     """Server-side dashboard stats — avoids loading all orders into the Flutter client."""
     from sqlalchemy import func
+    from sqlalchemy import Integer
+    from sqlalchemy import cast
 
     status_counts = dict(
         db.query(Order.status, func.count(Order.id))
         .group_by(Order.status).all()
     )
     total_orders = sum(status_counts.values())
-    total_products = db.query(func.count(Product.id)).scalar() or 0
-    needs_review = db.query(func.count(Product.id)).filter(
-        Product.stok_sistem < Product.stok_booking
-    ).scalar() or 0
+
+    # Combine both product COUNT queries into a single round-trip
+    product_result = db.query(
+        func.count(Product.id),
+        func.sum(cast(Product.stok_sistem < Product.stok_booking, Integer)),
+    ).first()
+    total_products = product_result[0] or 0
+    needs_review = product_result[1] or 0
 
     return {
         "total_orders": total_orders,
@@ -224,3 +323,19 @@ def get_admin_stats(
         "total_products": total_products,
         "needs_review": needs_review,
     }
+
+
+@router.get("/count")
+def get_product_count(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    """Return total product count for pagination."""
+    query = db.query(func.count(Product.id))
+    if search:
+        query = query.filter(
+            (Product.id.ilike(f"%{search}%"))
+            | (Product.nama_barang.ilike(f"%{search}%"))
+        )
+    return {"total": query.scalar() or 0}
