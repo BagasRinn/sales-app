@@ -29,6 +29,11 @@ class AdminProvider extends ChangeNotifier {
   int _productTotal = 0;
   String _productSearch = '';
 
+  // Filters
+  String? _selectedKategori;
+  String? _selectedStatus;
+  String? _orderFilter; // persists filter across approve/reject actions
+
   // Debounce timer for search
   Timer? _searchDebounceTimer;
   static const _searchDebounceDuration = Duration(milliseconds: 400);
@@ -52,6 +57,9 @@ class AdminProvider extends ChangeNotifier {
   bool get hasPrevProductPage => _productPage > 0;
   bool get hasNextProductPage => _productPage < productTotalPages - 1;
   String get productSearch => _productSearch;
+  String? get selectedKategori => _selectedKategori;
+  String? get selectedStatus => _selectedStatus;
+  String? get orderFilter => _orderFilter;
 
   /// Start auto-refresh. Call from dashboard initState.
   void startAutoRefresh({Duration interval = const Duration(seconds: 30)}) {
@@ -120,6 +128,7 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<void> loadAllOrders({String? status}) async {
+    _orderFilter = status;
     try {
       _allOrders = await _repo.getAllOrders(status: status);
       notifyListeners();
@@ -136,9 +145,13 @@ class AdminProvider extends ChangeNotifier {
           page: _productPage,
           limit: _productLimit,
           search: _productSearch.isEmpty ? null : _productSearch,
+          kategori: _selectedKategori,
+          status: _selectedStatus,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
+          kategori: _selectedKategori,
+          status: _selectedStatus,
         ),
       ]);
       _products = results[0] as List<Product>;
@@ -147,6 +160,31 @@ class AdminProvider extends ChangeNotifier {
       _errorMessage = e.message;
     }
     notifyListeners();
+  }
+
+  Future<void> setKategoriFilter(String? kategori) async {
+    _selectedKategori = kategori;
+    _productPage = 0;
+    await loadProducts();
+  }
+
+  Future<void> setStatusFilter(String? status) async {
+    _selectedStatus = status;
+    _productPage = 0;
+    await loadProducts();
+  }
+
+  Future<void> clearAllFilters() async {
+    _selectedKategori = null;
+    _selectedStatus = null;
+    _productSearch = '';
+    _productPage = 0;
+    _searchDebounceTimer?.cancel();
+    await loadProducts();
+  }
+
+  Future<List<String>> getKategoriList() async {
+    return await _repo.getKategoriList();
   }
 
   Future<void> searchProducts(String query) async {
@@ -212,7 +250,7 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _loadAllOrders() async {
     try {
-      _allOrders = await _repo.getAllOrders();
+      _allOrders = await _repo.getAllOrders(status: _orderFilter);
     } on ApiException catch (e) {
       _errorMessage = e.message;
     }
@@ -224,9 +262,13 @@ class AdminProvider extends ChangeNotifier {
         page: _productPage,
         limit: _productLimit,
         search: _productSearch.isEmpty ? null : _productSearch,
+        kategori: _selectedKategori,
+        status: _selectedStatus,
       ),
       _repo.getProductCount(
         search: _productSearch.isEmpty ? null : _productSearch,
+        kategori: _selectedKategori,
+        status: _selectedStatus,
       ),
     ]);
     _products = results[0] as List<Product>;

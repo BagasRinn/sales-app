@@ -27,6 +27,8 @@ def list_products(
     limit: int = 20,
     search: Optional[str] = None,
     needs_review: Optional[bool] = None,
+    kategori: Optional[str] = None,
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -41,6 +43,19 @@ def list_products(
             (Product.id.ilike(f"%{search}%"))
             | (Product.nama_barang.ilike(f"%{search}%"))
         )
+
+    if kategori:
+        query = query.filter(Product.kategori == kategori)
+
+    # Apply stock status filter at SQL level so pagination stays correct
+    if status:
+        stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
+        if status == "tersedia":
+            query = query.filter(stok_expr > 5)
+        elif status == "rendah":
+            query = query.filter(stok_expr > 0, stok_expr <= 5)
+        elif status == "habis":
+            query = query.filter(stok_expr <= 0)
 
     products = query.offset(skip).limit(limit).all()
 
@@ -71,97 +86,20 @@ def list_products(
     return result
 
 
-@router.get("/{product_id}", response_model=ProductResponse)
-def get_product(
-    product_id: str,
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
-):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
-    return ProductResponse(
-        id=product.id,
-        nama_barang=product.nama_barang,
-        harga=product.harga,
-        stok_sistem=product.stok_sistem or 0,
-        stok_booking=product.stok_booking or 0,
-        stok_tersedia=stok_tersedia,
-        perlu_ditinjau=(
-            (product.stok_sistem or 0) < (product.stok_booking or 0)
-            if current_user["role"] == "ADMIN" else None
-        ),
-        kategori=product.kategori,
-        satuan=product.satuan,
-    )
-
-
-@router.delete("/{product_id}", status_code=204)
-def delete_product(
-    product_id: str,
+@router.get("/kategori", response_model=List[str])
+def get_kategori_list(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    from app.models.models import OrderItem
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-
-    # Hapus relasi order_items dulu, baru produknya
-    db.query(OrderItem).filter(OrderItem.product_id == product_id).delete()
-    db.delete(product)
-    db.commit()
-
-
-@router.put("/{product_id}/stock", response_model=ProductResponse)
-def update_product_stock(
-    product_id: str,
-    stock_update: ProductUpdateStock,
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin),
-):
-    product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
-        .with_for_update()
-        .first()
+    """Return distinct kategori values for the filter dropdown."""
+    rows = (
+        db.query(Product.kategori)
+        .filter(Product.kategori.isnot(None), Product.kategori != "")
+        .distinct()
+        .order_by(Product.kategori)
+        .all()
     )
-    if not product:
-        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-
-    old_stok = product.stok_sistem or 0
-    delta = stock_update.stok_sistem - old_stok
-    product.stok_sistem = stock_update.stok_sistem
-
-    log_stock_change(
-        db=db,
-        product_id=product.id,
-        sumber="MANUAL",
-        field_terdampak="stok_sistem",
-        delta=delta,
-        nilai_sebelum=old_stok,
-        nilai_sesudah=stock_update.stok_sistem,
-        actor_id=UUID(current_user["user_id"]),
-        order_id=None,
-    )
-
-    db.commit()
-    db.refresh(product)
-
-    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
-    is_review_needed = (product.stok_sistem or 0) < (product.stok_booking or 0)
-    return ProductResponse(
-        id=product.id,
-        nama_barang=product.nama_barang,
-        harga=product.harga,
-        stok_sistem=product.stok_sistem or 0,
-        stok_booking=product.stok_booking or 0,
-        stok_tersedia=stok_tersedia,
-        perlu_ditinjau=is_review_needed,
-        kategori=product.kategori,
-        satuan=product.satuan,
-    )
+    return [r[0] for r in rows]
 
 
 @router.post("/sync", response_model=SyncResultResponse)
@@ -328,14 +266,118 @@ def get_admin_stats(
 @router.get("/count")
 def get_product_count(
     search: Optional[str] = None,
+    kategori: Optional[str] = None,
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    """Return total product count for pagination."""
+    """Return total product count for pagination — applies same filters as list_products."""
     query = db.query(func.count(Product.id))
     if search:
         query = query.filter(
             (Product.id.ilike(f"%{search}%"))
             | (Product.nama_barang.ilike(f"%{search}%"))
         )
+    if kategori:
+        query = query.filter(Product.kategori == kategori)
+    if status:
+        stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
+        if status == "tersedia":
+            query = query.filter(stok_expr > 5)
+        elif status == "rendah":
+            query = query.filter(stok_expr > 0, stok_expr <= 5)
+        elif status == "habis":
+            query = query.filter(stok_expr <= 0)
     return {"total": query.scalar() or 0}
+
+
+@router.get("/{product_id}", response_model=ProductResponse)
+def get_product(
+    product_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+    return ProductResponse(
+        id=product.id,
+        nama_barang=product.nama_barang,
+        harga=product.harga,
+        stok_sistem=product.stok_sistem or 0,
+        stok_booking=product.stok_booking or 0,
+        stok_tersedia=stok_tersedia,
+        perlu_ditinjau=(
+            (product.stok_sistem or 0) < (product.stok_booking or 0)
+            if current_user["role"] == "ADMIN" else None
+        ),
+        kategori=product.kategori,
+        satuan=product.satuan,
+    )
+
+
+@router.delete("/{product_id}", status_code=204)
+def delete_product(
+    product_id: str,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    from app.models.models import OrderItem
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    db.query(OrderItem).filter(OrderItem.product_id == product_id).delete()
+    db.delete(product)
+    db.commit()
+
+
+@router.put("/{product_id}/stock", response_model=ProductResponse)
+def update_product_stock(
+    product_id: str,
+    stock_update: ProductUpdateStock,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .with_for_update()
+        .first()
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    old_stok = product.stok_sistem or 0
+    delta = stock_update.stok_sistem - old_stok
+    product.stok_sistem = stock_update.stok_sistem
+
+    log_stock_change(
+        db=db,
+        product_id=product.id,
+        sumber="MANUAL",
+        field_terdampak="stok_sistem",
+        delta=delta,
+        nilai_sebelum=old_stok,
+        nilai_sesudah=stock_update.stok_sistem,
+        actor_id=UUID(current_user["user_id"]),
+        order_id=None,
+    )
+
+    db.commit()
+    db.refresh(product)
+
+    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+    is_review_needed = (product.stok_sistem or 0) < (product.stok_booking or 0)
+    return ProductResponse(
+        id=product.id,
+        nama_barang=product.nama_barang,
+        harga=product.harga,
+        stok_sistem=product.stok_sistem or 0,
+        stok_booking=product.stok_booking or 0,
+        stok_tersedia=stok_tersedia,
+        perlu_ditinjau=is_review_needed,
+        kategori=product.kategori,
+        satuan=product.satuan,
+    )

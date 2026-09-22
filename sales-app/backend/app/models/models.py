@@ -48,7 +48,6 @@ class Order(Base):
         Index("ix_orders_expired_at", "expired_at"),
         Index("ix_orders_status_created_at", "status", "created_at"),
         Index("ix_orders_sales_id", "sales_id"),
-        Index("ix_products_stok", "stok_sistem", "stok_booking"),
     )
 
     sales = relationship("User", back_populates="orders")

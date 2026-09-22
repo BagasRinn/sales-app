@@ -43,19 +43,31 @@ class AdminRepository {
     await _api.post('/orders/$orderId/reject');
   }
 
-  Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search}) async {
+  Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search, String? kategori, String? status}) async {
     final queryParams = {
       'skip': (page * limit).toString(),
       'limit': limit.toString(),
       if (search != null && search.isNotEmpty) 'search': search,
+      if (kategori != null && kategori.isNotEmpty) 'kategori': kategori,
+      if (status != null && status.isNotEmpty) 'status': status,
     };
     final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
     final data = await _api.get('/products?$queryString');
     return (data as List).map((e) => Product.fromJson(e)).toList();
   }
 
-  Future<int> getProductCount({String? search}) async {
-    final queryString = search != null && search.isNotEmpty ? '?search=$search' : '';
+  Future<List<String>> getKategoriList() async {
+    final data = await _api.get('/products/kategori');
+    return (data as List).map((e) => e.toString()).toList();
+  }
+
+  Future<int> getProductCount({String? search, String? kategori, String? status}) async {
+    final queryParams = {
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (kategori != null && kategori.isNotEmpty) 'kategori': kategori,
+      if (status != null && status.isNotEmpty) 'status': status,
+    };
+    final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/products/count$queryString');
     return data['total'] as int;
   }
