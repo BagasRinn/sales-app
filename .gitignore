@@ -93,6 +93,14 @@ code_review_output.json
 *.tmp
 *.log
 
+# ---------- Migration & one-off scripts (local dev only) ----------
+migrate_*.py
+test_*.py
+seed_*.py
+
+# ---------- Docs drafts & planning ----------
+docs/superpowers/
+
 # ---------- Env-specific overlays ----------
 **/coverage/
 **/.fvm/

@@ -1,20 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List, Optional
 from uuid import UUID
-import io
 
 from app.models.database import get_db
-from app.models.models import Product, Order, User, ImportLog, SyncValidationError
+from app.models.models import Product, Order, ImportLog, SyncValidationError
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
     SyncResultResponse,
     ImportLogResponse,
 )
-from app.core.security import require_admin, require_auth, CurrentUser
+from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
@@ -104,7 +102,6 @@ def get_kategori_list(
 
 @router.post("/sync", response_model=SyncResultResponse)
 def sync_products(
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
@@ -230,9 +227,9 @@ def get_sync_errors(
 @router.get("/stats")
 def get_admin_stats(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Server-side dashboard stats — avoids loading all orders into the Flutter client."""
+    """Server-side dashboard stats — MANAGER boleh akses untuk Dashboard ringkasan (read-only)."""
     from sqlalchemy import func
     from sqlalchemy import Integer
     from sqlalchemy import cast

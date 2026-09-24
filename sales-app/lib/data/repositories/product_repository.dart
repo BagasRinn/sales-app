@@ -8,7 +8,7 @@ class ProductRepository {
 
   Future<List<Product>> getProducts({
     int skip = 0,
-    int limit = 100,
+    int limit = 50,
     String? search,
   }) async {
     final queryParams = <String, String>{

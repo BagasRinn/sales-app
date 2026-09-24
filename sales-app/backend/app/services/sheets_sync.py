@@ -15,6 +15,7 @@ except ImportError:
 from app.models.models import Product, SyncValidationError
 from app.services.stock_logger import log_stock_change
 
+
 EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "STOK", "OUM", "FIX"]
 
 
@@ -70,6 +71,8 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
 def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, stok: Any) -> str | None:
     if not sku or not str(sku).strip():
         return "SKU kosong"
+    if not nama_produk or not str(nama_produk).strip():
+        return "Nama produk kosong"
     if harga is not None:
         try:
             int(harga)
@@ -212,7 +215,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             for r in to_insert
         ])
         db.execute(stmt)
-        logger.info(f"[SYNC] Bulk inserted %d products", len(to_insert))
+        logger.info(f"[SYNC] Bulk inserted {len(to_insert)} products")
 
     if to_update:
         def _stock_changed(existing_val, excel_val):
@@ -259,6 +262,6 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                       "satuan": stmt.excluded.satuan},
             )
             db.execute(stmt)
-        logger.info(f"[SYNC] Bulk updated %d products (%d stock changes)", len(to_update), len(changed))
+        logger.info(f"[SYNC] Bulk updated {len(to_update)} products ({len(changed)} stock changes)")
 
     return len(to_insert), len(to_update)

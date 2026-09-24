@@ -29,6 +29,8 @@ class AdminApp extends StatelessWidget {
               accessToken: initialTokens!['access_token']!,
               refreshToken: initialTokens!['refresh_token'] ?? '',
               username: initialTokens!['username'] ?? 'admin',
+              nama: initialTokens!['nama'] ?? '',
+              role: initialTokens!['role'] ?? 'ADMIN',
             )
           : const LoginScreen(),
     );

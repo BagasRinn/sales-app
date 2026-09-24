@@ -101,4 +101,15 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+def require_manager(current_user: dict = Depends(get_current_user)) -> dict:
+    """Izinkan MANAGER + ADMIN (ADMIN tetap punya akses penuh ke user management)."""
+    role = current_user.get("role")
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akses ditolak. Hanya manager atau admin yang dapat mengakses endpoint ini.",
+        )
+    return current_user
+
+
 CurrentUser = dict

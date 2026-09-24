@@ -1,38 +1,95 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import List, Optional
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, User
+from app.models.models import Order, OrderItem, Product, Customer, CustomerSales
 from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
     OrderListWithItemsResponse,
 )
-from app.core.security import require_admin, require_auth, CurrentUser
+from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-# ==================== SALES ENDPOINTS ====================
+def _validate_customer_for_sales(customer_id, sales_id, db):
+    customer = db.query(Customer).filter(
+        Customer.id == customer_id,
+        Customer.deleted_at.is_(None),
+    ).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
 
-@router.post("", response_model=OrderResponse)
-def create_order(
-    order_req: OrderCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
-):
-    if not order_req.items:
-        raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
+    assignment = db.query(CustomerSales).filter(
+        CustomerSales.customer_id == customer.id,
+        CustomerSales.sales_id == sales_id,
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=403, detail="Customer tidak di-assign ke sales ini")
 
-    pending_bookings = []
-    for item in order_req.items:
+    return customer
+
+
+def _build_order_response(order: Order) -> dict:
+    items_data = []
+    total_amount = 0
+    total_discount = 0
+    for item in order.items:
+        harga_satuan = 0
+        nama_barang = ""
+        if item.product:
+            harga_satuan = item.product.harga or 0
+            nama_barang = item.product.nama_barang or ""
+        diskon = item.discount_percent or 0
+        harga_setelah_diskon = int(harga_satuan * (100 - diskon) / 100)
+        subtotal = harga_setelah_diskon * item.qty
+        nominal_diskon = (harga_satuan - harga_setelah_diskon) * item.qty
+        items_data.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "qty": item.qty,
+            "harga_satuan": harga_satuan,
+            "nama_barang": nama_barang,
+            "discount_percent": diskon,
+            "harga_setelah_diskon": harga_setelah_diskon,
+            "subtotal": subtotal,
+        })
+        total_amount += subtotal
+        total_discount += nominal_diskon
+    return {
+        "id": order.id,
+        "sales_id": order.sales_id,
+        "sales_username": order.sales.username if order.sales else None,
+        "sales_nama": order.sales.nama if order.sales else None,
+        "customer_id": order.customer_id,
+        "customer_name": order.customer.nama_toko if order.customer else None,
+        "status": order.status,
+        "notes": order.notes,
+        "created_at": order.created_at,
+        "expired_at": order.expired_at,
+        "items": items_data,
+        "store_name": order.store_name,
+        "store_contact": order.store_contact,
+        "store_address": order.store_address,
+        "total_amount": total_amount,
+        "total_discount": total_discount,
+    }
+
+
+def _sync_order_to_sheets(order_id: str):
+    logger.info(f"[SHEETS SYNC] Order {order_id} submitted (sheets sync disabled)")
+
+
+def _book_items(items, db, sales_id, order_id_for_log):
+    """Apply stok_booking for given items. Raises 409 if insufficient."""
+    for item in items:
         result = db.execute(
             text(
                 "UPDATE products "
@@ -67,51 +124,71 @@ def create_order(
                 delta=item.qty,
                 nilai_sebelum=old_booking,
                 nilai_sesudah=product.stok_booking,
-                actor_id=UUID(current_user["user_id"]),
-                order_id=None,
+                actor_id=sales_id,
+                order_id=order_id_for_log,
             )
-        pending_bookings.append(item)
+
+
+# ==================== SALES ENDPOINTS ====================
+
+@router.post("", response_model=OrderResponse)
+def create_order(
+    order_req: OrderCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    if not order_req.items:
+        raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
+
+    sales_id = UUID(current_user["user_id"])
+    customer = _validate_customer_for_sales(order_req.customer_id, sales_id, db)
+
+    # DRAFT tidak booking stok. Validasi stok saja (cek tersedia), tapi tidak kurangi stok_booking.
+    # Booking baru dilakukan saat submit_draft_order.
+    for item in order_req.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Produk '{item.product_id}' tidak ditemukan",
+            )
+        available = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+        if item.qty > available:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Stok tidak cukup untuk '{product.nama_barang}'. "
+                    f"Tersedia: {available}, Diminta: {item.qty}"
+                ),
+            )
 
     order = Order(
         id=uuid4(),
-        sales_id=UUID(current_user["user_id"]),
-        status="PENDING",
+        sales_id=sales_id,
+        customer_id=customer.id,
+        status="DRAFT",
         created_at=datetime.now(timezone.utc),
-        expired_at=datetime.now(timezone.utc) + timedelta(hours=24),
-        store_name=order_req.store_name,
-        store_contact=order_req.store_contact,
-        store_address=order_req.store_address,
+        notes=order_req.notes,
+        store_name=customer.nama_toko,
+        store_contact=None,
+        store_address=customer.alamat,
     )
     db.add(order)
 
-    for item in pending_bookings:
-        order_item = OrderItem(
+    for item in order_req.items:
+        db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-        )
-        db.add(order_item)
+            discount_percent=item.discount_percent,
+        ))
 
     db.commit()
     db.refresh(order)
 
-    background_tasks.add_task(_sync_order_to_sheets, str(order.id))
-
-    return OrderResponse.model_validate(order)
-
-
-def _sync_order_to_sheets(order_id: str):
-    from app.services.sheets_sync import append_new_order_to_sheets
-    from app.models.database import SessionLocal
-
-    session = SessionLocal()
-    try:
-        append_new_order_to_sheets(order_id, session)
-    except Exception as e:
-        print(f"[SHEETS SYNC ERROR] Order {order_id}: {e}")
-    finally:
-        session.close()
+    # DRAFT tidak di-sync ke sheets. Sync hanya saat submit.
+    return _build_order_response(order)
 
 
 @router.get("/my", response_model=List[OrderListWithItemsResponse])
@@ -122,14 +199,197 @@ def get_my_orders(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    query = db.query(Order).filter(
+    query = db.query(Order).options(
+        joinedload(Order.items).joinedload(OrderItem.product),
+        joinedload(Order.customer),
+    ).filter(
         Order.sales_id == UUID(current_user["user_id"])
     )
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
 
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
-    return [OrderListWithItemsResponse.model_validate(o) for o in orders]
+    return [_build_order_response(o) for o in orders]
+
+
+@router.get("/my/stats")
+def get_my_stats(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Sales dashboard stats — computed in WITA (UTC+8) timezone."""
+    sales_id = UUID(current_user["user_id"])
+    WITA = timezone(timedelta(hours=8))
+    now_wita = datetime.now(WITA)
+    start_of_day_wita = now_wita.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day_wita = start_of_day_wita + timedelta(days=1)
+    start_of_month_wita = now_wita.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start_of_day_utc = start_of_day_wita.astimezone(timezone.utc)
+    end_of_day_utc = end_of_day_wita.astimezone(timezone.utc)
+    start_of_month_utc = start_of_month_wita.astimezone(timezone.utc)
+
+    omset_today = (
+        db.query(func.coalesce(func.sum(
+            OrderItem.qty * Product.harga * (100 - func.coalesce(OrderItem.discount_percent, 0)) / 100
+        ), 0))
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .filter(
+            Order.sales_id == sales_id,
+            Order.status == "APPROVED",
+            Order.created_at >= start_of_day_utc,
+            Order.created_at < end_of_day_utc,
+        )
+        .scalar()
+    )
+
+    pending_count = db.query(func.count(Order.id)).filter(
+        Order.sales_id == sales_id,
+        Order.status == "PENDING",
+    ).scalar() or 0
+
+    selesai_count = db.query(func.count(Order.id)).filter(
+        Order.sales_id == sales_id,
+        Order.status == "APPROVED",
+        Order.created_at >= start_of_month_utc,
+    ).scalar() or 0
+
+    selesai_total = (
+        db.query(func.coalesce(func.sum(
+            OrderItem.qty * Product.harga * (100 - func.coalesce(OrderItem.discount_percent, 0)) / 100
+        ), 0))
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .filter(
+            Order.sales_id == sales_id,
+            Order.status == "APPROVED",
+            Order.created_at >= start_of_month_utc,
+        )
+        .scalar()
+    )
+
+    return {
+        "omset_hari_ini": int(omset_today or 0),
+        "pending_count": int(pending_count),
+        "selesai_bulan_ini_count": int(selesai_count),
+        "selesai_bulan_ini_total": int(selesai_total or 0),
+    }
+
+
+@router.put("/{order_id}")
+def update_draft_order(
+    order_id: UUID,
+    order_update: OrderCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == order_id,
+            Order.sales_id == UUID(current_user["user_id"]),
+        )
+        .with_for_update()
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.status != "DRAFT":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hanya pesanan berstatus DRAFT yang bisa diedit. Status saat ini: {order.status}",
+        )
+
+    if not order_update.items:
+        raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
+
+    sales_id = UUID(current_user["user_id"])
+    customer = _validate_customer_for_sales(order_update.customer_id, sales_id, db)
+
+    # Hapus item lama, replace dengan item baru
+    db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
+    for item in order_update.items:
+        db.add(OrderItem(
+            id=uuid4(),
+            order_id=order.id,
+            product_id=item.product_id,
+            qty=item.qty,
+            discount_percent=item.discount_percent,
+        ))
+
+    order.customer_id = customer.id
+    order.notes = order_update.notes
+    order.store_name = customer.nama_toko
+    order.store_contact = None
+    order.store_address = customer.alamat
+
+    db.commit()
+    db.refresh(order)
+    return _build_order_response(order)
+
+
+@router.post("/{order_id}/submit")
+def submit_draft_order(
+    order_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    order = (
+        db.query(Order)
+        .filter(
+            Order.id == order_id,
+            Order.sales_id == UUID(current_user["user_id"]),
+        )
+        .with_for_update()
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.status != "DRAFT":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hanya pesanan DRAFT yang bisa di-submit. Status saat ini: {order.status}",
+        )
+
+    items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    if not items:
+        raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
+
+    # Apply stok booking
+    _book_items(items, db, UUID(current_user["user_id"]), order.id)
+
+    order.status = "PENDING"
+    order.expired_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    db.commit()
+    db.refresh(order)
+
+    # Sync ke sheets
+    background_tasks.add_task(_sync_order_to_sheets, str(order.id))
+
+    return _build_order_response(order)
+
+
+@router.delete("/{order_id}", status_code=204)
+def delete_draft_order(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.sales_id == UUID(current_user["user_id"]),
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.status != "DRAFT":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hanya pesanan DRAFT yang bisa dihapus. Status saat ini: {order.status}",
+        )
+    db.delete(order)
+    db.commit()
+    return None
 
 
 @router.post("/{order_id}/cancel")
@@ -201,41 +461,12 @@ def cancel_order(
 
 # ==================== ADMIN ENDPOINTS ====================
 
-def _build_order_response(order: Order) -> dict:
-    items_data = []
-    for item in order.items:
-        harga_satuan = 0
-        nama_barang = ""
-        if item.product:
-            harga_satuan = item.product.harga or 0
-            nama_barang = item.product.nama_barang or ""
-        items_data.append({
-            "id": item.id,
-            "product_id": item.product_id,
-            "qty": item.qty,
-            "harga_satuan": harga_satuan,
-            "nama_barang": nama_barang,
-        })
-    return {
-        "id": order.id,
-        "sales_id": order.sales_id,
-        "sales_username": order.sales.username if order.sales else None,
-        "status": order.status,
-        "created_at": order.created_at,
-        "expired_at": order.expired_at,
-        "items": items_data,
-        "store_name": order.store_name,
-        "store_contact": order.store_contact,
-        "store_address": order.store_address,
-    }
-
-
 @router.get("/pending")
 def list_pending_orders(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
     orders = (
         db.query(Order)
@@ -258,7 +489,7 @@ def list_all_orders(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
     query = db.query(Order).options(
         joinedload(Order.items).joinedload(OrderItem.product),
@@ -277,15 +508,24 @@ def get_order_detail(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = (
+        db.query(Order)
+        .options(
+            joinedload(Order.items).joinedload(OrderItem.product),
+            joinedload(Order.customer),
+            joinedload(Order.sales),
+        )
+        .filter(Order.id == order_id)
+        .first()
+    )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user["role"] != "ADMIN":
+    if current_user["role"] not in ("ADMIN", "MANAGER"):
         if str(order.sales_id) != current_user["user_id"]:
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
 
-    return OrderResponse.model_validate(order)
+    return _build_order_response(order)
 
 
 @router.post("/{order_id}/approve")

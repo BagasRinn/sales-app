@@ -7,10 +7,12 @@ from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
+    MANAGER = "MANAGER"
     SALES = "SALES"
 
 
 class OrderStatus(str, Enum):
+    DRAFT = "DRAFT"
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
@@ -23,7 +25,28 @@ class OrderStatus(str, Enum):
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=72)
-    role: str = Field(..., description="ADMIN atau SALES")
+    role: str = Field(..., description="ADMIN, MANAGER, atau SALES")
+    nama: Optional[str] = Field(None, max_length=100)
+
+
+class UserUpdate(BaseModel):
+    """Edit user — semua field opsional, hanya yang dikirim yang berubah."""
+    nama: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=72)
+    is_active: Optional[bool] = None
+
+
+class UserResponse(BaseModel):
+    id: UUID
+    username: str
+    nama: Optional[str] = None
+    role: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class UserLogin(BaseModel):
@@ -35,6 +58,10 @@ class Token(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
+    username: Optional[str] = None
+    nama: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -98,10 +125,13 @@ class SyncResultResponse(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: str
     qty: int = Field(..., gt=0)
+    discount_percent: int = Field(default=0, ge=0, le=100)
 
 
 class OrderCreate(BaseModel):
     items: List[OrderItemCreate]
+    customer_id: UUID
+    notes: Optional[str] = None
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
@@ -110,8 +140,12 @@ class OrderCreate(BaseModel):
 class OrderItemResponse(BaseModel):
     id: UUID
     product_id: str
+    nama_barang: Optional[str] = None
     qty: int
     harga_satuan: int = 0
+    discount_percent: int = 0
+    harga_setelah_diskon: int = 0
+    subtotal: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -120,13 +154,20 @@ class OrderItemResponse(BaseModel):
 class OrderResponse(BaseModel):
     id: UUID
     sales_id: UUID
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    sales_username: Optional[str] = None
+    sales_nama: Optional[str] = None
     status: str
+    notes: Optional[str] = None
     created_at: datetime
     expired_at: Optional[datetime]
     items: List[OrderItemResponse] = []
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
+    total_amount: Optional[int] = None
+    total_discount: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -135,7 +176,12 @@ class OrderResponse(BaseModel):
 class OrderListResponse(BaseModel):
     id: UUID
     sales_id: UUID
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    sales_username: Optional[str] = None
+    sales_nama: Optional[str] = None
     status: str
+    notes: Optional[str] = None
     created_at: datetime
     expired_at: Optional[datetime]
     store_name: Optional[str] = None
@@ -150,13 +196,19 @@ class OrderListWithItemsResponse(BaseModel):
     id: UUID
     sales_id: UUID
     sales_username: Optional[str] = None
+    sales_nama: Optional[str] = None
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
     status: str
+    notes: Optional[str] = None
     created_at: datetime
     expired_at: Optional[datetime]
     items: List[OrderItemResponse] = []
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
+    total_amount: Optional[int] = None
+    total_discount: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -164,6 +216,63 @@ class OrderListWithItemsResponse(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+
+# ==================== CUSTOMERS ====================
+
+class CustomerBase(BaseModel):
+    kode: Optional[str] = Field(None, max_length=50)
+    nama_toko: str = Field(..., min_length=1, max_length=200)
+    alamat: Optional[str] = None
+
+
+class CustomerCreate(CustomerBase):
+    pass
+
+
+class CustomerUpdate(BaseModel):
+    nama_toko: Optional[str] = None
+    alamat: Optional[str] = None
+
+
+class CustomerResponse(CustomerBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CustomerAssignmentRequest(BaseModel):
+    sales_ids: List[UUID]
+
+
+class SalesAssignmentResponse(BaseModel):
+    sales_id: UUID
+    sales_username: Optional[str] = None
+    sales_nama: Optional[str] = None
+    assigned_at: datetime
+
+
+class SalesUserResponse(BaseModel):
+    id: UUID
+    username: str
+    nama: Optional[str] = None
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
+# ==================== SALES STATS ====================
+
+class SalesStatsResponse(BaseModel):
+    omset_hari_ini: int
+    pending_count: int
+    selesai_bulan_ini_count: int
+    selesai_bulan_ini_total: int
 
 
 # ==================== STOCK LOG ====================

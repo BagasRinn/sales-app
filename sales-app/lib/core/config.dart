@@ -1,14 +1,15 @@
 class AppConfig {
-  // IMPORTANT: Use the correct address for your device type:
+  // Base URL untuk backend API. Set sesuai target runtime:
   //
-  //   Android Emulator → http://10.0.2.2:8000/api/v1
-  //     (10.0.2.2 is the emulator's alias for your laptop's localhost)
+  //   Chrome (web) di mesin yang sama dengan backend → http://localhost:8000/api/v1
   //
-  //   Physical Android Device → http://YOUR_PC_IP:8000/api/v1
-  //     (find your PC IP with: ipconfig → look for "IPv4 Address", e.g. 192.168.x.x)
-  //     Make sure your phone is on the SAME WiFi as your PC.
+  //   Android Emulator (AVD) → http://10.0.2.2:8000/api/v1
+  //     (10.0.2.2 adalah alias emulator ke host laptop)
   //
-  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
+  //   Physical Android/iOS device di WiFi sama → http://<PC-IP-LAN>:8000/api/v1
+  //     (cek dengan `ipconfig` → IPv4 Address, mis. 192.168.x.x)
+  //
+  static const String baseUrl = 'http://localhost:8000/api/v1';
 
   static const Duration requestTimeout = Duration(seconds: 30);
 

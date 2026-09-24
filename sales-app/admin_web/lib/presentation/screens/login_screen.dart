@@ -57,6 +57,8 @@ class _LoginScreenState extends State<LoginScreen> {
         accessToken: accessToken.toString(),
         refreshToken: refreshToken.toString(),
         username: _usernameController.text.trim(),
+        nama: data['nama']?.toString(),
+        role: data['role']?.toString(),
       );
 
       if (!mounted) return;
@@ -67,6 +69,8 @@ class _LoginScreenState extends State<LoginScreen> {
             accessToken: accessToken.toString(),
             refreshToken: refreshToken.toString(),
             username: _usernameController.text.trim(),
+            nama: data['nama']?.toString() ?? '',
+            role: data['role']?.toString() ?? 'ADMIN',
           ),
         ),
       );

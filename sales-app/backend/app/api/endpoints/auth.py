@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
-import uuid
 
 from app.models.database import get_db
 from app.models.models import User
@@ -23,8 +22,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username sudah terdaftar")
 
-    if user.role.upper() not in ("ADMIN", "SALES"):
-        raise HTTPException(status_code=400, detail="Role harus ADMIN atau SALES")
+    if user.role.upper() not in ("ADMIN", "MANAGER", "SALES"):
+        raise HTTPException(status_code=400, detail="Role harus ADMIN, MANAGER, atau SALES")
 
     new_user = User(
         username=user.username,
@@ -53,6 +52,12 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not db_user.is_active or db_user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun nonaktif. Hubungi manager.",
+        )
+
     access_token = create_access_token(
         data={
             "sub": str(db_user.id),
@@ -69,7 +74,15 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         }
     )
 
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "username": db_user.username,
+        "nama": db_user.nama,
+        "role": db_user.role,
+        "is_active": db_user.is_active,
+    }
 
 
 @router.post("/refresh", response_model=Token)

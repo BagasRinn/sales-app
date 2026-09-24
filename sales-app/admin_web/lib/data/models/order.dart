@@ -6,6 +6,7 @@ class Order {
   final DateTime? expiredAt;
   final List<OrderItem> items;
   final String? salesUsername;
+  final String? salesNama;
   final String? storeName;
   final String? storeContact;
   final String? storeAddress;
@@ -18,6 +19,7 @@ class Order {
     this.expiredAt,
     required this.items,
     this.salesUsername,
+    this.salesNama,
     this.storeName,
     this.storeContact,
     this.storeAddress,
@@ -32,14 +34,22 @@ class Order {
       expiredAt: json['expired_at'] != null ? DateTime.tryParse(json['expired_at']) : null,
       items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
       salesUsername: json['sales_username'],
+      salesNama: json['sales_nama'],
       storeName: json['store_name'],
       storeContact: json['store_contact'],
       storeAddress: json['store_address'],
     );
   }
 
+  String get salesDisplayName {
+    if (salesNama != null && salesNama!.isNotEmpty) return salesNama!;
+    if (salesUsername != null && salesUsername!.isNotEmpty) return salesUsername!;
+    return '?';
+  }
+
   int get totalItems => items.fold(0, (sum, item) => sum + item.qty);
-  int get totalAmount => items.fold(0, (sum, item) => sum + (item.qty * item.hargaSatuan));
+  int get totalAmount => items.fold(0, (sum, item) => sum + item.subtotal);
+  int get totalDiscount => items.fold(0, (sum, item) => sum + item.nominalDiskon);
 
   String get statusLabel {
     switch (status) {
@@ -60,6 +70,7 @@ class OrderItem {
   final String namaBarang;
   final int qty;
   final int hargaSatuan;
+  final int discountPercent;
 
   OrderItem({
     required this.id,
@@ -68,6 +79,7 @@ class OrderItem {
     required this.namaBarang,
     required this.qty,
     required this.hargaSatuan,
+    this.discountPercent = 0,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -78,6 +90,12 @@ class OrderItem {
       namaBarang: json['nama_barang'] ?? json['product_name'] ?? '',
       qty: json['qty'] ?? 0,
       hargaSatuan: json['harga_satuan'] ?? json['harga'] ?? 0,
+      discountPercent: json['discount_percent'] as int? ?? 0,
     );
   }
+
+  int get hargaSetelahDiskon =>
+      (hargaSatuan * (100 - discountPercent) / 100).round();
+  int get subtotal => hargaSetelahDiskon * qty;
+  int get nominalDiskon => (hargaSatuan - hargaSetelahDiskon) * qty;
 }

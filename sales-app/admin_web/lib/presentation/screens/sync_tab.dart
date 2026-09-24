@@ -155,6 +155,11 @@ class _SyncTabState extends State<SyncTab> {
           ],
 
           const SizedBox(height: 32),
+          // Customer Import Card
+          _CustomerImportCard(),
+
+
+          const SizedBox(height: 32),
           // Import history
           const Text('Histori Import', style: AppTextStyles.headlineLarge),
           const SizedBox(height: 16),
@@ -689,6 +694,219 @@ class _ImportLogRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class _CustomerImportCard extends StatefulWidget {
+  @override
+  State<_CustomerImportCard> createState() => _CustomerImportCardState();
+}
+
+
+class _CustomerImportCardState extends State<_CustomerImportCard> {
+  bool _importing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.successBg,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.store, size: 32, color: AppColors.success),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Import Toko (Customer)',
+                          style: AppTextStyles.headlineMedium),
+                      SizedBox(height: 4),
+                      Text(
+                        'Upload .xlsx untuk data toko + assignment sales ke customers',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  _InfoRowStatic(Icons.merge_type, 'Metode',
+                      'Upsert by nama_toko — insert baru, restore yang soft-deleted'),
+                  SizedBox(height: 8),
+                  _InfoRowStatic(Icons.security, 'Transaksi',
+                      'Per-row savepoint — 1 baris gagal tidak menggagalkan yang lain'),
+                  SizedBox(height: 8),
+                  _InfoRowStatic(Icons.person_add, 'Assignment sales',
+                      'Dilakukan manual via menu Toko (gunakan endpoint /customers/{id}/assign)'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.success),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Kolom Excel',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Wajib: kode, nama_toko (nama outlet)', style: AppTextStyles.bodySmall),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Opsional: alamat',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Contoh baris: "OUT001, Toko Maju Jaya, Jl. Sudirman 12"',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton.icon(
+                onPressed: _importing ? null : () => _pickAndImport(context, context.read<AdminProvider>()),
+                icon: _importing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.folder_open),
+                label: Text(_importing
+                    ? 'Mengimport...'
+                    : 'Pilih File Excel Toko (.xlsx)'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndImport(BuildContext context, AdminProvider provider) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Gagal membaca file'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _importing = true);
+    final success = await provider.importCustomersExcel(file.bytes!, file.name);
+    if (!mounted) return;
+    setState(() => _importing = false);
+
+    if (success) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Text(provider.lastSyncResult?.message ?? 'Import toko berhasil'),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Import toko gagal'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+}
+
+
+class _InfoRowStatic extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InfoRowStatic(this.icon, this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: 8),
+        Text('$label:', style: AppTextStyles.bodySmall),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 }

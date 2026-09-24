@@ -4,6 +4,10 @@ import '../../data/repositories/admin_repository.dart';
 import '../../data/models/order.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sync_result.dart';
+import '../../data/models/customer.dart';
+import '../../data/models/sales_user.dart';
+import '../../data/models/sales_assignment.dart';
+import '../../data/models/user_item.dart';
 import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
@@ -17,6 +21,7 @@ class AdminProvider extends ChangeNotifier {
   List<Order> _pendingOrders = [];
   List<Order> _allOrders = [];
   List<Product> _products = [];
+  List<Customer> _customers = [];
   SyncResult? _lastSyncResult;
   Map<String, int> _stats = {};
   String? _loadingMessage;
@@ -28,6 +33,12 @@ class AdminProvider extends ChangeNotifier {
   final int _productLimit = 20;
   int _productTotal = 0;
   String _productSearch = '';
+
+  // Customer pagination
+  int _customerPage = 0;
+  final int _customerLimit = 20;
+  int _customerTotal = 0;
+  String _customerSearch = '';
 
   // Filters
   String? _selectedKategori;
@@ -45,6 +56,7 @@ class AdminProvider extends ChangeNotifier {
   List<Order> get pendingOrders => _pendingOrders;
   List<Order> get allOrders => _allOrders;
   List<Product> get products => _products;
+  List<Customer> get customers => _customers;
   SyncResult? get lastSyncResult => _lastSyncResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
@@ -60,6 +72,25 @@ class AdminProvider extends ChangeNotifier {
   String? get selectedKategori => _selectedKategori;
   String? get selectedStatus => _selectedStatus;
   String? get orderFilter => _orderFilter;
+
+  int get customerPage => _customerPage;
+  int get customerLimit => _customerLimit;
+  int get customerTotal => _customerTotal;
+  int get customerTotalPages => (_customerTotal / _customerLimit).ceil();
+  bool get hasPrevCustomerPage => _customerPage > 0;
+  bool get hasNextCustomerPage => _customerPage < customerTotalPages - 1;
+  String get customerSearch => _customerSearch;
+
+  String _userRole = 'ADMIN';
+  String get userRole => _userRole;
+  bool get isAdmin => _userRole == 'ADMIN';
+  bool get isManager => _userRole == 'MANAGER';
+
+  void setUserRole(String role) {
+    // Tidak notifyListeners: _userRole cuma dipakai loadAll() untuk skip endpoint
+    // admin-only. UI pakai widget.role langsung dari DashboardScreen.
+    _userRole = role;
+  }
 
   /// Start auto-refresh. Call from dashboard initState.
   void startAutoRefresh({Duration interval = const Duration(seconds: 30)}) {
@@ -84,13 +115,14 @@ class AdminProvider extends ChangeNotifier {
     try {
       final prevLength = _pendingOrders.length;
       final prevStats = Map<String, int>.from(_stats);
-      await Future.wait([
+      final tasks = <Future<void>>[
         _loadPendingOrders(),
-        _loadStats(),
-      ]);
+        if (isAdmin) _loadStats(),
+      ];
+      await Future.wait(tasks);
       // Only rebuild UI if data actually changed
       final pendingChanged = _pendingOrders.length != prevLength;
-      final statsChanged = !_mapEquals(_stats, prevStats);
+      final statsChanged = isAdmin && !_mapEquals(_stats, prevStats);
       if (pendingChanged) {
         _hasNewPending = _pendingOrders.length > prevLength;
       }
@@ -215,6 +247,192 @@ class AdminProvider extends ChangeNotifier {
     await loadProducts();
   }
 
+  Future<void> _loadCustomers() async {
+    final results = await Future.wait([
+      _repo.getCustomers(
+        page: _customerPage,
+        limit: _customerLimit,
+        search: _customerSearch.isEmpty ? null : _customerSearch,
+      ),
+      _repo.getCustomerCount(
+        search: _customerSearch.isEmpty ? null : _customerSearch,
+      ),
+    ]);
+    _customers = results[0] as List<Customer>;
+    _customerTotal = results[1] as int;
+  }
+
+  Future<void> loadCustomers() async {
+    try {
+      await _loadCustomers();
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+    }
+    notifyListeners();
+  }
+
+  Future<void> searchCustomers(String query) async {
+    _customerSearch = query;
+    _customerPage = 0;
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(_searchDebounceDuration, () => loadCustomers());
+  }
+
+  Future<void> clearCustomerSearch() async {
+    _customerSearch = '';
+    _customerPage = 0;
+    _searchDebounceTimer?.cancel();
+    await loadCustomers();
+  }
+
+  Future<void> nextCustomerPage() async {
+    if (hasNextCustomerPage) {
+      _customerPage++;
+      await loadCustomers();
+    }
+  }
+
+  Future<void> prevCustomerPage() async {
+    if (hasPrevCustomerPage) {
+      _customerPage--;
+      await loadCustomers();
+    }
+  }
+
+  Future<Customer> getCustomerDetail(String customerId) async {
+    return await _repo.getCustomer(customerId);
+  }
+
+  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+    return await _repo.getCustomerAssignments(customerId);
+  }
+
+  Future<List<SalesUser>> listSalesUsers() async {
+    return await _repo.listSalesUsers();
+  }
+
+  Future<bool> updateCustomer(String customerId, Map<String, dynamic> body) async {
+    _setLoading(true, 'Menyimpan perubahan...');
+    try {
+      await _repo.updateCustomer(customerId, body);
+      await _loadCustomers();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> assignCustomerSales(String customerId, List<String> salesIds) async {
+    _setLoading(true, 'Menyimpan assignment sales...');
+    try {
+      await _repo.assignCustomerSales(customerId, salesIds);
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCustomer(String customerId) async {
+    _setLoading(true, 'Menghapus toko...');
+    try {
+      await _repo.deleteCustomer(customerId);
+      await _loadCustomers();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ====== User management (manager only) ======
+  List<UserItem> _users = [];
+  String _userRoleFilter = '';
+  String _userSearch = '';
+
+  List<UserItem> get users => _users;
+  String get userRoleFilter => _userRoleFilter;
+  String get userSearch => _userSearch;
+
+  Future<void> loadUsers({String? role, String? search}) async {
+    if (role != null) _userRoleFilter = role;
+    if (search != null) _userSearch = search;
+    try {
+      _users = await _repo.getUsers(
+        role: _userRoleFilter.isEmpty ? null : _userRoleFilter,
+        search: _userSearch.isEmpty ? null : _userSearch,
+      );
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+    }
+    notifyListeners();
+  }
+
+  Future<bool> createUser({
+    required String username,
+    required String password,
+    required String role,
+    String? nama,
+  }) async {
+    _setLoading(true, 'Membuat user...');
+    try {
+      await _repo.createUser(
+        username: username,
+        password: password,
+        role: role,
+        nama: nama,
+      );
+      await loadUsers();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateUser(String userId, Map<String, dynamic> body) async {
+    _setLoading(true, 'Menyimpan perubahan...');
+    try {
+      await _repo.updateUser(userId, body);
+      await loadUsers();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteUser(String userId) async {
+    _setLoading(true, 'Menghapus user...');
+    try {
+      await _repo.deleteUser(userId);
+      await loadUsers();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> _loadStats() async {
     try {
       _stats = await _repo.getDashboardStats();
@@ -226,12 +444,18 @@ class AdminProvider extends ChangeNotifier {
   Future<void> loadAll() async {
     _setLoading(true, 'Memuat data...');
     try {
-      await Future.wait([
+      // MANAGER butuh stats untuk Dashboard (read-only).
+      // MANAGER tidak butuh produk (tab Produk & Stok tidak ada untuk mereka).
+      final tasks = <Future<void>>[
         _loadPendingOrders(),
         _loadAllOrders(),
-        _loadProducts(),
+        _loadCustomers(),
         _loadStats(),
-      ]);
+      ];
+      if (isAdmin) {
+        tasks.add(_loadProducts());
+      }
+      await Future.wait(tasks);
       _state = AdminState.loaded;
     } catch (e) {
       _state = AdminState.error;
@@ -336,7 +560,7 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<bool> syncProducts() async {
-    _setLoading(true, 'Menyinkronkan data dari Google Sheets...');
+    _setLoading(true, 'Menyinkronkan data dari Excel...');
     try {
       _lastSyncResult = await _repo.syncProducts();
       await _loadProducts();
@@ -357,6 +581,20 @@ class AdminProvider extends ChangeNotifier {
       _lastSyncResult = await _repo.importExcel(fileBytes, fileName);
       await _loadProducts();
       await _loadStats();
+      _setLoading(false);
+      return true;
+    } on ApiException catch (e) {
+      _setLoading(false);
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> importCustomersExcel(List<int> fileBytes, String fileName) async {
+    _setLoading(true, 'Mengimport data toko...');
+    try {
+      _lastSyncResult = await _repo.importCustomersExcel(fileBytes, fileName);
       _setLoading(false);
       return true;
     } on ApiException catch (e) {

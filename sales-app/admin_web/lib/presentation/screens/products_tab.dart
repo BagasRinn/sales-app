@@ -123,7 +123,7 @@ class _ProductsTabState extends State<ProductsTab> {
                   SizedBox(
                     width: 160,
                     child: DropdownButtonFormField<String>(
-                      value: selectedKategori,
+                      initialValue: selectedKategori,
                       decoration: InputDecoration(
                         hintText: 'Kategori',
                         contentPadding: const EdgeInsets.symmetric(
@@ -149,7 +149,7 @@ class _ProductsTabState extends State<ProductsTab> {
                   SizedBox(
                     width: 140,
                     child: DropdownButtonFormField<String>(
-                      value: selectedStatus,
+                      initialValue: selectedStatus,
                       decoration: InputDecoration(
                         hintText: 'Status',
                         contentPadding: const EdgeInsets.symmetric(

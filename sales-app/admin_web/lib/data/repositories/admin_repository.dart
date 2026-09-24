@@ -2,6 +2,10 @@ import '../repositories/api_service.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/sync_result.dart';
+import '../models/customer.dart';
+import '../models/sales_user.dart';
+import '../models/sales_assignment.dart';
+import '../models/user_item.dart';
 
 class AdminRepository {
   final ApiService _api;
@@ -93,6 +97,95 @@ class AdminRepository {
   Future<SyncResult> importExcel(List<int> fileBytes, String fileName) async {
     final data = await _api.postFile('/products/import-excel', fileBytes, fileName);
     return SyncResult.fromJson(data);
+  }
+
+  Future<SyncResult> importCustomersExcel(List<int> fileBytes, String fileName) async {
+    final data = await _api.postFile('/customers/import-excel', fileBytes, fileName);
+    return SyncResult.fromJson(data);
+  }
+
+  Future<List<Customer>> getCustomers({int page = 0, int limit = 20, String? search}) async {
+    final queryParams = {
+      'skip': (page * limit).toString(),
+      'limit': limit.toString(),
+      if (search != null && search.isNotEmpty) 'search': search,
+    };
+    final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
+    final data = await _api.get('/customers?$queryString');
+    return (data as List).map((e) => Customer.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<int> getCustomerCount({String? search}) async {
+    final queryParams = {
+      if (search != null && search.isNotEmpty) 'search': search,
+    };
+    final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/customers/count$queryString');
+    return data['total'] as int;
+  }
+
+  Future<Customer> getCustomer(String customerId) async {
+    final data = await _api.get('/customers/$customerId');
+    return Customer.fromJson(data);
+  }
+
+  Future<Customer> updateCustomer(String customerId, Map<String, dynamic> body) async {
+    final data = await _api.put('/customers/$customerId', body: body);
+    return Customer.fromJson(data);
+  }
+
+  Future<void> deleteCustomer(String customerId) async {
+    await _api.delete('/customers/$customerId');
+  }
+
+  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+    final data = await _api.get('/customers/$customerId/assignments');
+    return (data as List).map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<SalesAssignment>> assignCustomerSales(String customerId, List<String> salesIds) async {
+    final data = await _api.post('/customers/$customerId/assign', body: {
+      'sales_ids': salesIds,
+    });
+    return (data as List).map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<SalesUser>> listSalesUsers() async {
+    final data = await _api.get('/users/sales');
+    return (data as List).map((e) => SalesUser.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<UserItem>> getUsers({String? role, String? search}) async {
+    final params = <String, String>{};
+    if (role != null && role.isNotEmpty) params['role'] = role;
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    final qs = params.isEmpty ? '' : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/users$qs');
+    return (data as List).map((e) => UserItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<UserItem> createUser({
+    required String username,
+    required String password,
+    required String role,
+    String? nama,
+  }) async {
+    final data = await _api.post('/users', body: {
+      'username': username,
+      'password': password,
+      'role': role,
+      if (nama != null && nama.isNotEmpty) 'nama': nama,
+    });
+    return UserItem.fromJson(data);
+  }
+
+  Future<UserItem> updateUser(String userId, Map<String, dynamic> body) async {
+    final data = await _api.put('/users/$userId', body: body);
+    return UserItem.fromJson(data);
+  }
+
+  Future<void> deleteUser(String userId) async {
+    await _api.delete('/users/$userId');
   }
 
   Future<List<SyncError>> getSyncErrors() async {

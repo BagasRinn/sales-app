@@ -9,7 +9,9 @@ String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(amount);
 
 class OrdersTab extends StatefulWidget {
-  const OrdersTab({super.key});
+  /// Kalau true, sembunyikan tombol Approve/Reject (untuk MANAGER).
+  final bool readOnly;
+  const OrdersTab({super.key, this.readOnly = false});
 
   @override
   State<OrdersTab> createState() => _OrdersTabState();
@@ -130,8 +132,8 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       itemCount: orders.length,
       itemBuilder: (ctx, i) => _OrderCard(
         order: orders[i],
-        onApprove: () => _approveOrder(orders[i].id),
-        onReject: () => _rejectOrder(orders[i].id),
+        onApprove: widget.readOnly ? null : () => _approveOrder(orders[i].id),
+        onReject: widget.readOnly ? null : () => _rejectOrder(orders[i].id),
       ),
     );
   }
@@ -203,22 +205,24 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.successBg,
-                  shape: BoxShape.circle,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.successBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child:
+                      const Icon(Icons.check_circle, size: 40, color: AppColors.success),
                 ),
-                child:
-                    const Icon(Icons.check_circle, size: 40, color: AppColors.success),
-              ),
-              const SizedBox(height: 20),
-              const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
+                const SizedBox(height: 20),
+                const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
               const SizedBox(height: 8),
               const Text(
                 'Stok sistem akan dikurangi sesuai jumlah pesanan.',
@@ -247,6 +251,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
           ),
         ),
       ),
+    ),
     );
 
     if (confirm == true && mounted) {
@@ -401,9 +406,9 @@ class _OrderCard extends StatelessWidget {
                 'Order #${order.id.substring(0, 8)}',
                 style: AppTextStyles.mono,
               ),
-              if (order.salesUsername != null)
+              if (order.salesUsername != null || order.salesNama != null)
                 Text(
-                  'Sales: ${order.salesUsername}',
+                  'Sales: ${order.salesDisplayName}',
                   style: AppTextStyles.bodySmall,
                 ),
               const SizedBox(height: 2),
@@ -499,8 +504,8 @@ class _OrderCard extends StatelessWidget {
                             order.storeAddress!.isNotEmpty)
                           _infoRow(
                               Icons.location_on, 'Alamat', order.storeAddress!),
-                        if (order.salesUsername != null)
-                          _infoRow(Icons.person, 'Sales', order.salesUsername!),
+                        if (order.salesUsername != null || order.salesNama != null)
+                          _infoRow(Icons.person, 'Sales', order.salesDisplayName),
                       ],
                     ),
                   ),
@@ -513,13 +518,27 @@ class _OrderCard extends StatelessWidget {
                 ...order.items.map((item) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Text(
-                              item.namaBarang.isNotEmpty
-                                  ? item.namaBarang
-                                  : 'Produk ${item.productId}',
-                              style: AppTextStyles.bodyMedium,
+                            flex: 2,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.namaBarang.isNotEmpty
+                                      ? item.namaBarang
+                                      : 'Produk ${item.productId}',
+                                  style: AppTextStyles.bodyMedium,
+                                ),
+                                if (item.discountPercent > 0)
+                                  Text(
+                                    'Diskon ${item.discountPercent}%',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           Text(
@@ -527,15 +546,37 @@ class _OrderCard extends StatelessWidget {
                             style: AppTextStyles.bodySmall,
                           ),
                           const SizedBox(width: 16),
-                          SizedBox(
-                            width: 90,
-                            child: Text(
-                              currencyFormat.format(item.hargaSatuan * item.qty),
-                              textAlign: TextAlign.right,
-                              style: AppTextStyles.labelLarge
-                                  .copyWith(fontSize: 13),
+                          if (item.discountPercent > 0)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  currencyFormat.format(
+                                      item.hargaSatuan * item.qty),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textMuted,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                Text(
+                                  currencyFormat.format(item.subtotal),
+                                  style: AppTextStyles.labelLarge.copyWith(
+                                    fontSize: 13,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            SizedBox(
+                              width: 90,
+                              child: Text(
+                                currencyFormat.format(item.subtotal),
+                                textAlign: TextAlign.right,
+                                style: AppTextStyles.labelLarge
+                                    .copyWith(fontSize: 13),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     )),
@@ -552,6 +593,27 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (order.totalDiscount > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total Diskon',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                      Text(
+                        '- ${_fmt(order.totalDiscount)}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

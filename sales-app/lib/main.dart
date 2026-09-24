@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'core/theme.dart';
 import 'core/jwt_utils.dart';
 import 'data/repositories/api_service.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/product_repository.dart';
 import 'data/repositories/order_repository.dart';
+import 'data/repositories/customer_repository.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/product_provider.dart';
-import 'presentation/providers/cart_provider.dart';
 import 'presentation/providers/order_provider.dart';
+import 'presentation/providers/draft_order_provider.dart';
+import 'presentation/providers/home_stats_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Locale data harus diinisialisasi sebelum NumberFormat/DateFormat dengan locale kustom.
+  await initializeDateFormatting('id_ID', null);
   runApp(const SalesApp());
 }
 
@@ -25,7 +32,6 @@ class SalesApp extends StatefulWidget {
 }
 
 class _SalesAppState extends State<SalesApp> {
-  // Single shared ApiService instance for all repositories
   late final ApiService _apiService;
 
   @override
@@ -39,6 +45,7 @@ class _SalesAppState extends State<SalesApp> {
     final authRepository = AuthRepository(_apiService);
     final productRepository = ProductRepository(_apiService);
     final orderRepository = OrderRepository(_apiService);
+    final customerRepository = CustomerRepository(_apiService);
 
     return MultiProvider(
       providers: [
@@ -49,10 +56,16 @@ class _SalesAppState extends State<SalesApp> {
           create: (_) => ProductProvider(productRepository),
         ),
         ChangeNotifierProvider(
-          create: (_) => CartProvider(),
+          create: (_) => OrderProvider(orderRepository),
         ),
         ChangeNotifierProvider(
-          create: (_) => OrderProvider(orderRepository),
+          create: (_) => DraftOrderProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => HomeStatsProvider(orderRepository),
+        ),
+        Provider<CustomerRepository>.value(
+          value: customerRepository,
         ),
       ],
       child: MaterialApp(
@@ -86,7 +99,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkAuth() async {
-    // Wire token expiry callback — triggers redirect to login
     widget.apiService.onTokenExpired = () {
       if (mounted) {
         context.read<AuthProvider>().forceLogout('Sesi login berakhir. Silakan masuk kembali.');
@@ -96,7 +108,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final authProvider = context.read<AuthProvider>();
     await authProvider.checkLoginStatus();
 
-    // Also check if stored token is already expired before navigating
     if (authProvider.state == AuthState.authenticated) {
       final token = await authProvider.getToken();
       if (JwtUtils.isExpired(token)) {
@@ -113,9 +124,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Widget build(BuildContext context) {
     if (_checking) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 

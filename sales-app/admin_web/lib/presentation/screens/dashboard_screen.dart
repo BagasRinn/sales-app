@@ -11,17 +11,23 @@ import 'orders_tab.dart';
 import 'products_tab.dart';
 import 'sync_tab.dart';
 import 'stats_tab.dart';
+import 'customers_tab.dart';
+import 'users_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
   final String refreshToken;
   final String username;
+  final String nama;
+  final String role;
 
   const DashboardScreen({
     super.key,
     required this.accessToken,
     required this.refreshToken,
     required this.username,
+    required this.nama,
+    required this.role,
   });
 
   @override
@@ -43,6 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       accessToken: widget.accessToken,
       refreshToken: widget.refreshToken,
       username: widget.username,
+      nama: widget.nama.isEmpty ? null : widget.nama,
+      role: widget.role,
     );
   }
 
@@ -55,17 +63,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AdminProvider(_repo)..loadAll(),
-      child: _DashboardContent(username: widget.username, apiService: _apiService),
+      create: (_) => AdminProvider(_repo),
+      child: _DashboardContent(
+        username: widget.username,
+        nama: widget.nama,
+        role: widget.role,
+        apiService: _apiService,
+      ),
     );
   }
 }
 
 class _DashboardContent extends StatefulWidget {
   final String username;
+  final String nama;
+  final String role;
   final ApiService apiService;
 
-  const _DashboardContent({required this.username, required this.apiService});
+  const _DashboardContent({
+    required this.username,
+    required this.nama,
+    required this.role,
+    required this.apiService,
+  });
 
   @override
   State<_DashboardContent> createState() => _DashboardContentState();
@@ -75,15 +95,39 @@ class _DashboardContentState extends State<_DashboardContent> {
   int _selectedIndex = 0;
   late final AdminProvider _adminProvider;
   late final ApiService _apiService;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
-  static const _navItems = [
-    _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
-    _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
-    _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
-    _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
-  ];
+  bool get _isAdmin => widget.role == 'ADMIN';
+  bool get _isManager => widget.role == 'MANAGER';
 
-  static const _titles = ['Dashboard', 'Pesanan', 'Produk & Stok', 'Sinkronisasi'];
+  List<_NavItem> get _navItems {
+    // Urutan tab konsisten untuk kedua role — MANAGER dapat Dashboard juga
+    // (ringkasan read-only), tapi TIDAK dapat Produk & Stok / Sinkronisasi.
+    final items = <_NavItem>[
+      const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
+      const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
+      const _NavItem(icon: Icons.store_outlined, selectedIcon: Icons.store, label: 'Toko'),
+    ];
+    if (_isAdmin) {
+      items.addAll([
+        const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
+        const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
+      ]);
+    }
+    if (_isManager) {
+      items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
+    }
+    return items;
+  }
+
+  List<String> get _titles {
+    final titles = <String>['Dashboard', 'Pesanan', 'Toko'];
+    if (_isAdmin) {
+      titles.addAll(['Produk & Stok', 'Sinkronisasi']);
+    }
+    if (_isManager) titles.add('User');
+    return titles;
+  }
 
   @override
   void initState() {
@@ -91,43 +135,59 @@ class _DashboardContentState extends State<_DashboardContent> {
     _adminProvider = context.read<AdminProvider>();
     _apiService = widget.apiService;
 
-    // Register 401 callback — redirects to login
-    _apiService.setOnUnauthorized(() async {
-      await AuthStorage().clearTokens();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-      }
-    });
+    // Register 401 callback — redirect via navigatorKey supaya aman
+    // dipanggil setelah widget dispose (context tidak boleh dipakai post-dispose).
+    _apiService.setOnUnauthorized(_handleUnauthorized);
 
     // Check token expiry on startup — redirect to login if expired
     if (JwtUtils.isExpired(_apiService.accessToken)) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await AuthStorage().clearTokens();
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-        }
+        if (!mounted) return;
+        _pushLogin();
       });
       return;
     }
 
-    // Start auto-refresh every 30 seconds
+    // Set role di provider supaya loadAll() tahu endpoint mana yang boleh dipanggil.
+    // loadAll + auto-refresh dijalankan SETELAH frame pertama selesai — supaya
+    // notifyListeners tidak terjadi di tengah build phase (yang bisa trigger _dirty).
+    _adminProvider.setUserRole(widget.role);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _adminProvider.loadAll();
       _adminProvider.startAutoRefresh();
     });
+  }
+
+  void _handleUnauthorized() async {
+    await AuthStorage().clearTokens();
+    if (!mounted) return;
+    _pushLogin();
+  }
+
+  void _pushLogin() {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null) return;
+    navigator.pushReplacement(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
   }
 
   @override
   void dispose() {
     _adminProvider.stopAutoRefresh();
+    _apiService.setOnUnauthorized(null);
     super.dispose();
   }
 
   void _onNavTap(int i) {
-    if (_selectedIndex == 1 && i != 1) {
+    final items = _navItems;
+    final leavingOrders = i != 1 &&
+        _selectedIndex == 1 &&
+        _selectedIndex < items.length &&
+        items[_selectedIndex].label == 'Pesanan';
+    if (leavingOrders) {
       // Clear badge when leaving orders tab
       context.read<AdminProvider>().clearNewPendingBadge();
     }
@@ -135,18 +195,36 @@ class _DashboardContentState extends State<_DashboardContent> {
   }
 
   Widget _buildBody() {
-    switch (_selectedIndex) {
+    final items = _navItems;
+    final i = _selectedIndex.clamp(0, items.length - 1);
+
+    if (_isManager) {
+      // MANAGER: Dashboard, Pesanan (read-only), Toko, User
+      switch (i) {
+        case 0:
+          return const StatsTab();
+        case 1:
+          return const OrdersTab(readOnly: true);
+        case 2:
+          return const CustomersTab();
+        case 3:
+          return const UsersTab();
+      }
+    }
+    // ADMIN: Dashboard, Pesanan, Toko, Produk & Stok, Sinkronisasi
+    switch (i) {
       case 0:
         return const StatsTab();
       case 1:
         return const OrdersTab();
       case 2:
-        return const ProductsTab();
+        return const CustomersTab();
       case 3:
+        return const ProductsTab();
+      case 4:
         return const SyncTab();
-      default:
-        return const StatsTab();
     }
+    return const StatsTab();
   }
 
   @override
@@ -290,16 +368,21 @@ class _DashboardContentState extends State<_DashboardContent> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
-                          child: Text(
-                            widget.username.isNotEmpty
-                                ? widget.username[0].toUpperCase()
-                                : 'A',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
+                          child: Builder(builder: (_) {
+                            final display = widget.nama.isNotEmpty
+                                ? widget.nama
+                                : widget.username;
+                            return Text(
+                              display.isNotEmpty
+                                  ? display[0].toUpperCase()
+                                  : 'A',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            );
+                          }),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -307,19 +390,24 @@ class _DashboardContentState extends State<_DashboardContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Builder(builder: (_) {
+                              final display = widget.nama.isNotEmpty
+                                  ? widget.nama
+                                  : widget.username;
+                              return Text(
+                                display,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: AppTextStyles.fontFamily,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            }),
                             Text(
-                              widget.username,
+                              widget.role == 'MANAGER' ? 'Manager' : 'Administrator',
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const Text(
-                              'Administrator',
-                              style: TextStyle(
                                 color: Colors.white54,
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 11,
@@ -367,6 +455,26 @@ class _DashboardContentState extends State<_DashboardContent> {
                         _titles[_selectedIndex],
                         style: AppTextStyles.headlineMedium,
                       ),
+                      if (widget.role == 'MANAGER')
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.infoBg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.infoBorder),
+                            ),
+                            child: const Text(
+                              'Read-only',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.info,
+                              ),
+                            ),
+                          ),
+                        ),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.refresh),

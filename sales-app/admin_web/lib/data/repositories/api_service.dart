@@ -19,6 +19,11 @@ class ApiService {
     _dio.interceptors.add(_authInterceptor);
   }
 
+  // Import-excel endpoints can run for minutes on big files; the default
+  // 10s receive timeout aborts before the server finishes. Per-call override
+  // keeps short timeouts on regular JSON calls.
+  static const Duration _importReceiveTimeout = Duration(seconds: 180);
+
   void setTokens({String? access, String? refresh}) {
     _dio.options.headers['Authorization'] = access != null ? 'Bearer $access' : null;
     _refreshToken = refresh;
@@ -79,6 +84,9 @@ class ApiService {
         data: formData,
         options: Options(
           headers: {'Content-Type': 'multipart/form-data'},
+          receiveTimeout: endpoint.contains('/import-excel')
+              ? _importReceiveTimeout
+              : null,
         ),
       );
       return resp.data;
