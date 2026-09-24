@@ -105,3 +105,9 @@ docs/superpowers/
 **/coverage/
 **/.fvm/
 **/l10n.yaml.local
+
+# ---------- Env files (secrets) ----------
+.env
+.env.local
+.env.production
+.env.*.local

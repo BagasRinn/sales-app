@@ -287,49 +287,52 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.errorBg,
-                  shape: BoxShape.circle,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
                 ),
-                child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
-              ),
-              const SizedBox(height: 20),
-              const Text('Tolak Pesanan?', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 8),
-              const Text(
-                'Stok booking akan dikembalikan, stok sistem tidak berubah.',
-                style: AppTextStyles.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.error,
+                const SizedBox(height: 20),
+                const Text('Tolak Pesanan?', style: AppTextStyles.headlineSmall),
+                const SizedBox(height: 8),
+                const Text(
+                  'Stok booking akan dikembalikan, stok sistem tidak berubah.',
+                  style: AppTextStyles.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Batal'),
                       ),
-                      child: const Text('Tolak'),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                        ),
+                        child: const Text('Tolak'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
