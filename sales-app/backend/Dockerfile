@@ -8,13 +8,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
-COPY requirements.txt .
+# Railway passes repo root as build context, so we copy only the backend folder
+COPY sales-app/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+COPY sales-app/backend/ .
 
-# Run the app — Render uses the "Start Command" field separately,
-# so CMD is here as a fallback.
+# Run the app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
