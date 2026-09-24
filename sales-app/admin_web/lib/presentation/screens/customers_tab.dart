@@ -338,11 +338,13 @@ class _CustomersTabState extends State<CustomersTab> {
       ),
     );
 
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !mounted) return;
     final provider = context.read<AdminProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     final success = await provider.deleteCustomer(c.id);
-    if (success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (!mounted) return;
+    if (success) {
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -354,8 +356,8 @@ class _CustomersTabState extends State<CustomersTab> {
           backgroundColor: AppColors.success,
         ),
       );
-    } else if (!success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    } else {
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
               provider.errorMessage ?? 'Gagal menghapus toko'),
