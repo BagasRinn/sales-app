@@ -9,7 +9,7 @@ class AppConfig {
   //   Physical Android/iOS device di WiFi sama → http://<PC-IP-LAN>:8000/api/v1
   //     (cek dengan `ipconfig` → IPv4 Address, mis. 192.168.x.x)
   //
-  static const String baseUrl = 'http://localhost:8000/api/v1';
+  static const String baseUrl = 'https://practical-beauty-production-071a.up.railway.app/api/v1';
 
   static const Duration requestTimeout = Duration(seconds: 30);
 

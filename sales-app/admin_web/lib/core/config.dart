@@ -3,5 +3,5 @@ class AppConfig {
   // from another device on the same network.
   // To find your IP: run `ipconfig` in cmd and look for "IPv4 Address".
   // For local development on the same machine
-  static const String baseUrl = 'http://localhost:8000/api/v1';
+  static const String baseUrl = 'https://practical-beauty-production-071a.up.railway.app/api/v1';
 }
