@@ -14,6 +14,12 @@ class OrderProvider extends ChangeNotifier {
   String? _errorMessage;
   String? _activeStatusFilter;
 
+  // Dipakai khusus untuk section "Orderan Terbaru" di Beranda.
+  // Dipisah dari `_orders` supaya filter yang dipasang di halaman Pesanan
+  // tidak mengotori tampilan Orderan Terbaru.
+  List<Order> _recentOrders = [];
+  bool _isLoadingRecent = false;
+
   OrderProvider(this._orderRepo);
 
   List<Order> get orders => _orders;
@@ -22,6 +28,9 @@ class OrderProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   String? get errorMessage => _errorMessage;
   String? get activeStatusFilter => _activeStatusFilter;
+
+  List<Order> get recentOrders => _recentOrders;
+  bool get isLoadingRecent => _isLoadingRecent;
 
   int countByStatus(String status) {
     return _orders.where((o) => o.status == status).length;
@@ -72,6 +81,28 @@ class OrderProvider extends ChangeNotifier {
     await loadOrders(status: _activeStatusFilter, reset: true);
   }
 
+  /// Ambil 5 order terbaru (semua status) khusus untuk section "Orderan Terbaru"
+  /// di Beranda. Tidak pernah append — selalu replace list supaya tampilan
+  /// Orderan Terbaru konsisten dengan backend dan tidak terkontaminasi filter
+  /// yang dipasang di halaman Pesanan.
+  Future<void> loadRecentOrders() async {
+    _isLoadingRecent = true;
+    notifyListeners();
+
+    try {
+      _recentOrders = await _orderRepo.getMyOrders(
+        skip: 0,
+        limit: 5,
+        status: null,
+      );
+    } catch (e) {
+      // Diam saja — fallback ke list sebelumnya supaya UI tidak blank.
+    }
+
+    _isLoadingRecent = false;
+    notifyListeners();
+  }
+
   Future<Order?> getOrderDetail(String orderId) async {
     try {
       return await _orderRepo.getOrderDetail(orderId);
@@ -85,7 +116,7 @@ class OrderProvider extends ChangeNotifier {
   Future<Order?> createOrder({
     required String customerId,
     required Map<String, int> items,
-    required Map<String, int> discounts,
+    required Map<String, int> discounts, // legacy: productId -> discount_percent
     String? notes,
   }) async {
     _errorMessage = null;
@@ -96,6 +127,9 @@ class OrderProvider extends ChangeNotifier {
           .map((e) => {
                 'product_id': e.key,
                 'qty': e.value,
+                // Mobile step_review UI baru support persen — order_provider
+                // masih pakai signature Map<productId, percent>. Step UI
+                // akan di-update terpisah untuk kirim nominal juga.
                 'discount_percent': discounts[e.key] ?? 0,
               })
           .toList();

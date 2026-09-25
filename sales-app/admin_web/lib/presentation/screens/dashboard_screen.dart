@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_storage.dart';
 import '../../core/design_system.dart';
 import '../../core/jwt_utils.dart';
+import '../../core/navigator_key.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../data/repositories/api_service.dart';
 import '../providers/admin_provider.dart';
@@ -91,11 +94,20 @@ class _DashboardContent extends StatefulWidget {
   State<_DashboardContent> createState() => _DashboardContentState();
 }
 
-class _DashboardContentState extends State<_DashboardContent> {
+class _DashboardContentState extends State<_DashboardContent>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
   late final AdminProvider _adminProvider;
   late final ApiService _apiService;
-  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  // Track aktivitas user untuk idle auto-logout. Default 15 menit — standar
+  // untuk aplikasi admin. Bisa diturunkan kalau perlu lebih ketat, atau
+  // dinaikkan kalau admin sering monitor tanpa interaksi.
+  static const Duration _idleTimeout = Duration(minutes: 15);
+  static const Duration _idleCheckInterval = Duration(seconds: 30);
+
+  DateTime _lastActivity = DateTime.now();
+  Timer? _idleTimer;
 
   bool get _isAdmin => widget.role == 'ADMIN';
   bool get _isManager => widget.role == 'MANAGER';
@@ -134,6 +146,7 @@ class _DashboardContentState extends State<_DashboardContent> {
     super.initState();
     _adminProvider = context.read<AdminProvider>();
     _apiService = widget.apiService;
+    WidgetsBinding.instance.addObserver(this);
 
     // Register 401 callback — redirect via navigatorKey supaya aman
     // dipanggil setelah widget dispose (context tidak boleh dipakai post-dispose).
@@ -157,6 +170,10 @@ class _DashboardContentState extends State<_DashboardContent> {
       if (!mounted) return;
       _adminProvider.loadAll();
       _adminProvider.startAutoRefresh();
+      // Idle timer baru mulai setelah load pertama selesai — supaya
+      // activity "load" dari internal tidak dihitung interaksi user.
+      _lastActivity = DateTime.now();
+      _idleTimer = Timer.periodic(_idleCheckInterval, (_) => _checkIdle());
     });
   }
 
@@ -167,15 +184,45 @@ class _DashboardContentState extends State<_DashboardContent> {
   }
 
   void _pushLogin() {
-    final navigator = _navigatorKey.currentState;
+    final navigator = rootNavigatorKey.currentState;
     if (navigator == null) return;
-    navigator.pushReplacement(
+    // pushAndRemoveUntil (bukan pushReplacement) supaya SELURUH stack
+    // dibersihkan — kalau user sedang di sub-screen (mis. detail pesanan),
+    // sub-screen DAN DashboardScreen semuanya hilang, hanya LoginScreen
+    // yang tersisa.
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
     );
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    // Di web, lifecycle state dipakai untuk tab focus events
+    // (inactive/hidden = tab di background, resumed = tab aktif).
+    if (lifecycleState == AppLifecycleState.resumed) {
+      _recordActivity();
+    }
+  }
+
+  void _recordActivity() {
+    _lastActivity = DateTime.now();
+  }
+
+  void _checkIdle() {
+    if (!mounted) return;
+    final idle = DateTime.now().difference(_lastActivity);
+    if (idle > _idleTimeout) {
+      _idleTimer?.cancel();
+      AuthStorage().clearTokens();
+      _pushLogin();
+    }
+  }
+
+  @override
   void dispose() {
+    _idleTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _adminProvider.stopAutoRefresh();
     _apiService.setOnUnauthorized(null);
     super.dispose();
@@ -229,7 +276,18 @@ class _DashboardContentState extends State<_DashboardContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Listener (translucent) di paling luar: setiap pointer event di dashboard
+    // dianggap aktivitas user. Tanpa throttle — Timer._checkIdle sudah jalan
+    // setiap 30 detik, jadi tidak perlu debounce di sisi Listener.
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _recordActivity(),
+      onPointerMove: (event) {
+        // Track drag, tapi jangan spam pada hover biasa.
+        if (event.buttons != 0) _recordActivity();
+      },
+      onPointerSignal: (_) => _recordActivity(), // wheel/trackpad
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
         children: [
@@ -420,13 +478,9 @@ class _DashboardContentState extends State<_DashboardContent> {
                         icon: const Icon(Icons.logout, color: Colors.white54, size: 20),
                         tooltip: 'Keluar',
                         onPressed: () async {
-                          final nav = Navigator.of(context);
                           await AuthStorage().clearTokens();
                           if (!mounted) return;
-                          nav.pushReplacement(
-                            MaterialPageRoute(
-                                builder: (_) => const LoginScreen()),
-                          );
+                          _pushLogin();
                         },
                       ),
                     ],
@@ -494,6 +548,7 @@ class _DashboardContentState extends State<_DashboardContent> {
           ),
         ],
       ),
+    ),
     );
   }
 }

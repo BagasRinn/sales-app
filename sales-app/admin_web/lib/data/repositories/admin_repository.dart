@@ -47,6 +47,17 @@ class AdminRepository {
     await _api.post('/orders/$orderId/reject');
   }
 
+  /// Bulk update discount per item — dipakai admin untuk koreksi sebelum approve/reject.
+  Future<Order> updateOrderDiscounts(
+    String orderId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final data = await _api.put('/orders/$orderId/discounts', body: {
+      'items': items,
+    });
+    return Order.fromJson(data);
+  }
+
   Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search, String? kategori, String? status}) async {
     final queryParams = {
       'skip': (page * limit).toString(),

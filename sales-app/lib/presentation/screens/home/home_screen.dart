@@ -47,8 +47,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
-    if (lifecycleState == AppLifecycleState.resumed && _currentIndex == 1) {
-      context.read<OrderProvider>().loadOrders(reset: false);
+    if (lifecycleState == AppLifecycleState.resumed) {
+      // Pakai loadRecentOrders (bukan loadOrders) supaya "Orderan Terbaru"
+      // selalu fresh tanpa terikat filter Pesanan.
+      context.read<OrderProvider>().loadRecentOrders();
+      if (_currentIndex == 1) {
+        context.read<OrderProvider>().refreshOrders();
+      }
     }
   }
 
@@ -57,7 +62,9 @@ class _HomeScreenState extends State<HomeScreen>
       final wasOrders = _currentIndex == 1;
       setState(() => _currentIndex = index);
       if (index == 1 && !wasOrders) {
-        context.read<OrderProvider>().loadOrders(reset: false);
+        // Saat masuk tab Pesanan, reset list dengan filter aktif (default null)
+        // supaya tampilan fresh dan tidak mewarisi data append dari sesi sebelumnya.
+        context.read<OrderProvider>().refreshOrders();
       }
     }
   }
@@ -117,7 +124,11 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     ).then((_) {
       if (mounted) {
-        context.read<OrderProvider>().loadOrders(reset: false);
+        // Refresh khusus Orderan Terbaru + list Pesanan dengan filter aktifnya,
+        // supaya order baru langsung muncul di kedua tempat tanpa append kotor.
+        final orderProvider = context.read<OrderProvider>();
+        orderProvider.loadRecentOrders();
+        orderProvider.refreshOrders();
       }
     });
   }
@@ -137,16 +148,18 @@ class _BerandaTabState extends State<_BerandaTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeStatsProvider>().load();
-      context.read<OrderProvider>().loadOrders();
+      // Pakai loadRecentOrders agar Orderan Terbaru tidak terikat
+      // dengan filter Pesanan. List Pesanan di-spawn terpisah di
+      // OrderListScreen.initState.
+      context.read<OrderProvider>().loadRecentOrders();
       context.read<ProductProvider>().loadProducts();
     });
   }
 
   Future<void> _refresh() async {
-    final orderProvider = context.read<OrderProvider>();
     await Future.wait([
       context.read<HomeStatsProvider>().refresh(),
-      orderProvider.loadOrders(status: orderProvider.activeStatusFilter, reset: false),
+      context.read<OrderProvider>().loadRecentOrders(),
       context.read<ProductProvider>().loadProducts(),
     ]);
   }
@@ -434,7 +447,9 @@ class _RecentOrdersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final orderProvider = context.watch<OrderProvider>();
-    final orders = orderProvider.orders;
+    // Pakai recentOrders (bukan orders) supaya filter Pesanan tidak
+    // mencemari tampilan Orderan Terbaru.
+    final orders = orderProvider.recentOrders;
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -456,7 +471,7 @@ class _RecentOrdersSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        if (orders.isEmpty && !orderProvider.isLoading)
+        if (orders.isEmpty && !orderProvider.isLoadingRecent)
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
@@ -520,7 +535,14 @@ class _RecentOrderTile extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => OrderDetailScreen(orderId: order.id),
           ),
-        );
+        ).then((_) {
+          if (context.mounted) {
+            // Status order bisa berubah (mis. admin approve) selama halaman
+            // detail terbuka, jadi refresh keduanya saat kembali.
+            context.read<OrderProvider>().loadRecentOrders();
+            context.read<OrderProvider>().refreshOrders();
+          }
+        });
       },
       borderRadius: BorderRadius.circular(14),
       child: Padding(

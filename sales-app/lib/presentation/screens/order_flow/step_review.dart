@@ -297,14 +297,34 @@ class _ProductRow extends StatefulWidget {
 class _ProductRowState extends State<_ProductRow> {
   late TextEditingController _discountController;
   bool _showDiscount = false;
+  // Track tipe diskon yang sedang dipilih. Default: PERCENT (backward compat).
+  String _discountType = 'PERCENT';
 
   @override
   void initState() {
     super.initState();
     final draft = context.read<DraftOrderProvider>();
-    final diskon = draft.discounts[widget.productId] ?? 0;
-    _discountController = TextEditingController(
-        text: diskon > 0 ? diskon.toString() : '');
+    final info = draft.discounts[widget.productId];
+    if (info != null) {
+      _discountType = info.type;
+      _discountController =
+          TextEditingController(text: info.value.toString());
+    } else {
+      _discountController = TextEditingController();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sinkronkan textfield kalau draft.discounts berubah dari luar (mis. tombol hapus).
+    final draft = context.read<DraftOrderProvider>();
+    final info = draft.discounts[widget.productId];
+    if (info == null && _discountController.text.isNotEmpty) {
+      _discountController.clear();
+    } else if (info != null && _discountController.text != info.value.toString()) {
+      _discountController.text = info.value.toString();
+    }
   }
 
   @override
@@ -313,13 +333,28 @@ class _ProductRowState extends State<_ProductRow> {
     super.dispose();
   }
 
-  Widget _buildPriceCell(int diskon, int price, int qty, int subtotal, NumberFormat currency) {
-    if (diskon > 0) {
+  int _calcHargaNet(int price, DiscountInfo? info) {
+    if (info == null) return price;
+    if (info.type == 'NOMINAL') {
+      return (price - info.value).clamp(0, price);
+    }
+    return (price * (100 - info.value) / 100).round();
+  }
+
+  Widget _buildPriceCell(
+    DiscountInfo? info,
+    int price,
+    int qty,
+    int subtotal,
+    NumberFormat currency,
+  ) {
+    if (info != null) {
+      final original = price * qty;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            currency.format(price * qty),
+            currency.format(original),
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.textMuted,
               decoration: TextDecoration.lineThrough,
@@ -345,7 +380,7 @@ class _ProductRowState extends State<_ProductRow> {
 
   @override
   Widget build(BuildContext context) {
-    final draft = context.read<DraftOrderProvider>();
+    final draft = context.watch<DraftOrderProvider>();
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -353,10 +388,10 @@ class _ProductRowState extends State<_ProductRow> {
     );
     final name = widget.product?.namaBarang ?? widget.productId;
     final price = widget.product?.harga ?? 0;
-    final diskon = draft.discounts[widget.productId] ?? 0;
-    final hargaNet = (price * (100 - diskon) / 100).round();
+    final info = draft.discounts[widget.productId];
+    final hargaNet = _calcHargaNet(price, info);
     final subtotal = hargaNet * widget.qty;
-    final nominalDiskon = (price - hargaNet) * widget.qty;
+    final nominalDiskon = info == null ? 0 : (price - hargaNet) * widget.qty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -380,7 +415,7 @@ class _ProductRowState extends State<_ProductRow> {
                   ],
                 ),
               ),
-              _buildPriceCell(diskon, price, widget.qty, subtotal, currency),
+              _buildPriceCell(info, price, widget.qty, subtotal, currency),
               const SizedBox(width: 4),
               IconButton(
                 icon: const Icon(Icons.discount_outlined,
@@ -392,57 +427,122 @@ class _ProductRowState extends State<_ProductRow> {
                 icon: const Icon(Icons.delete_outline,
                     size: 18, color: AppColors.error),
                 tooltip: 'Hapus',
-                onPressed: () => draft.setQty(widget.productId, 0),
+                onPressed: () {
+                  draft.setQty(widget.productId, 0);
+                  _discountController.clear();
+                },
               ),
             ],
           ),
           if (_showDiscount)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 80,
-                    child: TextField(
-                      controller: _discountController,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        suffixText: '%',
-                        suffixStyle: AppTextStyles.bodySmall,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                  // Segmented control: Persen vs Nominal
+                  Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('% Persen'),
+                        selected: _discountType == 'PERCENT',
+                        onSelected: (sel) {
+                          if (!sel) return;
+                          setState(() {
+                            _discountType = 'PERCENT';
+                            _discountController.clear();
+                            if (info != null) {
+                              draft.setDiscount(
+                                productId: widget.productId,
+                                type: 'PERCENT',
+                                value: 0,
+                              );
+                            }
+                          });
+                        },
                       ),
-                      style: AppTextStyles.bodyMedium,
-                      onChanged: (v) {
-                        final parsed = int.tryParse(v) ?? 0;
-                        draft.setDiscount(widget.productId, parsed);
-                        setState(() {});
-                      },
-                    ),
+                      const SizedBox(width: 6),
+                      ChoiceChip(
+                        label: const Text('Rp Nominal'),
+                        selected: _discountType == 'NOMINAL',
+                        onSelected: (sel) {
+                          if (!sel) return;
+                          setState(() {
+                            _discountType = 'NOMINAL';
+                            _discountController.clear();
+                            if (info != null) {
+                              draft.setDiscount(
+                                productId: widget.productId,
+                                type: 'NOMINAL',
+                                value: 0,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  if (diskon > 0)
-                    Text(
-                      'Hemat ${currency.format(nominalDiskon)}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.success,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 110,
+                        child: TextField(
+                          controller: _discountController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            prefixText: _discountType == 'NOMINAL' ? 'Rp ' : null,
+                            suffixText: _discountType == 'PERCENT' ? '%' : null,
+                            hintText: '0',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          style: AppTextStyles.bodyMedium,
+                          onChanged: (v) {
+                            final parsed = int.tryParse(v) ?? 0;
+                            try {
+                              draft.setDiscount(
+                                productId: widget.productId,
+                                type: _discountType,
+                                value: parsed,
+                              );
+                              setState(() {});
+                            } on ArgumentError {
+                              // value di luar range — jangan apply, tapi jangan
+                              // crash UI. User akan melihat hint error dari
+                              // helper text di bawah input.
+                            }
+                          },
+                        ),
                       ),
-                    )
-                  else
-                    Text(
-                      'Masukkan % diskon',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
+                      const SizedBox(width: 8),
+                      if (info != null)
+                        Text(
+                          'Hemat ${currency.format(nominalDiskon)}',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.success,
+                          ),
+                        )
+                      else
+                        Text(
+                          _discountType == 'PERCENT'
+                              ? 'Masukkan % diskon'
+                              : 'Masukkan nominal (Rp)',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),

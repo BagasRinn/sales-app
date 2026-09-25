@@ -7,7 +7,10 @@ class DraftOrderProvider extends ChangeNotifier {
   String? customerName;
   String? customerAddress;
   Map<String, int> items = {}; // productId -> qty
-  Map<String, int> discounts = {}; // productId -> discount_percent (0-100)
+
+  /// Diskon per produk. Map ini simpan DiscountInfo (bukan int) supaya
+  /// bisa support persen ATAU nominal, dipilih per produk.
+  Map<String, DiscountInfo> discounts = {};
   String notes = '';
   String? editingOrderId;
 
@@ -46,12 +49,29 @@ class DraftOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setDiscount(String productId, int percent) {
-    final clamped = percent.clamp(0, 100);
-    if (clamped == 0) {
+  /// Set diskon per produk. [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR).
+  /// value <= 0 akan menghapus entry (artinya tidak ada diskon).
+  void setDiscount({
+    required String productId,
+    required String type,
+    required int value,
+  }) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError('discount type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    if (value <= 0) {
       discounts.remove(productId);
     } else {
-      discounts[productId] = clamped;
+      if (type == 'PERCENT' && value > 100) {
+        throw ArgumentError('discount percent tidak boleh > 100');
+      }
+      if (type == 'NOMINAL') {
+        final harga = _priceCache[productId] ?? 0;
+        if (value > harga) {
+          throw ArgumentError('discount nominal tidak boleh > harga satuan ($harga)');
+        }
+      }
+      discounts[productId] = DiscountInfo(type: type, value: value);
     }
     notifyListeners();
   }
@@ -67,7 +87,7 @@ class DraftOrderProvider extends ChangeNotifier {
     required String customerName,
     required String? customerAddress,
     required Map<String, int> existingItems,
-    required Map<String, int> existingDiscounts,
+    required Map<String, DiscountInfo> existingDiscounts,
     required String existingNotes,
   }) {
     editingOrderId = orderId;
@@ -75,7 +95,7 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerName = customerName;
     this.customerAddress = customerAddress;
     items = Map<String, int>.from(existingItems);
-    discounts = Map<String, int>.from(existingDiscounts);
+    discounts = Map<String, DiscountInfo>.from(existingDiscounts);
     notes = existingNotes;
     notifyListeners();
   }
@@ -100,8 +120,12 @@ class DraftOrderProvider extends ChangeNotifier {
     int total = 0;
     items.forEach((productId, qty) {
       final price = _priceCache[productId] ?? 0;
-      final diskon = discounts[productId] ?? 0;
-      final hargaNet = (price * (100 - diskon) / 100).round();
+      final info = discounts[productId];
+      final hargaNet = info == null
+          ? price
+          : info.type == 'NOMINAL'
+              ? (price - info.value).clamp(0, price)
+              : (price * (100 - info.value) / 100).round();
       total += hargaNet * qty;
     });
     return total;
@@ -111,9 +135,36 @@ class DraftOrderProvider extends ChangeNotifier {
     int total = 0;
     items.forEach((productId, qty) {
       final price = _priceCache[productId] ?? 0;
-      final diskon = discounts[productId] ?? 0;
-      total += (price * diskon / 100).round() * qty;
+      final info = discounts[productId];
+      if (info == null) return;
+      if (info.type == 'NOMINAL') {
+        total += info.value * qty;
+      } else {
+        total += (price * info.value / 100).round() * qty;
+      }
     });
     return total;
   }
+}
+
+class DiscountInfo {
+  final String type; // 'PERCENT' atau 'NOMINAL'
+  final int value;
+
+  const DiscountInfo({required this.type, required this.value});
+
+  Map<String, dynamic> toJson() => {
+        'discount_type': type,
+        if (type == 'PERCENT') 'discount_percent': value,
+        if (type == 'NOMINAL') 'discount_nominal': value,
+      };
+
+  factory DiscountInfo.percent(int value) =>
+      DiscountInfo(type: 'PERCENT', value: value);
+  factory DiscountInfo.nominal(int value) =>
+      DiscountInfo(type: 'NOMINAL', value: value);
+
+  /// Backward compat untuk data lama yang hanya simpan percent sebagai int.
+  factory DiscountInfo.fromPercentInt(int value) =>
+      DiscountInfo(type: 'PERCENT', value: value);
 }

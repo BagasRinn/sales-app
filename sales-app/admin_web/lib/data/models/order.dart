@@ -70,7 +70,9 @@ class OrderItem {
   final String namaBarang;
   final int qty;
   final int hargaSatuan;
+  final String discountType; // 'PERCENT' atau 'NOMINAL'
   final int discountPercent;
+  final int discountNominal;
 
   OrderItem({
     required this.id,
@@ -79,7 +81,9 @@ class OrderItem {
     required this.namaBarang,
     required this.qty,
     required this.hargaSatuan,
+    this.discountType = 'PERCENT',
     this.discountPercent = 0,
+    this.discountNominal = 0,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -90,12 +94,25 @@ class OrderItem {
       namaBarang: json['nama_barang'] ?? json['product_name'] ?? '',
       qty: json['qty'] ?? 0,
       hargaSatuan: json['harga_satuan'] ?? json['harga'] ?? 0,
+      discountType: (json['discount_type'] as String?) ?? 'PERCENT',
       discountPercent: json['discount_percent'] as int? ?? 0,
+      discountNominal: json['discount_nominal'] as int? ?? 0,
     );
   }
 
-  int get hargaSetelahDiskon =>
-      (hargaSatuan * (100 - discountPercent) / 100).round();
+  int get hargaSetelahDiskon {
+    if (discountType == 'NOMINAL') {
+      return (hargaSatuan - discountNominal).clamp(0, hargaSatuan);
+    }
+    return (hargaSatuan * (100 - discountPercent) / 100).round();
+  }
+
   int get subtotal => hargaSetelahDiskon * qty;
-  int get nominalDiskon => (hargaSatuan - hargaSetelahDiskon) * qty;
+  int get nominalDiskon {
+    if (discountType == 'NOMINAL') return discountNominal * qty;
+    return (hargaSatuan - hargaSetelahDiskon) * qty;
+  }
+
+  bool get hasDiscount =>
+      discountType == 'NOMINAL' ? discountNominal > 0 : discountPercent > 0;
 }

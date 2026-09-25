@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/theme.dart';
 import 'core/auth_storage.dart';
+import 'core/navigator_key.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/dashboard_screen.dart';
 
@@ -24,6 +25,7 @@ class AdminApp extends StatelessWidget {
       title: 'Admin Dashboard',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
+      navigatorKey: rootNavigatorKey,
       home: initialTokens?['access_token'] != null
           ? DashboardScreen(
               accessToken: initialTokens!['access_token']!,

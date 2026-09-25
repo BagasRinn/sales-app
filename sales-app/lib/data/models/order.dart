@@ -4,7 +4,13 @@ class OrderItem {
   final String? namaBarang;
   final int qty;
   final int? hargaSatuan;
+
+  /// Tipe diskon: 'PERCENT' (default) atau 'NOMINAL' (dalam IDR).
+  /// Hanya salah satu dari [discountPercent] / [discountNominal] yang dipakai,
+  /// sesuai dengan field ini.
+  final String discountType;
   final int discountPercent;
+  final int discountNominal;
 
   OrderItem({
     required this.id,
@@ -12,7 +18,9 @@ class OrderItem {
     this.namaBarang,
     required this.qty,
     this.hargaSatuan,
+    this.discountType = 'PERCENT',
     this.discountPercent = 0,
+    this.discountNominal = 0,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -22,12 +30,17 @@ class OrderItem {
       namaBarang: json['nama_barang'] as String?,
       qty: json['qty'] as int,
       hargaSatuan: json['harga_satuan'] as int?,
+      discountType: (json['discount_type'] as String?) ?? 'PERCENT',
       discountPercent: json['discount_percent'] as int? ?? 0,
+      discountNominal: json['discount_nominal'] as int? ?? 0,
     );
   }
 
   int get hargaSetelahDiskon {
     final harga = hargaSatuan ?? 0;
+    if (discountType == 'NOMINAL') {
+      return (harga - discountNominal).clamp(0, harga);
+    }
     return (harga * (100 - discountPercent) / 100).round();
   }
 
@@ -35,7 +48,16 @@ class OrderItem {
 
   int get nominalDiskon {
     final harga = hargaSatuan ?? 0;
+    if (discountType == 'NOMINAL') {
+      return discountNominal * qty;
+    }
     return (harga - hargaSetelahDiskon) * qty;
+  }
+
+  /// True kalau ada diskon aktif (persen > 0 ATAU nominal > 0).
+  bool get hasDiscount {
+    if (discountType == 'NOMINAL') return discountNominal > 0;
+    return discountPercent > 0;
   }
 }
 

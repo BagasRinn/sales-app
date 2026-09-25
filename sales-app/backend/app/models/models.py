@@ -97,7 +97,9 @@ class OrderItem(Base):
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"))
     product_id = Column(String, ForeignKey("products.id"))
     qty = Column(Integer)
-    discount_percent = Column(Integer, default=0)
+    discount_percent = Column(Integer, default=0)  # dipakai kalau discount_type == 'PERCENT'
+    discount_type = Column(String(10), default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
+    discount_nominal = Column(Integer, default=0)  # dipakai kalau discount_type == 'NOMINAL', dalam IDR
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")

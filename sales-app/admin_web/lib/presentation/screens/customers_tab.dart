@@ -254,47 +254,49 @@ class _CustomersTabState extends State<CustomersTab> {
             width: colWidths[0],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.kode ?? '-', style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+              child: Text(c.kode ?? '-', style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           SizedBox(
             width: colWidths[1],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.namaToko, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500), maxLines: 3, overflow: TextOverflow.ellipsis),
+              child: Text(c.namaToko, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           SizedBox(
             width: colWidths[2],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.alamat ?? '-', style: AppTextStyles.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis),
+              child: Text(c.alamat ?? '-', style: AppTextStyles.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           SizedBox(
             width: colWidths[3],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () => _openDetail(c),
-                    icon: const Icon(Icons.visibility_outlined, size: 18),
-                    color: AppColors.primaryLight,
-                    tooltip: 'Lihat / edit',
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                  IconButton(
-                    onPressed: () => _confirmDelete(c),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    color: AppColors.error,
-                    tooltip: 'Hapus toko',
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                ],
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () => _openDetail(c),
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      color: AppColors.primaryLight,
+                      tooltip: 'Lihat / edit',
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      padding: EdgeInsets.zero,
+                    ),
+                    IconButton(
+                      onPressed: () => _confirmDelete(c),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      color: AppColors.error,
+                      tooltip: 'Hapus toko',
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

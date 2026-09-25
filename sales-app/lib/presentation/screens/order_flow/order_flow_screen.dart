@@ -111,7 +111,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       final result = await context.read<OrderProvider>().createOrder(
             customerId: draft.customerId!,
             items: draft.items,
-            discounts: draft.discounts,
+            // OrderProvider.createOrder masih signature lama Map<productId, percent>.
+            // Untuk sekarang hanya percent yang dikirim ke backend; nominal
+            // belum dipakai dari mobile (step_review UI supportnya, tapi tidak
+            // diserialisasi ke HTTP body sampai backend siap menerima).
+            discounts: {
+              for (final e in draft.discounts.entries)
+                if (e.value.type == 'PERCENT') e.key: e.value.value,
+            },
             notes: draft.notes,
           );
       _hideLoading();
@@ -147,19 +154,25 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
 
       _showLoading('Mengirim order...');
       Order? result;
+      // Konversi ke Map<String, int> (percent only) untuk dikirim via OrderProvider
+      // yang masih signature lama — sampai backend menerima nominal dari mobile.
+      final percentDiscounts = {
+        for (final e in draft.discounts.entries)
+          if (e.value.type == 'PERCENT') e.key: e.value.value,
+      };
       if (draft.isEditing && draft.editingOrderId != null) {
         result = await orderProvider.updateDraftOrder(
           orderId: draft.editingOrderId!,
           customerId: draft.customerId!,
           items: draft.items,
-          discounts: draft.discounts,
+          discounts: percentDiscounts,
           notes: draft.notes,
         );
       } else {
         result = await orderProvider.createOrder(
           customerId: draft.customerId!,
           items: draft.items,
-          discounts: draft.discounts,
+          discounts: percentDiscounts,
           notes: draft.notes,
         );
       }

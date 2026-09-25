@@ -43,7 +43,8 @@ class _OrderListScreenState extends State<OrderListScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
     if (lifecycleState == AppLifecycleState.resumed) {
-      _refreshOrders(reset: false);
+      // Pakai reset:true (bukan false) supaya list replace, bukan append.
+      _refreshOrders(reset: true);
     }
   }
 
@@ -254,7 +255,14 @@ class _OrderTile extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => OrderDetailScreen(orderId: order.id),
             ),
-          );
+          ).then((_) {
+            // Refresh setelah kembali dari detail — status order bisa
+            // berubah (admin approve/reject) selama halaman detail terbuka.
+            // refreshOrders() re-fetch dengan filter aktif saat ini (reset:true).
+            if (context.mounted) {
+              context.read<OrderProvider>().refreshOrders();
+            }
+          });
         },
         child: Container(
           padding: const EdgeInsets.all(14),

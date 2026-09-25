@@ -6,6 +6,8 @@ class AuthRepository {
   final ApiService _api;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
+  static const String _backgroundPausedAtKey = 'background_paused_at';
+
   AuthRepository(this._api);
 
   Future<Map<String, dynamic>> login(String username, String password) async {
@@ -21,6 +23,9 @@ class AuthRepository {
     await _storage.write(key: AppConfig.tokenKey, value: token);
     await _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
 
+    // Login baru = sesi baru, bersihkan sisa timestamp background pause.
+    await _storage.delete(key: _backgroundPausedAtKey);
+
     return data;
   }
 
@@ -29,6 +34,7 @@ class AuthRepository {
     await _storage.delete(key: AppConfig.refreshTokenKey);
     await _storage.delete(key: AppConfig.userRoleKey);
     await _storage.delete(key: AppConfig.userIdKey);
+    await _storage.delete(key: _backgroundPausedAtKey);
     _api.clearAccessToken();
   }
 
@@ -57,6 +63,25 @@ class AuthRepository {
   Future<void> saveTokens(String accessToken, String refreshToken) async {
     _storage.write(key: AppConfig.tokenKey, value: accessToken);
     _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
+  }
+
+  /// Timestamp terakhir app di-background, dipakai untuk auto-logout
+  /// ketika app terlalu lama di latar belakang (idle background).
+  Future<DateTime?> readBackgroundPausedAt() async {
+    final raw = await _storage.read(key: _backgroundPausedAtKey);
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  Future<void> writeBackgroundPausedAt(DateTime? value) async {
+    if (value == null) {
+      await _storage.delete(key: _backgroundPausedAtKey);
+    } else {
+      await _storage.write(
+        key: _backgroundPausedAtKey,
+        value: value.toIso8601String(),
+      );
+    }
   }
 
   Future<Map<String, dynamic>?> refreshTokens(String refreshToken) async {

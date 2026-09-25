@@ -577,7 +577,7 @@ class _DataRow extends StatelessWidget {
             width: colW[0],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.id, style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+              child: Text(product.id, style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,),
             ),
           ),
           // Nama — colW[1], wrap text
@@ -585,7 +585,7 @@ class _DataRow extends StatelessWidget {
             width: colW[1],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis),
+              child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           // Kategori — colW[2], wrap text
@@ -593,7 +593,7 @@ class _DataRow extends StatelessWidget {
             width: colW[2],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.kategori ?? '-', maxLines: 3, overflow: TextOverflow.ellipsis),
+              child: Text(product.kategori ?? '-', maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           // Stok Sistem — colW[3], center
@@ -635,22 +635,24 @@ class _DataRow extends StatelessWidget {
             width: colW[7],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextButton(
-                    onPressed: () => onShowStock(product),
-                    child: const Text('Ubah'),
-                  ),
-                  IconButton(
-                    onPressed: () => onConfirmDelete(product),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    color: AppColors.error,
-                    tooltip: 'Hapus',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                  ),
-                ],
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () => onShowStock(product),
+                      child: const Text('Ubah'),
+                    ),
+                    IconButton(
+                      onPressed: () => onConfirmDelete(product),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      color: AppColors.error,
+                      tooltip: 'Hapus',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

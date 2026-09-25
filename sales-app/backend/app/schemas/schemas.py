@@ -125,7 +125,9 @@ class SyncResultResponse(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: str
     qty: int = Field(..., gt=0)
+    discount_type: str = Field(default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
     discount_percent: int = Field(default=0, ge=0, le=100)
+    discount_nominal: int = Field(default=0, ge=0)
 
 
 class OrderCreate(BaseModel):
@@ -143,12 +145,26 @@ class OrderItemResponse(BaseModel):
     nama_barang: Optional[str] = None
     qty: int
     harga_satuan: int = 0
+    discount_type: str = 'PERCENT'
     discount_percent: int = 0
+    discount_nominal: int = 0
     harga_setelah_diskon: int = 0
     subtotal: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+
+class OrderDiscountUpdateItem(BaseModel):
+    item_id: UUID
+    discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
+    discount_percent: int = Field(default=0, ge=0, le=100)
+    discount_nominal: int = Field(default=0, ge=0)
+
+
+class OrderDiscountUpdate(BaseModel):
+    """Bulk update discount per item — dipakai admin untuk koreksi sebelum approve/reject."""
+    items: List[OrderDiscountUpdateItem]
 
 
 class OrderResponse(BaseModel):

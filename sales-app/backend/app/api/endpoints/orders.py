@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
     OrderListWithItemsResponse,
+    OrderDiscountUpdate,
 )
 from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.stock_logger import log_stock_change
@@ -37,6 +38,30 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
     return customer
 
 
+def _calc_discount(harga_satuan: int, qty: int, discount_type: str,
+                   discount_percent: int, discount_nominal: int):
+    """Hitung harga_setelah_diskon, subtotal, dan nominal_diskon per item.
+
+    Returns: (harga_setelah_diskon, subtotal, nominal_diskon)
+
+    Aturan:
+    - PERCENT: harga_setelah = harga * (100 - pct) / 100. nominal_diskon = harga*pct/100 * qty.
+    - NOMINAL: harga_setelah = harga - nominal (clamped >= 0). nominal_diskon = nominal * qty.
+    """
+    if discount_type == 'NOMINAL':
+        nominal = max(0, discount_nominal)
+        harga_setelah = max(0, harga_satuan - nominal)
+        subtotal = harga_setelah * qty
+        nominal_diskon_total = nominal * qty
+    else:
+        # PERCENT (default)
+        pct = max(0, min(100, discount_percent or 0))
+        harga_setelah = int(harga_satuan * (100 - pct) / 100)
+        subtotal = harga_setelah * qty
+        nominal_diskon_total = (harga_satuan - harga_setelah) * qty
+    return harga_setelah, subtotal, nominal_diskon_total
+
+
 def _build_order_response(order: Order) -> dict:
     items_data = []
     total_amount = 0
@@ -47,18 +72,25 @@ def _build_order_response(order: Order) -> dict:
         if item.product:
             harga_satuan = item.product.harga or 0
             nama_barang = item.product.nama_barang or ""
-        diskon = item.discount_percent or 0
-        harga_setelah_diskon = int(harga_satuan * (100 - diskon) / 100)
-        subtotal = harga_setelah_diskon * item.qty
-        nominal_diskon = (harga_satuan - harga_setelah_diskon) * item.qty
+
+        discount_type = (item.discount_type or 'PERCENT').upper()
+        discount_pct = item.discount_percent or 0
+        discount_nom = item.discount_nominal or 0
+
+        harga_setelah, subtotal, nominal_diskon = _calc_discount(
+            harga_satuan, item.qty, discount_type, discount_pct, discount_nom,
+        )
+
         items_data.append({
             "id": item.id,
             "product_id": item.product_id,
             "qty": item.qty,
             "harga_satuan": harga_satuan,
             "nama_barang": nama_barang,
-            "discount_percent": diskon,
-            "harga_setelah_diskon": harga_setelah_diskon,
+            "discount_type": discount_type,
+            "discount_percent": discount_pct,
+            "discount_nominal": discount_nom,
+            "harga_setelah_diskon": harga_setelah,
             "subtotal": subtotal,
         })
         total_amount += subtotal
@@ -176,12 +208,27 @@ def create_order(
     db.add(order)
 
     for item in order_req.items:
+        discount_type = (item.discount_type or 'PERCENT').upper()
+        if discount_type not in ('PERCENT', 'NOMINAL'):
+            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+        # Kalau NOMINAL, cap di harga_satuan * qty supaya tidak bisa kasih barang gratis.
+        if discount_type == 'NOMINAL':
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            max_nominal = (product.harga or 0) if product else 0
+            if item.discount_nominal > max_nominal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
+                           f"melebihi harga satuan ({max_nominal})",
+                )
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-            discount_percent=item.discount_percent,
+            discount_type=discount_type,
+            discount_percent=item.discount_percent if discount_type == 'PERCENT' else 0,
+            discount_nominal=item.discount_nominal if discount_type == 'NOMINAL' else 0,
         ))
 
     db.commit()
@@ -230,7 +277,18 @@ def get_my_stats(
 
     omset_today = (
         db.query(func.coalesce(func.sum(
-            OrderItem.qty * Product.harga * (100 - func.coalesce(OrderItem.discount_percent, 0)) / 100
+            # Untuk PERCENT: harga * (100-pct)/100. Untuk NOMINAL: (harga - nom)*qty.
+            # SQLite tidak punya CASE WHEN yang sama persis di semua backend — kita pakai
+            # ekspresi generatif via func.ifnull + case.
+            func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
+            - func.coalesce(
+                db.case(
+                    (OrderItem.discount_type == 'NOMINAL',
+                     func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
+                    else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
+                         * func.coalesce(OrderItem.discount_percent, 0) / 100,
+                ), 0
+            )
         ), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
@@ -256,7 +314,15 @@ def get_my_stats(
 
     selesai_total = (
         db.query(func.coalesce(func.sum(
-            OrderItem.qty * Product.harga * (100 - func.coalesce(OrderItem.discount_percent, 0)) / 100
+            func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
+            - func.coalesce(
+                db.case(
+                    (OrderItem.discount_type == 'NOMINAL',
+                     func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
+                    else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
+                         * func.coalesce(OrderItem.discount_percent, 0) / 100,
+                ), 0
+            )
         ), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
@@ -309,12 +375,26 @@ def update_draft_order(
     # Hapus item lama, replace dengan item baru
     db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
     for item in order_update.items:
+        discount_type = (item.discount_type or 'PERCENT').upper()
+        if discount_type not in ('PERCENT', 'NOMINAL'):
+            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+        if discount_type == 'NOMINAL':
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            max_nominal = (product.harga or 0) if product else 0
+            if item.discount_nominal > max_nominal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
+                           f"melebihi harga satuan ({max_nominal})",
+                )
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-            discount_percent=item.discount_percent,
+            discount_type=discount_type,
+            discount_percent=item.discount_percent if discount_type == 'PERCENT' else 0,
+            discount_nominal=item.discount_nominal if discount_type == 'NOMINAL' else 0,
         ))
 
     order.customer_id = customer.id
@@ -525,6 +605,68 @@ def get_order_detail(
         if str(order.sales_id) != current_user["user_id"]:
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
 
+    return _build_order_response(order)
+
+
+@router.put("/{order_id}/discounts", response_model=OrderResponse)
+def update_discounts(
+    order_id: UUID,
+    body: OrderDiscountUpdate,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_admin),
+):
+    """Bulk update discount per item — admin only, hanya untuk pesanan PENDING.
+
+    Tujuannya: admin bisa koreksi diskon yang kelewat besar/aneh dari sales
+    sebelum melakukan approve/reject.
+    """
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(Order.id == order_id)
+        .with_for_update(of=[Order])
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.status != "PENDING":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Diskon hanya bisa diedit saat status PENDING. Status saat ini: {order.status}",
+        )
+
+    items_by_id = {item.id: item for item in order.items}
+    for upd in body.items:
+        item = items_by_id.get(upd.item_id)
+        if not item:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Item {upd.item_id} tidak ada di pesanan ini",
+            )
+        discount_type = (upd.discount_type or 'PERCENT').upper()
+        if discount_type not in ('PERCENT', 'NOMINAL'):
+            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+
+        if discount_type == 'NOMINAL':
+            harga_satuan = item.product.harga or 0 if item.product else 0
+            if upd.discount_nominal > harga_satuan:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Diskon nominal untuk '{item.product.nama_barang if item.product else item.product_id}' "
+                        f"melebihi harga satuan ({harga_satuan})"
+                    ),
+                )
+            item.discount_type = 'NOMINAL'
+            item.discount_nominal = upd.discount_nominal
+            item.discount_percent = 0
+        else:
+            item.discount_type = 'PERCENT'
+            item.discount_percent = upd.discount_percent
+            item.discount_nominal = 0
+
+    db.commit()
+    db.refresh(order)
     return _build_order_response(order)
 
 

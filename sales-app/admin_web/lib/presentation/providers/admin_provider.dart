@@ -49,6 +49,10 @@ class AdminProvider extends ChangeNotifier {
   Timer? _searchDebounceTimer;
   static const _searchDebounceDuration = Duration(milliseconds: 400);
 
+  // Timer terpisah untuk user search agar tidak konflik dengan products/customers
+  // (mis. user di tab User mengetik saat auto-refresh timer tick di background).
+  Timer? _userSearchDebounceTimer;
+
   AdminProvider(this._repo);
 
   AdminState get state => _state;
@@ -378,6 +382,16 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Debounced user search — pakai pattern yang sama dengan searchProducts
+  /// dan searchCustomers supaya tiap ketukan tidak firing 1 HTTP request.
+  void searchUsers(String query) {
+    _userSearch = query;
+    _userSearchDebounceTimer?.cancel();
+    _userSearchDebounceTimer = Timer(_searchDebounceDuration, () {
+      loadUsers(search: query);
+    });
+  }
+
   Future<bool> createUser({
     required String username,
     required String password,
@@ -386,13 +400,15 @@ class AdminProvider extends ChangeNotifier {
   }) async {
     _setLoading(true, 'Membuat user...');
     try {
-      await _repo.createUser(
+      // Pakai response POST langsung — tidak perlu GET ulang seluruh list
+      // karena backend sudah mengembalikan UserItem lengkap.
+      final newUser = await _repo.createUser(
         username: username,
         password: password,
         role: role,
         nama: nama,
       );
-      await loadUsers();
+      _users = [..._users, newUser];
       _setLoading(false);
       return true;
     } on ApiException catch (e) {
@@ -406,8 +422,9 @@ class AdminProvider extends ChangeNotifier {
   Future<bool> updateUser(String userId, Map<String, dynamic> body) async {
     _setLoading(true, 'Menyimpan perubahan...');
     try {
-      await _repo.updateUser(userId, body);
-      await loadUsers();
+      // Pakai response PUT langsung, replace user di list berdasarkan id.
+      final updated = await _repo.updateUser(userId, body);
+      _users = _users.map((u) => u.id == updated.id ? updated : u).toList();
       _setLoading(false);
       return true;
     } on ApiException catch (e) {
@@ -422,7 +439,8 @@ class AdminProvider extends ChangeNotifier {
     _setLoading(true, 'Menghapus user...');
     try {
       await _repo.deleteUser(userId);
-      await loadUsers();
+      // Soft-delete: langsung hilangkan dari list lokal.
+      _users = _users.where((u) => u.id != userId).toList();
       _setLoading(false);
       return true;
     } on ApiException catch (e) {

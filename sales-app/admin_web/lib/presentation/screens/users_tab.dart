@@ -64,7 +64,7 @@ class _UsersTabState extends State<UsersTab> {
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() => _searchQuery = '');
-                                  provider.loadUsers(search: '');
+                                  provider.searchUsers('');
                                 },
                               )
                             : null,
@@ -76,7 +76,7 @@ class _UsersTabState extends State<UsersTab> {
                       ),
                       onChanged: (v) {
                         setState(() => _searchQuery = v);
-                        provider.loadUsers(search: v);
+                        provider.searchUsers(v);
                       },
                     ),
                   ),
@@ -102,7 +102,10 @@ class _UsersTabState extends State<UsersTab> {
                       ],
                       onChanged: (v) {
                         setState(() => _roleFilter = v);
-                        provider.loadUsers(role: v);
+                        // Kirim '' (bukan null) untuk "Semua Role" karena loadUsers
+                        // skip update kalau role=null — kalau tidak, state internal
+                        // masih nyimpen role lama walaupun UI menampilkan "Semua Role".
+                        provider.loadUsers(role: v ?? '');
                       },
                     ),
                   ),

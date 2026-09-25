@@ -252,9 +252,11 @@ class _OrderDetailContent extends StatelessWidget {
                               order.items![i].namaBarang ?? order.items![i].productId,
                               style: AppTextStyles.bodyMedium,
                             ),
-                            if (order.items![i].discountPercent > 0)
+                            if (order.items![i].hasDiscount)
                               Text(
-                                'Diskon ${order.items![i].discountPercent}%',
+                                order.items![i].discountType == 'NOMINAL'
+                                    ? 'Diskon Rp ${order.items![i].discountNominal}'
+                                    : 'Diskon ${order.items![i].discountPercent}%',
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.success,
                                 ),
@@ -342,12 +344,14 @@ class _OrderDetailContent extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () {
               final items = <String, int>{};
-              final discounts = <String, int>{};
+              final discounts = <String, DiscountInfo>{};
               if (order.items != null) {
                 for (final item in order.items!) {
                   items[item.productId] = item.qty;
-                  if (item.discountPercent > 0) {
-                    discounts[item.productId] = item.discountPercent;
+                  if (item.discountType == 'NOMINAL' && item.discountNominal > 0) {
+                    discounts[item.productId] = DiscountInfo.nominal(item.discountNominal);
+                  } else if (item.discountPercent > 0) {
+                    discounts[item.productId] = DiscountInfo.percent(item.discountPercent);
                   }
                 }
               }

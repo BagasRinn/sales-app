@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/product_provider.dart';
-import '../home/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,20 +26,17 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.login(
+    // Login bisa throw ApiException; AuthProvider.login men-set state=error
+    // dan Consumer di build() akan menampilkan error banner.
+    await context.read<AuthProvider>().login(
       _usernameController.text.trim(),
       _passwordController.text,
     );
 
-    if (success && mounted) {
-      await context.read<ProductProvider>().loadProducts();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
-    }
+    // Jangan push HomeScreen di sini — AuthWrapper sudah watch authState
+    // dan akan swap LoginScreen → HomeScreen saat state jadi authenticated.
+    // Kalau kita push manual, HomeScreen akan menumpuk di Navigator stack
+    // dan memblokir LoginScreen saat forceLogout di kemudian hari.
   }
 
   @override

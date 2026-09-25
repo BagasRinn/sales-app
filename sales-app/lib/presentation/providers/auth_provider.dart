@@ -58,6 +58,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Attempt token refresh first; force logout only if refresh fails.
+  /// Memanggil logout() (bukan logoutSync()) supaya token di secure storage
+  /// ikut dihapus — kalau tidak, cold start berikutnya akan auto-login lagi
+  /// pakai token lama yang seharusnya sudah invalid.
   Future<void> forceLogout([String? message]) async {
     final refreshToken = await _authRepo.getRefreshToken();
     if (refreshToken != null) {
@@ -73,7 +76,7 @@ class AuthProvider extends ChangeNotifier {
         // Refresh failed — fall through to logout.
       }
     }
-    _authRepo.logoutSync();
+    await _authRepo.logout();
     _state = AuthState.unauthenticated;
     _errorMessage = message;
     notifyListeners();
