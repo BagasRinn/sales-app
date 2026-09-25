@@ -48,8 +48,19 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       final accessToken = data['access_token'];
       final refreshToken = data['refresh_token'];
+      final role = data['role']?.toString();
+
       if (accessToken == null || refreshToken == null) {
         setState(() => _error = 'Token tidak ditemukan dalam respons');
+        return;
+      }
+
+      // Hanya ADMIN dan MANAGER yang boleh login ke admin web
+      if (role != 'ADMIN' && role != 'MANAGER') {
+        setState(() {
+          _error = 'Hanya admin dan manager yang boleh mengakses dashboard ini.';
+          _isLoading = false;
+        });
         return;
       }
 
@@ -58,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
         refreshToken: refreshToken.toString(),
         username: _usernameController.text.trim(),
         nama: data['nama']?.toString(),
-        role: data['role']?.toString(),
+        role: role,
       );
 
       if (!mounted) return;
@@ -70,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
             refreshToken: refreshToken.toString(),
             username: _usernameController.text.trim(),
             nama: data['nama']?.toString() ?? '',
-            role: data['role']?.toString() ?? 'ADMIN',
+            role: role ?? 'ADMIN',
           ),
         ),
       );

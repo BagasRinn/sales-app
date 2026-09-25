@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/web_download.dart';
 import '../providers/admin_provider.dart';
-import '../../data/repositories/admin_repository.dart';
 
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
@@ -46,7 +45,7 @@ class _StatsTabState extends State<StatsTab> {
     }
     setState(() => _downloading = true);
     try {
-      final repo = context.read<AdminRepository>();
+      final repo = context.read<AdminProvider>().adminRepository;
       final bytes = await repo.downloadDailyReport(
         date: _selectedDate,
         statuses: [_statusFilter],
@@ -98,8 +97,11 @@ class _StatsTabState extends State<StatsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final stats = context.watch<AdminProvider>().stats;
-    final pending = context.watch<AdminProvider>().pendingOrders;
+    final provider = context.watch<AdminProvider>();
+    final stats = provider.stats;
+    final pending = provider.pendingOrders;
+    final isLoading = provider.isLoading;
+    final errorMessage = provider.errorMessage;
 
     final totalOrders = stats['total_orders'] ?? 0;
     final pendingOrders = stats['pending_orders'] ?? 0;
@@ -118,9 +120,53 @@ class _StatsTabState extends State<StatsTab> {
             'Pantau performa order dan status stok secara keseluruhan',
             style: AppTextStyles.bodyMedium,
           ),
-          const SizedBox(height: 20),
-          _ReportDownloadCard(
-            selectedDate: _selectedDate,
+
+          // Error card — tampilkan kalau ada error
+          if (errorMessage != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              color: AppColors.errorBg,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        errorMessage,
+                        style: TextStyle(color: AppColors.error, fontSize: 13),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, color: AppColors.error, size: 20),
+                      tooltip: 'Coba lagi',
+                      onPressed: () => provider.loadAll(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Loading overlay — skeleton placeholder
+          if (isLoading && stats.isEmpty && pending.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Memuat data...', style: AppTextStyles.bodyMedium),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 20),
+            _ReportDownloadCard(
+              selectedDate: _selectedDate,
             statusFilter: _statusFilter,
             downloading: _downloading,
             onPickDate: _pickDate,
@@ -281,6 +327,7 @@ class _StatsTabState extends State<StatsTab> {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );

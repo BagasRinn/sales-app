@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/order.dart';
-import '../../data/repositories/admin_repository.dart';
 
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(amount);
@@ -39,6 +38,15 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Trigger explicit load untuk tab "Semua Pesanan" setelah frame pertama.
+    // Sebelumnya data hanya datang dari DashboardScreen.initState yang
+    // memanggil loadAll(). Kalau user navigasi ke tab ini sebelum
+    // loadAll() selesai (atau kalau loadAll gagal), orders page kelihatan
+    // kosong. Sekarang kita fetch independen — first frame dulu supaya
+    // context siap, baru panggil _applyFilters.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _applyFilters();
+    });
   }
 
   @override
@@ -1020,7 +1028,7 @@ class _OrderItemRowState extends State<_OrderItemRow> {
 
     setState(() => _saving = true);
     try {
-      final repo = context.read<AdminRepository>();
+      final repo = context.read<AdminProvider>().adminRepository;
       final updated = await repo.updateOrderDiscounts(widget.orderId, [
         {
           'item_id': widget.item.id,

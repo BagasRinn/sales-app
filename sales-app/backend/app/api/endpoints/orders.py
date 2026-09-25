@@ -747,35 +747,8 @@ def approve_order(
                 status_code=404,
                 detail=f"Produk '{item.product_id}' tidak ditemukan",
             )
-
-        old_sistem = product.stok_sistem or 0
-        old_booking = product.stok_booking or 0
-
-        product.stok_sistem = max(0, old_sistem - item.qty)
-        product.stok_booking = max(0, old_booking - item.qty)
-
-        log_stock_change(
-            db=db,
-            product_id=item.product_id,
-            sumber="APPROVE",
-            field_terdampak="stok_sistem",
-            delta=-item.qty,
-            nilai_sebelum=old_sistem,
-            nilai_sesudah=product.stok_sistem,
-            actor_id=UUID(current_user["user_id"]),
-            order_id=order.id,
-        )
-        log_stock_change(
-            db=db,
-            product_id=item.product_id,
-            sumber="APPROVE",
-            field_terdampak="stok_booking",
-            delta=-item.qty,
-            nilai_sebelum=old_booking,
-            nilai_sesudah=product.stok_booking,
-            actor_id=UUID(current_user["user_id"]),
-            order_id=order.id,
-        )
+        # Approve: stok_booking TIDAK disentuh — tetap sebagai record barang yang sudah
+        # dibooking/terkirim. Stok_tersedia = stok_sistem - stok_booking tetap konsisten.
 
     order.status = "APPROVED"
     db.commit()
@@ -814,6 +787,9 @@ def reject_order(
         product = products.get(item.product_id)
         if product:
             old_booking = product.stok_booking or 0
+            # Reject dari PENDING: booking dilepas (stok kembali tersedia).
+            # Kalau approve sudah dipanggil duluan, stok_booking sudah 0
+            # (approve memindahkan dari pending ke sent), reject tidak perlu ngapa-ngapain.
             product.stok_booking = max(0, old_booking - item.qty)
 
             log_stock_change(

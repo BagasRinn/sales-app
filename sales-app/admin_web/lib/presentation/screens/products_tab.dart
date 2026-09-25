@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/product.dart';
@@ -171,6 +172,12 @@ class _ProductsTabState extends State<ProductsTab> {
                       style: AppTextStyles.bodySmall,
                     ),
                   ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: 'Refresh stok',
+                    onPressed: () => provider.loadProducts(),
+                  ),
                 ],
               ),
               if (selectedKategori != null || selectedStatus != null) ...[
@@ -258,14 +265,14 @@ class _ProductsTabState extends State<ProductsTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availW = constraints.maxWidth;
-        // Kolom: SKU | Nama | Kategori | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Aksi
-        // fixedW = [sku, ktgr, stok, stok, stok, sat, aksi] (nama ambil sisa)
-        const fixedW = [100.0, 140.0, 100.0, 100.0, 110.0, 70.0, 110.0];
-        const fixedTotal = 730.0;
-        final namaW = (availW - fixedTotal).clamp(150.0, 400.0);
+        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Aksi
+        // fixedW = [sku, ktgr, harga, stok, stok, stok, sat, aksi] (nama ambil sisa)
+        const fixedW = [100.0, 130.0, 120.0, 110.0, 110.0, 120.0, 80.0, 110.0];
+        const fixedTotal = 880.0;
+        final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         final totalW = namaW + fixedTotal;
-        // Urutan col: [sku, nama, ktgr, stok, stok, stok, sat, aksi]
-        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6]];
+        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, sat, aksi]
+        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7]];
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
         return SingleChildScrollView(
@@ -521,8 +528,8 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Urutan: SKU | Nama | Kategori | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Aksi
-    const labels = ['SKU', 'Nama', 'Kategori', 'Stok Sistem', 'Stok Booking', 'Stok Tersedia', 'Satuan', 'Aksi'];
+    // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Aksi
+    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Tersedia', 'Satuan', 'Aksi'];
     return SizedBox(
       width: totalW,
       child: Container(
@@ -567,6 +574,7 @@ class _DataRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = stockStatusColor(stockStatusFromValue(product.stokTersedia));
+    final fmtCurrency = NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
     return SizedBox(
       width: totalW,
       height: 60,
@@ -588,51 +596,65 @@ class _DataRow extends StatelessWidget {
               child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
-          // Kategori — colW[2], wrap text
+          // Kategori — colW[2]
           SizedBox(
             width: colW[2],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.kategori ?? '-', maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(product.kategori ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
-          // Stok Sistem — colW[3], center
+          // Harga — colW[3]
           SizedBox(
             width: colW[3],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Text(
+                fmtCurrency.format(product.harga),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          // Stok Sistem — colW[4]
+          SizedBox(
+            width: colW[4],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text('${product.stokSistem}', textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: product.stokSistem < product.stokBooking ? AppColors.error : null), maxLines: 2),
             ),
           ),
-          // Stok Booking — colW[4], center
+          // Stok Booking — colW[5]
           SizedBox(
-            width: colW[4],
+            width: colW[5],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
             ),
           ),
-          // Stok Tersedia — colW[5], center
+          // Stok Tersedia — colW[6]
           SizedBox(
-            width: colW[5],
+            width: colW[6],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text('${product.stokTersedia}', textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
             ),
           ),
-          // Satuan — colW[6], center
+          // Satuan — colW[7]
           SizedBox(
-            width: colW[6],
+            width: colW[7],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
             ),
           ),
-          // Aksi — colW[7]
+          // Aksi — colW[8]
           SizedBox(
-            width: colW[7],
+            width: colW[8],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(

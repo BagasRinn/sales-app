@@ -58,6 +58,9 @@ class AdminProvider extends ChangeNotifier {
 
   AdminProvider(this._repo);
 
+  /// Expose repo untuk widget yang butuh akses langsung (mis. download file).
+  AdminRepository get adminRepository => _repo;
+
   AdminState get state => _state;
   String? get errorMessage => _errorMessage;
   List<Order> get pendingOrders => _pendingOrders;
@@ -163,8 +166,8 @@ class AdminProvider extends ChangeNotifier {
     try {
       _pendingOrders = await _repo.getPendingOrders();
       notifyListeners();
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
     }
   }
@@ -190,8 +193,8 @@ class AdminProvider extends ChangeNotifier {
       _allOrders = result.orders;
       _orderTotal = result.total;
       notifyListeners();
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
     }
   }
@@ -214,10 +217,11 @@ class AdminProvider extends ChangeNotifier {
       ]);
       _products = results[0] as List<Product>;
       _productTotal = results[1] as int;
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> setKategoriFilter(String? kategori) async {
@@ -274,27 +278,32 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<void> _loadCustomers() async {
-    final results = await Future.wait([
-      _repo.getCustomers(
-        page: _customerPage,
-        limit: _customerLimit,
-        search: _customerSearch.isEmpty ? null : _customerSearch,
-      ),
-      _repo.getCustomerCount(
-        search: _customerSearch.isEmpty ? null : _customerSearch,
-      ),
-    ]);
-    _customers = results[0] as List<Customer>;
-    _customerTotal = results[1] as int;
+    try {
+      final results = await Future.wait([
+        _repo.getCustomers(
+          page: _customerPage,
+          limit: _customerLimit,
+          search: _customerSearch.isEmpty ? null : _customerSearch,
+        ),
+        _repo.getCustomerCount(
+          search: _customerSearch.isEmpty ? null : _customerSearch,
+        ),
+      ]);
+      _customers = results[0] as List<Customer>;
+      _customerTotal = results[1] as int;
+    } catch (e) {
+      _errorMessage = e.toString();
+    }
   }
 
   Future<void> loadCustomers() async {
     try {
       await _loadCustomers();
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> searchCustomers(String query) async {
@@ -344,9 +353,9 @@ class AdminProvider extends ChangeNotifier {
       await _loadCustomers();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -358,9 +367,9 @@ class AdminProvider extends ChangeNotifier {
       await _repo.assignCustomerSales(customerId, salesIds);
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -373,15 +382,69 @@ class AdminProvider extends ChangeNotifier {
       await _loadCustomers();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
   }
 
-  // ====== User management (manager only) ======
+  Future<bool> createUser({
+    required String username,
+    required String password,
+    required String role,
+    String? nama,
+  }) async {
+    _setLoading(true, 'Membuat user...');
+    try {
+      final newUser = await _repo.createUser(
+        username: username,
+        password: password,
+        role: role,
+        nama: nama,
+      );
+      _users = [..._users, newUser];
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateUser(String userId, Map<String, dynamic> body) async {
+    _setLoading(true, 'Menyimpan perubahan...');
+    try {
+      final updated = await _repo.updateUser(userId, body);
+      _users = _users.map((u) => u.id == updated.id ? updated : u).toList();
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteUser(String userId) async {
+    _setLoading(true, 'Menghapus user...');
+    try {
+      await _repo.deleteUser(userId);
+      _users = _users.where((u) => u.id != userId).toList();
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   List<UserItem> _users = [];
   String _userRoleFilter = '';
   String _userSearch = '';
@@ -398,10 +461,11 @@ class AdminProvider extends ChangeNotifier {
         role: _userRoleFilter.isEmpty ? null : _userRoleFilter,
         search: _userSearch.isEmpty ? null : _userSearch,
       );
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Debounced user search — pakai pattern yang sama dengan searchProducts
@@ -414,70 +478,13 @@ class AdminProvider extends ChangeNotifier {
     });
   }
 
-  Future<bool> createUser({
-    required String username,
-    required String password,
-    required String role,
-    String? nama,
-  }) async {
-    _setLoading(true, 'Membuat user...');
-    try {
-      // Pakai response POST langsung — tidak perlu GET ulang seluruh list
-      // karena backend sudah mengembalikan UserItem lengkap.
-      final newUser = await _repo.createUser(
-        username: username,
-        password: password,
-        role: role,
-        nama: nama,
-      );
-      _users = [..._users, newUser];
-      _setLoading(false);
-      return true;
-    } on ApiException catch (e) {
-      _setLoading(false);
-      _errorMessage = e.message;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> updateUser(String userId, Map<String, dynamic> body) async {
-    _setLoading(true, 'Menyimpan perubahan...');
-    try {
-      // Pakai response PUT langsung, replace user di list berdasarkan id.
-      final updated = await _repo.updateUser(userId, body);
-      _users = _users.map((u) => u.id == updated.id ? updated : u).toList();
-      _setLoading(false);
-      return true;
-    } on ApiException catch (e) {
-      _setLoading(false);
-      _errorMessage = e.message;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> deleteUser(String userId) async {
-    _setLoading(true, 'Menghapus user...');
-    try {
-      await _repo.deleteUser(userId);
-      // Soft-delete: langsung hilangkan dari list lokal.
-      _users = _users.where((u) => u.id != userId).toList();
-      _setLoading(false);
-      return true;
-    } on ApiException catch (e) {
-      _setLoading(false);
-      _errorMessage = e.message;
-      notifyListeners();
-      return false;
-    }
-  }
-
   Future<void> _loadStats() async {
     try {
       _stats = await _repo.getDashboardStats();
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
+      // _stats = {} default, dashboard tampil 0 bukan blank/crash.
+      _errorMessage = e.toString();
     }
   }
 
@@ -507,36 +514,40 @@ class AdminProvider extends ChangeNotifier {
   Future<void> _loadPendingOrders() async {
     try {
       _pendingOrders = await _repo.getPendingOrders();
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      _errorMessage = e.toString();
     }
   }
 
   Future<void> _loadAllOrders() async {
     try {
       _allOrders = await _repo.getAllOrders(status: _orderFilter);
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      _errorMessage = e.toString();
     }
   }
 
   Future<void> _loadProducts() async {
-    final results = await Future.wait([
-      _repo.getProducts(
-        page: _productPage,
-        limit: _productLimit,
-        search: _productSearch.isEmpty ? null : _productSearch,
-        kategori: _selectedKategori,
-        status: _selectedStatus,
-      ),
-      _repo.getProductCount(
-        search: _productSearch.isEmpty ? null : _productSearch,
-        kategori: _selectedKategori,
-        status: _selectedStatus,
-      ),
-    ]);
-    _products = results[0] as List<Product>;
-    _productTotal = results[1] as int;
+    try {
+      final results = await Future.wait([
+        _repo.getProducts(
+          page: _productPage,
+          limit: _productLimit,
+          search: _productSearch.isEmpty ? null : _productSearch,
+          kategori: _selectedKategori,
+          status: _selectedStatus,
+        ),
+        _repo.getProductCount(
+          search: _productSearch.isEmpty ? null : _productSearch,
+          kategori: _selectedKategori,
+          status: _selectedStatus,
+        ),
+      ]);
+      _products = results[0] as List<Product>;
+      _productTotal = results[1] as int;
+    } catch (e) {
+      _errorMessage = e.toString();
+    }
   }
 
   Future<bool> approveOrder(String orderId) async {
@@ -545,9 +556,9 @@ class AdminProvider extends ChangeNotifier {
       await _repo.approveOrder(orderId);
       await loadAll();
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -559,9 +570,9 @@ class AdminProvider extends ChangeNotifier {
       await _repo.rejectOrder(orderId);
       await loadAll();
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -575,9 +586,9 @@ class AdminProvider extends ChangeNotifier {
       await _loadStats();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -591,9 +602,9 @@ class AdminProvider extends ChangeNotifier {
       await _loadStats();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -607,9 +618,9 @@ class AdminProvider extends ChangeNotifier {
       await _loadStats();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -623,9 +634,9 @@ class AdminProvider extends ChangeNotifier {
       await _loadStats();
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -637,9 +648,9 @@ class AdminProvider extends ChangeNotifier {
       _lastSyncResult = await _repo.importCustomersExcel(fileBytes, fileName);
       _setLoading(false);
       return true;
-    } on ApiException catch (e) {
+    } catch (e) {
       _setLoading(false);
-      _errorMessage = e.message;
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }
@@ -657,8 +668,8 @@ class AdminProvider extends ChangeNotifier {
     try {
       await _repo.clearImportErrors();
       return true;
-    } on ApiException catch (e) {
-      _errorMessage = e.message;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
     }

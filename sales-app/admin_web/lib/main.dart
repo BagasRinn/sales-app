@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'core/auth_storage.dart';
 import 'core/navigator_key.dart';
@@ -7,6 +8,9 @@ import 'presentation/screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Initialize intl locale data sebelum DateFormat/NumberFormat dipakai.
+  // Tanpa ini, `intl` throw LocaleDataException di release mode.
+  await initializeDateFormatting('id_ID', null);
 
   final storage = AuthStorage();
   final tokens = await storage.getTokens();

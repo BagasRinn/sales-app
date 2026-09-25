@@ -447,6 +447,21 @@ class _ProductRowState extends State<_ProductRow> {
                       ChoiceChip(
                         label: const Text('% Persen'),
                         selected: _discountType == 'PERCENT',
+                        selectedColor: AppColors.primaryLight,
+                        side: BorderSide(
+                          color: _discountType == 'PERCENT'
+                              ? AppColors.primaryLight
+                              : AppColors.border,
+                          width: 1.5,
+                        ),
+                        labelStyle: TextStyle(
+                          color: _discountType == 'PERCENT'
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontWeight: _discountType == 'PERCENT'
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
                         onSelected: (sel) {
                           if (!sel) return;
                           setState(() {
@@ -466,6 +481,21 @@ class _ProductRowState extends State<_ProductRow> {
                       ChoiceChip(
                         label: const Text('Rp Nominal'),
                         selected: _discountType == 'NOMINAL',
+                        selectedColor: AppColors.primaryLight,
+                        side: BorderSide(
+                          color: _discountType == 'NOMINAL'
+                              ? AppColors.primaryLight
+                              : AppColors.border,
+                          width: 1.5,
+                        ),
+                        labelStyle: TextStyle(
+                          color: _discountType == 'NOMINAL'
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontWeight: _discountType == 'NOMINAL'
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
                         onSelected: (sel) {
                           if (!sel) return;
                           setState(() {

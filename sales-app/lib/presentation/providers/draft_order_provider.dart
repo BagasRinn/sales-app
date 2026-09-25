@@ -51,6 +51,7 @@ class DraftOrderProvider extends ChangeNotifier {
 
   /// Set diskon per produk. [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR).
   /// value <= 0 akan menghapus entry (artinya tidak ada diskon).
+  /// NOMINAL di-cap di harga satuan produk; PERCENT di-cap di 100%.
   void setDiscount({
     required String productId,
     required String type,
@@ -62,16 +63,14 @@ class DraftOrderProvider extends ChangeNotifier {
     if (value <= 0) {
       discounts.remove(productId);
     } else {
+      int capped = value;
       if (type == 'PERCENT' && value > 100) {
-        throw ArgumentError('discount percent tidak boleh > 100');
+        capped = 100;
+      } else if (type == 'NOMINAL') {
+        final harga = _priceCache[productId] ?? value;
+        if (value > harga) capped = harga;
       }
-      if (type == 'NOMINAL') {
-        final harga = _priceCache[productId] ?? 0;
-        if (value > harga) {
-          throw ArgumentError('discount nominal tidak boleh > harga satuan ($harga)');
-        }
-      }
-      discounts[productId] = DiscountInfo(type: type, value: value);
+      discounts[productId] = DiscountInfo(type: type, value: capped);
     }
     notifyListeners();
   }

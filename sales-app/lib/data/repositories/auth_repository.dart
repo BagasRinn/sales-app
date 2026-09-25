@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/config.dart';
+import '../../core/api_exception.dart';
 import 'api_service.dart';
 
 class AuthRepository {
@@ -16,12 +17,21 @@ class AuthRepository {
       'password': password,
     });
 
+    final role = data['role']?.toString();
+
+    // Hanya SALES yang boleh login ke aplikasi mobile
+    if (role != 'SALES') {
+      throw ApiException(statusCode: 403, message: 'Aplikasi ini hanya untuk akun sales.');
+    }
+
     final token = data['access_token'] as String;
     final refreshToken = data['refresh_token'] as String;
     _api.setAccessToken(token);
 
     await _storage.write(key: AppConfig.tokenKey, value: token);
     await _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
+    await _storage.write(key: AppConfig.userRoleKey, value: role);
+    await _storage.write(key: AppConfig.userIdKey, value: data['id']?.toString());
 
     // Login baru = sesi baru, bersihkan sisa timestamp background pause.
     await _storage.delete(key: _backgroundPausedAtKey);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -258,7 +259,7 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-class _QtyStepper extends StatelessWidget {
+class _QtyStepper extends StatefulWidget {
   final String productId;
   final int qty;
   final int available;
@@ -269,37 +270,122 @@ class _QtyStepper extends StatelessWidget {
   });
 
   @override
+  State<_QtyStepper> createState() => _QtyStepperState();
+}
+
+class _QtyStepperState extends State<_QtyStepper> {
+  late TextEditingController _controller;
+  bool _isEditing = false;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.qty}');
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus && _isEditing) {
+        _applyInput();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _QtyStepper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing && widget.qty != oldWidget.qty) {
+      _controller.text = '${widget.qty}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _applyInput() {
+    final text = _controller.text.trim();
+    final parsed = int.tryParse(text) ?? 0;
+    final capped = parsed.clamp(0, widget.available);
+    _controller.text = '$capped';
+    _isEditing = false;
+    _focusNode.unfocus();
+    context.read<DraftOrderProvider>().setQty(widget.productId, capped);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final canIncrement = available > 0 && qty < available;
+    final canIncrement = widget.available > 0 && widget.qty < widget.available;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _StepperButton(
           icon: Icons.remove,
-          onTap: qty > 0
-              ? () => context
-                  .read<DraftOrderProvider>()
-                  .setQty(productId, qty - 1)
+          onTap: widget.qty > 0
+              ? () {
+                  final newQty = (widget.qty - 1).clamp(0, widget.available);
+                  _controller.text = '$newQty';
+                  context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
+                }
               : null,
         ),
         SizedBox(
-          width: 32,
-          child: Center(
-            child: Text(
-              '$qty',
+          width: 52,
+          child: GestureDetector(
+            onTap: () {
+              _controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _controller.text.length,
+              );
+              _isEditing = true;
+              _focusNode.requestFocus();
+            },
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
               style: AppTextStyles.bodyLarge.copyWith(
                 fontWeight: FontWeight.w600,
-                color: qty > 0 ? AppColors.primaryLight : AppColors.textMuted,
+                color: widget.qty > 0 ? AppColors.primaryLight : AppColors.textMuted,
+                fontSize: 15,
               ),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.primaryLight, width: 1.5),
+                ),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (val) {
+                _isEditing = true;
+                final parsed = int.tryParse(val) ?? 0;
+                if (parsed > widget.available) {
+                  final capped = widget.available.toString();
+                  _controller.value = TextEditingValue(
+                    text: capped,
+                    selection: TextSelection.collapsed(offset: capped.length),
+                  );
+                }
+              },
+              onSubmitted: (_) => _applyInput(),
             ),
           ),
         ),
         _StepperButton(
           icon: Icons.add,
           onTap: canIncrement
-              ? () => context
-                  .read<DraftOrderProvider>()
-                  .setQty(productId, qty + 1)
+              ? () {
+                  final newQty = (widget.qty + 1).clamp(0, widget.available);
+                  _controller.text = '$newQty';
+                  context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
+                }
               : null,
           primary: true,
           disabled: !canIncrement,

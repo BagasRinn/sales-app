@@ -215,47 +215,75 @@ class _StatsCards extends StatelessWidget {
           _SkeletonCard(),
           _SkeletonCard(),
           _SkeletonCard(),
-          _SkeletonCard(),
         ],
       );
     }
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.1,
+    return Column(
       children: [
-        _StatCard(
-          label: 'Omset Hari Ini',
-          value: currency.format(stats?.omsetHariIni ?? 0),
-          icon: Icons.payments_outlined,
-          color: AppColors.success,
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.1,
+          children: [
+            _StatCard(
+              label: 'Omset Hari Ini',
+              value: currency.format(stats?.omsetHariIni ?? 0),
+              icon: Icons.payments_outlined,
+              color: AppColors.success,
+            ),
+            _StatCard(
+              label: 'Pending',
+              value: '${stats?.pendingCount ?? 0}',
+              subtitle: 'menunggu admin',
+              icon: Icons.hourglass_top_outlined,
+              color: AppColors.info,
+            ),
+            _StatCard(
+              label: 'Selesai (Bulan)',
+              value: '${stats?.selesaiBulanIniCount ?? 0}',
+              subtitle: 'order',
+              extraText: currency.format(stats?.selesaiBulanIniTotal ?? 0),
+              icon: Icons.check_circle_outline,
+              color: AppColors.primary,
+            ),
+          ],
         ),
-        _StatCard(
-          label: 'Pending',
-          value: '${stats?.pendingCount ?? 0}',
-          subtitle: 'menunggu admin',
-          icon: Icons.hourglass_top_outlined,
-          color: AppColors.info,
-        ),
-        _StatCard(
-          label: 'Selesai (Bulan)',
-          value: '${stats?.selesaiBulanIniCount ?? 0}',
-          subtitle: 'order',
-          extraText: currency.format(stats?.selesaiBulanIniTotal ?? 0),
-          icon: Icons.check_circle_outline,
-          color: AppColors.primary,
-        ),
-        const _StatCard(
-          label: 'Segera Hadir',
-          value: '—',
-          subtitle: 'metric berikutnya',
-          icon: Icons.lock_outline,
-          color: AppColors.textMuted,
-        ),
+        if (statsProvider.errorMessage != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.errorBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Gagal memuat statistik',
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => context.read<HomeStatsProvider>().refresh(),
+                  child: Text(
+                    'Coba lagi',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

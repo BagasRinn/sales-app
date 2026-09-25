@@ -227,6 +227,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"], "stok_sistem": r["stok"],
+                 "stok_booking": 0,  # reset saat sync Excel baru
                  "kategori": r.get("kategori"), "satuan": r.get("satuan")}
                 for r in changed
             ])
@@ -235,6 +236,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                 set_={"nama_barang": stmt.excluded.nama_barang,
                       "harga": stmt.excluded.harga,
                       "stok_sistem": stmt.excluded.stok_sistem,
+                      "stok_booking": 0,  # reset saat sync Excel baru
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan},
             )
