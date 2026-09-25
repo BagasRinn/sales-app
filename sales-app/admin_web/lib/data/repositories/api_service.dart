@@ -9,6 +9,10 @@ class ApiService {
 
   String? _refreshToken;
 
+  /// Expose internal Dio — dipakai caller yang butuh kontrol penuh
+  /// (mis. download binary dengan ResponseType.bytes).
+  Dio get dio => _dio;
+
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.baseUrl,

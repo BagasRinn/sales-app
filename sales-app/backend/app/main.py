@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, users
+from app.api.endpoints import auth, products, orders, customers, users, reports
 
 
 scheduler = AsyncIOScheduler()
@@ -161,6 +161,7 @@ app.include_router(products.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(customers.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(reports.router, prefix="/api/v1")
 
 
 @app.get("/")

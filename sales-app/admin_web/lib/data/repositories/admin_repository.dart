@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../repositories/api_service.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -56,6 +58,25 @@ class AdminRepository {
       'items': items,
     });
     return Order.fromJson(data);
+  }
+
+  /// Download laporan harian sebagai bytes Excel. Caller yang handle
+  /// blob URL / file save (browser download di web).
+  Future<List<int>> downloadDailyReport({
+    required DateTime date,
+    List<String> statuses = const ['APPROVED'],
+  }) async {
+    final dateStr = '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+    final qs = '?date=$dateStr&status=${statuses.join(',')}';
+    // Ambil raw bytes — pakai helper Dio langsung agar bypass deserialization JSON.
+    final dio = _api.dio;
+    final response = await dio.get<List<int>>(
+      '/reports/daily$qs',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return response.data ?? [];
   }
 
   Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search, String? kategori, String? status}) async {
