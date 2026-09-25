@@ -31,8 +31,29 @@ class AdminRepository {
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
-  Future<List<Order>> getAllOrders({String? status}) async {
-    final data = await _api.get('/orders${status != null ? '?status=$status' : ''}');
+  Future<List<Order>> getAllOrders({
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
+    final params = <String, String>{};
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (dateFrom != null) {
+      params['date_from'] =
+          '${dateFrom.year.toString().padLeft(4, '0')}-'
+          '${dateFrom.month.toString().padLeft(2, '0')}-'
+          '${dateFrom.day.toString().padLeft(2, '0')}';
+    }
+    if (dateTo != null) {
+      params['date_to'] =
+          '${dateTo.year.toString().padLeft(4, '0')}-'
+          '${dateTo.month.toString().padLeft(2, '0')}-'
+          '${dateTo.day.toString().padLeft(2, '0')}';
+    }
+    final qs = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/orders$qs');
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 

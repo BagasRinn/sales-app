@@ -566,17 +566,58 @@ def list_pending_orders(
 @router.get("")
 def list_all_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
+    date_from: Optional[str] = Query(
+        None,
+        description="Tanggal mulai (YYYY-MM-DD, WITA). Filter created_at >= date_from 00:00 WITA.",
+    ),
+    date_to: Optional[str] = Query(
+        None,
+        description="Tanggal akhir inklusif (YYYY-MM-DD, WITA). Filter created_at < (date_to+1) 00:00 WITA.",
+    ),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
+    """List semua pesanan dengan filter status + rentang tanggal (WITA).
+    date_from/date_to opsional — kalau dua-duanya kosong, semua pesanan.
+    """
     query = db.query(Order).options(
         joinedload(Order.items).joinedload(OrderItem.product),
         joinedload(Order.sales),
     )
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
+
+    if date_from or date_to:
+        # WITA timezone biar konsisten dengan sales app
+        wita = timezone(timedelta(hours=8))
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="date_from harus berformat YYYY-MM-DD",
+                )
+            start_wita = datetime.combine(from_date, datetime.min.time()).replace(tzinfo=wita)
+            query = query.filter(
+                Order.created_at >= start_wita.astimezone(timezone.utc)
+            )
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="date_to harus berformat YYYY-MM-DD",
+                )
+            end_wita_exclusive = datetime.combine(
+                to_date + timedelta(days=1), datetime.min.time()
+            ).replace(tzinfo=wita)
+            query = query.filter(
+                Order.created_at < end_wita_exclusive.astimezone(timezone.utc)
+            )
 
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return [_build_order_response(o) for o in orders]

@@ -44,6 +44,8 @@ class AdminProvider extends ChangeNotifier {
   String? _selectedKategori;
   String? _selectedStatus;
   String? _orderFilter; // persists filter across approve/reject actions
+  DateTime? _orderDateFrom;
+  DateTime? _orderDateTo;
 
   // Debounce timer for search
   Timer? _searchDebounceTimer;
@@ -76,6 +78,8 @@ class AdminProvider extends ChangeNotifier {
   String? get selectedKategori => _selectedKategori;
   String? get selectedStatus => _selectedStatus;
   String? get orderFilter => _orderFilter;
+  DateTime? get orderDateFrom => _orderDateFrom;
+  DateTime? get orderDateTo => _orderDateTo;
 
   int get customerPage => _customerPage;
   int get customerLimit => _customerLimit;
@@ -163,10 +167,20 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> loadAllOrders({String? status}) async {
+  Future<void> loadAllOrders({
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
     _orderFilter = status;
+    _orderDateFrom = dateFrom;
+    _orderDateTo = dateTo;
     try {
-      _allOrders = await _repo.getAllOrders(status: status);
+      _allOrders = await _repo.getAllOrders(
+        status: status,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
       notifyListeners();
     } on ApiException catch (e) {
       _errorMessage = e.message;

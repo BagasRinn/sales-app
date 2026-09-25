@@ -18,9 +18,18 @@ class OrdersTab extends StatefulWidget {
   State<OrdersTab> createState() => _OrdersTabState();
 }
 
+/// Quick presets + custom date range. Disimpan lokal di sini (bukan di
+/// AdminProvider) supaya tidak tercampur dengan state global — ketika user
+/// keluar dari tab ini, filter dianggap selesai dan direset.
+enum _DatePreset { all, today, thisWeek, thisMonth, custom }
+
 class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _filterStatus;
+
+  _DatePreset _datePreset = _DatePreset.all;
+  DateTime? _customDateFrom;
+  DateTime? _customDateTo;
 
   @override
   void initState() {
@@ -32,6 +41,59 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  ({DateTime? from, DateTime? to}) _resolveDateRange() {
+    final now = DateTime.now();
+    switch (_datePreset) {
+      case _DatePreset.all:
+        return (from: null, to: null);
+      case _DatePreset.today:
+        final t = DateTime(now.year, now.month, now.day);
+        return (from: t, to: t);
+      case _DatePreset.thisWeek:
+        // Week starts Monday
+        final start = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: (now.weekday - 1)));
+        return (from: start, to: now);
+      case _DatePreset.thisMonth:
+        final start = DateTime(now.year, now.month, 1);
+        return (from: start, to: now);
+      case _DatePreset.custom:
+        return (from: _customDateFrom, to: _customDateTo);
+    }
+  }
+
+  void _applyFilters() {
+    final provider = context.read<AdminProvider>();
+    final range = _resolveDateRange();
+    provider.loadAllOrders(
+      status: _filterStatus,
+      dateFrom: range.from,
+      dateTo: range.to,
+    );
+  }
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final initial = (_customDateFrom != null && _customDateTo != null)
+        ? DateTimeRange(start: _customDateFrom!, end: _customDateTo!)
+        : DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now.add(const Duration(days: 1)),
+      initialDateRange: initial,
+      helpText: 'Pilih rentang tanggal',
+    );
+    if (picked != null) {
+      setState(() {
+        _customDateFrom = picked.start;
+        _customDateTo = picked.end;
+        _datePreset = _DatePreset.custom;
+      });
+      _applyFilters();
+    }
   }
 
   @override
@@ -142,64 +204,159 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   Widget _buildAllOrders(AdminProvider provider, bool isLoading) {
     final orders = provider.allOrders;
 
-    if (isLoading) return const Center(child: CircularProgressIndicator());
-
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(16),
           color: AppColors.surface,
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Filter: ', style: AppTextStyles.labelLarge),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _filterStatus,
-                    hint: const Text('Semua'),
-                    isDense: true,
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('Semua')),
-                      DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
-                      DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
-                      DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
-                      DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
-                      DropdownMenuItem(value: 'EXPIRED', child: Text('Kedaluwarsa')),
+              // Row 1: status + counter
+              Row(
+                children: [
+                  const Text('Status: ', style: AppTextStyles.labelLarge),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _filterStatus,
+                        hint: const Text('Semua'),
+                        isDense: true,
+                        items: const [
+                          DropdownMenuItem(value: null, child: Text('Semua')),
+                          DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
+                          DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
+                          DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
+                          DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
+                          DropdownMenuItem(value: 'EXPIRED', child: Text('Kedaluwarsa')),
+                        ],
+                        onChanged: (v) {
+                          setState(() => _filterStatus = v);
+                          _applyFilters();
+                        },
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${orders.length} pesanan',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Row 2: date quick-filter chips + custom range
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _dateChip(_DatePreset.all, 'Semua'),
+                  _dateChip(_DatePreset.today, 'Hari Ini'),
+                  _dateChip(_DatePreset.thisWeek, 'Minggu Ini'),
+                  _dateChip(_DatePreset.thisMonth, 'Bulan Ini'),
+                  _dateChip(_DatePreset.custom, 'Pilih Tanggal'),
+                ],
+              ),
+              if (_datePreset == _DatePreset.custom &&
+                  _customDateFrom != null &&
+                  _customDateTo != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.date_range,
+                          size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${_formatDate(_customDateFrom!)} → ${_formatDate(_customDateTo!)}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: _pickCustomRange,
+                        child: Text(
+                          'Ubah',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.primaryLight,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ],
-                    onChanged: (v) {
-                      setState(() => _filterStatus = v);
-                      provider.loadAllOrders(status: v);
-                    },
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${orders.length} pesanan',
-                style: AppTextStyles.bodySmall,
-              ),
             ],
           ),
         ),
         Expanded(
-          child: orders.isEmpty
-              ? const Center(
-                  child: Text('Tidak ada pesanan', style: AppTextStyles.bodyMedium))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: orders.length,
-                  itemBuilder: (ctx, i) => _OrderCard(order: orders[i]),
-                ),
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : orders.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.receipt_long_outlined,
+                              size: 48,
+                              color: AppColors.textMuted
+                                  .withValues(alpha: 0.4)),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Tidak ada pesanan untuk filter ini',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: orders.length,
+                      itemBuilder: (ctx, i) => _OrderCard(order: orders[i]),
+                    ),
         ),
       ],
     );
   }
+
+  Widget _dateChip(_DatePreset preset, String label) {
+    final selected = _datePreset == preset;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) async {
+        if (preset == _DatePreset.custom) {
+          await _pickCustomRange();
+          return;
+        }
+        setState(() => _datePreset = preset);
+        _applyFilters();
+      },
+      selectedColor: AppColors.primaryLight,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : AppColors.textPrimary,
+        fontWeight: FontWeight.w500,
+        fontSize: 12,
+      ),
+      backgroundColor: AppColors.background,
+      side: BorderSide(
+        color: selected ? AppColors.primaryLight : AppColors.border,
+      ),
+    );
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   Future<void> _approveOrder(String orderId) async {
     final confirm = await showDialog<bool>(
