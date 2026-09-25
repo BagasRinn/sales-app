@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, func
 from uuid import UUID
@@ -565,6 +565,7 @@ def list_pending_orders(
 
 @router.get("")
 def list_all_orders(
+    response: Response,
     status_filter: Optional[str] = Query(None, alias="status"),
     date_from: Optional[str] = Query(
         None,
@@ -581,13 +582,16 @@ def list_all_orders(
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
     date_from/date_to opsional — kalau dua-duanya kosong, semua pesanan.
+    Set header X-Total-Count untuk pagination di client.
     """
     query = db.query(Order).options(
         joinedload(Order.items).joinedload(OrderItem.product),
         joinedload(Order.sales),
     )
+    count_query = db.query(Order)
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
+        count_query = count_query.filter(Order.status == status_filter.upper())
 
     if date_from or date_to:
         # WITA timezone biar konsisten dengan sales app
@@ -601,9 +605,9 @@ def list_all_orders(
                     detail="date_from harus berformat YYYY-MM-DD",
                 )
             start_wita = datetime.combine(from_date, datetime.min.time()).replace(tzinfo=wita)
-            query = query.filter(
-                Order.created_at >= start_wita.astimezone(timezone.utc)
-            )
+            start_utc = start_wita.astimezone(timezone.utc)
+            query = query.filter(Order.created_at >= start_utc)
+            count_query = count_query.filter(Order.created_at >= start_utc)
         if date_to:
             try:
                 to_date = datetime.strptime(date_to, "%Y-%m-%d").date()
@@ -615,10 +619,12 @@ def list_all_orders(
             end_wita_exclusive = datetime.combine(
                 to_date + timedelta(days=1), datetime.min.time()
             ).replace(tzinfo=wita)
-            query = query.filter(
-                Order.created_at < end_wita_exclusive.astimezone(timezone.utc)
-            )
+            end_utc = end_wita_exclusive.astimezone(timezone.utc)
+            query = query.filter(Order.created_at < end_utc)
+            count_query = count_query.filter(Order.created_at < end_utc)
 
+    total = count_query.count()
+    response.headers["X-Total-Count"] = str(total)
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return [_build_order_response(o) for o in orders]
 

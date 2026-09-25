@@ -46,6 +46,7 @@ class AdminProvider extends ChangeNotifier {
   String? _orderFilter; // persists filter across approve/reject actions
   DateTime? _orderDateFrom;
   DateTime? _orderDateTo;
+  int _orderTotal = 0; // total pesanan yang match filter (untuk pagination)
 
   // Debounce timer for search
   Timer? _searchDebounceTimer;
@@ -80,6 +81,7 @@ class AdminProvider extends ChangeNotifier {
   String? get orderFilter => _orderFilter;
   DateTime? get orderDateFrom => _orderDateFrom;
   DateTime? get orderDateTo => _orderDateTo;
+  int get orderTotal => _orderTotal;
 
   int get customerPage => _customerPage;
   int get customerLimit => _customerLimit;
@@ -171,16 +173,22 @@ class AdminProvider extends ChangeNotifier {
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
+    int skip = 0,
+    int limit = 20,
   }) async {
     _orderFilter = status;
     _orderDateFrom = dateFrom;
     _orderDateTo = dateTo;
     try {
-      _allOrders = await _repo.getAllOrders(
+      final result = await _repo.getAllOrdersPaginated(
         status: status,
         dateFrom: dateFrom,
         dateTo: dateTo,
+        skip: skip,
+        limit: limit,
       );
+      _allOrders = result.orders;
+      _orderTotal = result.total;
       notifyListeners();
     } on ApiException catch (e) {
       _errorMessage = e.message;

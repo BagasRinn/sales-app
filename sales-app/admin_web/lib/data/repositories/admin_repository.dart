@@ -35,8 +35,13 @@ class AdminRepository {
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
+    int skip = 0,
+    int limit = 50,
   }) async {
-    final params = <String, String>{};
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (dateFrom != null) {
       params['date_from'] =
@@ -50,11 +55,48 @@ class AdminRepository {
           '${dateTo.month.toString().padLeft(2, '0')}-'
           '${dateTo.day.toString().padLeft(2, '0')}';
     }
-    final qs = params.isEmpty
-        ? ''
-        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/orders$qs');
     return (data as List).map((e) => Order.fromJson(e)).toList();
+  }
+
+  /// Sama dengan [getAllOrders] tapi juga baca header X-Total-Count —
+  /// untuk pagination di client. Pakai Dio langsung agar bisa akses
+  /// response.headers.
+  Future<({List<Order> orders, int total})> getAllOrdersPaginated({
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int skip = 0,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (dateFrom != null) {
+      params['date_from'] =
+          '${dateFrom.year.toString().padLeft(4, '0')}-'
+          '${dateFrom.month.toString().padLeft(2, '0')}-'
+          '${dateFrom.day.toString().padLeft(2, '0')}';
+    }
+    if (dateTo != null) {
+      params['date_to'] =
+          '${dateTo.year.toString().padLeft(4, '0')}-'
+          '${dateTo.month.toString().padLeft(2, '0')}-'
+          '${dateTo.day.toString().padLeft(2, '0')}';
+    }
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final response = await _api.dio.get<dynamic>(
+      '/orders$qs',
+      options: Options(responseType: ResponseType.json),
+    );
+    final data = response.data as List;
+    final orders = data.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final totalHeader = response.headers.value('x-total-count');
+    final total = int.tryParse(totalHeader ?? '') ?? orders.length;
+    return (orders: orders, total: total);
   }
 
   Future<Order> getOrderDetail(String orderId) async {

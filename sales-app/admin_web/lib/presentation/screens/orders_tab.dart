@@ -31,6 +31,10 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   DateTime? _customDateFrom;
   DateTime? _customDateTo;
 
+  // Pagination state untuk tab Semua Pesanan.
+  static const int _pageSize = 20;
+  int _currentPage = 1; // 1-indexed
+
   @override
   void initState() {
     super.initState();
@@ -64,13 +68,31 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     }
   }
 
-  void _applyFilters() {
+  void _applyFilters({bool resetPage = true}) {
     final provider = context.read<AdminProvider>();
+    final range = _resolveDateRange();
+    if (resetPage) _currentPage = 1;
+    provider.loadAllOrders(
+      status: _filterStatus,
+      dateFrom: range.from,
+      dateTo: range.to,
+      skip: (_currentPage - 1) * _pageSize,
+      limit: _pageSize,
+    );
+  }
+
+  void _goToPage(int page) {
+    final provider = context.read<AdminProvider>();
+    final totalPages = (provider.orderTotal / _pageSize).ceil().clamp(1, 1 << 30);
+    if (page < 1 || page > totalPages) return;
+    _currentPage = page;
     final range = _resolveDateRange();
     provider.loadAllOrders(
       status: _filterStatus,
       dateFrom: range.from,
       dateTo: range.to,
+      skip: (_currentPage - 1) * _pageSize,
+      limit: _pageSize,
     );
   }
 
@@ -203,6 +225,12 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
   Widget _buildAllOrders(AdminProvider provider, bool isLoading) {
     final orders = provider.allOrders;
+    final total = provider.orderTotal;
+    final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
+    final hasPrev = _currentPage > 1;
+    final hasNext = _currentPage < totalPages;
+    final startItem = total == 0 ? 0 : (_currentPage - 1) * _pageSize + 1;
+    final endItem = startItem + orders.length - 1;
 
     return Column(
       children: [
@@ -245,7 +273,9 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   ),
                   const Spacer(),
                   Text(
-                    '${orders.length} pesanan',
+                    total == 0
+                        ? '0 pesanan'
+                        : '$total pesanan',
                     style: AppTextStyles.bodySmall,
                   ),
                 ],
@@ -325,6 +355,58 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                       itemBuilder: (ctx, i) => _OrderCard(order: orders[i]),
                     ),
         ),
+        // Pagination controls (sticky bottom)
+        if (total > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(
+                top: BorderSide(color: AppColors.border),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    total == 0
+                        ? '0 pesanan'
+                        : 'Menampilkan $startItem-$endItem dari $total pesanan',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: hasPrev ? () => _goToPage(_currentPage - 1) : null,
+                  icon: const Icon(Icons.chevron_left, size: 18),
+                  label: const Text('Sebelumnya'),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$_currentPage / $totalPages',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: hasNext ? () => _goToPage(_currentPage + 1) : null,
+                  icon: const Icon(Icons.chevron_right, size: 18),
+                  label: const Text('Selanjutnya'),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
