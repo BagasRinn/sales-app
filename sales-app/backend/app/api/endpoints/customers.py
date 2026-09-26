@@ -8,7 +8,7 @@ from sqlalchemy import func
 from uuid import UUID
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerSales, User
+from app.models.models import Customer, CustomerSales, User, ImportLog
 from app.schemas.schemas import (
     CustomerCreate,
     CustomerUpdate,
@@ -215,6 +215,19 @@ def import_excel(
         raise HTTPException(status_code=400, detail="File kosong")
 
     sync_result = sync_customers_from_excel(contents, db)
+
+    # Catat ke histori import
+    db.add(ImportLog(
+        user_id=_current_user["user_id"],
+        username=_current_user.get("username"),
+        import_type="CUSTOMER",
+        total_rows=sync_result["total_rows"],
+        inserted=sync_result["inserted"],
+        updated=sync_result["updated"],
+        skipped=sync_result["skipped"],
+        file_name=file.filename,
+    ))
+    db.commit()
 
     return SyncResultResponse(
         success=sync_result["success"],

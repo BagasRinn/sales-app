@@ -146,6 +146,7 @@ def import_excel(
     db.add(ImportLog(
         user_id=current_user["user_id"],
         username=current_user.get("username"),
+        import_type="PRODUCT",
         total_rows=sync_result["total_rows"],
         inserted=sync_result["inserted"],
         updated=sync_result["updated"],

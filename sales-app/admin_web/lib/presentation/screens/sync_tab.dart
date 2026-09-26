@@ -51,7 +51,7 @@ class _SyncTabState extends State<SyncTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Import Excel',
+                              'Import Produk',
                               style: AppTextStyles.headlineMedium,
                             ),
                             const SizedBox(height: 4),
@@ -65,26 +65,6 @@ class _SyncTabState extends State<SyncTab> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _infoRow(Icons.merge_type, 'Metode', 'Upsert — insert baru, update yang sudah ada'),
-                        const SizedBox(height: 8),
-                        _infoRow(Icons.security, 'Transaksi', 'Atomic — gagal sebagian = rollback semua'),
-                        const SizedBox(height: 8),
-                        _infoRow(Icons.notes, 'Format Stok', 'Ambil angka depan (cth: "880 Pcs" → 880)'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Column reference
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -172,20 +152,6 @@ class _SyncTabState extends State<SyncTab> {
           _SyncErrorsSection(),
         ],
       ),
-    );
-  }
-
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.textMuted),
-        const SizedBox(width: 8),
-        Text('$label:', style: AppTextStyles.bodySmall),
-        const SizedBox(width: 6),
-        Text(value,
-            style: AppTextStyles.bodyMedium.copyWith(
-                fontWeight: FontWeight.w500)),
-      ],
     );
   }
 
@@ -375,10 +341,62 @@ class _SyncErrorsSection extends StatelessWidget {
               icon: const Icon(Icons.open_in_new, size: 16),
               label: const Text('Lihat Detail'),
             ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => _clearErrors(context, provider),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Bersihkan'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _clearErrors(BuildContext context, AdminProvider provider) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Bersihkan Error?'),
+        content: const Text(
+          'Semua记录 error import akan dihapus dari database. Tindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Bersihkan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      final success = await provider.clearImportErrors();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Text(success ? 'Error berhasil dibersihkan' : 'Gagal membersihkan error'),
+              ],
+            ),
+            backgroundColor: success ? AppColors.success : AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showErrorsDialog(
@@ -595,6 +613,7 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
                       _col('File', flex: 2),
                       _col('Baru', flex: 1),
                       _col('Update', flex: 1),
+                      _col('Tipe', flex: 1),
                       _col('Error', flex: 1),
                     ],
                   ),
@@ -684,6 +703,10 @@ class _ImportLogRow extends StatelessWidget {
           ),
           Expanded(
             flex: 1,
+            child: _ImportTypeChip(type: log['import_type']?.toString() ?? 'PRODUCT'),
+          ),
+          Expanded(
+            flex: 1,
             child: Text(
               '$skipped',
               style: AppTextStyles.bodySmall.copyWith(
@@ -693,6 +716,37 @@ class _ImportLogRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class _ImportTypeChip extends StatelessWidget {
+  final String type;
+
+  const _ImportTypeChip({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final isProduct = type == 'PRODUCT';
+    final color = isProduct ? AppColors.info : AppColors.success;
+    final bgColor = isProduct ? AppColors.infoBg : AppColors.successBg;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        isProduct ? 'Produk' : 'Toko',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
@@ -731,7 +785,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Text('Import Toko (Customer)',
+                      Text('Import Toko',
                           style: AppTextStyles.headlineMedium),
                       SizedBox(height: 4),
                       Text(
@@ -744,28 +798,6 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
               ],
             ),
             const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  _InfoRowStatic(Icons.merge_type, 'Metode',
-                      'Upsert by nama_toko — insert baru, restore yang soft-deleted'),
-                  SizedBox(height: 8),
-                  _InfoRowStatic(Icons.security, 'Transaksi',
-                      'Per-row savepoint — 1 baris gagal tidak menggagalkan yang lain'),
-                  SizedBox(height: 8),
-                  _InfoRowStatic(Icons.person_add, 'Assignment sales',
-                      'Dilakukan manual via menu Toko (gunakan endpoint /customers/{id}/assign)'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -790,19 +822,14 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text('Wajib: kode, nama_toko (nama outlet)', style: AppTextStyles.bodySmall),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Opsional: alamat',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Contoh baris: "OUT001, Toko Maju Jaya, Jl. Sudirman 12"',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: AppColors.textSecondary,
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _CustomerColChip('code', required: true),
+                      _CustomerColChip('store_name', required: true),
+                      _CustomerColChip('address', required: false),
+                    ],
                   ),
                 ],
               ),
@@ -882,31 +909,25 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
       );
     }
   }
-}
 
-
-class _InfoRowStatic extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRowStatic(this.icon, this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.textMuted),
-        const SizedBox(width: 8),
-        Text('$label:', style: AppTextStyles.bodySmall),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
-          ),
+  Widget _CustomerColChip(String label, {required bool required}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: required ? AppColors.success.withValues(alpha: 0.15) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: required ? AppColors.success : AppColors.border),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(
+          fontFamily: 'monospace',
+          color: required ? AppColors.success : AppColors.textMuted,
+          fontWeight: required ? FontWeight.w600 : FontWeight.w400,
         ),
-      ],
+      ),
     );
   }
 }
+
+

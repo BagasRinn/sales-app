@@ -318,6 +318,7 @@ class StokLogResponse(BaseModel):
 class ImportLogResponse(BaseModel):
     id: UUID
     username: Optional[str]
+    import_type: str = "PRODUCT"
     total_rows: int
     inserted: int
     updated: int

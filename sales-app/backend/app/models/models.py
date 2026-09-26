@@ -139,6 +139,7 @@ class ImportLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(String, nullable=True)
     username = Column(String, nullable=True)
+    import_type = Column(String, nullable=False, default="PRODUCT")
     total_rows = Column(Integer, default=0)
     inserted = Column(Integer, default=0)
     updated = Column(Integer, default=0)
