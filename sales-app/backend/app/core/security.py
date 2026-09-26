@@ -122,6 +122,7 @@ def get_current_user(
         "user_id": user_id,
         "username": payload.get("username"),
         "role": payload.get("role"),
+        "nama": user.nama,
     }
 
 

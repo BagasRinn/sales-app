@@ -219,7 +219,7 @@ def import_excel(
     # Catat ke histori import
     db.add(ImportLog(
         user_id=_current_user["user_id"],
-        username=_current_user.get("username"),
+        nama=_current_user.get("nama"),
         import_type="CUSTOMER",
         total_rows=sync_result["total_rows"],
         inserted=sync_result["inserted"],

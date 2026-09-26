@@ -125,6 +125,9 @@ class _SyncTabState extends State<SyncTab> {
             ),
           ),
 
+          // Customer Import Card
+          _CustomerImportCard(historyKey: _historyKey),
+
           // Result cards
           if (syncResult != null) ...[
             const SizedBox(height: 32),
@@ -133,11 +136,6 @@ class _SyncTabState extends State<SyncTab> {
             const SizedBox(height: 16),
             _SyncResultGrid(result: syncResult),
           ],
-
-          const SizedBox(height: 32),
-          // Customer Import Card
-          _CustomerImportCard(),
-
 
           const SizedBox(height: 32),
           // Import history
@@ -646,7 +644,6 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
                     children: [
                       _col('Waktu', flex: 2),
                       _col('User', flex: 1),
-                      _col('File', flex: 2),
                       _col('Baru', flex: 1),
                       _col('Update', flex: 1),
                       _col('Tipe', flex: 1),
@@ -711,16 +708,8 @@ class _ImportLogRow extends StatelessWidget {
           Expanded(
             flex: 1,
             child: Text(
-              log['username']?.toString() ?? 'Admin',
+              log['nama']?.toString() ?? 'Admin',
               style: AppTextStyles.bodySmall,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              log['file_name']?.toString() ?? '-',
-              style: AppTextStyles.bodySmall,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
           Expanded(
@@ -774,6 +763,10 @@ class _ImportTypeChip extends StatelessWidget {
 
 
 class _CustomerImportCard extends StatefulWidget {
+  final GlobalKey<_ImportHistorySectionState> historyKey;
+
+  const _CustomerImportCard({required this.historyKey});
+
   @override
   State<_CustomerImportCard> createState() => _CustomerImportCardState();
 }
@@ -781,6 +774,8 @@ class _CustomerImportCard extends StatefulWidget {
 
 class _CustomerImportCardState extends State<_CustomerImportCard> {
   bool _importing = false;
+
+  GlobalKey<_ImportHistorySectionState> get _historyKey => widget.historyKey;
 
   @override
   Widget build(BuildContext context) {
@@ -908,6 +903,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
     setState(() => _importing = false);
 
     if (success) {
+      _historyKey.currentState?._refresh();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
