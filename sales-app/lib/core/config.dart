@@ -11,12 +11,11 @@ class AppConfig {
   //   Physical Android/iOS device di WiFi sama → http://<PC-IP-LAN>:8000/api/v1
   //     (cek dengan `ipconfig` → IPv4 Address, mis. 192.168.x.x)
 
-  // [ACTIVE — LOCAL DEV] Default Android Emulator. Ganti sesuai skenario di atas
-  // kalau target runtimenya berbeda.
-  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
+  // [ACTIVE — PRODUCTION] Deploy di Railway
+  static const String baseUrl = 'https://practical-beauty-production-071a.up.railway.app/api/v1';
 
-  // [PRODUCTION] Deploy di Railway — uncomment & comment baris di atas untuk balik ke deploy
-  // static const String baseUrl = 'https://practical-beauty-production-071a.up.railway.app/api/v1';
+  // [LOCAL DEV] Android Emulator — comment baris di atas, uncomment ini
+  // static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
 
   static const Duration requestTimeout = Duration(seconds: 30);
 
