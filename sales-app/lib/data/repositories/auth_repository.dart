@@ -120,4 +120,16 @@ class AuthRepository {
     });
     return data;
   }
+
+  /// Ganti password user sendiri. Endpoint akan increment token_version di
+  /// server, jadi semua sesi invalid. Caller wajib clear storage & logout.
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _api.post('/auth/change-password', body: {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    });
+  }
 }

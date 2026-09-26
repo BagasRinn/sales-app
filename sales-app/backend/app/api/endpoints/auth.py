@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
+from datetime import datetime, timezone
 
 from app.models.database import get_db
 from app.models.models import User
-from app.schemas.schemas import UserCreate, UserLogin, Token, RefreshTokenRequest
+from app.schemas.schemas import UserCreate, UserLogin, Token, RefreshTokenRequest, ChangePasswordRequest
 from app.core.security import (
     get_password_hash,
     verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
+    require_auth,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -63,6 +65,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "token_version": db_user.token_version or 0,
         }
     )
 
@@ -71,6 +74,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "token_version": db_user.token_version or 0,
         }
     )
 
@@ -114,7 +118,41 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "token_version": db_user.token_version or 0,
         }
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Ganti password user yang sedang login.
+
+    Verify password lama, set password baru, increment token_version sehingga
+    SEMUA sesi lama (termasuk device ini) ter-invalidate. User harus login
+    ulang dengan password baru.
+    """
+    user = db.query(User).filter(User.id == UUID(current_user["user_id"])).first()
+    if not user or user.deleted_at is not None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun nonaktif atau tidak ditemukan",
+        )
+
+    if not verify_password(body.old_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password lama salah",
+        )
+
+    user.password_hash = get_password_hash(body.new_password)
+    user.token_version = (user.token_version or 0) + 1
+    user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"detail": "Password berhasil diubah. Silakan login ulang."}

@@ -312,109 +312,112 @@ class _ProductsTabState extends State<ProductsTab> {
       builder: (ctx) => Dialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.infoBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.edit, color: AppColors.info),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Ubah Stok Sistem',
-                            style: AppTextStyles.headlineSmall),
-                        Text('Manual override stok produk',
-                            style: AppTextStyles.bodySmall),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: SizedBox(
+          width: 480,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(product.namaBarang, style: AppTextStyles.labelLarge),
-                    const SizedBox(height: 4),
-                    Text('SKU: ${product.id}', style: AppTextStyles.mono),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.edit, color: AppColors.info),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Ubah Stok Sistem',
+                              style: AppTextStyles.headlineSmall),
+                          Text('Manual override stok produk',
+                              style: AppTextStyles.bodySmall),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Stok Sistem Baru',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(product.namaBarang, style: AppTextStyles.labelLarge),
+                      const SizedBox(height: 4),
+                      Text('SKU: ${product.id}', style: AppTextStyles.mono),
+                    ],
+                  ),
                 ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.infoBg,
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Stok Sistem Baru',
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
                 ),
-                child: Row(
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.infoBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      _infoPill(
+                          'Booking', '${product.stokBooking}', AppColors.info),
+                      const SizedBox(width: 8),
+                      _infoPill('Tersedia (lama)',
+                          '${product.stokTersedia}', AppColors.warning),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
                   children: [
-                    _infoPill(
-                        'Booking', '${product.stokBooking}', AppColors.info),
-                    const SizedBox(width: 8),
-                    _infoPill('Tersedia (lama)',
-                        '${product.stokTersedia}', AppColors.warning),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Batal'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          final value = int.tryParse(controller.text);
+                          if (value == null || value < 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Masukkan angka yang valid')),
+                            );
+                            return;
+                          }
+                          Navigator.pop(ctx, value);
+                        },
+                        child: const Text('Simpan'),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        final value = int.tryParse(controller.text);
-                        if (value == null || value < 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Masukkan angka yang valid')),
-                          );
-                          return;
-                        }
-                        Navigator.pop(ctx, value);
-                      },
-                      child: const Text('Simpan'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

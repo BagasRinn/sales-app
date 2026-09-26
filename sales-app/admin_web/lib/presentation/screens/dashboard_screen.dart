@@ -16,6 +16,7 @@ import 'sync_tab.dart';
 import 'stats_tab.dart';
 import 'customers_tab.dart';
 import 'users_tab.dart';
+import 'change_password_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
@@ -472,6 +473,14 @@ class _DashboardContentState extends State<_DashboardContent>
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.lock_outline, color: Colors.white54, size: 20),
+                        tooltip: 'Ganti password',
+                        onPressed: () => ChangePasswordDialog.show(
+                          context,
+                          context.read<AdminProvider>().adminRepository,
                         ),
                       ),
                       IconButton(

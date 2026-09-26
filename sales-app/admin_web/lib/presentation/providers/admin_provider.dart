@@ -291,6 +291,7 @@ class AdminProvider extends ChangeNotifier {
       ]);
       _customers = results[0] as List<Customer>;
       _customerTotal = results[1] as int;
+      _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     }
@@ -481,6 +482,7 @@ class AdminProvider extends ChangeNotifier {
   Future<void> _loadStats() async {
     try {
       _stats = await _repo.getDashboardStats();
+      _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
       // _stats = {} default, dashboard tampil 0 bukan blank/crash.
@@ -514,6 +516,7 @@ class AdminProvider extends ChangeNotifier {
   Future<void> _loadPendingOrders() async {
     try {
       _pendingOrders = await _repo.getPendingOrders();
+      _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     }
@@ -522,6 +525,7 @@ class AdminProvider extends ChangeNotifier {
   Future<void> _loadAllOrders() async {
     try {
       _allOrders = await _repo.getAllOrders(status: _orderFilter);
+      _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     }
@@ -545,6 +549,7 @@ class AdminProvider extends ChangeNotifier {
       ]);
       _products = results[0] as List<Product>;
       _productTotal = results[1] as int;
+      _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     }

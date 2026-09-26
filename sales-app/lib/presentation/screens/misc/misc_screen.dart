@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
+import '../auth/change_password_dialog.dart';
 import '../auth/login_screen.dart';
 
 class MiscScreen extends StatelessWidget {
@@ -74,6 +75,16 @@ class MiscScreen extends StatelessWidget {
                     label: 'Bantuan',
                     subtitle: 'Hubungi admin untuk bantuan',
                     onTap: () => _showBantuanDialog(context),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  _MenuTile(
+                    icon: Icons.lock_outline,
+                    label: 'Ganti Password',
+                    subtitle: 'Ubah password login Anda',
+                    onTap: () => ChangePasswordDialog.show(
+                      context,
+                      context.read<AuthProvider>(),
+                    ),
                   ),
                   const Divider(height: 1, indent: 56),
                   _MenuTile(

@@ -3,8 +3,12 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+
+from app.models.database import get_db
 
 load_dotenv = None
 
@@ -41,14 +45,23 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({
+        "exp": expire,
+        "type": "access",
+        # Embed token_version supaya token invalid setelah password change.
+        "tv": data.get("token_version", 0),
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh",
+        "tv": data.get("token_version", 0),
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -65,7 +78,16 @@ def decode_token(token: str) -> Optional[dict]:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Decode token, lookup user, dan validasi token_version.
+
+    Return dict berisi info user. Raise 401 kalau token invalid, user tidak
+    ada, atau token_version tidak match dengan current_user.token_version
+    (artinya sesi sudah di-invalidate — biasanya karena password diubah).
+    """
     payload = decode_token(token)
     if payload is None:
         raise HTTPException(
@@ -75,10 +97,25 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         )
 
     user_id = payload.get("sub")
+    token_version = payload.get("tv", 0)
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token payload tidak valid",
+        )
+
+    # Lazy import untuk hindari circular dependency
+    from app.models.models import User
+    user = db.query(User).filter(User.id == UUID(user_id)).first()
+    if not user or user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User tidak ditemukan",
+        )
+    if (user.token_version or 0) != token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesi sudah tidak valid (password telah diubah)",
         )
 
     return {

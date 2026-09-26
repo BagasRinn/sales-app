@@ -126,8 +126,15 @@ def update_user(
                 )
         data["role"] = new_role
 
+    # Tangkap sebelum pop — deteksi request yang punya field password.
+    had_password_change = "password" in data
     if "password" in data and data["password"]:
         data["password_hash"] = get_password_hash(data.pop("password"))
+
+    # Increment token_version setiap kali password diubah — invalidate semua
+    # sesi user target, baik dari self-service maupun reset oleh manager.
+    if had_password_change:
+        user.token_version = (user.token_version or 0) + 1
 
     for field, value in data.items():
         setattr(user, field, value)

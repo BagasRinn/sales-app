@@ -57,6 +57,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ganti password sendiri. Endpoint invalidate semua sesi; caller wajib
+  /// panggil [logout] setelah ini untuk clear storage & navigate ke login.
+  Future<void> changeOwnPassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _authRepo.changePassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
+  }
+
   /// Attempt token refresh first; force logout only if refresh fails.
   /// Memanggil logout() (bukan logoutSync()) supaya token di secure storage
   /// ikut dihapus — kalau tidak, cold start berikutnya akan auto-login lagi

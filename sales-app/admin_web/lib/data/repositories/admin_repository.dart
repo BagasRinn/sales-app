@@ -285,6 +285,18 @@ class AdminRepository {
   //   await _api.delete('/users/$userId');
   // }
 
+  /// Ganti password user yang sedang login. Endpoint invalidate semua sesi,
+  /// caller wajib clear storage & navigate ke LoginScreen.
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await _api.post('/auth/change-password', body: {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    });
+  }
+
   Future<List<SyncError>> getSyncErrors() async {
     final data = await _api.get('/products/sync/errors');
     return (data as List).map((e) => SyncError.fromJson(e)).toList();

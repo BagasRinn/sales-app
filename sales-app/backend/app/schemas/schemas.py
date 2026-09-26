@@ -37,6 +37,12 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    """Body untuk POST /auth/change-password — ganti password user sendiri."""
+    old_password: str = Field(..., min_length=1, max_length=72)
+    new_password: str = Field(..., min_length=6, max_length=72)
+
+
 class UserResponse(BaseModel):
     id: UUID
     username: str

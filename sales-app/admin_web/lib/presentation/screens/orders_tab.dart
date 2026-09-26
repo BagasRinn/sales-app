@@ -115,6 +115,29 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       lastDate: now.add(const Duration(days: 1)),
       initialDateRange: initial,
       helpText: 'Pilih rentang tanggal',
+      // Wrap dengan Theme + SizedBox untuk tiga hal sekaligus:
+      // 1. Lebar & tinggi dibatasi supaya tidak melebar ke seluruh layar
+      // 2. Calendar mode tidak terlalu tinggi (top/bottom padding lebih ringkas)
+      // 3. Input mode dapat ruang napas lebih (whitespace di sekitar form)
+      // 4. Rounded corner 20px, konsisten dengan AlertDialog di project ini
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            dialogTheme: const DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+              ),
+            ),
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 460,
+              height: 520,
+              child: child,
+            ),
+          ),
+        );
+      },
     );
     if (picked != null) {
       setState(() {
