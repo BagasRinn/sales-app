@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import func
 from typing import List, Optional
 from uuid import UUID
 
@@ -194,35 +194,17 @@ def get_sync_errors(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    # Return persisted validation skips (empty SKU, negative, duplicate) first
+    # Return only actual validation errors from sync_validation_errors table
     from app.models.models import SyncValidationError
     val_errors = db.query(SyncValidationError).order_by(
         SyncValidationError.created_at.desc()
     ).limit(100).all()
-    # Then include SYNC audit log rows for reference
-    stock_changes = db.execute(
-        text(
-            "SELECT id, product_id, sumber, field_terdampak, delta, "
-            "nilai_sebelum, nilai_sesudah, created_at "
-            "FROM stok_log WHERE sumber = 'SYNC' "
-            "ORDER BY created_at DESC LIMIT 100"
-        )
-    ).fetchall()
 
-    val_rows = [
+    return [
         {"id": str(e.id), "row": e.row_number, "sku": e.sku,
-         "reason": e.reason, "source": "validation"}
+         "reason": e.reason}
         for e in val_errors
     ]
-    audit_rows = [
-        {"id": str(r.id), "product_id": r.product_id,
-         "sumber": r.sumber, "field_terdampak": r.field_terdampak,
-         "delta": r.delta, "nilai_sebelum": r.nilai_sebelum,
-         "nilai_sesudah": r.nilai_sesudah, "created_at": str(r.created_at),
-         "source": "audit"}
-        for r in stock_changes
-    ]
-    return val_rows + audit_rows
 
 
 @router.get("/stats")
