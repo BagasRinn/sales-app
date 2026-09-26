@@ -101,6 +101,12 @@ seed_*.py
 # ---------- Docs drafts & planning ----------
 docs/superpowers/
 
+# ---------- Internal SDD workspace (Claude execution metadata) ----------
+.superpowers/
+
+# ---------- Admin Web agent artifacts ----------
+sales-app/admin_web/.agents/
+
 # ---------- Env-specific overlays ----------
 **/coverage/
 **/.fvm/
