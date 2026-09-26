@@ -405,6 +405,7 @@ class AdminProvider extends ChangeNotifier {
         nama: nama,
       );
       _users = [..._users, newUser];
+      _sortUsers();
       _setLoading(false);
       return true;
     } catch (e) {
@@ -420,21 +421,7 @@ class AdminProvider extends ChangeNotifier {
     try {
       final updated = await _repo.updateUser(userId, body);
       _users = _users.map((u) => u.id == updated.id ? updated : u).toList();
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setLoading(false);
-      _errorMessage = e is ApiException ? e.message : e.toString();
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> deleteUser(String userId) async {
-    _setLoading(true, 'Menghapus user...');
-    try {
-      await _repo.deleteUser(userId);
-      _users = _users.where((u) => u.id != userId).toList();
+      _sortUsers();
       _setLoading(false);
       return true;
     } catch (e) {
@@ -453,6 +440,18 @@ class AdminProvider extends ChangeNotifier {
   String get userRoleFilter => _userRoleFilter;
   String get userSearch => _userSearch;
 
+  /// Aktif di atas, nonaktif di bawah. Tiap group diurutkan A-Z by nama (fallback ke username).
+  int _compareUsers(UserItem a, UserItem b) {
+    if (a.isActive != b.isActive) {
+      return a.isActive ? -1 : 1;
+    }
+    final aKey = (a.nama != null && a.nama!.isNotEmpty) ? a.nama! : a.username;
+    final bKey = (b.nama != null && b.nama!.isNotEmpty) ? b.nama! : b.username;
+    return aKey.toLowerCase().compareTo(bKey.toLowerCase());
+  }
+
+  void _sortUsers() => _users.sort(_compareUsers);
+
   Future<void> loadUsers({String? role, String? search}) async {
     if (role != null) _userRoleFilter = role;
     if (search != null) _userSearch = search;
@@ -461,6 +460,7 @@ class AdminProvider extends ChangeNotifier {
         role: _userRoleFilter.isEmpty ? null : _userRoleFilter,
         search: _userSearch.isEmpty ? null : _userSearch,
       );
+      _sortUsers();
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();

@@ -279,9 +279,11 @@ class AdminRepository {
     return UserItem.fromJson(data);
   }
 
-  Future<void> deleteUser(String userId) async {
-    await _api.delete('/users/$userId');
-  }
+  // Soft-delete User dihapus: fitur nonaktifkan (is_active=false) sudah cukup
+  // untuk memblokir akses user. Hindari 2 fitur dengan tujuan yang sama.
+  // Future<void> deleteUser(String userId) async {
+  //   await _api.delete('/users/$userId');
+  // }
 
   Future<List<SyncError>> getSyncErrors() async {
     final data = await _api.get('/products/sync/errors');

@@ -509,7 +509,9 @@ class _DashboardContentState extends State<_DashboardContent>
                         _titles[_selectedIndex],
                         style: AppTextStyles.headlineMedium,
                       ),
-                      if (widget.role == 'MANAGER')
+                      if (widget.role == 'MANAGER' &&
+                          _selectedIndex < _navItems.length &&
+                          _navItems[_selectedIndex].label == 'Pesanan')
                         Padding(
                           padding: const EdgeInsets.only(left: 12),
                           child: Container(

@@ -144,29 +144,49 @@ def delete_user(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Soft-delete user — manager + admin only."""
-    user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+    """Soft-delete user — DIHAPUS.
 
-    # Jangan hapus diri sendiri
-    if str(user.id) == str(_current_user.get("user_id")):
-        raise HTTPException(status_code=400, detail="Tidak bisa menghapus akun sendiri")
+    Fitur nonaktifkan user (toggle is_active di dialog edit) sudah cukup untuk
+    memblokir akses login. Tidak ada dua fitur dengan tujuan yang sama.
 
-    # Jangan hapus admin terakhir
-    if user.role == "ADMIN":
-        other_admins = (
-            _exclude_deleted(db.query(User))
-            .filter(User.role == "ADMIN", User.id != user_id, User.is_active.is_(True))
-            .count()
-        )
-        if other_admins == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Tidak bisa menghapus admin terakhir",
-            )
+    Endpoint ini di-comment bukan di-delete supaya kalau ada rollback / audit,
+    kode aslinya masih kelihatan. Untuk restore: uncomment blok di bawah.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail="Endpoint dihapus. Gunakan toggle is_active untuk blokir akses user.",
+    )
 
-    user.deleted_at = datetime.now(timezone.utc)
-    user.is_active = False
-    db.commit()
-    return None
+
+# --- KODE ASLI (di-comment, tidak lagi dipakai) ---
+# def delete_user(
+#     user_id: UUID,
+#     db: Session = Depends(get_db),
+#     _current_user: CurrentUser = Depends(require_manager),
+# ):
+#     """Soft-delete user — manager + admin only."""
+#     user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User tidak ditemukan")
+#
+#     # Jangan hapus diri sendiri
+#     if str(user.id) == str(_current_user.get("user_id")):
+#         raise HTTPException(status_code=400, detail="Tidak bisa menghapus akun sendiri")
+#
+#     # Jangan hapus admin terakhir
+#     if user.role == "ADMIN":
+#         other_admins = (
+#             _exclude_deleted(db.query(User))
+#             .filter(User.role == "ADMIN", User.id != user_id, User.is_active.is_(True))
+#             .count()
+#         )
+#         if other_admins == 0:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="Tidak bisa menghapus admin terakhir",
+#             )
+#
+#     user.deleted_at = datetime.now(timezone.utc)
+#     user.is_active = False
+#     db.commit()
+#     return None

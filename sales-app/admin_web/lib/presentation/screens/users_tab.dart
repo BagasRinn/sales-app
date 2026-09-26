@@ -159,9 +159,10 @@ class _UsersTabState extends State<UsersTab> {
   }
 
   Future<void> _openCreateDialog(BuildContext context) async {
+    final provider = context.read<AdminProvider>();
     await showDialog(
       context: context,
-      builder: (_) => const _UserEditDialog(),
+      builder: (_) => _UserEditDialog(provider: provider),
     );
   }
 }
@@ -261,15 +262,9 @@ class _UserRow extends StatelessWidget {
                       const BoxConstraints(minWidth: 36, minHeight: 36),
                   padding: EdgeInsets.zero,
                 ),
-                IconButton(
-                  onPressed: () => _confirmDelete(context),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  color: AppColors.error,
-                  tooltip: 'Hapus user',
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                  padding: EdgeInsets.zero,
-                ),
+                // Tombol hapus dihapus — fitur nonaktifkan (toggle is_active di
+                // dialog edit) sudah cukup untuk memblokir akses. Tidak ada 2
+                // jalur berbeda untuk tujuan yang sama.
               ],
             ),
           ),
@@ -279,60 +274,15 @@ class _UserRow extends StatelessWidget {
   }
 
   Future<void> _openEditDialog(BuildContext context) async {
+    final provider = context.read<AdminProvider>();
     await showDialog(
       context: context,
-      builder: (_) => _UserEditDialog(existing: user),
+      builder: (_) => _UserEditDialog(existing: user, provider: provider),
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus User'),
-        content: Text(
-          'Yakin ingin menghapus user "${user.displayName}" (${user.username})?\n\n'
-          'User akan di-soft-delete dan tidak bisa login lagi.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-    final provider = context.read<AdminProvider>();
-    final success = await provider.deleteUser(user.id);
-    if (success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Text('User "${user.username}" berhasil dihapus'),
-            ],
-          ),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } else if (!success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(provider.errorMessage ?? 'Gagal menghapus user'),
-            backgroundColor: AppColors.error),
-      );
-    }
-  }
+  // _confirmDelete dihapus — nonaktifkan user cukup lewat toggle is_active
+  // di dialog edit. Tidak ada 2 fitur dengan tujuan yang sama.
 }
 
 class _Cell extends StatelessWidget {
@@ -411,7 +361,8 @@ class _StatusBadge extends StatelessWidget {
 
 class _UserEditDialog extends StatefulWidget {
   final UserItem? existing;
-  const _UserEditDialog({this.existing});
+  final AdminProvider provider;
+  const _UserEditDialog({this.existing, required this.provider});
 
   @override
   State<_UserEditDialog> createState() => _UserEditDialogState();
@@ -485,28 +436,40 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     }
 
     setState(() => _saving = true);
-    final provider = context.read<AdminProvider>();
-    bool ok;
-
-    if (_isEdit) {
-      final body = <String, dynamic>{
-        'nama': nama.isEmpty ? null : nama,
-        'role': _role,
-        'is_active': _isActive,
-      };
-      if (password.isNotEmpty) body['password'] = password;
-      ok = await provider.updateUser(widget.existing!.id, body);
-    } else {
-      ok = await provider.createUser(
-        username: username,
-        password: password,
-        role: _role,
-        nama: nama.isEmpty ? null : nama,
-      );
+    bool ok = false;
+    String? unexpectedError;
+    // Pakai widget.provider (di-passing via constructor dari pemanggil showDialog)
+    // — `context.read` di sini akan throw karena dialog hidup di navigator Overlay,
+    // bukan descendant dari ChangeNotifierProvider di DashboardScreen.
+    final provider = widget.provider;
+    try {
+      if (_isEdit) {
+        final body = <String, dynamic>{
+          'nama': nama.isEmpty ? null : nama,
+          'role': _role,
+          'is_active': _isActive,
+        };
+        if (password.isNotEmpty) body['password'] = password;
+        ok = await provider.updateUser(widget.existing!.id, body);
+      } else {
+        ok = await provider.createUser(
+          username: username,
+          password: password,
+          role: _role,
+          nama: nama.isEmpty ? null : nama,
+        );
+      }
+    } catch (e) {
+      // Tangkap exception yang lolos dari provider (mis. listener notifyListeners
+      // melempar saat state berubah). Tanpa finally di bawah, _saving stuck true
+      // dan spinner berputar selamanya meskipun operasi sudah selesai.
+      ok = false;
+      unexpectedError = e.toString();
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
 
     if (!mounted) return;
-    setState(() => _saving = false);
 
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -525,7 +488,9 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(provider.errorMessage ?? 'Gagal menyimpan'),
+            content: Text(unexpectedError ??
+                provider.errorMessage ??
+                'Gagal menyimpan'),
             backgroundColor: AppColors.error),
       );
     }
