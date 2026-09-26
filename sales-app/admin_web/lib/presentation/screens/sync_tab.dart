@@ -80,7 +80,7 @@ class _SyncTabState extends State<SyncTab> {
                           children: [
                             Icon(Icons.info_outline, size: 16, color: AppColors.primaryLight),
                             const SizedBox(width: 6),
-                            Text('Kolom yang harus ada di file Excel',
+                            Text('Kolom yang harus ada di file',
                                 style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
                           ],
                         ),
@@ -319,52 +319,85 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-class _SyncErrorsSection extends StatelessWidget {
+class _SyncErrorsSection extends StatefulWidget {
+  @override
+  State<_SyncErrorsSection> createState() => _SyncErrorsSectionState();
+}
+
+class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
+  Future<List<SyncError>>? _errorsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadErrors();
+  }
+
+  void _loadErrors() {
+    _errorsFuture = context.read<AdminProvider>().getSyncErrors();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AdminProvider>();
+    return FutureBuilder<List<SyncError>>(
+      future: _errorsFuture,
+      builder: (context, snapshot) {
+        final errors = snapshot.data ?? [];
+        final isEmpty = errors.isEmpty;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline,
-                size: 20, color: AppColors.textMuted),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text('Daftar baris yang dilewati saat import',
-                  style: AppTextStyles.bodyMedium),
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Icon(
+                  isEmpty ? Icons.check_circle : Icons.error_outline,
+                  size: 20,
+                  color: isEmpty ? AppColors.success : AppColors.textMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isEmpty
+                        ? 'Tidak ada import bermasalah'
+                        : 'Daftar baris yang dilewati saat import (${errors.length})',
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                ),
+                if (!isEmpty) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => _showErrorsDialog(context, errors),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Lihat Detail'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _clearErrors(context),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Bersihkan'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                    ),
+                  ),
+                ],
+              ],
             ),
-            OutlinedButton.icon(
-              onPressed: () => _showErrorsDialog(context, provider),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Lihat Detail'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _clearErrors(context, provider),
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Bersihkan'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _clearErrors(BuildContext context, AdminProvider provider) async {
+  Future<void> _clearErrors(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Bersihkan Error?'),
         content: const Text(
-          'Semua记录 error import akan dihapus dari database. Tindakan ini tidak dapat dibatalkan.',
+          'Semua record error import akan dihapus dari database. Tindakan ini tidak dapat dibatalkan.',
         ),
         actions: [
           TextButton(
@@ -381,13 +414,21 @@ class _SyncErrorsSection extends StatelessWidget {
     );
 
     if (confirm == true && context.mounted) {
+      final provider = context.read<AdminProvider>();
       final success = await provider.clearImportErrors();
       if (context.mounted) {
+        if (success) {
+          _loadErrors();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                Icon(
+                  success ? Icons.check_circle : Icons.error,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 const SizedBox(width: 10),
                 Text(success ? 'Error berhasil dibersihkan' : 'Gagal membersihkan error'),
               ],
@@ -399,12 +440,7 @@ class _SyncErrorsSection extends StatelessWidget {
     }
   }
 
-  Future<void> _showErrorsDialog(
-      BuildContext context, AdminProvider provider) async {
-    final errors = await provider.getSyncErrors();
-
-    if (!context.mounted) return;
-
+  Future<void> _showErrorsDialog(BuildContext context, List<SyncError> errors) async {
     await showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -729,25 +765,9 @@ class _ImportTypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isProduct = type == 'PRODUCT';
-    final color = isProduct ? AppColors.info : AppColors.success;
-    final bgColor = isProduct ? AppColors.infoBg : AppColors.successBg;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        isProduct ? 'Produk' : 'Toko',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
+    return Text(
+      type == 'PRODUCT' ? 'Produk' : 'Toko',
+      style: AppTextStyles.bodySmall,
     );
   }
 }
@@ -814,7 +834,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                       const Icon(Icons.info_outline, size: 16, color: AppColors.success),
                       const SizedBox(width: 6),
                       Text(
-                        'Kolom Excel',
+                        'Kolom yang harus ada di file',
                         style: AppTextStyles.bodySmall.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -826,9 +846,9 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      _CustomerColChip('code', required: true),
-                      _CustomerColChip('store_name', required: true),
-                      _CustomerColChip('address', required: false),
+                      _customerColChip('code', required: true),
+                      _customerColChip('store_name', required: true),
+                      _customerColChip('address', required: false),
                     ],
                   ),
                 ],
@@ -910,21 +930,17 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
     }
   }
 
-  Widget _CustomerColChip(String label, {required bool required}) {
+  Widget _customerColChip(String label, {required bool required}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: required ? AppColors.success.withValues(alpha: 0.15) : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: required ? AppColors.success : AppColors.border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Text(
         label,
-        style: AppTextStyles.bodySmall.copyWith(
-          fontFamily: 'monospace',
-          color: required ? AppColors.success : AppColors.textMuted,
-          fontWeight: required ? FontWeight.w600 : FontWeight.w400,
-        ),
+        style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
       ),
     );
   }
