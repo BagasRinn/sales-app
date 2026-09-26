@@ -60,6 +60,8 @@ pubspec.lock
 
 # ---------- Web (admin_web) ----------
 **/lib/generated_plugin_registrant.dart
+.firebase/
+*.cache
 
 # ---------- IDE ----------
 .idea/
