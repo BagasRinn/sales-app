@@ -245,7 +245,9 @@ class OrderStatusUpdate(BaseModel):
 class CustomerBase(BaseModel):
     kode: Optional[str] = Field(None, max_length=50)
     nama_toko: str = Field(..., min_length=1, max_length=200)
-    alamat: Optional[str] = None
+    # alamat wajib: identitas toko = (nama_toko, alamat) — boleh ada dua toko
+    # dengan nama sama selama alamat beda, dan sebaliknya.
+    alamat: str = Field(..., min_length=1, max_length=500)
 
 
 class CustomerCreate(CustomerBase):
@@ -328,3 +330,11 @@ class ImportLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ImportLogsPage(BaseModel):
+    """Paginated response untuk histori import."""
+    items: List[ImportLogResponse]
+    total: int
+    page: int
+    page_size: int

@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.models.database import get_db
@@ -79,11 +79,24 @@ def create_customer(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
+    """Identity toko = (nama_toko, alamat) — kedua kolom wajib dan dicocokkan
+    case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda."""
+    nama_norm = customer.nama_toko.strip().lower()
+    alamat_norm = customer.alamat.strip().lower()
+
     existing = _exclude_deleted(
-        db.query(Customer).filter(Customer.nama_toko == customer.nama_toko.strip())
+        db.query(Customer)
+        .filter(func.lower(Customer.nama_toko) == nama_norm)
+        .filter(func.lower(Customer.alamat) == alamat_norm)
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail=f"Customer '{customer.nama_toko}' sudah ada")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Toko dengan nama '{customer.nama_toko}' dan alamat "
+                f"'{customer.alamat}' sudah ada."
+            ),
+        )
 
     new_customer = Customer(**customer.model_dump())
     db.add(new_customer)

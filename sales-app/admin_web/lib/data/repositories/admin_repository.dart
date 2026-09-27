@@ -302,9 +302,12 @@ class AdminRepository {
     return (data as List).map((e) => SyncError.fromJson(e)).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getImportLogs() async {
-    final data = await _api.get('/products/import-logs');
-    return (data as List).cast<Map<String, dynamic>>();
+  Future<Map<String, dynamic>> getImportLogs({int page = 1, int pageSize = 5}) async {
+    final data = await _api.dio.get<Map<String, dynamic>>(
+      '/products/import-logs',
+      queryParameters: {'page': page, 'page_size': pageSize},
+    );
+    return data.data ?? {'items': <dynamic>[], 'total': 0};
   }
 
   Future<void> clearImportErrors() async {

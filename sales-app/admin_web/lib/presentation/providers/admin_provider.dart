@@ -665,8 +665,8 @@ class AdminProvider extends ChangeNotifier {
     return await _repo.getSyncErrors();
   }
 
-  Future<List<Map<String, dynamic>>> getImportLogs() async {
-    return await _repo.getImportLogs();
+  Future<Map<String, dynamic>> getImportLogs({int page = 1, int pageSize = 5}) async {
+    return await _repo.getImportLogs(page: page, pageSize: pageSize);
   }
 
   Future<bool> clearImportErrors() async {

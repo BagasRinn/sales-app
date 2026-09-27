@@ -675,23 +675,32 @@ class _ImportHistorySection extends StatefulWidget {
 }
 
 class _ImportHistorySectionState extends State<_ImportHistorySection> {
-  late Future<List<Map<String, dynamic>>> _logsFuture;
+  static const int _pageSize = 5;
+  late Future<Map<String, dynamic>> _logsFuture;
+  int _currentPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _logsFuture = context.read<AdminProvider>().getImportLogs();
+    _loadPage(1);
+  }
+
+  void _loadPage(int page) {
+    setState(() {
+      _currentPage = page;
+      _logsFuture = context
+          .read<AdminProvider>()
+          .getImportLogs(page: page, pageSize: _pageSize);
+    });
   }
 
   void _refresh() {
-    setState(() {
-      _logsFuture = context.read<AdminProvider>().getImportLogs();
-    });
+    _loadPage(_currentPage);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
+    return FutureBuilder<Map<String, dynamic>>(
       future: _logsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -703,9 +712,14 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
           );
         }
 
-        final logs = snapshot.data ?? [];
+        final data = snapshot.data ?? const {'items': <dynamic>[], 'total': 0};
+        final logs = (data['items'] as List?)
+                ?.cast<Map<String, dynamic>>() ??
+            const <Map<String, dynamic>>[];
+        final total = (data['total'] as int?) ?? 0;
+        final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
 
-        if (logs.isEmpty) {
+        if (logs.isEmpty && total == 0) {
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -728,8 +742,9 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header row
+                // Header row — fixed column widths
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
@@ -737,18 +752,20 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
-                    children: [
-                      _col('Waktu', flex: 2),
-                      _col('User', flex: 1),
-                      _col('Baru', flex: 1),
-                      _col('Update', flex: 1),
-                      _col('Tipe', flex: 1),
-                      _col('Error', flex: 1),
+                    children: const [
+                      _HeaderCell(label: 'Waktu', width: _kColWaktu),
+                      _HeaderCell(label: 'User', width: _kColUser),
+                      _HeaderCell(label: 'Baru', width: _kColBaru, align: TextAlign.right),
+                      _HeaderCell(label: 'Update', width: _kColUpdate, align: TextAlign.right),
+                      _HeaderCell(label: 'Tipe', width: _kColTipe),
+                      _HeaderCell(label: 'Error', width: _kColError, align: TextAlign.right),
                     ],
                   ),
                 ),
                 const SizedBox(height: 4),
                 ...logs.map((log) => _ImportLogRow(log: log, dateFormat: dateFormat)),
+                const SizedBox(height: 12),
+                _paginationBar(total: total, totalPages: totalPages),
               ],
             ),
           ),
@@ -757,11 +774,67 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
     );
   }
 
-  Widget _col(String label, {int flex = 1}) {
-    return Expanded(
-      flex: flex,
+  Widget _paginationBar({required int total, required int totalPages}) {
+    final canPrev = _currentPage > 1;
+    final canNext = _currentPage < totalPages;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Total: $total histori',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: canPrev ? () => _loadPage(_currentPage - 1) : null,
+              icon: const Icon(Icons.chevron_left, size: 16),
+              label: const Text('Sebelumnya'),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Halaman $_currentPage dari $totalPages',
+              style: AppTextStyles.bodySmall,
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: canNext ? () => _loadPage(_currentPage + 1) : null,
+              icon: const Icon(Icons.chevron_right, size: 16),
+              label: const Text('Selanjutnya'),
+              iconAlignment: IconAlignment.end,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+const double _kColWaktu = 180;
+const double _kColUser = 150;
+const double _kColBaru = 80;
+const double _kColUpdate = 100;
+const double _kColTipe = 110;
+const double _kColError = 80;
+
+class _HeaderCell extends StatelessWidget {
+  final String label;
+  final double width;
+  final TextAlign align;
+
+  const _HeaderCell({
+    required this.label,
+    required this.width,
+    this.align = TextAlign.left,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
       child: Text(
         label,
+        textAlign: align,
         style: AppTextStyles.bodySmall.copyWith(
           fontWeight: FontWeight.w600,
           color: AppColors.textSecondary,
@@ -794,42 +867,47 @@ class _ImportLogRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            flex: 2,
+          SizedBox(
+            width: _kColWaktu,
             child: Text(
               createdAt != null ? dateFormat.format(createdAt.toLocal()) : '-',
               style: AppTextStyles.mono.copyWith(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: _kColUser,
             child: Text(
               log['nama']?.toString() ?? 'Admin',
               style: AppTextStyles.bodySmall,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: _kColBaru,
             child: Text(
               '${log['inserted'] ?? 0}',
+              textAlign: TextAlign.right,
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
             ),
           ),
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: _kColUpdate,
             child: Text(
               '${log['updated'] ?? 0}',
+              textAlign: TextAlign.right,
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryLight),
             ),
           ),
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: _kColTipe,
             child: _ImportTypeChip(type: log['import_type']?.toString() ?? 'PRODUCT'),
           ),
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: _kColError,
             child: Text(
               '$skipped',
+              textAlign: TextAlign.right,
               style: AppTextStyles.bodySmall.copyWith(
                 color: skipped > 0 ? AppColors.error : AppColors.textMuted,
                 fontWeight: skipped > 0 ? FontWeight.w600 : null,
@@ -939,9 +1017,9 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      _customerColChip('code', required: true),
-                      _customerColChip('store_name', required: true),
-                      _customerColChip('address', required: false),
+                      _customerColChip('kode', required: true),
+                      _customerColChip('nama_toko', required: true),
+                      _customerColChip('alamat', required: true),
                     ],
                   ),
                 ],

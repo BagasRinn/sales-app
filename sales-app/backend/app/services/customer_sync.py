@@ -1,13 +1,17 @@
 """
 Customer sync service — Excel import logic untuk tabel customers.
-Prototipe: kolom wajib kode, nama_toko (nama outlet); opsional alamat.
+Prototipe: kolom wajib kode (opsional), nama_toko, alamat.
 Assignment sales dilakukan manual via endpoint /customers/{id}/assign.
+
+Identity toko = (nama_toko, alamat) keduanya. Boleh ada dua toko dengan
+nama sama selama alamatnya beda, dan sebaliknya.
 
 Pattern mirror dari app/services/sheets_sync.py.
 """
 import logging
 from io import BytesIO
 from typing import List, Dict, Any
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -70,17 +74,19 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     return rows
 
 
-def _normalize_nama_toko(value: Any) -> str:
-    """Normalize nama_toko for matching: strip + lowercase."""
+def _normalize(value: Any) -> str:
+    """Normalize string for comparison: strip + lowercase. Empty string for None."""
     if value is None:
         return ""
     return str(value).strip().lower()
 
 
-def _validate_row(row_num: int, nama_toko: Any) -> str | None:
+def _validate_row(row_num: int, nama_toko: Any, alamat: Any) -> str | None:
     """Validate required fields. Return error string or None."""
     if not nama_toko or not str(nama_toko).strip():
         return "Kolom 'nama_toko' kosong. Wajib diisi dengan nama toko."
+    if not alamat or not str(alamat).strip():
+        return "Kolom 'alamat' kosong. Wajib diisi dengan alamat toko."
     return None
 
 
@@ -107,7 +113,7 @@ def sync_customers_from_excel(
     inserted = 0
     updated = 0
     skipped = 0
-    seen_nama_toko: set = set()
+    seen_keys: set = set()  # (normalized_nama_toko, normalized_alamat) tuples
 
     import_log = ImportLog(
         user_id=current_user.get("user_id"),
@@ -145,31 +151,46 @@ def sync_customers_from_excel(
 
     for idx, row in enumerate(raw_rows, start=1):
         nama_toko_raw = row.get("nama_toko")
-        error = _validate_row(idx, nama_toko_raw)
+        alamat_raw = row.get("alamat")
+        error = _validate_row(idx, nama_toko_raw, alamat_raw)
         if error:
-            validation_errors.append({"row": idx, "sku": "", "reason": error})
-            skipped += 1
-            continue
-
-        normalized = _normalize_nama_toko(nama_toko_raw)
-        if normalized in seen_nama_toko:
             validation_errors.append({
                 "row": idx,
-                "sku": str(nama_toko_raw),
-                "reason": f"nama_toko '{nama_toko_raw}' duplikat dalam file ini. Setiap nama toko harus unik.",
+                "sku": str(nama_toko_raw or ""),
+                "reason": error,
             })
             skipped += 1
             continue
-        seen_nama_toko.add(normalized)
+
+        nama_norm = _normalize(nama_toko_raw)
+        alamat_norm = _normalize(alamat_raw)
+        key = (nama_norm, alamat_norm)
+
+        if key in seen_keys:
+            validation_errors.append({
+                "row": idx,
+                "sku": str(nama_toko_raw),
+                "reason": (
+                    f"Kombinasi nama_toko '{nama_toko_raw}' + alamat '{alamat_raw}' "
+                    "muncul lebih dari sekali di file ini. Setiap pasangan (nama, alamat) harus unik."
+                ),
+            })
+            skipped += 1
+            continue
+        seen_keys.add(key)
 
         kode_value = _str_or_none(row.get("kode"))
-        alamat_value = _str_or_none(row.get("alamat"))
+        alamat_value = _str_or_none(alamat_raw)
 
         sp = db.begin_nested()
         try:
+            # Identity toko = (nama_toko, alamat) — case-insensitive exact match.
+            # Pakai func.lower() bukan ilike() supaya karakter '_' / '%' di alamat
+            # tidak dianggap wildcard SQL.
             existing = (
                 db.query(Customer)
-                .filter(Customer.nama_toko.ilike(normalized))
+                .filter(func.lower(Customer.nama_toko) == nama_norm)
+                .filter(func.lower(Customer.alamat) == alamat_norm)
                 .first()
             )
 
@@ -177,8 +198,6 @@ def sync_customers_from_excel(
                 # Update hanya kalau Excel ada nilainya, biar tidak overwrite dengan kosong
                 if kode_value is not None:
                     existing.kode = kode_value
-                if alamat_value is not None:
-                    existing.alamat = alamat_value
                 if existing.deleted_at is not None:
                     existing.deleted_at = None
                 updated += 1

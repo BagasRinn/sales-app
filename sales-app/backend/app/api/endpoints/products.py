@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -11,6 +11,7 @@ from app.schemas.schemas import (
     ProductUpdateStock,
     SyncResultResponse,
     ImportLogResponse,
+    ImportLogsPage,
 )
 from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.sheets_sync import sync_products_from_excel
@@ -163,14 +164,26 @@ def import_excel(
     )
 
 
-@router.get("/import-logs", response_model=List[ImportLogResponse])
+@router.get("/import-logs", response_model=ImportLogsPage)
 def get_import_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    """Ambil histori import Excel."""
-    logs = db.query(ImportLog).order_by(ImportLog.created_at.desc()).limit(50).all()
-    return logs
+    """Ambil histori import Excel (paginated, urut terbaru dulu)."""
+    total = db.query(ImportLog).count()
+    offset = (page - 1) * page_size
+    logs = (
+        db.query(ImportLog)
+        .order_by(ImportLog.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return ImportLogsPage(
+        items=logs, total=total, page=page, page_size=page_size
+    )
 
 
 @router.delete("/import-errors", status_code=204)
