@@ -676,31 +676,24 @@ class _ImportHistorySection extends StatefulWidget {
 
 class _ImportHistorySectionState extends State<_ImportHistorySection> {
   static const int _pageSize = 5;
-  late Future<Map<String, dynamic>> _logsFuture;
+  late Future<List<Map<String, dynamic>>> _logsFuture;
   int _currentPage = 1;
 
   @override
   void initState() {
     super.initState();
-    _loadPage(1);
-  }
-
-  void _loadPage(int page) {
-    setState(() {
-      _currentPage = page;
-      _logsFuture = context
-          .read<AdminProvider>()
-          .getImportLogs(page: page, pageSize: _pageSize);
-    });
+    _logsFuture = context.read<AdminProvider>().getImportLogs();
   }
 
   void _refresh() {
-    _loadPage(_currentPage);
+    setState(() {
+      _logsFuture = context.read<AdminProvider>().getImportLogs();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
+    return FutureBuilder<List<Map<String, dynamic>>>(
       future: _logsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -712,14 +705,16 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
           );
         }
 
-        final data = snapshot.data ?? const {'items': <dynamic>[], 'total': 0};
-        final logs = (data['items'] as List?)
-                ?.cast<Map<String, dynamic>>() ??
-            const <Map<String, dynamic>>[];
-        final total = (data['total'] as int?) ?? 0;
-        final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
+        final allLogs = snapshot.data ?? const <Map<String, dynamic>>[];
+        final totalPages = allLogs.isEmpty
+            ? 1
+            : (allLogs.length / _pageSize).ceil();
+        final page = _currentPage.clamp(1, totalPages);
+        final start = (page - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, allLogs.length);
+        final logs = allLogs.sublist(start, end);
 
-        if (logs.isEmpty && total == 0) {
+        if (allLogs.isEmpty) {
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -765,7 +760,7 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
                 const SizedBox(height: 4),
                 ...logs.map((log) => _ImportLogRow(log: log, dateFormat: dateFormat)),
                 const SizedBox(height: 12),
-                _paginationBar(total: total, totalPages: totalPages),
+                _paginationBar(total: allLogs.length, page: page, totalPages: totalPages),
               ],
             ),
           ),
@@ -774,9 +769,9 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
     );
   }
 
-  Widget _paginationBar({required int total, required int totalPages}) {
-    final canPrev = _currentPage > 1;
-    final canNext = _currentPage < totalPages;
+  Widget _paginationBar({required int total, required int page, required int totalPages}) {
+    final canPrev = page > 1;
+    final canNext = page < totalPages;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -787,18 +782,18 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
         Row(
           children: [
             OutlinedButton.icon(
-              onPressed: canPrev ? () => _loadPage(_currentPage - 1) : null,
+              onPressed: canPrev ? () => setState(() => _currentPage = page - 1) : null,
               icon: const Icon(Icons.chevron_left, size: 16),
               label: const Text('Sebelumnya'),
             ),
             const SizedBox(width: 12),
             Text(
-              'Halaman $_currentPage dari $totalPages',
+              'Halaman $page dari $totalPages',
               style: AppTextStyles.bodySmall,
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: canNext ? () => _loadPage(_currentPage + 1) : null,
+              onPressed: canNext ? () => setState(() => _currentPage = page + 1) : null,
               icon: const Icon(Icons.chevron_right, size: 16),
               label: const Text('Selanjutnya'),
               iconAlignment: IconAlignment.end,

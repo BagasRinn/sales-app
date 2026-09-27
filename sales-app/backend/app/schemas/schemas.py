@@ -330,11 +330,3 @@ class ImportLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ImportLogsPage(BaseModel):
-    """Paginated response untuk histori import."""
-    items: List[ImportLogResponse]
-    total: int
-    page: int
-    page_size: int
