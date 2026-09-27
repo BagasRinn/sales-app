@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, func
+from sqlalchemy import text, func, case
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -282,7 +282,7 @@ def get_my_stats(
             # ekspresi generatif via func.ifnull + case.
             func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
             - func.coalesce(
-                db.case(
+                case(
                     (OrderItem.discount_type == 'NOMINAL',
                      func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
                     else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
@@ -316,7 +316,7 @@ def get_my_stats(
         db.query(func.coalesce(func.sum(
             func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
             - func.coalesce(
-                db.case(
+                case(
                     (OrderItem.discount_type == 'NOMINAL',
                      func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
                     else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
