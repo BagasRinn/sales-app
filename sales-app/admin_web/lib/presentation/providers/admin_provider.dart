@@ -493,17 +493,16 @@ class AdminProvider extends ChangeNotifier {
   Future<void> loadAll() async {
     _setLoading(true, 'Memuat data...');
     try {
-      // MANAGER butuh stats untuk Dashboard (read-only).
-      // MANAGER tidak butuh produk (tab Produk & Stok tidak ada untuk mereka).
+      // MANAGER butuh stats untuk Dashboard dan produk untuk halaman
+      // Produk & Stok (read-only). Tasks di sini adalah view-only fetch;
+      // write endpoint sudah dibatasi di backend (require_admin).
       final tasks = <Future<void>>[
         _loadPendingOrders(),
         _loadAllOrders(),
         _loadCustomers(),
         _loadStats(),
+        _loadProducts(),
       ];
-      if (isAdmin) {
-        tasks.add(_loadProducts());
-      }
       await Future.wait(tasks);
       _state = AdminState.loaded;
     } catch (e) {

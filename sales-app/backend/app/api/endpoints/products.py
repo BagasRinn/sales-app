@@ -87,9 +87,9 @@ def list_products(
 @router.get("/kategori", response_model=List[str])
 def get_kategori_list(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Return distinct kategori values for the filter dropdown."""
+    """Return distinct kategori values for the filter dropdown (admin + manager)."""
     rows = (
         db.query(Product.kategori)
         .filter(Product.kategori.isnot(None), Product.kategori != "")
@@ -166,7 +166,7 @@ def import_excel(
 @router.get("/import-logs", response_model=List[ImportLogResponse])
 def get_import_logs(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
     """Ambil histori import Excel (max 20 terbaru; pagination 5/halaman di client)."""
     logs = db.query(ImportLog).order_by(ImportLog.created_at.desc()).limit(20).all()
@@ -176,9 +176,10 @@ def get_import_logs(
 @router.delete("/import-errors", status_code=204)
 def clear_import_errors(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    _current_user: CurrentUser = Depends(require_admin),
 ):
-    """Hapus semua histori error import (admin + manager boleh)."""
+    """Hapus semua histori error import. Admin-only karena read-only manager
+    tidak boleh mengubah state monitoring."""
     db.query(SyncValidationError).delete()
     db.commit()
 
@@ -256,7 +257,7 @@ def get_product_count(
     kategori: Optional[str] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
     """Return total product count for pagination — applies same filters as list_products."""
     query = db.query(func.count(Product.id))

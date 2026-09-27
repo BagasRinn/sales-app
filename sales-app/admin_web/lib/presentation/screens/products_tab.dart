@@ -6,7 +6,9 @@ import '../providers/admin_provider.dart';
 import '../../data/models/product.dart';
 
 class ProductsTab extends StatefulWidget {
-  const ProductsTab({super.key});
+  const ProductsTab({super.key, this.readOnly = false});
+
+  final bool readOnly;
 
   @override
   State<ProductsTab> createState() => _ProductsTabState();
@@ -292,6 +294,7 @@ class _ProductsTabState extends State<ProductsTab> {
                     itemBuilder: (ctx, i) => _DataRow(products[i], colW, totalW,
                       onShowStock: (p) => _showStockDialog(context, p),
                       onConfirmDelete: (p) => _confirmDelete(context, p),
+                      readOnly: widget.readOnly,
                     ),
                   ),
                 ),
@@ -570,9 +573,10 @@ class _DataRow extends StatelessWidget {
   final double totalW;
   final void Function(Product) onShowStock;
   final void Function(Product) onConfirmDelete;
+  final bool readOnly;
 
   const _DataRow(this.product, this.colW, this.totalW,
-      {required this.onShowStock, required this.onConfirmDelete});
+      {required this.onShowStock, required this.onConfirmDelete, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -661,23 +665,31 @@ class _DataRow extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(
-                      onPressed: () => onShowStock(product),
-                      child: const Text('Ubah'),
-                    ),
-                    IconButton(
-                      onPressed: () => onConfirmDelete(product),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      color: AppColors.error,
-                      tooltip: 'Hapus',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                    ),
-                  ],
-                ),
+                child: readOnly
+                    ? Text(
+                        '—',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textMuted,
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            onPressed: () => onShowStock(product),
+                            child: const Text('Ubah'),
+                          ),
+                          IconButton(
+                            onPressed: () => onConfirmDelete(product),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            color: AppColors.error,
+                            tooltip: 'Hapus',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),

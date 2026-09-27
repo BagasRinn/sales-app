@@ -7,7 +7,9 @@ import '../providers/admin_provider.dart';
 import '../../data/models/sync_result.dart';
 
 class SyncTab extends StatefulWidget {
-  const SyncTab({super.key});
+  const SyncTab({super.key, this.readOnly = false});
+
+  final bool readOnly;
 
   @override
   State<SyncTab> createState() => _SyncTabState();
@@ -106,7 +108,7 @@ class _SyncTabState extends State<SyncTab> {
                     width: double.infinity,
                     height: 50,
                     child: FilledButton.icon(
-                      onPressed: isLoading
+                      onPressed: (isLoading || widget.readOnly)
                           ? null
                           : () => _pickAndImport(context, provider),
                       icon: isLoading
@@ -127,7 +129,11 @@ class _SyncTabState extends State<SyncTab> {
           ),
 
           // Customer Import Card
-          _CustomerImportCard(historyKey: _historyKey, errorsKey: _errorsKey),
+          _CustomerImportCard(
+            historyKey: _historyKey,
+            errorsKey: _errorsKey,
+            readOnly: widget.readOnly,
+          ),
 
           // Result cards
           if (syncResult != null) ...[
@@ -148,7 +154,7 @@ class _SyncTabState extends State<SyncTab> {
           // Error history
           const Text('Riwayat Error', style: AppTextStyles.headlineLarge),
           const SizedBox(height: 16),
-          _SyncErrorsSection(),
+          _SyncErrorsSection(readOnly: widget.readOnly),
         ],
       ),
     );
@@ -320,6 +326,10 @@ class _ResultCard extends StatelessWidget {
 }
 
 class _SyncErrorsSection extends StatefulWidget {
+  const _SyncErrorsSection({this.readOnly = false});
+
+  final bool readOnly;
+
   @override
   State<_SyncErrorsSection> createState() => _SyncErrorsSectionState();
 }
@@ -378,7 +388,9 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: () => _clearErrors(context),
+                    onPressed: widget.readOnly
+                        ? null
+                        : () => _clearErrors(context),
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('Bersihkan'),
                     style: OutlinedButton.styleFrom(
@@ -934,8 +946,13 @@ class _ImportTypeChip extends StatelessWidget {
 class _CustomerImportCard extends StatefulWidget {
   final GlobalKey<_ImportHistorySectionState> historyKey;
   final GlobalKey<_SyncErrorsSectionState> errorsKey;
+  final bool readOnly;
 
-  const _CustomerImportCard({required this.historyKey, required this.errorsKey});
+  const _CustomerImportCard({
+    required this.historyKey,
+    required this.errorsKey,
+    this.readOnly = false,
+  });
 
   @override
   State<_CustomerImportCard> createState() => _CustomerImportCardState();
@@ -1025,7 +1042,9 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
               width: double.infinity,
               height: 50,
               child: FilledButton.icon(
-                onPressed: _importing ? null : () => _pickAndImport(context, context.read<AdminProvider>()),
+                onPressed: (_importing || widget.readOnly)
+                    ? null
+                    : () => _pickAndImport(context, context.read<AdminProvider>()),
                 icon: _importing
                     ? const SizedBox(
                         width: 20,

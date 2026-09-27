@@ -114,19 +114,16 @@ class _DashboardContentState extends State<_DashboardContent>
   bool get _isManager => widget.role == 'MANAGER';
 
   List<_NavItem> get _navItems {
-    // Urutan tab konsisten untuk kedua role — MANAGER dapat Dashboard juga
-    // (ringkasan read-only), tapi TIDAK dapat Produk & Stok / Sinkronisasi.
+    // Urutan shared untuk kedua role (Dashboard, Pesanan, Toko, Produk & Stok,
+    // Sinkronisasi). MANAGER dapat semua-nya tapi read-only di Pesanan/Produk/
+    // Sinkronisasi. Menu "User" hanya untuk MANAGER (admin tidak manage user).
     final items = <_NavItem>[
       const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
       const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
       const _NavItem(icon: Icons.store_outlined, selectedIcon: Icons.store, label: 'Toko'),
+      const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
+      const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
     ];
-    if (_isAdmin) {
-      items.addAll([
-        const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
-        const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
-      ]);
-    }
     if (_isManager) {
       items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
     }
@@ -134,10 +131,13 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   List<String> get _titles {
-    final titles = <String>['Dashboard', 'Pesanan', 'Toko'];
-    if (_isAdmin) {
-      titles.addAll(['Produk & Stok', 'Sinkronisasi']);
-    }
+    final titles = <String>[
+      'Dashboard',
+      'Pesanan',
+      'Toko',
+      'Produk & Stok',
+      'Sinkronisasi',
+    ];
     if (_isManager) titles.add('User');
     return titles;
   }
@@ -245,32 +245,24 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
+    final readOnly = !_isAdmin;
 
-    if (_isManager) {
-      // MANAGER: Dashboard, Pesanan (read-only), Toko, User
-      switch (i) {
-        case 0:
-          return const StatsTab();
-        case 1:
-          return const OrdersTab(readOnly: true);
-        case 2:
-          return const CustomersTab();
-        case 3:
-          return const UsersTab();
-      }
-    }
-    // ADMIN: Dashboard, Pesanan, Toko, Produk & Stok, Sinkronisasi
+    // Indexes shared untuk ADMIN dan MANAGER: 0=Dashboard, 1=Pesanan, 2=Toko,
+    // 3=Produk & Stok, 4=Sinkronisasi. MANAGER punya index 5=User.
     switch (i) {
       case 0:
         return const StatsTab();
       case 1:
-        return const OrdersTab();
+        return OrdersTab(readOnly: readOnly);
       case 2:
         return const CustomersTab();
       case 3:
-        return const ProductsTab();
+        return ProductsTab(readOnly: readOnly);
       case 4:
-        return const SyncTab();
+        return SyncTab(readOnly: readOnly);
+      case 5:
+        if (_isManager) return const UsersTab();
+        break;
     }
     return const StatsTab();
   }
