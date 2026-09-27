@@ -126,6 +126,7 @@ class SyncValidationError(Base):
     __tablename__ = "sync_validation_errors"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    import_log_id = Column(UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=True)
     row_number = Column(Integer)
     sku = Column(String, nullable=True)
     reason = Column(String(255))

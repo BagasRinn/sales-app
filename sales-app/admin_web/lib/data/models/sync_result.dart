@@ -29,14 +29,31 @@ class SyncResult {
 
 class SyncError {
   final String row;
+  final String? sku;
   final String reason;
+  final String? importType;
+  final String? fileName;
+  final String? timestamp;
 
-  SyncError({required this.row, required this.reason});
+  SyncError({
+    required this.row,
+    required this.reason,
+    this.sku,
+    this.importType,
+    this.fileName,
+    this.timestamp,
+  });
 
   factory SyncError.fromJson(Map<String, dynamic> json) {
     return SyncError(
       row: json['row']?.toString() ?? '',
+      sku: json['sku']?.toString(),
       reason: json['reason'] ?? json['error'] ?? '',
+      importType: json['import_type']?.toString(),
+      fileName: json['file_name']?.toString(),
+      timestamp: json['timestamp']?.toString(),
     );
   }
+
+  bool get isStoreImport => importType == 'CUSTOMER';
 }

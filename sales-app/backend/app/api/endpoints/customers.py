@@ -214,20 +214,14 @@ def import_excel(
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="File kosong")
 
-    sync_result = sync_customers_from_excel(contents, db)
-
-    # Catat ke histori import
-    db.add(ImportLog(
-        user_id=_current_user["user_id"],
-        nama=_current_user.get("nama"),
-        import_type="CUSTOMER",
-        total_rows=sync_result["total_rows"],
-        inserted=sync_result["inserted"],
-        updated=sync_result["updated"],
-        skipped=sync_result["skipped"],
+    sync_result = sync_customers_from_excel(
+        contents, db,
+        current_user={
+            "user_id": _current_user["user_id"],
+            "nama": _current_user.get("nama"),
+        },
         file_name=file.filename,
-    ))
-    db.commit()
+    )
 
     return SyncResultResponse(
         success=sync_result["success"],

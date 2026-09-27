@@ -12,7 +12,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from app.models.models import Product, SyncValidationError
+from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
@@ -70,21 +70,21 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
 
 def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, stok: Any) -> str | None:
     if not sku or not str(sku).strip():
-        return "SKU kosong"
+        return "Kolom 'code' kosong. Wajib diisi dengan kode produk unik."
     if not nama_produk or not str(nama_produk).strip():
-        return "Nama produk kosong"
+        return "Kolom 'NAME ITEM' kosong. Wajib diisi dengan nama produk."
     if harga is not None:
         try:
             int(harga)
         except (ValueError, TypeError):
-            return f"Harga bukan angka: {harga}"
+            return f"Kolom 'FIX' berisi '{harga}' bukan angka. Gunakan bilangan bulat."
     if stok is not None:
         try:
             stok_val = int(stok)
             if stok_val < 0:
-                return f"Stok negatif: {stok_val}"
+                return f"Kolom 'STOK' berisi {stok_val}. Stok tidak boleh negatif."
         except (ValueError, TypeError):
-            return f"Stok bukan angka: {stok}"
+            return f"Kolom 'STOK' berisi '{stok}' bukan angka. Gunakan bilangan bulat."
     return None
 
 
@@ -103,9 +103,16 @@ def _parse_stok(value: Any) -> int:
     return 0
 
 
-def sync_products_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
+def sync_products_from_excel(
+    file_bytes: bytes,
+    db: Session,
+    current_user: Dict[str, Any],
+    file_name: str,
+) -> Dict[str, Any]:
     """
     Read product data from an uploaded Excel file and upsert into the database.
+    Creates an ImportLog row and persists per-row validation errors with FK
+    so the admin Riwayat Error panel can show context (file name, type, time).
     All changes happen inside a single transaction — rollback on any error.
     """
     validation_errors: List[Dict[str, str]] = []
@@ -113,17 +120,33 @@ def sync_products_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
     seen_skus: set[str] = set()
     validated_rows: List[Dict[str, Any]] = []
 
+    import_log = ImportLog(
+        user_id=current_user.get("user_id"),
+        nama=current_user.get("nama"),
+        import_type="PRODUCT",
+        file_name=file_name,
+    )
+    db.add(import_log)
+    db.flush()
+
     try:
         raw_rows = _read_excel(file_bytes)
     except Exception as e:
         logger.error(f"Excel read failed: {e}")
+        db.add(SyncValidationError(
+            import_log_id=import_log.id,
+            row_number=0,
+            sku="",
+            reason=f"Gagal membaca file Excel: {str(e)}",
+        ))
+        db.commit()
         return {
             "success": False,
             "total_rows": 0,
             "inserted": 0,
             "updated": 0,
             "skipped": 0,
-            "errors": [{"row": 0, "sku": "", "reason": str(e)}],
+            "errors": [{"row": 0, "sku": "", "reason": f"Gagal membaca file Excel: {str(e)}"}],
             "needs_review": False,
         }
 
@@ -146,7 +169,7 @@ def sync_products_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
             continue
 
         if sku.lower() in seen_skus:
-            validation_errors.append({"row": row_num, "sku": sku, "reason": "SKU duplikat dalam file"})
+            validation_errors.append({"row": row_num, "sku": sku, "reason": f"SKU '{sku}' muncul lebih dari sekali di file ini. Setiap SKU harus unik."})
             skipped += 1
             continue
         seen_skus.add(sku.lower())
@@ -166,13 +189,18 @@ def sync_products_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
     if validated_rows:
         inserted, updated = _bulk_upsert(db, validated_rows)
 
-    # Persist validation errors so /sync/errors can return them later
     for err in validation_errors:
         db.add(SyncValidationError(
+            import_log_id=import_log.id,
             row_number=err["row"],
             sku=err["sku"],
             reason=err["reason"],
         ))
+
+    import_log.total_rows = total_rows
+    import_log.inserted = inserted
+    import_log.updated = updated
+    import_log.skipped = skipped
     db.commit()
 
     # Compute needs_review (products where stok_sistem < stok_booking)

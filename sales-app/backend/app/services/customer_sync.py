@@ -18,7 +18,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from app.models.models import Customer
+from app.models.models import Customer, SyncValidationError, ImportLog
 
 EXCEL_COLUMNS = ["kode", "nama_toko", "alamat"]
 
@@ -80,7 +80,7 @@ def _normalize_nama_toko(value: Any) -> str:
 def _validate_row(row_num: int, nama_toko: Any) -> str | None:
     """Validate required fields. Return error string or None."""
     if not nama_toko or not str(nama_toko).strip():
-        return "nama_toko kosong"
+        return "Kolom 'nama_toko' kosong. Wajib diisi dengan nama toko."
     return None
 
 
@@ -91,9 +91,16 @@ def _str_or_none(value: Any) -> str | None:
     return text if text else None
 
 
-def sync_customers_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
+def sync_customers_from_excel(
+    file_bytes: bytes,
+    db: Session,
+    current_user: Dict[str, Any],
+    file_name: str,
+) -> Dict[str, Any]:
     """
     Read customer data from uploaded Excel, upsert into customers table.
+    Creates an ImportLog row and persists per-row validation errors with FK
+    so the admin Riwayat Error panel can show context (file name, type, time).
     Returns summary dict. Per-row savepoint so 1 failure doesn't rollback others.
     """
     validation_errors: List[Dict[str, str]] = []
@@ -102,17 +109,36 @@ def sync_customers_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
     skipped = 0
     seen_nama_toko: set = set()
 
+    import_log = ImportLog(
+        user_id=current_user.get("user_id"),
+        nama=current_user.get("nama"),
+        import_type="CUSTOMER",
+        file_name=file_name,
+    )
+    db.add(import_log)
+    db.flush()
+
     try:
         raw_rows = _read_excel(file_bytes)
     except Exception as e:
         logger.error(f"Excel read failed: {e}")
+        db.add(SyncValidationError(
+            import_log_id=import_log.id,
+            row_number=0,
+            sku="",
+            reason=f"Gagal membaca file Excel: {str(e)}",
+        ))
+        import_log.total_rows = 0
+        import_log.skipped = 0
+        db.commit()
         return {
             "success": False,
             "total_rows": 0,
             "inserted": 0,
             "updated": 0,
             "skipped": 0,
-            "errors": [{"row": 0, "sku": "", "reason": str(e)}],
+            "errors": [{"row": 0, "sku": "", "reason": f"Gagal membaca file Excel: {str(e)}"}],
+            "needs_review": False,
         }
 
     total_rows = len(raw_rows)
@@ -130,7 +156,7 @@ def sync_customers_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
             validation_errors.append({
                 "row": idx,
                 "sku": str(nama_toko_raw),
-                "reason": f"Duplicate nama_toko '{nama_toko_raw}' dalam file",
+                "reason": f"nama_toko '{nama_toko_raw}' duplikat dalam file ini. Setiap nama toko harus unik.",
             })
             skipped += 1
             continue
@@ -172,12 +198,23 @@ def sync_customers_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
             validation_errors.append({
                 "row": idx,
                 "sku": str(nama_toko_raw) if nama_toko_raw else "",
-                "reason": f"Error: {str(e)}",
+                "reason": f"Gagal menyimpan baris ini ke database: {str(e)}",
             })
             skipped += 1
             continue
 
     try:
+        for err in validation_errors:
+            db.add(SyncValidationError(
+                import_log_id=import_log.id,
+                row_number=err["row"],
+                sku=err["sku"],
+                reason=err["reason"],
+            ))
+        import_log.total_rows = total_rows
+        import_log.inserted = inserted
+        import_log.updated = updated
+        import_log.skipped = skipped
         db.commit()
     except Exception as e:
         db.rollback()
@@ -189,6 +226,7 @@ def sync_customers_from_excel(file_bytes: bytes, db: Session) -> Dict[str, Any]:
             "updated": 0,
             "skipped": total_rows,
             "errors": [{"row": 0, "sku": "", "reason": f"Database error: {str(e)}"}],
+            "needs_review": False,
         }
 
     needs_review = len(validation_errors) > 0

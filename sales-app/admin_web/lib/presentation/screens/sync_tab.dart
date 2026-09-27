@@ -15,6 +15,7 @@ class SyncTab extends StatefulWidget {
 
 class _SyncTabState extends State<SyncTab> {
   final _historyKey = GlobalKey<_ImportHistorySectionState>();
+  final _errorsKey = GlobalKey<_SyncErrorsSectionState>();
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +127,7 @@ class _SyncTabState extends State<SyncTab> {
           ),
 
           // Customer Import Card
-          _CustomerImportCard(historyKey: _historyKey),
+          _CustomerImportCard(historyKey: _historyKey, errorsKey: _errorsKey),
 
           // Result cards
           if (syncResult != null) ...[
@@ -194,6 +195,7 @@ class _SyncTabState extends State<SyncTab> {
     if (success && context.mounted) {
       final result_ = provider.lastSyncResult;
       _historyKey.currentState?._refresh();
+      _errorsKey.currentState?._refresh();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -336,6 +338,10 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
     setState(() {});
   }
 
+  void _refresh() {
+    _loadErrors();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<SyncError>>(
@@ -359,7 +365,8 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                   child: Text(
                     isEmpty
                         ? 'Tidak ada import bermasalah'
-                        : 'Daftar baris yang dilewati saat import (${errors.length})',
+                        : '${errors.length} baris bermasalah dari '
+                            '${errors.map((e) => e.fileName ?? '-').toSet().length} file',
                     style: AppTextStyles.bodyMedium,
                   ),
                 ),
@@ -439,13 +446,14 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
   }
 
   Future<void> _showErrorsDialog(BuildContext context, List<SyncError> errors) async {
+    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     await showDialog(
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: SizedBox(
-          width: 560,
-          height: 460,
+          width: 640,
+          height: 520,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -469,8 +477,10 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                         children: [
                           Text('Error Import',
                               style: AppTextStyles.headlineSmall),
-                          Text('Baris yang dilewati saat proses import',
-                              style: AppTextStyles.bodySmall),
+                          Text(
+                            'Baris yang dilewati saat proses import. Buka file asli dan perbaiki sesuai pesan di bawah.',
+                            style: AppTextStyles.bodySmall,
+                          ),
                         ],
                       ),
                     ),
@@ -508,46 +518,9 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                         padding: const EdgeInsets.all(16),
                         itemCount: errors.length,
                         separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, i) => Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.errorBg,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.errorBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.warning_amber,
-                                  size: 18, color: AppColors.error),
-                              const SizedBox(width: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Baris ${errors[i].row}',
-                                  style: AppTextStyles.mono.copyWith(
-                                    color: AppColors.error,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  errors[i].reason,
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.error,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                            const SizedBox(height: 10),
+                        itemBuilder: (context, i) =>
+                            _buildErrorTile(errors[i], dateFormat),
                       ),
               ),
               const Divider(height: 1),
@@ -566,6 +539,129 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorTile(SyncError err, DateFormat dateFormat) {
+    final isStore = err.isStoreImport;
+    final tint = isStore ? AppColors.success : AppColors.info;
+    final tintBg = isStore ? AppColors.successBg : AppColors.infoBg;
+    final tintBorder = isStore ? AppColors.successBorder : AppColors.infoBorder;
+    final typeLabel = isStore ? 'Toko' : 'Produk';
+
+    DateTime? ts;
+    if (err.timestamp != null) {
+      ts = DateTime.tryParse(err.timestamp!)?.toLocal();
+    }
+    final tsText = ts != null ? dateFormat.format(ts) : '-';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.errorBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.errorBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tintBg,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: tintBorder),
+                ),
+                child: Text(
+                  typeLabel,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: tint,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (err.fileName != null && err.fileName!.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    err.fileName!,
+                    style: AppTextStyles.mono.copyWith(fontSize: 11),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              else
+                const Spacer(),
+              const SizedBox(width: 8),
+              Text(
+                tsText,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.warning_amber,
+                  size: 18, color: AppColors.error),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Baris ${err.row}',
+                  style: AppTextStyles.mono.copyWith(
+                    color: AppColors.error,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  err.reason,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (err.sku != null && err.sku!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Row(
+                children: [
+                  Text(
+                    'SKU/Kode: ',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  Text(
+                    err.sku!,
+                    style: AppTextStyles.mono.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -764,8 +860,9 @@ class _ImportTypeChip extends StatelessWidget {
 
 class _CustomerImportCard extends StatefulWidget {
   final GlobalKey<_ImportHistorySectionState> historyKey;
+  final GlobalKey<_SyncErrorsSectionState> errorsKey;
 
-  const _CustomerImportCard({required this.historyKey});
+  const _CustomerImportCard({required this.historyKey, required this.errorsKey});
 
   @override
   State<_CustomerImportCard> createState() => _CustomerImportCardState();
@@ -776,6 +873,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
   bool _importing = false;
 
   GlobalKey<_ImportHistorySectionState> get _historyKey => widget.historyKey;
+  GlobalKey<_SyncErrorsSectionState> get _errorsKey => widget.errorsKey;
 
   @override
   Widget build(BuildContext context) {
@@ -904,6 +1002,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
 
     if (success) {
       _historyKey.currentState?._refresh();
+      _errorsKey.currentState?._refresh();
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(

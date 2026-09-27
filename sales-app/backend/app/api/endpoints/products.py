@@ -140,20 +140,14 @@ def import_excel(
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="File kosong")
 
-    sync_result = sync_products_from_excel(contents, db)
-
-    # Catat ke histori import
-    db.add(ImportLog(
-        user_id=current_user["user_id"],
-        nama=current_user.get("nama"),
-        import_type="PRODUCT",
-        total_rows=sync_result["total_rows"],
-        inserted=sync_result["inserted"],
-        updated=sync_result["updated"],
-        skipped=sync_result["skipped"],
+    sync_result = sync_products_from_excel(
+        contents, db,
+        current_user={
+            "user_id": current_user["user_id"],
+            "nama": current_user.get("nama"),
+        },
         file_name=file.filename,
-    ))
-    db.commit()
+    )
 
     needs_review = db.query(Product).filter(
         Product.stok_sistem < Product.stok_booking
@@ -182,9 +176,9 @@ def get_import_logs(
 @router.delete("/import-errors", status_code=204)
 def clear_import_errors(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Hapus semua histori error import."""
+    """Hapus semua histori error import (admin + manager boleh)."""
     db.query(SyncValidationError).delete()
     db.commit()
 
@@ -192,18 +186,31 @@ def clear_import_errors(
 @router.get("/sync/errors", response_model=List[dict])
 def get_sync_errors(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    _current_user: CurrentUser = Depends(require_manager),
 ):
-    # Return only actual validation errors from sync_validation_errors table
-    from app.models.models import SyncValidationError
-    val_errors = db.query(SyncValidationError).order_by(
-        SyncValidationError.created_at.desc()
-    ).limit(100).all()
+    """Ambil error validasi dari sync terakhir (gabung dengan import_logs untuk
+    menampilkan file name, import type, dan timestamp). 100 baris terbaru."""
+    from app.models.models import SyncValidationError, ImportLog
+
+    rows = (
+        db.query(SyncValidationError, ImportLog)
+        .outerjoin(ImportLog, SyncValidationError.import_log_id == ImportLog.id)
+        .order_by(SyncValidationError.created_at.desc())
+        .limit(100)
+        .all()
+    )
 
     return [
-        {"id": str(e.id), "row": e.row_number, "sku": e.sku,
-         "reason": e.reason}
-        for e in val_errors
+        {
+            "id": str(err.id),
+            "row": err.row_number,
+            "sku": err.sku,
+            "reason": err.reason,
+            "import_type": log.import_type if log else None,
+            "file_name": log.file_name if log else None,
+            "timestamp": err.created_at.isoformat() if err.created_at else None,
+        }
+        for err, log in rows
     ]
 
 
