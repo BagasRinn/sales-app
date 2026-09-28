@@ -81,6 +81,7 @@ class OrderItem {
   final int discountPercent;
   final int discountNominal;
   /// Harga per pcs setelah diskon — langsung dari backend (bukan dihitung client).
+  /// Untuk NOMINAL: harga_satuan − (nominal / qty). Untuk PERCENT: sama.
   final int hargaSetelahDiskon;
   final int subtotal;
 

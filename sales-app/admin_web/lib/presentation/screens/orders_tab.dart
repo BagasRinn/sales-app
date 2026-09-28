@@ -1001,7 +1001,7 @@ class _OrderItemRow extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       item.discountType == 'NOMINAL'
-                          ? 'Diskon Rp ${currencyFormat.format(item.discountNominal)}/pcs'
+                          ? 'Diskon Rp ${currencyFormat.format(item.discountNominal)}'
                           : 'Diskon ${item.discountPercent}%',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.success,
@@ -1135,7 +1135,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Diskon nominal tidak boleh melebihi harga satuan (${widget.maxNominal})'),
+              'Diskon nominal tidak boleh melebihi subtotal (${widget.maxNominal})'),
         ),
       );
       return;
@@ -1159,7 +1159,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Subtotal item: Rp ${widget.maxNominal}',
+            'Subtotal: Rp ${widget.maxNominal}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
@@ -1204,7 +1204,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           const SizedBox(height: 8),
           Text(
             _type == 'PERCENT'
-                ? 'Diskon diterapkan ke (harga × qty). Contoh: 10% dari Rp ${widget.maxNominal}'
+                ? 'Diskon diterapkan ke subtotal. Contoh: 10% dari Rp ${widget.maxNominal}'
                 : 'Potong sekali di akhir. Maks: Rp ${widget.maxNominal}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           ),
