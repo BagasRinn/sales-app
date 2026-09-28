@@ -219,13 +219,28 @@ def get_sync_errors(
 
 @router.get("/stats")
 def get_admin_stats(
+    date: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Server-side dashboard stats — MANAGER boleh akses untuk Dashboard ringkasan (read-only)."""
-    from sqlalchemy import func
-    from sqlalchemy import Integer
-    from sqlalchemy import cast
+    """Server-side dashboard stats — MANAGER boleh akses untuk Dashboard ringkasan (read-only).
+
+    Jika `date` diberikan (format YYYY-MM-DD), stats difilter untuk order yang dibuat
+    pada tanggal tersebut saja. Tanpa `date`, mengembalikan semua order.
+    """
+    from sqlalchemy import func, Integer, cast
+    from app.models.models import Order, Product
+
+    query = db.query(Order.status, func.count(Order.id))
+
+    if date:
+        # Filter: order.created_at tanggal = date (YYYY-MM-DD)
+        query = query.filter(
+            func.date(Order.created_at) == date
+        )
+
+    status_counts = dict(query.group_by(Order.status).all())
+    total_orders = sum(status_counts.values())
 
     status_counts = dict(
         db.query(Order.status, func.count(Order.id))

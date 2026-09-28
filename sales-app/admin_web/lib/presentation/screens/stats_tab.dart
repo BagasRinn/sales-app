@@ -36,6 +36,8 @@ class _StatsTabState extends State<StatsTab> {
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      // Load stats untuk tanggal yang dipilih
+      if (mounted) context.read<AdminProvider>().loadAll(date: picked);
     }
   }
 
@@ -679,12 +681,12 @@ class _ReportDownloadCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: AppColors.info.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.today,
-                    color: AppColors.primary,
+                    color: AppColors.info,
                     size: 22,
                   ),
                 ),
@@ -763,7 +765,7 @@ class _ReportDownloadCard extends StatelessWidget {
                     downloading ? 'Mengunduh...' : 'Download Harian',
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.info,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 18, vertical: 18),
                   ),

@@ -319,10 +319,15 @@ class AdminRepository {
     await _api.delete('/products/import-errors');
   }
 
-  Future<Map<String, int>> getDashboardStats() async {
+  Future<Map<String, int>> getDashboardStats({DateTime? date}) async {
     // Use the server-side /products/stats endpoint so the count is never
     // limited by a client-side 50-order window.
-    final data = await _api.get('/products/stats');
+    final qs = date != null
+        ? '?date=${date.year.toString().padLeft(4, '0')}-'
+              '${date.month.toString().padLeft(2, '0')}-'
+              '${date.day.toString().padLeft(2, '0')}'
+        : '';
+    final data = await _api.get('/products/stats$qs');
     return {
       'total_orders': data['total_orders'] ?? 0,
       'pending_orders': data['pending_orders'] ?? 0,

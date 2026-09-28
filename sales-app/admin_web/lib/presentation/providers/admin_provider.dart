@@ -460,9 +460,9 @@ class AdminProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> _loadStats() async {
+  Future<void> _loadStats({DateTime? date}) async {
     try {
-      _stats = await _repo.getDashboardStats();
+      _stats = await _repo.getDashboardStats(date: date);
       _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
@@ -471,7 +471,7 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> loadAll() async {
+  Future<void> loadAll({DateTime? date}) async {
     _setLoading(true, 'Memuat data...');
     try {
       // MANAGER butuh stats untuk Dashboard dan produk untuk halaman
@@ -481,7 +481,7 @@ class AdminProvider extends ChangeNotifier {
         _loadPendingOrders(),
         _loadAllOrders(),
         _loadCustomers(),
-        _loadStats(),
+        _loadStats(date: date),
         _loadProducts(),
       ];
       await Future.wait(tasks);
