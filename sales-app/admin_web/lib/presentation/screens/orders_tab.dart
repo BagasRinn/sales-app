@@ -903,7 +903,7 @@ class _OrderCardState extends State<_OrderCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Diskon ${_order.orderDiscountType == 'NOMINAL' ? '' : _order.orderDiscountNominal.toString() + '%'}',
+                'Diskon ${_order.orderDiscountType == 'NOMINAL' ? '' : '${_order.orderDiscountNominal}%'}',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
               ),
               Text(

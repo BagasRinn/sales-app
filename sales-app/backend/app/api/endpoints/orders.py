@@ -5,6 +5,7 @@ from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import List, Optional
+import logging
 
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer
@@ -16,6 +17,8 @@ from app.schemas.schemas import (
 )
 from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.stock_logger import log_stock_change
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
