@@ -144,6 +144,9 @@ class OrderCreate(BaseModel):
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
+    # Diskon di level order — berlaku untuk total seluruh item.
+    order_discount_type: str = Field(default='PERCENT', description="'PERCENT' atau 'NOMINAL'")
+    order_discount_nominal: int = Field(default=0, ge=0)
 
 
 class OrderItemResponse(BaseModel):
@@ -165,13 +168,12 @@ class OrderItemResponse(BaseModel):
 class OrderDiscountUpdateItem(BaseModel):
     item_id: UUID
     discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
-    discount_percent: int = Field(default=0, ge=0, le=100)
-    discount_nominal: int = Field(default=0, ge=0)
 
 
 class OrderDiscountUpdate(BaseModel):
-    """Bulk update discount per item — dipakai admin untuk koreksi sebelum approve/reject."""
-    items: List[OrderDiscountUpdateItem]
+    """Update diskon di level order — berlaku untuk total seluruh item."""
+    discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
+    discount_nominal: int = Field(default=0, ge=0)
 
 
 class OrderResponse(BaseModel):
@@ -191,6 +193,8 @@ class OrderResponse(BaseModel):
     store_address: Optional[str] = None
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
+    order_discount_type: str = 'PERCENT'
+    order_discount_nominal: int = 0
 
     class Config:
         from_attributes = True

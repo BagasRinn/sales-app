@@ -169,55 +169,8 @@ class _StepReviewState extends State<StepReview> {
               ),
               const SizedBox(height: 20),
 
-              // Total
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Total (${draft.totalItems} item)',
-                          style: AppTextStyles.bodyLarge,
-                        ),
-                        Text(
-                          currency.format(draft.totalPrice),
-                          style: AppTextStyles.headlineSmall.copyWith(
-                            color: AppColors.primaryLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (draft.totalDiscount > 0) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Hemat',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.success,
-                            ),
-                          ),
-                          Text(
-                            '- ${currency.format(draft.totalDiscount)}',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              // Total + Diskon
+              _OrderTotalCard(draft: draft, currency: currency),
             ],
           ),
         ),
@@ -280,50 +233,50 @@ class _StepReviewState extends State<StepReview> {
   }
 }
 
-class _ProductRow extends StatefulWidget {
-  final Product? product;
-  final int qty;
-  final String productId;
-  const _ProductRow({
-    required this.product,
-    required this.qty,
-    required this.productId,
-  });
+/// Widget kartu total + input diskon level order.
+/// Diskon ditampilkan/setelah total harga, bukan per item.
+class _OrderTotalCard extends StatefulWidget {
+  final DraftOrderProvider draft;
+  final NumberFormat currency;
+
+  const _OrderTotalCard({required this.draft, required this.currency});
 
   @override
-  State<_ProductRow> createState() => _ProductRowState();
+  State<_OrderTotalCard> createState() => _OrderTotalCardState();
 }
 
-class _ProductRowState extends State<_ProductRow> {
+class _OrderTotalCardState extends State<_OrderTotalCard> {
   late TextEditingController _discountController;
-  bool _showDiscount = false;
-  // Track tipe diskon yang sedang dipilih. Default: PERCENT (backward compat).
   String _discountType = 'PERCENT';
+  bool _showDiscountInput = false;
 
   @override
   void initState() {
     super.initState();
-    final draft = context.read<DraftOrderProvider>();
-    final info = draft.discounts[widget.productId];
-    if (info != null) {
-      _discountType = info.type;
+    final od = widget.draft.orderDiscount;
+    if (od != null) {
+      _discountType = od.type;
       _discountController =
-          TextEditingController(text: info.value.toString());
+          TextEditingController(text: od.value.toString());
     } else {
       _discountController = TextEditingController();
     }
   }
 
   @override
-  void didUpdateWidget(covariant _ProductRow oldWidget) {
+  void didUpdateWidget(covariant _OrderTotalCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Sinkronkan textfield kalau draft.discounts berubah dari luar (mis. tombol hapus).
-    final draft = context.read<DraftOrderProvider>();
-    final info = draft.discounts[widget.productId];
-    if (info == null && _discountController.text.isNotEmpty) {
+    final od = widget.draft.orderDiscount;
+    if (od == null && _discountController.text.isNotEmpty) {
+      // diskon dihapus dari luar
       _discountController.clear();
-    } else if (info != null && _discountController.text != info.value.toString()) {
-      _discountController.text = info.value.toString();
+    } else if (od != null) {
+      if (_discountController.text != od.value.toString()) {
+        _discountController.text = od.value.toString();
+      }
+      if (_discountType != od.type) {
+        setState(() => _discountType = od.type);
+      }
     }
   }
 
@@ -333,117 +286,151 @@ class _ProductRowState extends State<_ProductRow> {
     super.dispose();
   }
 
-  int _calcHargaNet(int price, DiscountInfo? info) {
-    if (info == null) return price;
-    if (info.type == 'NOMINAL') {
-      return (price - info.value).clamp(0, price);
-    }
-    return (price * (100 - info.value) / 100).round();
-  }
-
-  Widget _buildPriceCell(
-    DiscountInfo? info,
-    int price,
-    int qty,
-    int subtotal,
-    NumberFormat currency,
-  ) {
-    if (info != null) {
-      final original = price * qty;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            currency.format(original),
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textMuted,
-              decoration: TextDecoration.lineThrough,
-            ),
-          ),
-          Text(
-            currency.format(subtotal),
-            style: AppTextStyles.bodyMedium.copyWith(
-              fontWeight: FontWeight.w600,
-              color: AppColors.success,
-            ),
-          ),
-        ],
-      );
-    }
-    return Text(
-      currency.format(price * qty),
-      style: AppTextStyles.bodyMedium.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final draft = context.watch<DraftOrderProvider>();
-    final currency = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
-    final name = widget.product?.namaBarang ?? widget.productId;
-    final price = widget.product?.harga ?? 0;
-    final info = draft.discounts[widget.productId];
-    final hargaNet = _calcHargaNet(price, info);
-    final subtotal = hargaNet * widget.qty;
-    final nominalDiskon = info == null ? 0 : (price - hargaNet) * widget.qty;
+    final draft = widget.draft;
+    final hasDiscount = draft.orderDiscount != null;
+    final raw = draft.totalRaw;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                // Baris: Total item
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(name, style: AppTextStyles.bodyMedium),
-                    const SizedBox(height: 2),
                     Text(
-                      '× ${widget.qty} · ${currency.format(price)}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
+                      'Total (${draft.totalItems} item)',
+                      style: AppTextStyles.bodyLarge,
+                    ),
+                    Text(
+                      widget.currency.format(raw),
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.primaryLight,
                       ),
                     ),
                   ],
                 ),
-              ),
-              _buildPriceCell(info, price, widget.qty, subtotal, currency),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.discount_outlined,
-                    size: 18, color: AppColors.primaryLight),
-                tooltip: 'Diskon',
-                onPressed: () => setState(() => _showDiscount = !_showDiscount),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    size: 18, color: AppColors.error),
-                tooltip: 'Hapus',
-                onPressed: () {
-                  draft.setQty(widget.productId, 0);
-                  _discountController.clear();
-                },
-              ),
-            ],
+
+                // Baris: Diskon
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      'Diskon',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (hasDiscount) ...[
+                      Text(
+                        _discountType == 'NOMINAL'
+                            ? '- ${widget.currency.format(draft.orderDiscount!.value)}'
+                            : '- ${draft.orderDiscount!.value}%',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        '-',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(
+                        hasDiscount
+                            ? Icons.edit_outlined
+                            : Icons.discount_outlined,
+                        size: 18,
+                        color: AppColors.primaryLight,
+                      ),
+                      tooltip: 'Tambah/diskon',
+                      onPressed: () =>
+                          setState(() => _showDiscountInput = !_showDiscountInput),
+                    ),
+                  ],
+                ),
+
+                if (hasDiscount) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Hemat',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                      Text(
+                        widget.currency.format(draft.totalDiscount),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const Divider(height: 20),
+
+                // Grand total
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Grand Total',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      widget.currency.format(draft.totalPrice),
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.primaryLight,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          if (_showDiscount)
+
+          // Input diskon (expandable)
+          if (_showDiscountInput) ...[
+            const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Segmented control: Persen vs Nominal
+                  Text(
+                    'Tipe Diskon',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      const SizedBox(width: 8),
                       ChoiceChip(
                         label: const Text('% Persen'),
                         selected: _discountType == 'PERCENT',
@@ -467,17 +454,11 @@ class _ProductRowState extends State<_ProductRow> {
                           setState(() {
                             _discountType = 'PERCENT';
                             _discountController.clear();
-                            if (info != null) {
-                              draft.setDiscount(
-                                productId: widget.productId,
-                                type: 'PERCENT',
-                                value: 0,
-                              );
-                            }
+                            draft.setOrderDiscount(type: 'PERCENT', value: 0);
                           });
                         },
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       ChoiceChip(
                         label: const Text('Rp Nominal'),
                         selected: _discountType == 'NOMINAL',
@@ -501,24 +482,17 @@ class _ProductRowState extends State<_ProductRow> {
                           setState(() {
                             _discountType = 'NOMINAL';
                             _discountController.clear();
-                            if (info != null) {
-                              draft.setDiscount(
-                                productId: widget.productId,
-                                type: 'NOMINAL',
-                                value: 0,
-                              );
-                            }
+                            draft.setOrderDiscount(type: 'NOMINAL', value: 0);
                           });
                         },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
-                      const SizedBox(width: 8),
                       SizedBox(
-                        width: 110,
+                        width: 140,
                         child: TextField(
                           controller: _discountController,
                           keyboardType: TextInputType.number,
@@ -526,8 +500,8 @@ class _ProductRowState extends State<_ProductRow> {
                           decoration: InputDecoration(
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
+                              horizontal: 10,
+                              vertical: 10,
                             ),
                             prefixText: _discountType == 'NOMINAL' ? 'Rp ' : null,
                             suffixText: _discountType == 'PERCENT' ? '%' : null,
@@ -539,36 +513,20 @@ class _ProductRowState extends State<_ProductRow> {
                           style: AppTextStyles.bodyMedium,
                           onChanged: (v) {
                             final parsed = int.tryParse(v) ?? 0;
-                            try {
-                              draft.setDiscount(
-                                productId: widget.productId,
-                                type: _discountType,
-                                value: parsed,
-                              );
-                              setState(() {});
-                            } on ArgumentError {
-                              // value di luar range — jangan apply, tapi jangan
-                              // crash UI. User akan melihat hint error dari
-                              // helper text di bawah input.
-                            }
+                            draft.setOrderDiscount(
+                              type: _discountType,
+                              value: parsed,
+                            );
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (info != null)
+                      const SizedBox(width: 12),
+                      if (draft.orderDiscount != null)
                         Text(
-                          'Hemat ${currency.format(nominalDiskon)}',
+                          'Hemat ${widget.currency.format(draft.totalDiscount)}',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.success,
-                          ),
-                        )
-                      else
-                        Text(
-                          _discountType == 'PERCENT'
-                              ? 'Masukkan % diskon'
-                              : 'Masukkan nominal (Rp)',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textMuted,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                     ],
@@ -576,6 +534,67 @@ class _ProductRowState extends State<_ProductRow> {
                 ],
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductRow extends StatelessWidget {
+  final Product? product;
+  final int qty;
+  final String productId;
+  const _ProductRow({
+    required this.product,
+    required this.qty,
+    required this.productId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    final draft = context.watch<DraftOrderProvider>();
+    final name = product?.namaBarang ?? productId;
+    final price = product?.harga ?? 0;
+    final subtotal = price * qty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: AppTextStyles.bodyMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '× $qty · ${currency.format(price)}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            currency.format(subtotal),
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: AppColors.error),
+            tooltip: 'Hapus',
+            onPressed: () => draft.setQty(productId, 0),
+          ),
         ],
       ),
     );

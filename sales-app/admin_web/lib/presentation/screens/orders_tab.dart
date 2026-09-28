@@ -38,12 +38,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Trigger explicit load untuk tab "Semua Pesanan" setelah frame pertama.
-    // Sebelumnya data hanya datang dari DashboardScreen.initState yang
-    // memanggil loadAll(). Kalau user navigasi ke tab ini sebelum
-    // loadAll() selesai (atau kalau loadAll gagal), orders page kelihatan
-    // kosong. Sekarang kita fetch independen — first frame dulu supaya
-    // context siap, baru panggil _applyFilters.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _applyFilters();
     });
@@ -64,7 +58,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         final t = DateTime(now.year, now.month, now.day);
         return (from: t, to: t);
       case _DatePreset.thisWeek:
-        // Week starts Monday
         final start = DateTime(now.year, now.month, now.day)
             .subtract(Duration(days: (now.weekday - 1)));
         return (from: start, to: now);
@@ -115,9 +108,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       lastDate: now.add(const Duration(days: 1)),
       initialDateRange: initial,
       helpText: 'Pilih rentang tanggal',
-      // Wrap dengan Theme + ConstrainedBox untuk:
-      // 1. Lebar & tinggi dibatasi (Material 3 side-by-side 2 bulan ≈ 600px)
-      // 2. Rounded corner 20px, konsisten dengan AlertDialog project ini
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -273,7 +263,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: status + counter
               Row(
                 children: [
                   const Text('Status: ', style: AppTextStyles.labelLarge),
@@ -314,7 +303,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 ],
               ),
               const SizedBox(height: 12),
-              // Row 2: date quick-filter chips + custom range
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -388,7 +376,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                       itemBuilder: (ctx, i) => _OrderCard(order: orders[i]),
                     ),
         ),
-        // Pagination controls (sticky bottom)
         if (total > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -482,7 +469,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
           constraints: const BoxConstraints(maxWidth: 360),
           child: Padding(
             padding: const EdgeInsets.all(24),
-          child: Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
@@ -496,35 +483,35 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 20),
                 const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 8),
-              const Text(
-                'Stok sistem akan dikurangi sesuai jumlah pesanan.',
-                style: AppTextStyles.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Batal'),
+                const SizedBox(height: 8),
+                const Text(
+                  'Stok sistem akan dikurangi sesuai jumlah pesanan.',
+                  style: AppTextStyles.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Batal'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Setujui'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Setujui'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
 
     if (confirm == true && mounted) {
@@ -533,12 +520,12 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                const Text('Pesanan disetujui'),
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Pesanan disetujui'),
               ],
             ),
             backgroundColor: AppColors.success,
@@ -617,12 +604,12 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.cancel, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                const Text('Pesanan ditolak'),
+                Icon(Icons.cancel, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Pesanan ditolak'),
               ],
             ),
             backgroundColor: AppColors.error,
@@ -668,25 +655,51 @@ class _OrderCardState extends State<_OrderCard> {
     }
   }
 
-  void _onItemSaved(OrderItem updated) {
-    final newItems = _order.items
-        .map((i) => i.id == updated.id ? updated : i)
-        .toList();
+  void _onDiscountSaved(Order updated) {
     setState(() {
-      _order = Order(
-        id: _order.id,
-        salesId: _order.salesId,
-        status: _order.status,
-        createdAt: _order.createdAt,
-        expiredAt: _order.expiredAt,
-        items: newItems,
-        salesUsername: _order.salesUsername,
-        salesNama: _order.salesNama,
-        storeName: _order.storeName,
-        storeContact: _order.storeContact,
-        storeAddress: _order.storeAddress,
-      );
+      _order = updated;
     });
+  }
+
+  Future<void> _openOrderDiscountDialog() async {
+    final result = await showDialog<_DiscountEditResult>(
+      context: context,
+      builder: (_) => _DiscountEditDialog(
+        orderId: _order.id,
+        currentType: _order.orderDiscountType,
+        currentNominal: _order.orderDiscountNominal,
+        totalRaw: _order.totalRaw,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    setState(() {});
+    try {
+      final repo = context.read<AdminProvider>().adminRepository;
+      final updated = await repo.updateOrderDiscounts(
+        _order.id,
+        discountType: result.type,
+        discountNominal: result.value,
+      );
+      _onDiscountSaved(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Diskon order diperbarui'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui diskon: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -836,65 +849,87 @@ class _OrderCardState extends State<_OrderCard> {
                         style: AppTextStyles.labelLarge),
                     const Spacer(),
                     if (_order.status == 'PENDING')
-                      Text(
-                        'Tap item untuk edit diskon',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontStyle: FontStyle.italic,
+                      OutlinedButton.icon(
+                        onPressed: _openOrderDiscountDialog,
+                        icon: const Icon(Icons.discount_outlined, size: 14),
+                        label: const Text('Edit Diskon Order'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          textStyle: const TextStyle(fontSize: 12),
+                          side: BorderSide(color: AppColors.primaryLight),
+                          foregroundColor: AppColors.primaryLight,
                         ),
                       ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 ..._order.items.map((item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       child: _OrderItemRow(
                         item: item,
                         currencyFormat: currencyFormat,
-                        editable: _order.status == 'PENDING',
-                        orderId: _order.id,
-                        onSaved: _onItemSaved,
                       ),
                     )),
                 const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total', style: AppTextStyles.headlineSmall),
-                    Text(
-                      _fmt(_order.totalAmount),
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: AppColors.primaryLight,
-                      ),
-                    ),
-                  ],
-                ),
-                if (_order.totalDiscount > 0) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Diskon',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.success,
-                        ),
-                      ),
-                      Text(
-                        '- ${_fmt(_order.totalDiscount)}',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+
+                // Ringkasan harga
+                _buildPriceSummary(),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPriceSummary() {
+    final raw = _order.totalRaw;
+    final amount = _order.totalAmount;
+    final discount = _order.totalDiscount;
+    final hasDiscount = _order.orderDiscountNominal > 0;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Subtotal', style: AppTextStyles.bodyMedium),
+            Text(_fmt(raw), style: AppTextStyles.bodyMedium),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (hasDiscount) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Diskon ${_order.orderDiscountType == 'NOMINAL' ? '' : _order.orderDiscountNominal.toString() + '%'}',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+              ),
+              Text(
+                '- ${_fmt(discount)}',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.success,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Total', style: AppTextStyles.headlineSmall),
+            Text(
+              _fmt(amount),
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: AppColors.primaryLight,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -923,172 +958,79 @@ class _OrderCardState extends State<_OrderCard> {
   }
 }
 
-/// Baris item di pesanan — bisa di-edit diskonnya kalau order masih PENDING.
-class _OrderItemRow extends StatefulWidget {
+/// Baris item di pesanan — hanya display (bukan edit).
+class _OrderItemRow extends StatelessWidget {
   final OrderItem item;
   final NumberFormat currencyFormat;
-  final bool editable;
-  final String orderId;
-  final ValueChanged<OrderItem> onSaved;
 
   const _OrderItemRow({
     required this.item,
     required this.currencyFormat,
-    required this.editable,
-    required this.orderId,
-    required this.onSaved,
   });
 
   @override
-  State<_OrderItemRow> createState() => _OrderItemRowState();
-}
-
-class _OrderItemRowState extends State<_OrderItemRow> {
-  bool _saving = false;
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final currency = widget.currencyFormat;
     final namaBarang = item.namaBarang.isNotEmpty
         ? item.namaBarang
         : 'Produk ${item.productId}';
 
-    return InkWell(
-      onTap: widget.editable ? () => _openEditDialog() : null,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(namaBarang, style: AppTextStyles.bodyMedium),
-                  if (item.hasDiscount)
-                    Text(
-                      item.discountType == 'NOMINAL'
-                          ? 'Diskon Rp ${item.discountNominal}'
-                          : 'Diskon ${item.discountPercent}%',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.success,
-                      ),
-                    ),
-                  if (widget.editable)
-                    Text(
-                      'Tap untuk edit diskon',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                        fontStyle: FontStyle.italic,
-                        fontSize: 10,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Text(
-              '${item.qty}x ${currency.format(item.hargaSatuan)}',
-              style: AppTextStyles.bodySmall,
-            ),
-            const SizedBox(width: 16),
-            if (item.hasDiscount)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    currency.format(item.hargaSatuan * item.qty),
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                      decoration: TextDecoration.lineThrough,
-                    ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(namaBarang, style: AppTextStyles.bodyMedium),
+                Text(
+                  '× ${item.qty}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
                   ),
-                  Text(
-                    currency.format(item.subtotal),
-                    style: AppTextStyles.labelLarge.copyWith(
-                      fontSize: 13,
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              )
-            else
-              SizedBox(
-                width: 90,
-                child: Text(
-                  currency.format(item.subtotal),
-                  textAlign: TextAlign.right,
-                  style: AppTextStyles.labelLarge.copyWith(fontSize: 13),
                 ),
+              ],
+            ),
+          ),
+          Text(
+            currencyFormat.format(item.hargaSatuan),
+            style: AppTextStyles.bodySmall,
+          ),
+          const SizedBox(width: 16),
+          if (item.hasDiscount)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  currencyFormat.format(item.hargaSatuan * item.qty),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+                Text(
+                  currencyFormat.format(item.subtotal),
+                  style: AppTextStyles.labelLarge.copyWith(
+                    fontSize: 13,
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            )
+          else
+            SizedBox(
+              width: 90,
+              child: Text(
+                currencyFormat.format(item.subtotal),
+                textAlign: TextAlign.right,
+                style: AppTextStyles.labelLarge.copyWith(fontSize: 13),
               ),
-            if (widget.editable)
-              IconButton(
-                icon: _saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.edit_outlined, size: 16),
-                tooltip: 'Edit diskon',
-                onPressed: _saving ? null : _openEditDialog,
-                color: AppColors.primaryLight,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
-  }
-
-  Future<void> _openEditDialog() async {
-    final result = await showDialog<_DiscountEditResult>(
-      context: context,
-      builder: (_) => _DiscountEditDialog(item: widget.item),
-    );
-    if (result == null || !mounted) return;
-
-    setState(() => _saving = true);
-    try {
-      final repo = context.read<AdminProvider>().adminRepository;
-      final updated = await repo.updateOrderDiscounts(widget.orderId, [
-        {
-          'item_id': widget.item.id,
-          'discount_type': result.type,
-          if (result.type == 'PERCENT') 'discount_percent': result.value,
-          if (result.type == 'NOMINAL') 'discount_nominal': result.value,
-        },
-      ]);
-      final newItem = updated.items.firstWhere(
-        (i) => i.id == widget.item.id,
-        orElse: () => widget.item,
-      );
-      widget.onSaved(newItem);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Diskon ${widget.item.namaBarang.isNotEmpty ? widget.item.namaBarang : "item"} diperbarui',
-            ),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memperbarui diskon: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
   }
 }
 
@@ -1099,8 +1041,17 @@ class _DiscountEditResult {
 }
 
 class _DiscountEditDialog extends StatefulWidget {
-  final OrderItem item;
-  const _DiscountEditDialog({required this.item});
+  final String orderId;
+  final String currentType;
+  final int currentNominal;
+  final int totalRaw;
+
+  const _DiscountEditDialog({
+    required this.orderId,
+    required this.currentType,
+    required this.currentNominal,
+    required this.totalRaw,
+  });
 
   @override
   State<_DiscountEditDialog> createState() => _DiscountEditDialogState();
@@ -1113,12 +1064,9 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
   @override
   void initState() {
     super.initState();
-    _type = widget.item.discountType;
-    final initial = _type == 'NOMINAL'
-        ? widget.item.discountNominal
-        : widget.item.discountPercent;
+    _type = widget.currentType;
     _valueController = TextEditingController(
-      text: initial > 0 ? initial.toString() : '',
+      text: widget.currentNominal > 0 ? widget.currentNominal.toString() : '',
     );
   }
 
@@ -1137,6 +1085,10 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
 
   void _save() {
     final raw = _valueController.text.trim();
+    if (raw.isEmpty) {
+      Navigator.of(context).pop(_DiscountEditResult(_type, 0));
+      return;
+    }
     final value = int.tryParse(raw) ?? 0;
     if (value <= 0) {
       Navigator.of(context).pop(_DiscountEditResult(_type, 0));
@@ -1148,26 +1100,16 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
       );
       return;
     }
-    if (_type == 'NOMINAL' && value > widget.item.hargaSatuan) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Nominal tidak boleh lebih dari harga satuan (${widget.item.hargaSatuan})',
-          ),
-        ),
-      );
-      return;
-    }
     Navigator.of(context).pop(_DiscountEditResult(_type, value));
   }
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
+    final hasCurrentDiscount = widget.currentNominal > 0;
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(
-        item.namaBarang.isNotEmpty ? item.namaBarang : 'Edit Diskon',
+      title: const Text(
+        'Edit Diskon Order',
         style: AppTextStyles.headlineSmall,
       ),
       content: Column(
@@ -1175,9 +1117,15 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Harga satuan: Rp ${item.hargaSatuan}',
+            'Total order: Rp ${widget.totalRaw}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
+          const SizedBox(height: 4),
+          if (hasCurrentDiscount)
+            Text(
+              'Diskon saat ini: ${widget.currentType == 'NOMINAL' ? 'Rp ${widget.currentNominal}' : '${widget.currentNominal}%'}',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -1211,22 +1159,13 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
               border: const OutlineInputBorder(),
             ),
           ),
-          if (_type == 'PERCENT' && item.discountPercent > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Saat ini: ${item.discountPercent}%',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
-            ),
-          if (_type == 'NOMINAL' && item.discountNominal > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Saat ini: Rp ${item.discountNominal}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            _type == 'PERCENT'
+                ? 'Contoh: 10% dari Rp ${widget.totalRaw} = Rp ${(widget.totalRaw * 0.1).round()}'
+                : 'Maks: Rp ${widget.totalRaw}',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
         ],
       ),
       actions: [

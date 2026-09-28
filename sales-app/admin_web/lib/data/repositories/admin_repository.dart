@@ -111,13 +111,16 @@ class AdminRepository {
     await _api.post('/orders/$orderId/reject');
   }
 
-  /// Bulk update discount per item — dipakai admin untuk koreksi sebelum approve/reject.
+  /// Update diskon di level order — berlaku untuk total seluruh item.
+  /// Backend mendistribusikan diskon secara proporsional ke tiap item.
   Future<Order> updateOrderDiscounts(
-    String orderId,
-    List<Map<String, dynamic>> items,
-  ) async {
+    String orderId, {
+    required String discountType, // 'PERCENT' atau 'NOMINAL'
+    required int discountNominal,
+  }) async {
     final data = await _api.put('/orders/$orderId/discounts', body: {
-      'items': items,
+      'discount_type': discountType,
+      'discount_nominal': discountNominal,
     });
     return Order.fromJson(data);
   }

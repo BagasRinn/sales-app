@@ -10,11 +10,15 @@ class OrderRepository {
     required String customerId,
     required List<Map<String, dynamic>> items,
     String? notes,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
   }) async {
     final data = await _api.post('/orders', body: {
       'customer_id': customerId,
       'items': items,
       'notes': notes ?? '',
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal,
     });
     return Order.fromJson(data);
   }
@@ -24,11 +28,15 @@ class OrderRepository {
     required String customerId,
     required List<Map<String, dynamic>> items,
     String? notes,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
   }) async {
     final data = await _api.put('/orders/$orderId', body: {
       'customer_id': customerId,
       'items': items,
       'notes': notes ?? '',
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal,
     });
     return Order.fromJson(data);
   }

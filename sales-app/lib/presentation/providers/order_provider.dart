@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/models/order.dart';
 import '../../data/repositories/order_repository.dart';
 import '../../core/api_exception.dart';
+import 'draft_order_provider.dart';
 
 class OrderProvider extends ChangeNotifier {
   final OrderRepository _orderRepo;
@@ -116,7 +117,7 @@ class OrderProvider extends ChangeNotifier {
   Future<Order?> createOrder({
     required String customerId,
     required Map<String, int> items,
-    required Map<String, int> discounts, // legacy: productId -> discount_percent
+    required DiscountInfo? orderDiscount,
     String? notes,
   }) async {
     _errorMessage = null;
@@ -124,19 +125,18 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       final itemsList = items.entries
+          .where((e) => e.value > 0)
           .map((e) => {
                 'product_id': e.key,
                 'qty': e.value,
-                // Mobile step_review UI baru support persen — order_provider
-                // masih pakai signature Map<productId, percent>. Step UI
-                // akan di-update terpisah untuk kirim nominal juga.
-                'discount_percent': discounts[e.key] ?? 0,
               })
           .toList();
       final order = await _orderRepo.createOrder(
         customerId: customerId,
         items: itemsList,
         notes: notes,
+        orderDiscountType: orderDiscount?.type ?? 'PERCENT',
+        orderDiscountNominal: orderDiscount?.value ?? 0,
       );
       notifyListeners();
       return order;
@@ -155,7 +155,7 @@ class OrderProvider extends ChangeNotifier {
     required String orderId,
     required String customerId,
     required Map<String, int> items,
-    required Map<String, int> discounts,
+    required DiscountInfo? orderDiscount,
     String? notes,
   }) async {
     _errorMessage = null;
@@ -163,10 +163,10 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       final itemsList = items.entries
+          .where((e) => e.value > 0)
           .map((e) => {
                 'product_id': e.key,
                 'qty': e.value,
-                'discount_percent': discounts[e.key] ?? 0,
               })
           .toList();
       final order = await _orderRepo.updateOrder(
@@ -174,6 +174,8 @@ class OrderProvider extends ChangeNotifier {
         customerId: customerId,
         items: itemsList,
         notes: notes,
+        orderDiscountType: orderDiscount?.type ?? 'PERCENT',
+        orderDiscountNominal: orderDiscount?.value ?? 0,
       );
       notifyListeners();
       return order;

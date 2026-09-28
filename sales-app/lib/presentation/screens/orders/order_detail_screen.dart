@@ -344,16 +344,17 @@ class _OrderDetailContent extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () {
               final items = <String, int>{};
-              final discounts = <String, DiscountInfo>{};
               if (order.items != null) {
                 for (final item in order.items!) {
                   items[item.productId] = item.qty;
-                  if (item.discountType == 'NOMINAL' && item.discountNominal > 0) {
-                    discounts[item.productId] = DiscountInfo.nominal(item.discountNominal);
-                  } else if (item.discountPercent > 0) {
-                    discounts[item.productId] = DiscountInfo.percent(item.discountPercent);
-                  }
                 }
+              }
+              DiscountInfo? existingOrderDiscount;
+              if (order.orderDiscountNominal > 0) {
+                existingOrderDiscount = DiscountInfo(
+                  type: order.orderDiscountType,
+                  value: order.orderDiscountNominal,
+                );
               }
               context.read<DraftOrderProvider>().loadFromExisting(
                 orderId: order.id,
@@ -361,7 +362,7 @@ class _OrderDetailContent extends StatelessWidget {
                 customerName: order.customerName ?? order.storeName ?? '',
                 customerAddress: order.storeAddress,
                 existingItems: items,
-                existingDiscounts: discounts,
+                existingOrderDiscount: existingOrderDiscount,
                 existingNotes: order.notes ?? '',
               );
               Navigator.of(context).push(

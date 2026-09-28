@@ -8,9 +8,10 @@ class DraftOrderProvider extends ChangeNotifier {
   String? customerAddress;
   Map<String, int> items = {}; // productId -> qty
 
-  /// Diskon per produk. Map ini simpan DiscountInfo (bukan int) supaya
-  /// bisa support persen ATAU nominal, dipilih per produk.
-  Map<String, DiscountInfo> discounts = {};
+  /// Diskon di level order — berlaku untuk total seluruh item.
+  /// satu diskon per order, bukan per produk.
+  DiscountInfo? orderDiscount;
+
   String notes = '';
   String? editingOrderId;
 
@@ -42,37 +43,46 @@ class DraftOrderProvider extends ChangeNotifier {
   void setQty(String productId, int qty) {
     if (qty <= 0) {
       items.remove(productId);
-      discounts.remove(productId);
     } else {
       items[productId] = qty;
     }
     notifyListeners();
   }
 
-  /// Set diskon per produk. [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR).
-  /// value <= 0 akan menghapus entry (artinya tidak ada diskon).
-  /// NOMINAL di-cap di harga satuan produk; PERCENT di-cap di 100%.
+  /// Set diskon untuk keseluruhan order.
+  /// [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR).
+  /// value <= 0 akan menghapus diskon.
+  void setOrderDiscount({
+    required String type,
+    required int value,
+  }) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError(
+          'discount type harus PERCENT atau NOMINAL, dapat: \$type');
+    }
+    if (value <= 0) {
+      orderDiscount = null;
+    } else {
+      int capped = value;
+      if (type == 'PERCENT' && value > 100) {
+        capped = 100;
+      }
+      orderDiscount = DiscountInfo(type: type, value: capped);
+    }
+    notifyListeners();
+  }
+
+  /// Backward compat: setDiscount lama (per-item) sekarang tidak dipakai.
+  /// Disimpan tapi tidak memengaruhi harga — tetap order-level.
+  Map<String, DiscountInfo> discounts = {};
+
+  @Deprecated('Tidak dipakai — diskon sekarang di level order')
   void setDiscount({
     required String productId,
     required String type,
     required int value,
   }) {
-    if (type != 'PERCENT' && type != 'NOMINAL') {
-      throw ArgumentError('discount type harus PERCENT atau NOMINAL, dapat: $type');
-    }
-    if (value <= 0) {
-      discounts.remove(productId);
-    } else {
-      int capped = value;
-      if (type == 'PERCENT' && value > 100) {
-        capped = 100;
-      } else if (type == 'NOMINAL') {
-        final harga = _priceCache[productId] ?? value;
-        if (value > harga) capped = harga;
-      }
-      discounts[productId] = DiscountInfo(type: type, value: capped);
-    }
-    notifyListeners();
+    // no-op: diskon sekarang di level order
   }
 
   void setNotes(String value) {
@@ -86,7 +96,7 @@ class DraftOrderProvider extends ChangeNotifier {
     required String customerName,
     required String? customerAddress,
     required Map<String, int> existingItems,
-    required Map<String, DiscountInfo> existingDiscounts,
+    required DiscountInfo? existingOrderDiscount,
     required String existingNotes,
   }) {
     editingOrderId = orderId;
@@ -94,7 +104,7 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerName = customerName;
     this.customerAddress = customerAddress;
     items = Map<String, int>.from(existingItems);
-    discounts = Map<String, DiscountInfo>.from(existingDiscounts);
+    orderDiscount = existingOrderDiscount;
     notes = existingNotes;
     notifyListeners();
   }
@@ -104,6 +114,7 @@ class DraftOrderProvider extends ChangeNotifier {
     customerName = null;
     customerAddress = null;
     items = {};
+    orderDiscount = null;
     discounts = {};
     notes = '';
     editingOrderId = null;
@@ -115,34 +126,31 @@ class DraftOrderProvider extends ChangeNotifier {
   int get totalItems => items.values.fold(0, (a, b) => a + b);
   bool get isEditing => editingOrderId != null;
 
-  int get totalPrice {
+  /// Total harga TANPA diskon — harga dasar semua item.
+  int get totalRaw {
     int total = 0;
     items.forEach((productId, qty) {
       final price = _priceCache[productId] ?? 0;
-      final info = discounts[productId];
-      final hargaNet = info == null
-          ? price
-          : info.type == 'NOMINAL'
-              ? (price - info.value).clamp(0, price)
-              : (price * (100 - info.value) / 100).round();
-      total += hargaNet * qty;
+      total += price * qty;
     });
     return total;
   }
 
+  /// Total harga setelah diskon order-level (dihitung di backend).
+  /// Client-side estimasi untuk tampilan.
+  int get totalPrice {
+    final raw = totalRaw;
+    if (orderDiscount == null) return raw;
+    if (orderDiscount!.type == 'NOMINAL') {
+      return (raw - orderDiscount!.value).clamp(0, raw);
+    }
+    return (raw * (100 - orderDiscount!.value) / 100).round();
+  }
+
+  /// Estimasi hemat — selisih totalRaw dan totalPrice.
   int get totalDiscount {
-    int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      final info = discounts[productId];
-      if (info == null) return;
-      if (info.type == 'NOMINAL') {
-        total += info.value * qty;
-      } else {
-        total += (price * info.value / 100).round() * qty;
-      }
-    });
-    return total;
+    if (orderDiscount == null) return 0;
+    return totalRaw - totalPrice;
   }
 }
 
@@ -154,8 +162,8 @@ class DiscountInfo {
 
   Map<String, dynamic> toJson() => {
         'discount_type': type,
-        if (type == 'PERCENT') 'discount_percent': value,
-        if (type == 'NOMINAL') 'discount_nominal': value,
+        'discount_percent': type == 'PERCENT' ? value : 0,
+        'discount_nominal': type == 'NOMINAL' ? value : 0,
       };
 
   factory DiscountInfo.percent(int value) =>
@@ -163,7 +171,6 @@ class DiscountInfo {
   factory DiscountInfo.nominal(int value) =>
       DiscountInfo(type: 'NOMINAL', value: value);
 
-  /// Backward compat untuk data lama yang hanya simpan percent sebagai int.
   factory DiscountInfo.fromPercentInt(int value) =>
       DiscountInfo(type: 'PERCENT', value: value);
 }
