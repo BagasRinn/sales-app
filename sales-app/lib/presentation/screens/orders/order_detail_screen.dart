@@ -349,12 +349,16 @@ class _OrderDetailContent extends StatelessWidget {
                   items[item.productId] = item.qty;
                 }
               }
-              DiscountInfo? existingOrderDiscount;
-              if (order.orderDiscountNominal > 0) {
-                existingOrderDiscount = DiscountInfo(
-                  type: order.orderDiscountType,
-                  value: order.orderDiscountNominal,
-                );
+              final existingDiscounts = <String, DiscountInfo>{};
+              if (order.items != null) {
+                for (final item in order.items!) {
+                  if (item.hasDiscount) {
+                    existingDiscounts[item.productId] = DiscountInfo(
+                      type: item.discountType,
+                      value: item.discountType == 'NOMINAL' ? item.discountNominal : item.discountPercent,
+                    );
+                  }
+                }
               }
               context.read<DraftOrderProvider>().loadFromExisting(
                 orderId: order.id,
@@ -362,7 +366,7 @@ class _OrderDetailContent extends StatelessWidget {
                 customerName: order.customerName ?? order.storeName ?? '',
                 customerAddress: order.storeAddress,
                 existingItems: items,
-                existingOrderDiscount: existingOrderDiscount,
+                existingDiscounts: existingDiscounts,
                 existingNotes: order.notes ?? '',
               );
               Navigator.of(context).push(

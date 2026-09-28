@@ -117,7 +117,7 @@ class OrderProvider extends ChangeNotifier {
   Future<Order?> createOrder({
     required String customerId,
     required Map<String, int> items,
-    required DiscountInfo? orderDiscount,
+    required Map<String, DiscountInfo> discounts,
     String? notes,
   }) async {
     _errorMessage = null;
@@ -126,17 +126,21 @@ class OrderProvider extends ChangeNotifier {
     try {
       final itemsList = items.entries
           .where((e) => e.value > 0)
-          .map((e) => {
-                'product_id': e.key,
-                'qty': e.value,
+          .map((e) {
+                final disc = discounts[e.key];
+                return {
+                  'product_id': e.key,
+                  'qty': e.value,
+                  'discount_type': disc?.type ?? 'PERCENT',
+                  'discount_percent': disc?.type == 'PERCENT' ? (disc?.value ?? 0) : 0,
+                  'discount_nominal': disc?.type == 'NOMINAL' ? (disc?.value ?? 0) : 0,
+                };
               })
           .toList();
       final order = await _orderRepo.createOrder(
         customerId: customerId,
         items: itemsList,
         notes: notes,
-        orderDiscountType: orderDiscount?.type ?? 'PERCENT',
-        orderDiscountNominal: orderDiscount?.value ?? 0,
       );
       notifyListeners();
       return order;
@@ -155,7 +159,7 @@ class OrderProvider extends ChangeNotifier {
     required String orderId,
     required String customerId,
     required Map<String, int> items,
-    required DiscountInfo? orderDiscount,
+    required Map<String, DiscountInfo> discounts,
     String? notes,
   }) async {
     _errorMessage = null;
@@ -164,9 +168,15 @@ class OrderProvider extends ChangeNotifier {
     try {
       final itemsList = items.entries
           .where((e) => e.value > 0)
-          .map((e) => {
-                'product_id': e.key,
-                'qty': e.value,
+          .map((e) {
+                final disc = discounts[e.key];
+                return {
+                  'product_id': e.key,
+                  'qty': e.value,
+                  'discount_type': disc?.type ?? 'PERCENT',
+                  'discount_percent': disc?.type == 'PERCENT' ? (disc?.value ?? 0) : 0,
+                  'discount_nominal': disc?.type == 'NOMINAL' ? (disc?.value ?? 0) : 0,
+                };
               })
           .toList();
       final order = await _orderRepo.updateOrder(
@@ -174,8 +184,6 @@ class OrderProvider extends ChangeNotifier {
         customerId: customerId,
         items: itemsList,
         notes: notes,
-        orderDiscountType: orderDiscount?.type ?? 'PERCENT',
-        orderDiscountNominal: orderDiscount?.value ?? 0,
       );
       notifyListeners();
       return order;

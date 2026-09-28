@@ -661,31 +661,42 @@ class _OrderCardState extends State<_OrderCard> {
     });
   }
 
-  Future<void> _openOrderDiscountDialog() async {
+  Future<void> _openItemDiscountDialog(OrderItem item) async {
+    final currentValue = item.discountType == 'NOMINAL'
+        ? item.discountNominal
+        : item.discountPercent;
+
     final result = await showDialog<_DiscountEditResult>(
       context: context,
       builder: (_) => _DiscountEditDialog(
-        orderId: _order.id,
-        currentType: _order.orderDiscountType,
-        currentNominal: _order.orderDiscountNominal,
-        totalRaw: _order.totalRaw,
+        namaBarang: item.namaBarang.isNotEmpty
+            ? item.namaBarang
+            : 'Produk ${item.productId}',
+        currentType: item.discountType,
+        currentValue: currentValue,
+        maxNominal: item.hargaSatuan,
       ),
     );
     if (result == null || !mounted) return;
 
-    setState(() {});
     try {
       final repo = context.read<AdminProvider>().adminRepository;
       final updated = await repo.updateOrderDiscounts(
         _order.id,
-        discountType: result.type,
-        discountNominal: result.value,
+        items: [
+          {
+            'item_id': item.id,
+            'discount_type': result.type,
+            'discount_percent': result.type == 'PERCENT' ? result.value : 0,
+            'discount_nominal': result.type == 'NOMINAL' ? result.value : 0,
+          }
+        ],
       );
       _onDiscountSaved(updated);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Diskon order diperbarui'),
+            content: Text('Diskon item diperbarui'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -848,18 +859,6 @@ class _OrderCardState extends State<_OrderCard> {
                     const Text('Detail Item:',
                         style: AppTextStyles.labelLarge),
                     const Spacer(),
-                    if (_order.status == 'PENDING')
-                      OutlinedButton.icon(
-                        onPressed: _openOrderDiscountDialog,
-                        icon: const Icon(Icons.discount_outlined, size: 14),
-                        label: const Text('Edit Diskon Order'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          textStyle: const TextStyle(fontSize: 12),
-                          side: BorderSide(color: AppColors.primaryLight),
-                          foregroundColor: AppColors.primaryLight,
-                        ),
-                      ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -868,6 +867,8 @@ class _OrderCardState extends State<_OrderCard> {
                       child: _OrderItemRow(
                         item: item,
                         currencyFormat: currencyFormat,
+                        canEdit: _order.status == 'PENDING',
+                        onEdit: () => _openItemDiscountDialog(item),
                       ),
                     )),
                 const Divider(),
@@ -886,7 +887,7 @@ class _OrderCardState extends State<_OrderCard> {
     final raw = _order.totalRaw;
     final amount = _order.totalAmount;
     final discount = _order.totalDiscount;
-    final hasDiscount = _order.orderDiscountNominal > 0;
+    final hasDiscount = discount > 0;
 
     return Column(
       children: [
@@ -902,9 +903,9 @@ class _OrderCardState extends State<_OrderCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Diskon ${_order.orderDiscountType == 'NOMINAL' ? '' : '${_order.orderDiscountNominal}%'}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+              const Text(
+                'Diskon',
+                style: AppTextStyles.bodySmall,
               ),
               Text(
                 '- ${_fmt(discount)}',
@@ -958,14 +959,18 @@ class _OrderCardState extends State<_OrderCard> {
   }
 }
 
-/// Baris item di pesanan — hanya display (bukan edit).
+/// Baris item di pesanan — display plus tombol edit diskon per item.
 class _OrderItemRow extends StatelessWidget {
   final OrderItem item;
   final NumberFormat currencyFormat;
+  final bool canEdit;
+  final VoidCallback? onEdit;
 
   const _OrderItemRow({
     required this.item,
     required this.currencyFormat,
+    this.canEdit = false,
+    this.onEdit,
   });
 
   @override
@@ -991,6 +996,19 @@ class _OrderItemRow extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
+                if (item.hasDiscount)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      item.discountType == 'NOMINAL'
+                          ? 'Diskon Rp ${currencyFormat.format(item.discountNominal)}/pcs'
+                          : 'Diskon ${item.discountPercent}%',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -998,7 +1016,20 @@ class _OrderItemRow extends StatelessWidget {
             currencyFormat.format(item.hargaSatuan),
             style: AppTextStyles.bodySmall,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
+          if (canEdit && onEdit != null)
+            IconButton(
+              onPressed: onEdit,
+              icon: Icon(
+                item.hasDiscount ? Icons.edit_outlined : Icons.discount_outlined,
+                size: 14,
+                color: item.hasDiscount ? AppColors.success : AppColors.primaryLight,
+              ),
+              tooltip: item.hasDiscount ? 'Edit diskon' : 'Tambah diskon',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            ),
+          const SizedBox(width: 8),
           if (item.hasDiscount)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1041,16 +1072,16 @@ class _DiscountEditResult {
 }
 
 class _DiscountEditDialog extends StatefulWidget {
-  final String orderId;
+  final String namaBarang;
   final String currentType;
-  final int currentNominal;
-  final int totalRaw;
+  final int currentValue;
+  final int maxNominal; // harga satuan — untuk cap diskon NOMINAL
 
   const _DiscountEditDialog({
-    required this.orderId,
+    required this.namaBarang,
     required this.currentType,
-    required this.currentNominal,
-    required this.totalRaw,
+    required this.currentValue,
+    required this.maxNominal,
   });
 
   @override
@@ -1066,7 +1097,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
     super.initState();
     _type = widget.currentType;
     _valueController = TextEditingController(
-      text: widget.currentNominal > 0 ? widget.currentNominal.toString() : '',
+      text: widget.currentValue > 0 ? widget.currentValue.toString() : '',
     );
   }
 
@@ -1100,30 +1131,41 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
       );
       return;
     }
+    if (_type == 'NOMINAL' && value > widget.maxNominal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Diskon nominal tidak boleh melebihi harga satuan (${widget.maxNominal})'),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).pop(_DiscountEditResult(_type, value));
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasCurrentDiscount = widget.currentNominal > 0;
+    final hasCurrentDiscount = widget.currentValue > 0;
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'Edit Diskon Order',
+      title: Text(
+        'Diskon: ${widget.namaBarang}',
         style: AppTextStyles.headlineSmall,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Total order: Rp ${widget.totalRaw}',
+            'Harga satuan: Rp ${widget.maxNominal}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
           if (hasCurrentDiscount)
             Text(
-              'Diskon saat ini: ${widget.currentType == 'NOMINAL' ? 'Rp ${widget.currentNominal}' : '${widget.currentNominal}%'}',
+              'Diskon saat ini: ${widget.currentType == 'NOMINAL' ? 'Rp ${widget.currentValue}' : '${widget.currentValue}%'}',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
             ),
           const SizedBox(height: 16),
@@ -1162,8 +1204,8 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           const SizedBox(height: 8),
           Text(
             _type == 'PERCENT'
-                ? 'Contoh: 10% dari Rp ${widget.totalRaw} = Rp ${(widget.totalRaw * 0.1).round()}'
-                : 'Maks: Rp ${widget.totalRaw}',
+                ? 'Diskon diterapkan ke (harga × qty). Contoh: 10% dari Rp ${widget.maxNominal}'
+                : 'Maks: Rp ${widget.maxNominal} (harga satuan)',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           ),
         ],

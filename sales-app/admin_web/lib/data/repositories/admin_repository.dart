@@ -111,16 +111,13 @@ class AdminRepository {
     await _api.post('/orders/$orderId/reject');
   }
 
-  /// Update diskon di level order — berlaku untuk total seluruh item.
-  /// Backend mendistribusikan diskon secara proporsional ke tiap item.
+  /// Update diskon per item — admin only, hanya untuk pesanan PENDING.
   Future<Order> updateOrderDiscounts(
     String orderId, {
-    required String discountType, // 'PERCENT' atau 'NOMINAL'
-    required int discountNominal,
+    required List<Map<String, dynamic>> items,
   }) async {
     final data = await _api.put('/orders/$orderId/discounts', body: {
-      'discount_type': discountType,
-      'discount_nominal': discountNominal,
+      'items': items,
     });
     return Order.fromJson(data);
   }

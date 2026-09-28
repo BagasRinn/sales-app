@@ -8,9 +8,9 @@ class DraftOrderProvider extends ChangeNotifier {
   String? customerAddress;
   Map<String, int> items = {}; // productId -> qty
 
-  /// Diskon di level order — berlaku untuk total seluruh item.
-  /// satu diskon per order, bukan per produk.
-  DiscountInfo? orderDiscount;
+  /// Diskon per item: productId -> DiscountInfo.
+  /// Setiap item bisa punya diskon berbeda (persen atau nominal per pcs).
+  Map<String, DiscountInfo> discounts = {};
 
   String notes = '';
   String? editingOrderId;
@@ -49,41 +49,72 @@ class DraftOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Set diskon untuk keseluruhan order.
-  /// [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR).
-  /// value <= 0 akan menghapus diskon.
-  void setOrderDiscount({
-    required String type,
-    required int value,
-  }) {
-    if (type != 'PERCENT' && type != 'NOMINAL') {
-      throw ArgumentError(
-          'discount type harus PERCENT atau NOMINAL, dapat: \$type');
-    }
-    if (value <= 0) {
-      orderDiscount = null;
-    } else {
-      int capped = value;
-      if (type == 'PERCENT' && value > 100) {
-        capped = 100;
-      }
-      orderDiscount = DiscountInfo(type: type, value: capped);
-    }
-    notifyListeners();
-  }
-
-  /// Backward compat: setDiscount lama (per-item) sekarang tidak dipakai.
-  /// Disimpan tapi tidak memengaruhi harga — tetap order-level.
-  Map<String, DiscountInfo> discounts = {};
-
-  @Deprecated('Tidak dipakai — diskon sekarang di level order')
+  /// Set diskon untuk satu produk.
+  /// [type] = 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR per pcs).
+  /// value <= 0 akan menghapus diskon untuk produk ini.
   void setDiscount({
     required String productId,
     required String type,
     required int value,
   }) {
-    // no-op: diskon sekarang di level order
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError(
+          'discount type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    if (value <= 0) {
+      discounts.remove(productId);
+    } else {
+      int capped = value;
+      if (type == 'PERCENT' && value > 100) {
+        capped = 100;
+      }
+      // For NOMINAL, cap at harga satuan
+      if (type == 'NOMINAL') {
+        final harga = _priceCache[productId] ?? 0;
+        capped = value > harga ? harga : value;
+      }
+      discounts[productId] = DiscountInfo(type: type, value: capped);
+    }
+    notifyListeners();
   }
+
+  /// Total harga TANPA diskon — harga dasar semua item.
+  int get totalRaw {
+    int total = 0;
+    items.forEach((productId, qty) {
+      final price = _priceCache[productId] ?? 0;
+      total += price * qty;
+    });
+    return total;
+  }
+
+  /// Total harga setelah diskon per-item.
+  /// Formula: setiap item = (harga * qty) - diskon_nominal_per_item
+  /// Diskon nominal: dikurangi dari harga satuan, baru dikali qty
+  /// Diskon persen: % dari subtotal item, baru dikali qty
+  int get totalPrice {
+    int total = 0;
+    items.forEach((productId, qty) {
+      final price = _priceCache[productId] ?? 0;
+      final rawSubtotal = price * qty;
+      final disc = discounts[productId];
+      if (disc == null) {
+        total += rawSubtotal;
+      } else if (disc.type == 'NOMINAL') {
+        // Diskon nominal per pcs: (harga - nominal) * qty
+        final hargaStlh = (price - disc.value).clamp(0, price).toInt();
+        total += hargaStlh * qty;
+      } else {
+        // Diskon persen: subtotal - %
+        final nominalDiskon = (rawSubtotal * disc.value / 100).round();
+        total += rawSubtotal - nominalDiskon;
+      }
+    });
+    return total;
+  }
+
+  /// Estimasi hemat — selisih totalRaw dan totalPrice.
+  int get totalDiscount => totalRaw - totalPrice;
 
   void setNotes(String value) {
     notes = value;
@@ -96,7 +127,7 @@ class DraftOrderProvider extends ChangeNotifier {
     required String customerName,
     required String? customerAddress,
     required Map<String, int> existingItems,
-    required DiscountInfo? existingOrderDiscount,
+    required Map<String, DiscountInfo> existingDiscounts,
     required String existingNotes,
   }) {
     editingOrderId = orderId;
@@ -104,7 +135,7 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerName = customerName;
     this.customerAddress = customerAddress;
     items = Map<String, int>.from(existingItems);
-    orderDiscount = existingOrderDiscount;
+    discounts = Map<String, DiscountInfo>.from(existingDiscounts);
     notes = existingNotes;
     notifyListeners();
   }
@@ -114,7 +145,6 @@ class DraftOrderProvider extends ChangeNotifier {
     customerName = null;
     customerAddress = null;
     items = {};
-    orderDiscount = null;
     discounts = {};
     notes = '';
     editingOrderId = null;
@@ -125,33 +155,6 @@ class DraftOrderProvider extends ChangeNotifier {
   bool get hasItems => items.values.any((q) => q > 0);
   int get totalItems => items.values.fold(0, (a, b) => a + b);
   bool get isEditing => editingOrderId != null;
-
-  /// Total harga TANPA diskon — harga dasar semua item.
-  int get totalRaw {
-    int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      total += price * qty;
-    });
-    return total;
-  }
-
-  /// Total harga setelah diskon order-level (dihitung di backend).
-  /// Client-side estimasi untuk tampilan.
-  int get totalPrice {
-    final raw = totalRaw;
-    if (orderDiscount == null) return raw;
-    if (orderDiscount!.type == 'NOMINAL') {
-      return (raw - orderDiscount!.value).clamp(0, raw);
-    }
-    return (raw * (100 - orderDiscount!.value) / 100).round();
-  }
-
-  /// Estimasi hemat — selisih totalRaw dan totalPrice.
-  int get totalDiscount {
-    if (orderDiscount == null) return 0;
-    return totalRaw - totalPrice;
-  }
 }
 
 class DiscountInfo {

@@ -10,9 +10,6 @@ class Order {
   final String? storeName;
   final String? storeContact;
   final String? storeAddress;
-  /// Diskon di level order — berlaku untuk total seluruh item.
-  final String orderDiscountType; // 'PERCENT' atau 'NOMINAL'
-  final int orderDiscountNominal; // jika NOMINAL = nominal IDR; jika PERCENT = %
 
   Order({
     required this.id,
@@ -26,8 +23,6 @@ class Order {
     this.storeName,
     this.storeContact,
     this.storeAddress,
-    this.orderDiscountType = 'PERCENT',
-    this.orderDiscountNominal = 0,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -43,8 +38,6 @@ class Order {
       storeName: json['store_name'],
       storeContact: json['store_contact'],
       storeAddress: json['store_address'],
-      orderDiscountType: (json['order_discount_type'] as String?) ?? 'PERCENT',
-      orderDiscountNominal: json['order_discount_nominal'] as int? ?? 0,
     );
   }
 

@@ -111,7 +111,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       final result = await context.read<OrderProvider>().createOrder(
             customerId: draft.customerId!,
             items: draft.items,
-            orderDiscount: draft.orderDiscount,
+            discounts: draft.discounts,
             notes: draft.notes,
           );
       _hideLoading();
@@ -152,14 +152,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           orderId: draft.editingOrderId!,
           customerId: draft.customerId!,
           items: draft.items,
-          orderDiscount: draft.orderDiscount,
+          discounts: draft.discounts,
           notes: draft.notes,
         );
       } else {
         result = await orderProvider.createOrder(
           customerId: draft.customerId!,
           items: draft.items,
-          orderDiscount: draft.orderDiscount,
+          discounts: draft.discounts,
           notes: draft.notes,
         );
       }

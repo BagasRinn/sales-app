@@ -64,10 +64,6 @@ class Order(Base):
     store_name = Column(String(200), nullable=True)
     store_contact = Column(String(50), nullable=True)
     store_address = Column(String(500), nullable=True)
-    # Diskon di level order — berlaku untuk total seluruh item.
-    # Per-item discount tetap ada (backward compat) tapi tidak dipakai dari mobile.
-    order_discount_type = Column(String(10), default='PERCENT')   # 'PERCENT' atau 'NOMINAL'
-    order_discount_nominal = Column(Integer, default=0)           # nominal IDR jika NOMINAL
 
     __table_args__ = (
         Index("ix_orders_status", "status"),

@@ -233,63 +233,16 @@ class _StepReviewState extends State<StepReview> {
   }
 }
 
-/// Widget kartu total + input diskon level order.
-/// Diskon ditampilkan/setelah total harga, bukan per item.
-class _OrderTotalCard extends StatefulWidget {
+/// Widget kartu total — hanya menampilkan ringkasan, tanpa input diskon.
+/// Diskon diatur per-item di _ProductRow.
+class _OrderTotalCard extends StatelessWidget {
   final DraftOrderProvider draft;
   final NumberFormat currency;
 
   const _OrderTotalCard({required this.draft, required this.currency});
 
   @override
-  State<_OrderTotalCard> createState() => _OrderTotalCardState();
-}
-
-class _OrderTotalCardState extends State<_OrderTotalCard> {
-  late TextEditingController _discountController;
-  String _discountType = 'PERCENT';
-  bool _showDiscountInput = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final od = widget.draft.orderDiscount;
-    if (od != null) {
-      _discountType = od.type;
-      _discountController =
-          TextEditingController(text: od.value.toString());
-    } else {
-      _discountController = TextEditingController();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _OrderTotalCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final od = widget.draft.orderDiscount;
-    if (od == null && _discountController.text.isNotEmpty) {
-      // diskon dihapus dari luar
-      _discountController.clear();
-    } else if (od != null) {
-      if (_discountController.text != od.value.toString()) {
-        _discountController.text = od.value.toString();
-      }
-      if (_discountType != od.type) {
-        setState(() => _discountType = od.type);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _discountController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final draft = widget.draft;
-    final hasDiscount = draft.orderDiscount != null;
     final raw = draft.totalRaw;
 
     return Container(
@@ -305,7 +258,7 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
             padding: const EdgeInsets.all(14),
             child: Column(
               children: [
-                // Baris: Total item
+                // Baris: Total item (sebelum diskon)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -314,7 +267,7 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
                       style: AppTextStyles.bodyLarge,
                     ),
                     Text(
-                      widget.currency.format(raw),
+                      currency.format(raw),
                       style: AppTextStyles.headlineSmall.copyWith(
                         color: AppColors.primaryLight,
                       ),
@@ -322,51 +275,7 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
                   ],
                 ),
 
-                // Baris: Diskon
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      'Diskon',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (hasDiscount) ...[
-                      Text(
-                        _discountType == 'NOMINAL'
-                            ? '- ${widget.currency.format(draft.orderDiscount!.value)}'
-                            : '- ${draft.orderDiscount!.value}%',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ] else
-                      Text(
-                        '-',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: Icon(
-                        hasDiscount
-                            ? Icons.edit_outlined
-                            : Icons.discount_outlined,
-                        size: 18,
-                        color: AppColors.primaryLight,
-                      ),
-                      tooltip: 'Tambah/diskon',
-                      onPressed: () =>
-                          setState(() => _showDiscountInput = !_showDiscountInput),
-                    ),
-                  ],
-                ),
-
-                if (hasDiscount) ...[
+                if (draft.totalDiscount > 0) ...[
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -378,7 +287,7 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
                         ),
                       ),
                       Text(
-                        widget.currency.format(draft.totalDiscount),
+                        currency.format(draft.totalDiscount),
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.success,
                           fontWeight: FontWeight.w600,
@@ -401,7 +310,7 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
                       ),
                     ),
                     Text(
-                      widget.currency.format(draft.totalPrice),
+                      currency.format(draft.totalPrice),
                       style: AppTextStyles.headlineSmall.copyWith(
                         color: AppColors.primaryLight,
                         fontWeight: FontWeight.w700,
@@ -412,136 +321,13 @@ class _OrderTotalCardState extends State<_OrderTotalCard> {
               ],
             ),
           ),
-
-          // Input diskon (expandable)
-          if (_showDiscountInput) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tipe Diskon',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ChoiceChip(
-                        label: const Text('% Persen'),
-                        selected: _discountType == 'PERCENT',
-                        selectedColor: AppColors.primaryLight,
-                        side: BorderSide(
-                          color: _discountType == 'PERCENT'
-                              ? AppColors.primaryLight
-                              : AppColors.border,
-                          width: 1.5,
-                        ),
-                        labelStyle: TextStyle(
-                          color: _discountType == 'PERCENT'
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontWeight: _discountType == 'PERCENT'
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
-                        onSelected: (sel) {
-                          if (!sel) return;
-                          setState(() {
-                            _discountType = 'PERCENT';
-                            _discountController.clear();
-                            draft.setOrderDiscount(type: 'PERCENT', value: 0);
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Rp Nominal'),
-                        selected: _discountType == 'NOMINAL',
-                        selectedColor: AppColors.primaryLight,
-                        side: BorderSide(
-                          color: _discountType == 'NOMINAL'
-                              ? AppColors.primaryLight
-                              : AppColors.border,
-                          width: 1.5,
-                        ),
-                        labelStyle: TextStyle(
-                          color: _discountType == 'NOMINAL'
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontWeight: _discountType == 'NOMINAL'
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
-                        onSelected: (sel) {
-                          if (!sel) return;
-                          setState(() {
-                            _discountType = 'NOMINAL';
-                            _discountController.clear();
-                            draft.setOrderDiscount(type: 'NOMINAL', value: 0);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 140,
-                        child: TextField(
-                          controller: _discountController,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 10,
-                            ),
-                            prefixText: _discountType == 'NOMINAL' ? 'Rp ' : null,
-                            suffixText: _discountType == 'PERCENT' ? '%' : null,
-                            hintText: '0',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          style: AppTextStyles.bodyMedium,
-                          onChanged: (v) {
-                            final parsed = int.tryParse(v) ?? 0;
-                            draft.setOrderDiscount(
-                              type: _discountType,
-                              value: parsed,
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      if (draft.orderDiscount != null)
-                        Text(
-                          'Hemat ${widget.currency.format(draft.totalDiscount)}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-class _ProductRow extends StatelessWidget {
+class _ProductRow extends StatefulWidget {
   final Product? product;
   final int qty;
   final String productId;
@@ -552,6 +338,27 @@ class _ProductRow extends StatelessWidget {
   });
 
   @override
+  State<_ProductRow> createState() => _ProductRowState();
+}
+
+class _ProductRowState extends State<_ProductRow> {
+  bool _showDiscount = false;
+  late TextEditingController _discountController;
+  String _discountType = 'PERCENT';
+
+  @override
+  void initState() {
+    super.initState();
+    _discountController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _discountController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(
       locale: 'id_ID',
@@ -559,44 +366,193 @@ class _ProductRow extends StatelessWidget {
       decimalDigits: 0,
     );
     final draft = context.watch<DraftOrderProvider>();
-    final name = product?.namaBarang ?? productId;
-    final price = product?.harga ?? 0;
-    final subtotal = price * qty;
+    final name = widget.product?.namaBarang ?? widget.productId;
+    final price = widget.product?.harga ?? 0;
+    final rawSubtotal = price * widget.qty;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: AppTextStyles.bodyMedium),
-                const SizedBox(height: 2),
-                Text(
-                  '× $qty · ${currency.format(price)}',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+    final disc = draft.discounts[widget.productId];
+    int subtotal = rawSubtotal;
+    if (disc != null) {
+      if (disc.type == 'NOMINAL') {
+        subtotal = (price - disc.value).clamp(0, price) * widget.qty;
+      } else {
+        subtotal = rawSubtotal - (rawSubtotal * disc.value / 100).round();
+      }
+    }
+    final nominalDiskon = rawSubtotal - subtotal;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: AppTextStyles.bodyMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          '× ${widget.qty} · ${currency.format(price)}',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (nominalDiskon > 0) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          currency.format(rawSubtotal),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                        Text(
+                          currency.format(subtotal),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else
+                    Text(
+                      currency.format(subtotal),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: Icon(
+                      disc != null ? Icons.edit_outlined : Icons.discount_outlined,
+                      size: 18,
+                      color: disc != null ? AppColors.success : AppColors.textSecondary,
+                    ),
+                    tooltip: disc != null ? 'Edit diskon' : 'Tambah diskon',
+                    onPressed: () => setState(() => _showDiscount = !_showDiscount),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        size: 18, color: AppColors.error),
+                    tooltip: 'Hapus',
+                    onPressed: () => draft.setQty(widget.productId, 0),
+                  ),
+                ],
+              ),
+              if (disc != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    disc.type == 'NOMINAL'
+                        ? 'Diskon Rp ${currency.format(disc.value)}'
+                        : 'Diskon ${disc.value}%',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
+            ],
+          ),
+        ),
+        if (_showDiscount)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('%'),
+                  selected: _discountType == 'PERCENT',
+                  selectedColor: AppColors.primaryLight,
+                  labelStyle: TextStyle(
+                    color: _discountType == 'PERCENT' ? Colors.white : AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                  onSelected: (sel) {
+                    if (!sel) return;
+                    setState(() {
+                      _discountType = 'PERCENT';
+                      _discountController.clear();
+                    });
+                  },
+                ),
+                const SizedBox(width: 6),
+                ChoiceChip(
+                  label: const Text('Rp'),
+                  selected: _discountType == 'NOMINAL',
+                  selectedColor: AppColors.primaryLight,
+                  labelStyle: TextStyle(
+                    color: _discountType == 'NOMINAL' ? Colors.white : AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                  onSelected: (sel) {
+                    if (!sel) return;
+                    setState(() {
+                      _discountType = 'NOMINAL';
+                      _discountController.clear();
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _discountController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      prefixText: _discountType == 'NOMINAL' ? 'Rp ' : null,
+                      suffixText: _discountType == 'PERCENT' ? '%' : null,
+                      hintText: '0',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onChanged: (v) {
+                      final parsed = int.tryParse(v) ?? 0;
+                      draft.setDiscount(
+                        productId: widget.productId,
+                        type: _discountType,
+                        value: parsed,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (disc != null)
+                  TextButton(
+                    onPressed: () {
+                      draft.setDiscount(
+                        productId: widget.productId,
+                        type: _discountType,
+                        value: 0,
+                      );
+                      _discountController.clear();
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Hapus', style: TextStyle(fontSize: 12)),
+                  ),
               ],
             ),
           ),
-          Text(
-            currency.format(subtotal),
-            style: AppTextStyles.bodyMedium.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            icon: const Icon(Icons.delete_outline,
-                size: 18, color: AppColors.error),
-            tooltip: 'Hapus',
-            onPressed: () => draft.setQty(productId, 0),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

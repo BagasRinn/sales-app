@@ -33,70 +33,43 @@ def _get_customer(customer_id, db):
     return customer
 
 
-def _apply_order_discount(item_raw_subtotal: int, total_raw: int,
-                           discount_type: str, discount_nominal: int):
-    """Hitung harga_setelah_diskon per item dari diskon level order.
-
-    Diskon level order didistribusikan PROPORSIONAL: setiap item mendapat
-    potongan sebesar (item_subtotal / total_raw) * total_diskon_nominal.
-
-    Returns: (harga_setelah_diskon, subtotal, nominal_diskon)
-    """
-    if total_raw <= 0:
-        return 0, item_raw_subtotal, 0
-
-    item_share = item_raw_subtotal / total_raw  # proporsi item thd total
-
-    if discount_type == 'NOMINAL':
-        # Diskon nominal (dalam IDR) — distribusikan proporsional
-        nominal_diskon = int(round(item_share * discount_nominal))
-        harga_setelah = max(0, item_raw_subtotal - nominal_diskon)
-        return harga_setelah, harga_setelah, nominal_diskon
-    else:
-        # Diskon persen — sama % untuk semua item
-        pct = max(0, min(100, discount_nominal))  # discount_nominal di-serve sebagai percent
-        nominal_diskon = int(round(item_raw_subtotal * pct / 100))
-        harga_setelah = item_raw_subtotal - nominal_diskon
-        return harga_setelah, harga_setelah, nominal_diskon
-
-
 def _build_order_response(order: Order) -> dict:
     items_data = []
-    total_raw = 0  # subtotal SEBELUM diskon order-level
-
-    # Tahap 1: hitung harga RAW (tanpa diskon order-level) per item
-    for item in order.items:
-        harga_satuan = item.product.harga if item.product else 0
-        item_raw_subtotal = (harga_satuan or 0) * (item.qty or 0)
-        items_data.append({
-            "id": item.id,
-            "product_id": item.product_id,
-            "qty": item.qty,
-            "harga_satuan": harga_satuan,
-            "nama_barang": item.product.nama_barang if item.product else "",
-            "item_raw_subtotal": item_raw_subtotal,
-        })
-        total_raw += item_raw_subtotal
-
-    # Tahap 2: terapkan diskon level order secara proporsional
-    discount_type = (order.order_discount_type or 'PERCENT').upper()
-    discount_nominal = order.order_discount_nominal or 0
     total_amount = 0
     total_discount = 0
 
-    for i, item_dict in enumerate(items_data):
-        harga_setelah, subtotal, nominal_diskon = _apply_order_discount(
-            item_dict["item_raw_subtotal"], total_raw,
-            discount_type, discount_nominal,
-        )
-        items_data[i].update({
+    for item in order.items:
+        harga_satuan = item.product.harga if item.product else 0
+        qty = item.qty or 0
+        raw_subtotal = harga_satuan * qty
+
+        discount_type = (item.discount_type or 'PERCENT').upper()
+        discount_percent = item.discount_percent or 0
+        discount_nominal = item.discount_nominal or 0
+
+        if discount_type == 'NOMINAL':
+            # Diskon nominal (IDR) per pcs — dikurangi dari harga satuan, baru dikali qty
+            harga_setelah = max(0, harga_satuan - discount_nominal)
+            subtotal = harga_setelah * qty
+            nominal_diskon = discount_nominal * qty
+        else:
+            # Diskon persen — % dari subtotal, baru dikali qty
+            nominal_diskon = int(round(raw_subtotal * discount_percent / 100))
+            subtotal = raw_subtotal - nominal_diskon
+            harga_setelah = subtotal / qty if qty > 0 else 0
+
+        items_data.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "qty": qty,
+            "harga_satuan": harga_satuan,
+            "nama_barang": item.product.nama_barang if item.product else "",
             "discount_type": discount_type,
-            "discount_percent": discount_nominal if discount_type == 'PERCENT' else 0,
-            "discount_nominal": nominal_diskon,
-            "harga_setelah_diskon": harga_setelah,
+            "discount_percent": discount_percent if discount_type == 'PERCENT' else 0,
+            "discount_nominal": discount_nominal if discount_type == 'NOMINAL' else 0,
+            "harga_setelah_diskon": int(harga_setelah),
             "subtotal": subtotal,
         })
-        del items_data[i]["item_raw_subtotal"]
         total_amount += subtotal
         total_discount += nominal_diskon
 
@@ -115,10 +88,8 @@ def _build_order_response(order: Order) -> dict:
         "store_name": order.store_name,
         "store_contact": order.store_contact,
         "store_address": order.store_address,
-        "total_amount": total_amount,
-        "total_discount": total_discount,
-        "order_discount_type": discount_type,
-        "order_discount_nominal": discount_nominal,
+        "total_amount": int(total_amount),
+        "total_discount": int(total_discount),
     }
 
 
@@ -211,23 +182,32 @@ def create_order(
         store_name=customer.nama_toko,
         store_contact=None,
         store_address=customer.alamat,
-        # Diskon di level order — untuk mobile app
-        order_discount_type=(order_req.order_discount_type or 'PERCENT').upper(),
-        order_discount_nominal=order_req.order_discount_nominal or 0,
     )
     db.add(order)
 
     for item in order_req.items:
-        # Per-item discount tidak dipakai lagi — diskon di level order.
-        # Simpan dengan discount=0; harga setelah diskon dihitung di _build_order_response.
+        discount_type = (item.discount_type or 'PERCENT').upper()
+        if discount_type not in ('PERCENT', 'NOMINAL'):
+            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+
+        if discount_type == 'NOMINAL':
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            max_nominal = (product.harga or 0) if product else 0
+            if item.discount_nominal > max_nominal:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
+                           f"melebihi harga satuan ({max_nominal})",
+                )
+
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-            discount_type='PERCENT',
-            discount_percent=0,
-            discount_nominal=0,
+            discount_type=discount_type,
+            discount_percent=item.discount_percent if discount_type == 'PERCENT' else 0,
+            discount_nominal=item.discount_nominal if discount_type == 'NOMINAL' else 0,
         ))
 
     db.commit()
@@ -661,10 +641,7 @@ def update_discounts(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
-    """Update diskon di level order — admin only, hanya untuk pesanan PENDING.
-
-    Diskon berlaku untuk total seluruh item (proporsional).
-    """
+    """Update diskon per item — admin only, hanya untuk pesanan PENDING."""
     order = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
@@ -680,26 +657,30 @@ def update_discounts(
             detail=f"Diskon hanya bisa diedit saat status PENDING. Status saat ini: {order.status}",
         )
 
-    discount_type = body.discount_type.upper()
-    if discount_type not in ('PERCENT', 'NOMINAL'):
-        raise HTTPException(status_code=400, detail="discount_type tidak valid")
+    # Map item_id -> OrderItem
+    item_map = {str(item.id): item for item in order.items}
 
-    # Hitung total order untuk validasi cap nominal
-    total_raw = sum(
-        (item.product.harga or 0) * (item.qty or 0)
-        for item in order.items
-    )
-
-    if discount_type == 'NOMINAL':
-        if body.discount_nominal > total_raw:
+    for update_item in body.items:
+        order_item = item_map.get(str(update_item.item_id))
+        if not order_item:
             raise HTTPException(
-                status_code=400,
-                detail=f"Diskon nominal ({body.discount_nominal}) tidak boleh melebihi total order ({total_raw})",
+                status_code=404,
+                detail=f"Item '{update_item.item_id}' tidak ditemukan di pesanan ini",
             )
 
-    # Simpan diskon level order
-    order.order_discount_type = discount_type
-    order.order_discount_nominal = body.discount_nominal
+        discount_type = update_item.discount_type.upper()
+        if discount_type not in ('PERCENT', 'NOMINAL'):
+            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+
+        order_item.discount_type = discount_type
+        if discount_type == 'NOMINAL':
+            # Cap nominal at harga satuan
+            harga_satuan = order_item.product.harga if order_item.product else 0
+            order_item.discount_nominal = min(update_item.discount_nominal, harga_satuan)
+            order_item.discount_percent = 0
+        else:
+            order_item.discount_percent = min(update_item.discount_percent, 100)
+            order_item.discount_nominal = 0
 
     db.commit()
     db.refresh(order)
