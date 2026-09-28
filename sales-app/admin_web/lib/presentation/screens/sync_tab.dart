@@ -1043,7 +1043,7 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                           style: AppTextStyles.headlineMedium),
                       SizedBox(height: 4),
                       Text(
-                        'Upload .xlsx untuk data toko + assignment sales ke customers',
+                        'Upload .xlsx untuk data toko',
                         style: AppTextStyles.bodyMedium,
                       ),
                     ],

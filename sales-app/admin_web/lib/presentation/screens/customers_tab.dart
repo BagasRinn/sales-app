@@ -3,8 +3,6 @@ import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/customer.dart';
-import '../../data/models/sales_user.dart';
-import '../../data/models/sales_assignment.dart';
 
 class CustomersTab extends StatefulWidget {
   const CustomersTab({super.key});
@@ -381,7 +379,6 @@ class _CustomerDetailDialog extends StatefulWidget {
 
 class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
   Customer? _customer;
-  List<SalesUser> _allSales = [];
   bool _loadingDetail = true;
   bool _saving = false;
   String? _loadError;
@@ -389,7 +386,6 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
   late TextEditingController _kodeC;
   late TextEditingController _namaC;
   late TextEditingController _alamatC;
-  Set<String> _selectedSalesIds = {};
 
   @override
   void initState() {
@@ -414,25 +410,13 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
       _loadError = null;
     });
     try {
-      final provider = widget.provider;
-      final results = await Future.wait([
-        provider.getCustomerDetail(widget.customerId),
-        provider.getCustomerAssignments(widget.customerId),
-        provider.listSalesUsers(),
-      ]);
-      final c = results[0] as Customer;
-      final assignments = results[1] as List<SalesAssignment>;
-      final sales = results[2] as List<SalesUser>;
-
+      final c = await widget.provider.getCustomerDetail(widget.customerId);
       if (!mounted) return;
-
       setState(() {
         _customer = c;
-        _allSales = sales;
         _kodeC.text = c.kode ?? '';
         _namaC.text = c.namaToko;
         _alamatC.text = c.alamat ?? '';
-        _selectedSalesIds = assignments.map((a) => a.salesId).toSet();
         _loadingDetail = false;
       });
     } catch (e) {
@@ -461,24 +445,10 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
       if (_kodeC.text.trim().isNotEmpty) 'kode': _kodeC.text.trim(),
       'alamat': _alamatC.text.trim().isEmpty ? null : _alamatC.text.trim(),
     };
-    final okUpdate = await provider.updateCustomer(_customer!.id, body);
-    if (!okUpdate) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(provider.errorMessage ?? 'Gagal menyimpan'),
-            backgroundColor: AppColors.error),
-      );
-      return;
-    }
-    final okAssign = await provider.assignCustomerSales(
-      _customer!.id,
-      _selectedSalesIds.toList(),
-    );
+    final ok = await provider.updateCustomer(_customer!.id, body);
     if (!mounted) return;
     setState(() => _saving = false);
-    if (okAssign) {
+    if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Row(
@@ -495,7 +465,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(provider.errorMessage ?? 'Gagal menyimpan assignment'),
+            content: Text(provider.errorMessage ?? 'Gagal menyimpan'),
             backgroundColor: AppColors.error),
       );
     }
@@ -507,7 +477,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: SizedBox(
         width: 720,
-        height: 620,
+        height: 480,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -629,67 +599,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
             hint: 'cth: Jl. Sudirman No. 12',
             maxLines: 2,
           ),
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 12),
-          Text('Sales yang Ditugaskan', style: AppTextStyles.labelLarge),
-          const SizedBox(height: 4),
-          Text(
-            'Centang sales yang boleh mengambil order untuk toko ini.',
-            style: AppTextStyles.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          _buildSalesSelector(),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSalesSelector() {
-    if (_allSales.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(
-          'Belum ada user sales — buat user SALES dulu di menu user management.',
-          style: AppTextStyles.bodySmall,
-        ),
-      );
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Material(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          children: [
-            for (final s in _allSales)
-              CheckboxListTile(
-                dense: true,
-                value: _selectedSalesIds.contains(s.id),
-                onChanged: (v) {
-                  setState(() {
-                    if (v == true) {
-                      _selectedSalesIds.add(s.id);
-                    } else {
-                      _selectedSalesIds.remove(s.id);
-                    }
-                  });
-                },
-                title: Text(s.displayName, style: AppTextStyles.bodyMedium),
-                subtitle: Text(s.role, style: AppTextStyles.bodySmall),
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-          ],
-        ),
       ),
     );
   }

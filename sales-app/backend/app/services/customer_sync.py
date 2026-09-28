@@ -1,7 +1,7 @@
 """
 Customer sync service — Excel import logic untuk tabel customers.
 Prototipe: kolom wajib kode (opsional), nama_toko, alamat.
-Assignment sales dilakukan manual via endpoint /customers/{id}/assign.
+Semua sales dapat melihat dan membuat order untuk semua toko.
 
 Identity toko = (nama_toko, alamat) keduanya. Boleh ada dua toko dengan
 nama sama selama alamatnya beda, dan sebaliknya.

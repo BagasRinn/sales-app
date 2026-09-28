@@ -6,7 +6,6 @@ import '../../data/models/product.dart';
 import '../../data/models/sync_result.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/sales_user.dart';
-import '../../data/models/sales_assignment.dart';
 import '../../data/models/user_item.dart';
 import '../../core/api_exception.dart';
 
@@ -339,10 +338,6 @@ class AdminProvider extends ChangeNotifier {
     return await _repo.getCustomer(customerId);
   }
 
-  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
-    return await _repo.getCustomerAssignments(customerId);
-  }
-
   Future<List<SalesUser>> listSalesUsers() async {
     return await _repo.listSalesUsers();
   }
@@ -352,20 +347,6 @@ class AdminProvider extends ChangeNotifier {
     try {
       await _repo.updateCustomer(customerId, body);
       await _loadCustomers();
-      _setLoading(false);
-      return true;
-    } catch (e) {
-      _setLoading(false);
-      _errorMessage = e is ApiException ? e.message : e.toString();
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> assignCustomerSales(String customerId, List<String> salesIds) async {
-    _setLoading(true, 'Menyimpan assignment sales...');
-    try {
-      await _repo.assignCustomerSales(customerId, salesIds);
       _setLoading(false);
       return true;
     } catch (e) {

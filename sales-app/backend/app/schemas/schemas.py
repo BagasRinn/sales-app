@@ -270,17 +270,6 @@ class CustomerResponse(CustomerBase):
         from_attributes = True
 
 
-class CustomerAssignmentRequest(BaseModel):
-    sales_ids: List[UUID]
-
-
-class SalesAssignmentResponse(BaseModel):
-    sales_id: UUID
-    sales_username: Optional[str] = None
-    sales_nama: Optional[str] = None
-    assigned_at: datetime
-
-
 class SalesUserResponse(BaseModel):
     id: UUID
     username: str

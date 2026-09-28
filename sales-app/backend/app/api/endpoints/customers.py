@@ -1,4 +1,4 @@
-"""Customer API endpoints — CRUD, assignment, Excel import."""
+"""Customer API endpoints — CRUD, Excel import."""
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -8,14 +8,11 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerSales, User, ImportLog
+from app.models.models import Customer, ImportLog
 from app.schemas.schemas import (
     CustomerCreate,
     CustomerUpdate,
     CustomerResponse,
-    CustomerAssignmentRequest,
-    SalesAssignmentResponse,
-    SalesUserResponse,
     SyncResultResponse,
 )
 from app.core.security import require_manager, require_auth, CurrentUser
@@ -61,13 +58,8 @@ def list_my_customers(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    sales_id = UUID(current_user["user_id"])
-    query = (
-        db.query(Customer)
-        .join(CustomerSales, CustomerSales.customer_id == Customer.id)
-        .filter(CustomerSales.sales_id == sales_id)
-        .filter(Customer.deleted_at.is_(None))
-    )
+    """Semua customer — semua sales dapat melihat dan membuat order untuk semua toko."""
+    query = _exclude_deleted(db.query(Customer))
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
     return query.order_by(Customer.nama_toko).all()
@@ -155,63 +147,6 @@ def delete_customer(
     customer.deleted_at = datetime.now(timezone.utc)
     db.commit()
     return None
-
-
-def _list_assignments(customer_id: UUID, db: Session):
-    rows = (
-        db.query(CustomerSales, User)
-        .join(User, User.id == CustomerSales.sales_id)
-        .filter(CustomerSales.customer_id == customer_id)
-        .all()
-    )
-    return [
-        SalesAssignmentResponse(
-            sales_id=cs.sales_id,
-            sales_username=user.username if user else None,
-            sales_nama=user.nama if user else None,
-            assigned_at=cs.assigned_at,
-        )
-        for cs, user in rows
-    ]
-
-
-@router.post("/{customer_id}/assign", response_model=List[SalesAssignmentResponse])
-def assign_sales(
-    customer_id: UUID,
-    request: CustomerAssignmentRequest,
-    db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
-):
-    customer = _exclude_deleted(
-        db.query(Customer).filter(Customer.id == customer_id)
-    ).first()
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-
-    sales_users = db.query(User).filter(
-        User.id.in_(request.sales_ids),
-        User.role == "SALES",
-    ).all()
-    found_ids = {str(s.id) for s in sales_users}
-    invalid = [str(sid) for sid in request.sales_ids if str(sid) not in found_ids]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Sales ID tidak valid: {invalid}")
-
-    db.query(CustomerSales).filter(CustomerSales.customer_id == customer_id).delete()
-    for sales_id in request.sales_ids:
-        db.add(CustomerSales(customer_id=customer_id, sales_id=sales_id))
-    db.commit()
-
-    return _list_assignments(customer_id, db)
-
-
-@router.get("/{customer_id}/assignments", response_model=List[SalesAssignmentResponse])
-def list_assignments(
-    customer_id: UUID,
-    db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
-):
-    return _list_assignments(customer_id, db)
 
 
 @router.post("/import-excel", response_model=SyncResultResponse)

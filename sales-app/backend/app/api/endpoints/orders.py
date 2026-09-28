@@ -7,7 +7,7 @@ from uuid import uuid4
 from typing import List, Optional
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, CustomerSales
+from app.models.models import Order, OrderItem, Product, Customer
 from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
@@ -20,21 +20,13 @@ from app.services.stock_logger import log_stock_change
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-def _validate_customer_for_sales(customer_id, sales_id, db):
+def _get_customer(customer_id, db):
     customer = db.query(Customer).filter(
         Customer.id == customer_id,
         Customer.deleted_at.is_(None),
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-
-    assignment = db.query(CustomerSales).filter(
-        CustomerSales.customer_id == customer.id,
-        CustomerSales.sales_id == sales_id,
-    ).first()
-    if not assignment:
-        raise HTTPException(status_code=403, detail="Customer tidak di-assign ke sales ini")
-
     return customer
 
 
@@ -173,7 +165,7 @@ def create_order(
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
     sales_id = UUID(current_user["user_id"])
-    customer = _validate_customer_for_sales(order_req.customer_id, sales_id, db)
+    customer = _get_customer(order_req.customer_id, db)
 
     # DRAFT tidak booking stok. Validasi stok saja (cek tersedia), tapi tidak kurangi stok_booking.
     # Booking baru dilakukan saat submit_draft_order.
@@ -370,7 +362,7 @@ def update_draft_order(
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
     sales_id = UUID(current_user["user_id"])
-    customer = _validate_customer_for_sales(order_update.customer_id, sales_id, db)
+    customer = _get_customer(order_update.customer_id, db)
 
     # Hapus item lama, replace dengan item baru
     db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()

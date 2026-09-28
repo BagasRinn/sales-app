@@ -40,7 +40,6 @@ BEGIN;
 TRUNCATE TABLE
     public.order_items,
     public.orders,
-    public.customer_sales,
     public.stok_log,
     public.sync_validation_errors,
     public.import_logs,
@@ -71,7 +70,6 @@ COMMIT;
 --   customers              = 0
 --   orders                 = 0
 --   order_items            = 0
---   customer_sales         = 0
 --   stok_log               = 0
 --   sync_validation_errors = 0
 --   import_logs            = 0
@@ -81,7 +79,6 @@ UNION ALL SELECT 'products',               COUNT(*)::text FROM public.products
 UNION ALL SELECT 'customers',              COUNT(*)::text FROM public.customers
 UNION ALL SELECT 'orders',                 COUNT(*)::text FROM public.orders
 UNION ALL SELECT 'order_items',            COUNT(*)::text FROM public.order_items
-UNION ALL SELECT 'customer_sales',         COUNT(*)::text FROM public.customer_sales
 UNION ALL SELECT 'stok_log',               COUNT(*)::text FROM public.stok_log
 UNION ALL SELECT 'sync_validation_errors', COUNT(*)::text FROM public.sync_validation_errors
 UNION ALL SELECT 'import_logs',            COUNT(*)::text FROM public.import_logs

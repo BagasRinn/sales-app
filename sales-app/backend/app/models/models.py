@@ -22,7 +22,6 @@ class User(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     orders = relationship("Order", back_populates="sales")
-    customer_assignments = relationship("CustomerSales", back_populates="sales")
 
 
 class Product(Base):
@@ -49,19 +48,7 @@ class Customer(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    assignments = relationship("CustomerSales", back_populates="customer", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="customer")
-
-
-class CustomerSales(Base):
-    __tablename__ = "customer_sales"
-
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), primary_key=True)
-    sales_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    customer = relationship("Customer", back_populates="assignments")
-    sales = relationship("User", back_populates="customer_assignments")
 
 
 class Order(Base):

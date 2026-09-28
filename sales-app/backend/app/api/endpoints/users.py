@@ -34,7 +34,7 @@ def list_sales_users(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """List SALES user — untuk dropdown assignment toko. Semua role login boleh."""
+    """List SALES user. Semua role login boleh."""
     users = (
         _exclude_deleted(db.query(User))
         .filter(User.role == "SALES", User.is_active.is_(True))

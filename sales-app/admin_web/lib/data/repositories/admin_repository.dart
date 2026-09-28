@@ -6,7 +6,6 @@ import '../models/product.dart';
 import '../models/sync_result.dart';
 import '../models/customer.dart';
 import '../models/sales_user.dart';
-import '../models/sales_assignment.dart';
 import '../models/user_item.dart';
 
 class AdminRepository {
@@ -231,18 +230,6 @@ class AdminRepository {
 
   Future<void> deleteCustomer(String customerId) async {
     await _api.delete('/customers/$customerId');
-  }
-
-  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
-    final data = await _api.get('/customers/$customerId/assignments');
-    return (data as List).map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<List<SalesAssignment>> assignCustomerSales(String customerId, List<String> salesIds) async {
-    final data = await _api.post('/customers/$customerId/assign', body: {
-      'sales_ids': salesIds,
-    });
-    return (data as List).map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<SalesUser>> listSalesUsers() async {
