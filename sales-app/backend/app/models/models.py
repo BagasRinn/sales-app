@@ -35,8 +35,6 @@ class Product(Base):
     stok_booking = Column(Integer, default=0)
     kategori = Column(String, nullable=True)
     satuan = Column(String, nullable=True)
-
-
     nama_supplier = Column(String, nullable=True)
 
 
