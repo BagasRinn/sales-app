@@ -269,8 +269,8 @@ class _ProductsTabState extends State<ProductsTab> {
         final availW = constraints.maxWidth;
         // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Supplier | Aksi
         // fixedW = [sku, ktgr, harga, stok, stok, stok, sat, supp, aksi] (nama ambil sisa)
-        const fixedW = [100.0, 120.0, 120.0, 110.0, 110.0, 110.0, 110.0, 80.0, 120.0, 90.0];
-        const fixedTotal = 1070.0;
+        const fixedW = [90.0, 120.0, 100.0, 100.0, 100.0, 90.0, 100.0, 70.0, 200.0, 90.0];
+        const fixedTotal = 1060.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         final totalW = namaW + fixedTotal;
         // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, sat, supp, aksi]
@@ -664,7 +664,7 @@ class _DataRow extends StatelessWidget {
             width: colW[8],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 3, overflow: TextOverflow.ellipsis),
+              child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
           ),
           // Aksi — colW[9]
