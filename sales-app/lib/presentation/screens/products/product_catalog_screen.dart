@@ -719,6 +719,24 @@ class _ProductCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (product.namaSupplier != null && product.namaSupplier!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.business, size: 12, color: AppColors.textMuted),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                product.namaSupplier!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -799,6 +817,8 @@ class _ProductCard extends StatelessWidget {
                 _detailRow(Icons.scale_outlined, 'Satuan', product.satuan!),
               if (product.kategori != null)
                 _detailRow(Icons.category_outlined, 'Kategori', product.kategori!),
+              if (product.namaSupplier != null && product.namaSupplier!.isNotEmpty)
+                _detailRow(Icons.business, 'Supplier', product.namaSupplier!),
               const Divider(height: 24),
               Row(
                 children: [

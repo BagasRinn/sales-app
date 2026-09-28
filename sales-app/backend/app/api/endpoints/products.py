@@ -40,6 +40,7 @@ def list_products(
         query = query.filter(
             (Product.id.ilike(f"%{search}%"))
             | (Product.nama_barang.ilike(f"%{search}%"))
+            | (Product.nama_supplier.ilike(f"%{search}%"))
         )
 
     if kategori:
@@ -75,6 +76,7 @@ def list_products(
         ),
                 kategori=p.kategori,
                 satuan=p.satuan,
+                nama_supplier=p.nama_supplier,
             )
         )
 
@@ -265,6 +267,7 @@ def get_product_count(
         query = query.filter(
             (Product.id.ilike(f"%{search}%"))
             | (Product.nama_barang.ilike(f"%{search}%"))
+            | (Product.nama_supplier.ilike(f"%{search}%"))
         )
     if kategori:
         query = query.filter(Product.kategori == kategori)
@@ -302,6 +305,7 @@ def get_product(
         ),
         kategori=product.kategori,
         satuan=product.satuan,
+        nama_supplier=product.nama_supplier,
     )
 
 
@@ -368,4 +372,5 @@ def update_product_stock(
         perlu_ditinjau=is_review_needed,
         kategori=product.kategori,
         satuan=product.satuan,
+        nama_supplier=product.nama_supplier,
     )

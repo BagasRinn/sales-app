@@ -8,6 +8,7 @@ class Product {
   final bool? perluDitinjau;
   final String? kategori;
   final String? satuan;
+  final String? namaSupplier;
 
   Product({
     required this.id,
@@ -19,6 +20,7 @@ class Product {
     this.perluDitinjau,
     this.kategori,
     this.satuan,
+    this.namaSupplier,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class Product {
       perluDitinjau: json['perlu_ditinjau'] as bool?,
       kategori: json['kategori'] as String?,
       satuan: json['satuan'] as String?,
+      namaSupplier: json['nama_supplier'] as String?,
     );
   }
 
@@ -46,6 +49,7 @@ class Product {
       'perlu_ditinjau': perluDitinjau,
       'kategori': kategori,
       'satuan': satuan,
+      'nama_supplier': namaSupplier,
     };
   }
 }

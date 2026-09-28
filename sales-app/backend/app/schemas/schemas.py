@@ -105,6 +105,7 @@ class ProductResponse(BaseModel):
     perlu_ditinjau: Optional[bool] = None
     kategori: Optional[str] = None
     satuan: Optional[str] = None
+    nama_supplier: Optional[str] = None
 
     class Config:
         from_attributes = True

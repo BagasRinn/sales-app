@@ -16,7 +16,7 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "STOK", "OUM", "FIX"]
+EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "STOK", "OUM", "FIX", "\\"]
 
 
 def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
@@ -160,6 +160,8 @@ def sync_products_from_excel(
         kategori = str(row.get("KATEGORI") or "").strip() or None
         satuan = str(row.get("OUM") or "").strip() or None
 
+        nama_supplier = str(row.get("\\") or "").strip() or None
+
         error = _validate_row(row_num, sku, nama_produk, harga_raw, stok_raw)
         if error:
             validation_errors.append({"row": row_num, "sku": sku, "reason": error})
@@ -183,6 +185,7 @@ def sync_products_from_excel(
             "stok": stok,
             "kategori": kategori,
             "satuan": satuan,
+            "nama_supplier": nama_supplier,
         })
 
     inserted = updated = 0
@@ -239,7 +242,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             {"id": r["sku"], "nama_barang": r["nama_barang"],
              "harga": r["harga"], "stok_sistem": r["stok"],
              "stok_booking": 0, "kategori": r.get("kategori"),
-             "satuan": r.get("satuan")}
+             "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier")}
             for r in to_insert
         ])
         db.execute(stmt)
@@ -256,7 +259,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"], "stok_sistem": r["stok"],
                  "stok_booking": 0,  # reset saat sync Excel baru
-                 "kategori": r.get("kategori"), "satuan": r.get("satuan")}
+                 "kategori": r.get("kategori"), "satuan": r.get("satuan"),
+                 "nama_supplier": r.get("nama_supplier")}
                 for r in changed
             ])
             stmt = stmt.on_conflict_do_update(
@@ -266,7 +270,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                       "stok_sistem": stmt.excluded.stok_sistem,
                       "stok_booking": 0,  # reset saat sync Excel baru
                       "kategori": stmt.excluded.kategori,
-                      "satuan": stmt.excluded.satuan},
+                      "satuan": stmt.excluded.satuan,
+                      "nama_supplier": stmt.excluded.nama_supplier},
             )
             db.execute(stmt)
             for r in changed:
@@ -281,7 +286,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"],
-                 "kategori": r.get("kategori"), "satuan": r.get("satuan")}
+                 "kategori": r.get("kategori"), "satuan": r.get("satuan"),
+                 "nama_supplier": r.get("nama_supplier")}
                 for r in unchanged
             ])
             stmt = stmt.on_conflict_do_update(
@@ -289,7 +295,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                 set_={"nama_barang": stmt.excluded.nama_barang,
                       "harga": stmt.excluded.harga,
                       "kategori": stmt.excluded.kategori,
-                      "satuan": stmt.excluded.satuan},
+                      "satuan": stmt.excluded.satuan,
+                      "nama_supplier": stmt.excluded.nama_supplier},
             )
             db.execute(stmt)
         logger.info(f"[SYNC] Bulk updated {len(to_update)} products ({len(changed)} stock changes)")

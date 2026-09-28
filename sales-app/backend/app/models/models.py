@@ -37,6 +37,9 @@ class Product(Base):
     satuan = Column(String, nullable=True)
 
 
+    nama_supplier = Column(String, nullable=True)
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
