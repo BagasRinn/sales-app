@@ -357,6 +357,57 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
     return FutureBuilder<List<SyncError>>(
       future: _errorsFuture,
       builder: (context, snapshot) {
+        // First load (no prior data) — tampilkan spinner, jangan pesan
+        // "tidak ada error" karena FutureBuilder ada di waiting state dengan
+        // snapshot.data == null. Pesan kosong saat loading = misleading UX.
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Memuat riwayat error...',
+                        style: AppTextStyles.bodyMedium),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline,
+                      size: 20, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Gagal memuat riwayat error: ${snapshot.error}',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.error),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _loadErrors,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Coba lagi'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         final errors = snapshot.data ?? [];
         final isEmpty = errors.isEmpty;
 

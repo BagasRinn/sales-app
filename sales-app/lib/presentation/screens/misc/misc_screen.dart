@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../auth/change_password_dialog.dart';
-import '../auth/login_screen.dart';
 
 class MiscScreen extends StatelessWidget {
   const MiscScreen({super.key});
@@ -209,13 +208,13 @@ class MiscScreen extends StatelessWidget {
                       ),
                       onPressed: () async {
                         Navigator.pop(ctx);
+                        // Cukup logout — AuthWrapper detect state→unauthenticated
+                        // lalu rebuild ke LoginScreen. JANGAN pushAndRemoveUntil
+                        // LoginScreen manual: predicate (_) => false akan
+                        // menghapus AuthWrapper dari tree, jadi login berikutnya
+                        // tidak punya widget yang swap ke HomeScreen (user
+                        // terjebak di pushed LoginScreen sampai app di-restart).
                         await context.read<AuthProvider>().logout();
-                        if (context.mounted) {
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                            (route) => false,
-                          );
-                        }
                       },
                       child: const Text('Keluar'),
                     ),

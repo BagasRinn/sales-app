@@ -3,9 +3,9 @@
 -- Database: PostgreSQL (Supabase production)
 --
 -- Tujuan: wipe semua data, sisakan 3 user default
---   - admin   / admin   (ADMIN)
---   - manager / manager (MANAGER)
---   - sales   / sales   (SALES)
+--   - admin.default  (ADMIN)
+--   - manager.default (MANAGER)
+--   - sales.default  (SALES)
 --
 -- CARA PAKAI:
 --   1. BACKUP dulu (Supabase Dashboard → Database → Backups)
@@ -23,7 +23,7 @@
 -- ============================================================
 SELECT id, username, role, nama, is_active, deleted_at
 FROM public.users
-WHERE username IN ('admin', 'manager', 'sales')
+WHERE username IN ('admin.default', 'manager.default', 'sales.default')
 ORDER BY role;
 
 
@@ -51,14 +51,14 @@ RESTART IDENTITY CASCADE;
 -- 2b. Hapus user lain (selain 3 default). Pakai deleted_at IS NULL safety
 --     supaya kalau ada user yang sudah soft-delete, tidak ter-delete dua kali.
 DELETE FROM public.users
-WHERE username NOT IN ('admin', 'manager', 'sales');
+WHERE username NOT IN ('admin.default', 'manager.default', 'sales.default');
 
 -- 2c. Bump token_version 3 user default → invalidate semua sesi lama
---     (jadi device sales harus login ulang pakai sales/sales)
+--     (jadi device sales harus login ulang pakai sales.default)
 UPDATE public.users
 SET token_version = token_version + 1,
     updated_at = NOW()
-WHERE username IN ('admin', 'manager', 'sales');
+WHERE username IN ('admin.default', 'manager.default', 'sales.default');
 
 COMMIT;
 

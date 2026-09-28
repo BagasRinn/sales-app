@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/api_exception.dart';
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
-import 'login_screen.dart';
 
 class ChangePasswordDialog extends StatefulWidget {
   final AuthProvider authProvider;
@@ -78,11 +77,10 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
         ),
       );
       await widget.authProvider.logout();
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
+      // Cukup logout — AuthWrapper detect state→unauthenticated dan rebuild ke
+      // LoginScreen. JANGAN pushAndRemoveUntil LoginScreen manual: predicate
+      // (_) => false menghapus AuthWrapper dari tree, jadi login berikutnya
+      // tidak punya widget yang swap ke HomeScreen.
     } else {
       _errSnack(errorMsg ?? 'Gagal mengganti password');
     }
