@@ -141,6 +141,27 @@ class AdminRepository {
     return response.data ?? [];
   }
 
+  /// Download laporan periode (rentang tanggal) sebagai bytes Excel.
+  Future<List<int>> downloadPeriodReport({
+    required DateTime startDate,
+    required DateTime endDate,
+    List<String> statuses = const ['APPROVED'],
+  }) async {
+    final startStr = '${startDate.year.toString().padLeft(4, '0')}-'
+        '${startDate.month.toString().padLeft(2, '0')}-'
+        '${startDate.day.toString().padLeft(2, '0')}';
+    final endStr = '${endDate.year.toString().padLeft(4, '0')}-'
+        '${endDate.month.toString().padLeft(2, '0')}-'
+        '${endDate.day.toString().padLeft(2, '0')}';
+    final qs = '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}';
+    final dio = _api.dio;
+    final response = await dio.get<List<int>>(
+      '/reports/period$qs',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return response.data ?? [];
+  }
+
   Future<List<Product>> getProducts({int page = 0, int limit = 20, String? search, String? kategori, String? status}) async {
     final queryParams = {
       'skip': (page * limit).toString(),
