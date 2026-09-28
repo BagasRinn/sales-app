@@ -68,10 +68,11 @@ class DraftOrderProvider extends ChangeNotifier {
       if (type == 'PERCENT' && value > 100) {
         capped = 100;
       }
-      // For NOMINAL, cap at harga satuan
+      // For NOMINAL, cap at subtotal (harga × qty)
       if (type == 'NOMINAL') {
         final harga = _priceCache[productId] ?? 0;
-        capped = value > harga ? harga : value;
+        final max = harga * items[productId]!;
+        capped = value > max ? max : value;
       }
       discounts[productId] = DiscountInfo(type: type, value: capped);
     }
@@ -101,9 +102,9 @@ class DraftOrderProvider extends ChangeNotifier {
       if (disc == null) {
         total += rawSubtotal;
       } else if (disc.type == 'NOMINAL') {
-        // Diskon nominal per pcs: (harga - nominal) * qty
-        final hargaStlh = (price - disc.value).clamp(0, price).toInt();
-        total += hargaStlh * qty;
+        // Diskon nominal per-subtotal: potong sekali di akhir, di-cap agar tidak minus.
+        final nominalDiskon = disc.value > rawSubtotal ? rawSubtotal : disc.value;
+        total += rawSubtotal - nominalDiskon;
       } else {
         // Diskon persen: subtotal - %
         final nominalDiskon = (rawSubtotal * disc.value / 100).round();

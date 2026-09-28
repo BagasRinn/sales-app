@@ -674,7 +674,7 @@ class _OrderCardState extends State<_OrderCard> {
             : 'Produk ${item.productId}',
         currentType: item.discountType,
         currentValue: currentValue,
-        maxNominal: item.hargaSatuan,
+        maxNominal: item.hargaSatuan * item.qty,
       ),
     );
     if (result == null || !mounted) return;
@@ -1075,7 +1075,7 @@ class _DiscountEditDialog extends StatefulWidget {
   final String namaBarang;
   final String currentType;
   final int currentValue;
-  final int maxNominal; // harga satuan — untuk cap diskon NOMINAL
+  final int maxNominal; // harga × qty — untuk cap diskon NOMINAL per-subtotal
 
   const _DiscountEditDialog({
     required this.namaBarang,
@@ -1159,7 +1159,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Harga satuan: Rp ${widget.maxNominal}',
+            'Subtotal item: Rp ${widget.maxNominal}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
@@ -1205,7 +1205,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           Text(
             _type == 'PERCENT'
                 ? 'Diskon diterapkan ke (harga × qty). Contoh: 10% dari Rp ${widget.maxNominal}'
-                : 'Maks: Rp ${widget.maxNominal} (harga satuan)',
+                : 'Potong sekali di akhir. Maks: Rp ${widget.maxNominal}',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
           ),
         ],

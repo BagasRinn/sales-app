@@ -374,7 +374,9 @@ class _ProductRowState extends State<_ProductRow> {
     int subtotal = rawSubtotal;
     if (disc != null) {
       if (disc.type == 'NOMINAL') {
-        subtotal = (price - disc.value).clamp(0, price) * widget.qty;
+        // Per-subtotal: potong sekali di akhir, di-cap agar tidak minus.
+        final nominalDiskon = disc.value > rawSubtotal ? rawSubtotal : disc.value;
+        subtotal = rawSubtotal - nominalDiskon;
       } else {
         subtotal = rawSubtotal - (rawSubtotal * disc.value / 100).round();
       }

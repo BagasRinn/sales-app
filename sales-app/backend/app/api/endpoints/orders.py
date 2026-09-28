@@ -48,10 +48,11 @@ def _build_order_response(order: Order) -> dict:
         discount_nominal = item.discount_nominal or 0
 
         if discount_type == 'NOMINAL':
-            # Diskon nominal (IDR) per pcs — dikurangi dari harga satuan, baru dikali qty
-            harga_setelah = max(0, harga_satuan - discount_nominal)
-            subtotal = harga_setelah * qty
-            nominal_diskon = discount_nominal * qty
+            # Diskon nominal (IDR) per-subtotal: potong sekali di akhir.
+            # Nominal di-cap supaya tidak melebihi raw_subtotal (tidak boleh minus).
+            nominal_diskon = min(discount_nominal, raw_subtotal)
+            subtotal = raw_subtotal - nominal_diskon
+            harga_setelah = subtotal / qty if qty > 0 else 0
         else:
             # Diskon persen — % dari subtotal, baru dikali qty
             nominal_diskon = int(round(raw_subtotal * discount_percent / 100))
@@ -192,12 +193,13 @@ def create_order(
 
         if discount_type == 'NOMINAL':
             product = db.query(Product).filter(Product.id == item.product_id).first()
-            max_nominal = (product.harga or 0) if product else 0
+            harga_satuan = (product.harga or 0) if product else 0
+            max_nominal = harga_satuan * item.qty
             if item.discount_nominal > max_nominal:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
-                           f"melebihi harga satuan ({max_nominal})",
+                           f"melebihi subtotal ({max_nominal})",
                 )
 
         db.add(OrderItem(
@@ -359,12 +361,13 @@ def update_draft_order(
             raise HTTPException(status_code=400, detail="discount_type tidak valid")
         if discount_type == 'NOMINAL':
             product = db.query(Product).filter(Product.id == item.product_id).first()
-            max_nominal = (product.harga or 0) if product else 0
+            harga_satuan = (product.harga or 0) if product else 0
+            max_nominal = harga_satuan * item.qty
             if item.discount_nominal > max_nominal:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
-                           f"melebihi harga satuan ({max_nominal})",
+                           f"melebihi subtotal ({max_nominal})",
                 )
         db.add(OrderItem(
             id=uuid4(),
@@ -674,9 +677,11 @@ def update_discounts(
 
         order_item.discount_type = discount_type
         if discount_type == 'NOMINAL':
-            # Cap nominal at harga satuan
+            # Cap nominal at subtotal item (harga × qty) supaya tidak minus
             harga_satuan = order_item.product.harga if order_item.product else 0
-            order_item.discount_nominal = min(update_item.discount_nominal, harga_satuan)
+            qty = order_item.qty or 0
+            max_nominal = harga_satuan * qty
+            order_item.discount_nominal = min(update_item.discount_nominal, max_nominal)
             order_item.discount_percent = 0
         else:
             order_item.discount_percent = min(update_item.discount_percent, 100)
