@@ -211,7 +211,7 @@ class _StatsTabState extends State<StatsTab> {
           const Text('Ringkasan Sistem', style: AppTextStyles.headlineLarge),
           const SizedBox(height: 8),
           const Text(
-            'Pantau performa order dan status stok secara keseluruhan',
+            'Pantau performa order hari ini dan total produk',
             style: AppTextStyles.bodyMedium,
           ),
 
@@ -277,34 +277,51 @@ class _StatsTabState extends State<StatsTab> {
               onDownload: _downloadPeriodReport,
             ),
             const SizedBox(height: 28),
+            // Section: order hari ini
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12, left: 4),
+              child: Text('Pesanan Hari Ini', style: AppTextStyles.labelLarge),
+            ),
             Wrap(
               spacing: 16,
               runSpacing: 16,
               children: [
                 _StatCard(
-                  title: 'Total Pesanan (hari ini)',
+                  title: 'Total Pesanan',
                   value: '$totalOrders',
                   icon: Icons.shopping_cart,
                   color: AppColors.info,
                 ),
                 _StatCard(
-                  title: 'Menunggu Persetujuan (hari ini)',
+                  title: 'Menunggu Persetujuan',
                   value: '$pendingOrders',
                   icon: Icons.pending_actions,
                   color: AppColors.warning,
                 ),
                 _StatCard(
-                  title: 'Disetujui (hari ini)',
+                  title: 'Disetujui',
                   value: '$approvedOrders',
                   icon: Icons.check_circle,
                   color: AppColors.success,
                 ),
                 _StatCard(
-                  title: 'Ditolak (hari ini)',
+                  title: 'Ditolak',
                   value: '$rejectedOrders',
                   color: AppColors.error,
                   icon: Icons.cancel,
                 ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Section: total produk (keseluruhan, bukan per hari)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12, left: 4),
+              child: Text('Inventori', style: AppTextStyles.labelLarge),
+            ),
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
                 _StatCard(
                   title: 'Total Produk',
                   value: '$totalProducts',
