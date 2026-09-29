@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, Integer, cast, Date
 from typing import List, Optional
 from uuid import UUID
 
@@ -234,18 +234,15 @@ def get_admin_stats(
     query = db.query(Order.status, func.count(Order.id))
 
     if date:
-        # Filter: order.created_at tanggal = date (YYYY-MM-DD)
+        # Filter: order.created_at tanggal = date (YYYY-MM-DD).
+        # Di Postgres, `func.date(<timestamp>)` mengembalikan DATE. Parameter `date`
+        # di sini adalah VARCHAR — supaya Postgres mau membandingkan, cast ke DATE
+        # lewat `CAST(:date AS DATE)`.
         query = query.filter(
-            func.date(Order.created_at) == date
+            func.date(Order.created_at) == cast(date, Date)
         )
 
     status_counts = dict(query.group_by(Order.status).all())
-    total_orders = sum(status_counts.values())
-
-    status_counts = dict(
-        db.query(Order.status, func.count(Order.id))
-        .group_by(Order.status).all()
-    )
     total_orders = sum(status_counts.values())
 
     # Combine both product COUNT queries into a single round-trip
