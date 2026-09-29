@@ -229,7 +229,7 @@ def get_admin_stats(
     pada tanggal tersebut saja. Tanpa `date`, mengembalikan semua order.
     """
     from sqlalchemy import func, Integer, cast
-    from app.models.models import Order, Product
+    from app.models.models import Order, Product, Customer
 
     query = db.query(Order.status, func.count(Order.id))
 
@@ -253,6 +253,13 @@ def get_admin_stats(
     total_products = product_result[0] or 0
     needs_review = product_result[1] or 0
 
+    # Total customer (exclude soft-deleted)
+    total_customers = (
+        db.query(func.count(Customer.id))
+        .filter(Customer.deleted_at.is_(None))
+        .scalar()
+    ) or 0
+
     return {
         "total_orders": total_orders,
         "pending_orders": status_counts.get("PENDING", 0),
@@ -262,6 +269,7 @@ def get_admin_stats(
         "cancelled_orders": status_counts.get("CANCELLED", 0),
         "total_products": total_products,
         "needs_review": needs_review,
+        "total_customers": total_customers,
     }
 
 

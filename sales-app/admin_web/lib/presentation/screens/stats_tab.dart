@@ -202,6 +202,7 @@ class _StatsTabState extends State<StatsTab> {
     final approvedOrders = stats['approved_orders'] ?? 0;
     final rejectedOrders = stats['rejected_orders'] ?? 0;
     final totalProducts = stats['total_products'] ?? 0;
+    final totalCustomers = stats['total_customers'] ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -211,7 +212,7 @@ class _StatsTabState extends State<StatsTab> {
           const Text('Ringkasan Sistem', style: AppTextStyles.headlineLarge),
           const SizedBox(height: 8),
           const Text(
-            'Pantau performa order hari ini dan total produk',
+            'Pesanan hari ini, ringkasan data master, dan ambil laporan',
             style: AppTextStyles.bodyMedium,
           ),
 
@@ -257,26 +258,6 @@ class _StatsTabState extends State<StatsTab> {
             )
           else ...[
             const SizedBox(height: 20),
-            _ReportDownloadCard(
-              selectedDate: _selectedDate,
-              statusFilter: _statusFilter,
-              downloading: _downloading,
-              onPickDate: _pickDate,
-              onChangeStatus: (s) => setState(() => _statusFilter = s),
-              onDownload: _downloadReport,
-            ),
-            const SizedBox(height: 16),
-            _PeriodReportCard(
-              periodStart: _periodStart,
-              periodEnd: _periodEnd,
-              statusFilter: _statusFilter,
-              downloading: _downloadingPeriod,
-              onPickStart: _pickPeriodStart,
-              onPickEnd: _pickPeriodEnd,
-              onChangeStatus: (s) => setState(() => _statusFilter = s),
-              onDownload: _downloadPeriodReport,
-            ),
-            const SizedBox(height: 28),
             // Section: order hari ini
             const Padding(
               padding: EdgeInsets.only(bottom: 12, left: 4),
@@ -313,10 +294,10 @@ class _StatsTabState extends State<StatsTab> {
               ],
             ),
             const SizedBox(height: 24),
-            // Section: total produk (keseluruhan, bukan per hari)
+            // Section: data master (total keseluruhan, bukan per hari)
             const Padding(
               padding: EdgeInsets.only(bottom: 12, left: 4),
-              child: Text('Inventori', style: AppTextStyles.labelLarge),
+              child: Text('Data Master', style: AppTextStyles.labelLarge),
             ),
             Wrap(
               spacing: 16,
@@ -328,7 +309,36 @@ class _StatsTabState extends State<StatsTab> {
                   icon: Icons.inventory_2,
                   color: AppColors.primary,
                 ),
+                _StatCard(
+                  title: 'Total Toko',
+                  value: '$totalCustomers',
+                  icon: Icons.store,
+                  color: AppColors.info,
+                ),
               ],
+            ),
+            const SizedBox(height: 32),
+            // Laporan
+            const Text('Ambil Laporan', style: AppTextStyles.headlineLarge),
+            const SizedBox(height: 16),
+            _ReportDownloadCard(
+              selectedDate: _selectedDate,
+              statusFilter: _statusFilter,
+              downloading: _downloading,
+              onPickDate: _pickDate,
+              onChangeStatus: (s) => setState(() => _statusFilter = s),
+              onDownload: _downloadReport,
+            ),
+            const SizedBox(height: 16),
+            _PeriodReportCard(
+              periodStart: _periodStart,
+              periodEnd: _periodEnd,
+              statusFilter: _statusFilter,
+              downloading: _downloadingPeriod,
+              onPickStart: _pickPeriodStart,
+              onPickEnd: _pickPeriodEnd,
+              onChangeStatus: (s) => setState(() => _statusFilter = s),
+              onDownload: _downloadPeriodReport,
             ),
             const SizedBox(height: 36),
             Row(

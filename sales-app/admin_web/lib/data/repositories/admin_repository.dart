@@ -336,6 +336,7 @@ class AdminRepository {
       'expired_orders': data['expired_orders'] ?? 0,
       'cancelled_orders': data['cancelled_orders'] ?? 0,
       'total_products': data['total_products'] ?? 0,
+      'total_customers': data['total_customers'] ?? 0,
       'needs_review': data['needs_review'] ?? 0,
     };
   }
