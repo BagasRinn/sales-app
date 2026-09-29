@@ -282,25 +282,25 @@ class _StatsTabState extends State<StatsTab> {
               runSpacing: 16,
               children: [
                 _StatCard(
-                  title: 'Total Pesanan',
+                  title: 'Total Pesanan (hari ini)',
                   value: '$totalOrders',
                   icon: Icons.shopping_cart,
                   color: AppColors.info,
                 ),
                 _StatCard(
-                  title: 'Menunggu Persetujuan',
+                  title: 'Menunggu Persetujuan (hari ini)',
                   value: '$pendingOrders',
                   icon: Icons.pending_actions,
                   color: AppColors.warning,
                 ),
                 _StatCard(
-                  title: 'Disetujui',
+                  title: 'Disetujui (hari ini)',
                   value: '$approvedOrders',
                   icon: Icons.check_circle,
                   color: AppColors.success,
                 ),
                 _StatCard(
-                  title: 'Ditolak',
+                  title: 'Ditolak (hari ini)',
                   value: '$rejectedOrders',
                   color: AppColors.error,
                   icon: Icons.cancel,

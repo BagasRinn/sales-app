@@ -462,13 +462,23 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _loadStats({DateTime? date}) async {
     try {
-      _stats = await _repo.getDashboardStats(date: date);
+      // Default: hitung per hari ini (WIT) supaya cards dashboard = aktivitas hari ini,
+      // bukan total sepanjang masa di database.
+      final effectiveDate = date ?? _todayWita();
+      _stats = await _repo.getDashboardStats(date: effectiveDate);
       _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
       // _stats = {} default, dashboard tampil 0 bukan blank/crash.
       _errorMessage = e.toString();
     }
+  }
+
+  DateTime _todayWita() {
+    // WITA = UTC+8. Dashboard "hari ini" mengikuti jam WITA biar konsisten
+    // dengan sales app mobile (sudah pakai WITA di semua laporan).
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
+    return DateTime(now.year, now.month, now.day);
   }
 
   Future<void> loadAll({DateTime? date}) async {
