@@ -47,34 +47,47 @@ class ApiService {
   String? get accessToken => _dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '');
   String? get refreshToken => _refreshToken;
 
-  Future<dynamic> get(String endpoint) async {
+  Future<dynamic> get(String endpoint, {CancelToken? cancelToken}) async {
     try {
-      final resp = await _dio.get(endpoint);
+      final resp = await _dio.get(endpoint, cancelToken: cancelToken);
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<dynamic> post(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    CancelToken? cancelToken,
+  }) async {
     try {
-      final resp = await _dio.post(endpoint, data: body);
+      final resp = await _dio.post(endpoint, data: body, cancelToken: cancelToken);
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  Future<dynamic> put(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<dynamic> put(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    CancelToken? cancelToken,
+  }) async {
     try {
-      final resp = await _dio.put(endpoint, data: body);
+      final resp = await _dio.put(endpoint, data: body, cancelToken: cancelToken);
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  Future<dynamic> postFile(String endpoint, List<int> fileBytes, String fileName) async {
+  Future<dynamic> postFile(
+    String endpoint,
+    List<int> fileBytes,
+    String fileName, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(
@@ -86,6 +99,7 @@ class ApiService {
       final resp = await _dio.post(
         endpoint,
         data: formData,
+        cancelToken: cancelToken,
         options: Options(
           headers: {'Content-Type': 'multipart/form-data'},
           receiveTimeout: endpoint.contains('/import-excel')
@@ -99,9 +113,9 @@ class ApiService {
     }
   }
 
-  Future<void> delete(String endpoint) async {
+  Future<void> delete(String endpoint, {CancelToken? cancelToken}) async {
     try {
-      await _dio.delete(endpoint);
+      await _dio.delete(endpoint, cancelToken: cancelToken);
     } on DioException catch (e) {
       throw _handleError(e);
     }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../data/models/order.dart';
@@ -60,6 +61,21 @@ class AdminProvider extends ChangeNotifier {
   // Timer terpisah untuk user search agar tidak konflik dengan products/customers
   // (mis. user di tab User mengetik saat auto-refresh timer tick di background).
   Timer? _userSearchDebounceTimer;
+
+  /// Cancel token untuk request yang sedang berjalan. Saat tab/user navigasi
+  /// atau loadAll() dipanggil lagi, kita cancel request sebelumnya supaya
+  /// server tidak kirim response yang bakal diabaikan.
+  CancelToken? _loadCancelToken;
+  CancelToken _newLoadToken() {
+    _loadCancelToken?.cancel('New load started');
+    final token = CancelToken();
+    _loadCancelToken = token;
+    return token;
+  }
+  void cancelInFlightLoads() {
+    _loadCancelToken?.cancel('Cancelled by user');
+    _loadCancelToken = null;
+  }
 
   // ===== Sales Performance (Manager only) =====
   List<SalesPerformance> _performanceList = [];
@@ -322,23 +338,25 @@ class AdminProvider extends ChangeNotifier {
     await loadProducts();
   }
 
-  Future<void> _loadCustomers() async {
+  Future<void> _loadCustomers([CancelToken? cancelToken]) async {
     try {
       final results = await Future.wait([
         _repo.getCustomers(
           page: _customerPage,
           limit: _customerLimit,
           search: _customerSearch.isEmpty ? null : _customerSearch,
+          cancelToken: cancelToken,
         ),
         _repo.getCustomerCount(
           search: _customerSearch.isEmpty ? null : _customerSearch,
+          cancelToken: cancelToken,
         ),
       ]);
       _customers = results[0] as List<Customer>;
       _customerTotal = results[1] as int;
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
     }
   }
 
@@ -571,17 +589,17 @@ class AdminProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> _loadStats({DateTime? date}) async {
+  Future<void> _loadStats({DateTime? date, CancelToken? cancelToken}) async {
     try {
       // Default: hitung per hari ini (WIT) supaya cards dashboard = aktivitas hari ini,
       // bukan total sepanjang masa di database.
       final effectiveDate = date ?? _todayWita();
-      _stats = await _repo.getDashboardStats(date: effectiveDate);
+      _stats = await _repo.getDashboardStats(date: effectiveDate, cancelToken: cancelToken);
       _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
       // _stats = {} default, dashboard tampil 0 bukan blank/crash.
-      _errorMessage = e.toString();
+      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
     }
   }
 
@@ -594,45 +612,57 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> loadAll({DateTime? date}) async {
     _setLoading(true, 'Memuat data...');
+    // Cancel any in-flight loadAll requests supaya server tidak kirim response
+    // yang bakal diabaikan. Kalau user navigasi tab cepat, ini menghemat resource.
+    final cancelToken = _newLoadToken();
     try {
-      // MANAGER butuh stats untuk Dashboard dan produk untuk halaman
-      // Produk & Stok (read-only). Tasks di sini adalah view-only fetch;
-      // write endpoint sudah dibatasi di backend (require_admin).
-      final tasks = <Future<void>>[
-        _loadPendingOrders(),
-        _loadAllOrders(),
-        _loadCustomers(),
-        _loadStats(date: date),
-        _loadProducts(),
-      ];
-      await Future.wait(tasks);
+      // Batch 1: orders + stats (dipakai Dashboard & Pesanan)
+      await Future.wait([
+        _loadPendingOrders(cancelToken),
+        _loadAllOrders(cancelToken),
+        if (isAdmin) _loadStats(date: date, cancelToken: cancelToken),
+      ]);
+      // Batch 2: customers + products (dipakai Toko + Produk). Dijalankan
+      // setelah batch 1 supaya kalau tab Pesanan di-lewat cepat, batch 2
+      // tidak jadi beban pada user concurrency.
+      await Future.wait([
+        _loadCustomers(cancelToken),
+        _loadProducts(cancelToken),
+      ]);
       _state = AdminState.loaded;
     } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) {
+        // Cancelled — tidak perlu notify (request di-batalkan oleh user).
+        return;
+      }
       _state = AdminState.error;
       _errorMessage = e.toString();
     }
     notifyListeners();
   }
 
-  Future<void> _loadPendingOrders() async {
+  Future<void> _loadPendingOrders([CancelToken? cancelToken]) async {
     try {
-      _pendingOrders = await _repo.getPendingOrders();
+      _pendingOrders = await _repo.getPendingOrders(cancelToken: cancelToken);
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
     }
   }
 
-  Future<void> _loadAllOrders() async {
+  Future<void> _loadAllOrders([CancelToken? cancelToken]) async {
     try {
-      _allOrders = await _repo.getAllOrders(status: _orderFilter);
+      _allOrders = await _repo.getAllOrders(
+        status: _orderFilter,
+        cancelToken: cancelToken,
+      );
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
     }
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadProducts([CancelToken? cancelToken]) async {
     try {
       final results = await Future.wait([
         _repo.getProducts(
@@ -641,18 +671,20 @@ class AdminProvider extends ChangeNotifier {
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          cancelToken: cancelToken,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          cancelToken: cancelToken,
         ),
       ]);
       _products = results[0] as List<Product>;
       _productTotal = results[1] as int;
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
     }
   }
 

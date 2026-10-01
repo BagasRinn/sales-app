@@ -29,8 +29,8 @@ class AdminRepository {
   void clearTokens() => _api.clearTokens();
   bool get hasToken => _api.hasToken;
 
-  Future<List<Order>> getPendingOrders() async {
-    final data = await _api.get('/orders/pending');
+  Future<List<Order>> getPendingOrders({CancelToken? cancelToken}) async {
+    final data = await _api.get('/orders/pending', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
@@ -40,6 +40,7 @@ class AdminRepository {
     DateTime? dateTo,
     int skip = 0,
     int limit = 50,
+    CancelToken? cancelToken,
   }) async {
     final params = <String, String>{
       'skip': skip.toString(),
@@ -59,7 +60,7 @@ class AdminRepository {
           '${dateTo.day.toString().padLeft(2, '0')}';
     }
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/orders$qs');
+    final data = await _api.get('/orders$qs', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
@@ -173,6 +174,7 @@ class AdminRepository {
     String? supplier,
     String? status,
     String? orderType,
+    CancelToken? cancelToken,
   }) async {
     final queryParams = {
       'skip': (page * limit).toString(),
@@ -183,7 +185,7 @@ class AdminRepository {
       if (orderType != null && orderType.isNotEmpty) 'order_type': orderType,
     };
     final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
-    final data = await _api.get('/products?$queryString');
+    final data = await _api.get('/products?$queryString', cancelToken: cancelToken);
     return (data as List).map((e) => Product.fromJson(e)).toList();
   }
 
@@ -197,6 +199,7 @@ class AdminRepository {
     String? supplier,
     String? status,
     String? orderType,
+    CancelToken? cancelToken,
   }) async {
     final queryParams = {
       if (search != null && search.isNotEmpty) 'search': search,
@@ -205,7 +208,7 @@ class AdminRepository {
       if (orderType != null && orderType.isNotEmpty) 'order_type': orderType,
     };
     final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/products/count$queryString');
+    final data = await _api.get('/products/count$queryString', cancelToken: cancelToken);
     return data['total'] as int;
   }
 
@@ -256,23 +259,28 @@ class AdminRepository {
     return SyncResult.fromJson(data);
   }
 
-  Future<List<Customer>> getCustomers({int page = 0, int limit = 20, String? search}) async {
+  Future<List<Customer>> getCustomers({
+    int page = 0,
+    int limit = 20,
+    String? search,
+    CancelToken? cancelToken,
+  }) async {
     final queryParams = {
       'skip': (page * limit).toString(),
       'limit': limit.toString(),
       if (search != null && search.isNotEmpty) 'search': search,
     };
     final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
-    final data = await _api.get('/customers?$queryString');
+    final data = await _api.get('/customers?$queryString', cancelToken: cancelToken);
     return (data as List).map((e) => Customer.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<int> getCustomerCount({String? search}) async {
+  Future<int> getCustomerCount({String? search, CancelToken? cancelToken}) async {
     final queryParams = {
       if (search != null && search.isNotEmpty) 'search': search,
     };
     final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/customers/count$queryString');
+    final data = await _api.get('/customers/count$queryString', cancelToken: cancelToken);
     return data['total'] as int;
   }
 
@@ -406,7 +414,7 @@ class AdminRepository {
     await _api.delete('/products/import-errors');
   }
 
-  Future<Map<String, int>> getDashboardStats({DateTime? date}) async {
+  Future<Map<String, int>> getDashboardStats({DateTime? date, CancelToken? cancelToken}) async {
     // Use the server-side /products/stats endpoint so the count is never
     // limited by a client-side 50-order window.
     final qs = date != null
@@ -414,7 +422,7 @@ class AdminRepository {
               '${date.month.toString().padLeft(2, '0')}-'
               '${date.day.toString().padLeft(2, '0')}'
         : '';
-    final data = await _api.get('/products/stats$qs');
+    final data = await _api.get('/products/stats$qs', cancelToken: cancelToken);
     return {
       'total_orders': data['total_orders'] ?? 0,
       'pending_orders': data['pending_orders'] ?? 0,

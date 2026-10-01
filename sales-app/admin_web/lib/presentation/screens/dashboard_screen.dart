@@ -249,6 +249,9 @@ class _DashboardContentState extends State<_DashboardContent>
       context.read<AdminProvider>().clearNewPendingBadge();
     }
     setState(() => _selectedIndex = i);
+    // Cancel any in-flight loadAll requests — user sudah pindah tab,
+    // response dari tab lama tidak relevan.
+    context.read<AdminProvider>().cancelInFlightLoads();
   }
 
   Widget _buildBody() {
