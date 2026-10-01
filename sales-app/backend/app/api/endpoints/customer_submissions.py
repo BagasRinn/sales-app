@@ -1,0 +1,274 @@
+"""Customer registration submission endpoints.
+Sales submit pengajuan customer baru → admin/manager review → approve (bikin Customer row) atau reject.
+"""
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+from uuid import UUID, uuid4
+
+from app.models.database import get_db
+from app.models.models import Customer, CustomerRegistrationSubmission, User
+from app.schemas.schemas import (
+    CustomerSubmissionCreate,
+    CustomerSubmissionResponse,
+    CustomerSubmissionApprove,
+    CustomerSubmissionReject,
+)
+from app.core.security import require_auth, require_admin, require_manager, CurrentUser
+
+router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
+
+
+def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
+    """Serialize submission + lookup sales_name & reviewed_by_name untuk response."""
+    sales = db.query(User).filter(User.id == submission.sales_id).first()
+    reviewer = (
+        db.query(User).filter(User.id == submission.reviewed_by).first()
+        if submission.reviewed_by
+        else None
+    )
+    return {
+        "id": submission.id,
+        "sales_id": submission.sales_id,
+        "sales_nama": (sales.nama or sales.username) if sales else None,
+        "sales_username": sales.username if sales else None,
+        "status": submission.status,
+        "reject_reason": submission.reject_reason,
+        "approved_customer_id": submission.approved_customer_id,
+        "reviewed_by": submission.reviewed_by,
+        "reviewed_by_nama": (reviewer.nama or reviewer.username) if reviewer else None,
+        "reviewed_at": submission.reviewed_at,
+        "created_at": submission.created_at,
+        "updated_at": submission.updated_at,
+        "nama_langganan": submission.nama_langganan,
+        "nomor_id_ktp": submission.nomor_id_ktp,
+        "alamat_ktp": submission.alamat_ktp,
+        "nama_kontak_pemilik": submission.nama_kontak_pemilik,
+        "telpon_hp": submission.telpon_hp,
+        "alamat_kirim": submission.alamat_kirim,
+        "propinsi": submission.propinsi,
+        "kecamatan": submission.kecamatan,
+        "area_route": submission.area_route,
+        "tipe_langganan": submission.tipe_langganan,
+        "tipe_pembayaran": submission.tipe_pembayaran,
+        "nama_pasar": submission.nama_pasar,
+        "jangka_kredit_hari": submission.jangka_kredit_hari,
+        "batas_kredit_rupiah": submission.batas_kredit_rupiah,
+        "channel_kategori": submission.channel_kategori,
+        "key_account_ref_id": submission.key_account_ref_id,
+        "cluster_langganan": submission.cluster_langganan,
+        "kode_nama_salesman": submission.kode_nama_salesman,
+        "siklus_kunjungan": submission.siklus_kunjungan,
+    }
+
+
+@router.post("", response_model=CustomerSubmissionResponse, status_code=201)
+def submit_customer_registration(
+    payload: CustomerSubmissionCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Submit pengajuan customer baru. Status langsung PENDING — ga ada draft.
+    sales_id otomatis dari token (siapa yang login)."""
+    sales_id = UUID(current_user["user_id"])
+
+    submission = CustomerRegistrationSubmission(
+        id=uuid4(),
+        sales_id=sales_id,
+        status='PENDING',
+        **payload.model_dump(),
+    )
+    db.add(submission)
+    db.commit()
+    db.refresh(submission)
+    return _serialize(submission, db)
+
+
+@router.get("/my", response_model=List[CustomerSubmissionResponse])
+def list_my_submissions(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Sales lihat history submission sendiri (semua status, urut terbaru)."""
+    sales_id = UUID(current_user["user_id"])
+    submissions = (
+        db.query(CustomerRegistrationSubmission)
+        .filter(CustomerRegistrationSubmission.sales_id == sales_id)
+        .order_by(CustomerRegistrationSubmission.created_at.desc())
+        .all()
+    )
+    return [_serialize(s, db) for s in submissions]
+
+
+@router.get("/check-duplicate")
+def check_duplicate_customer(
+    name: str = Query(..., min_length=1, description="Nama toko yang akan disubmit"),
+    alamat: str = Query("", description="Alamat toko (opsional)"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Cek apakah ada customer existing dengan nama+alamat mirip (LIKE).
+    Return list match — frontend show warning tapi tetap boleh submit."""
+    name_pattern = f"%{name.lower()}%"
+    query = db.query(Customer).filter(
+        Customer.deleted_at.is_(None),
+        func.lower(Customer.nama_toko).like(name_pattern),
+    )
+    if alamat and alamat.strip():
+        alamat_pattern = f"%{alamat.lower()}%"
+        query = query.filter(func.lower(Customer.alamat).like(alamat_pattern))
+
+    matches = query.limit(5).all()
+    return {
+        "has_duplicate": len(matches) > 0,
+        "matches": [
+            {
+                "id": c.id,
+                "kode": c.kode,
+                "nama_toko": c.nama_toko,
+                "alamat": c.alamat,
+            }
+            for c in matches
+        ],
+    }
+
+
+@router.get("", response_model=List[CustomerSubmissionResponse])
+def list_submissions(
+    status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Admin/manager lihat semua submissions. Default: semua status (untuk log view)."""
+    query = db.query(CustomerRegistrationSubmission)
+    if status:
+        query = query.filter(CustomerRegistrationSubmission.status == status.upper())
+    submissions = query.order_by(CustomerRegistrationSubmission.created_at.desc()).all()
+    return [_serialize(s, db) for s in submissions]
+
+
+@router.get("/{submission_id}", response_model=CustomerSubmissionResponse)
+def get_submission(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Detail submission. Admin/manager bisa lihat semua; sales hanya bisa lihat milik sendiri."""
+    submission = db.query(CustomerRegistrationSubmission).filter(
+        CustomerRegistrationSubmission.id == submission_id
+    ).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+
+    role = current_user.get("role")
+    user_id = current_user["user_id"]
+    if role not in ("ADMIN", "MANAGER") and str(submission.sales_id) != user_id:
+        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+
+    return _serialize(submission, db)
+
+
+@router.post("/{submission_id}/approve", response_model=dict, status_code=201)
+def approve_submission(
+    submission_id: UUID,
+    payload: CustomerSubmissionApprove,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    """Approve submission → bikin Customer baru (dengan kode dari admin) → update submission jadi APPROVED."""
+    submission = (
+        db.query(CustomerRegistrationSubmission)
+        .filter(CustomerRegistrationSubmission.id == submission_id)
+        .with_for_update()
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+    if submission.status != "PENDING":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pengajuan tidak bisa di-approve (status saat ini: {submission.status})",
+        )
+
+    # Cek kode belum dipakai customer lain
+    kode = payload.kode.strip()
+    existing = db.query(Customer).filter(
+        Customer.deleted_at.is_(None),
+        Customer.kode == kode,
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Kode '{kode}' sudah dipakai customer lain",
+        )
+
+    # Bikin Customer baru. Nama & alamat dari submission, override kalau admin isi.
+    nama_toko = (payload.nama_toko or submission.nama_langganan).strip()
+    alamat = (payload.alamat or submission.alamat_kirim or "").strip()
+
+    customer = Customer(
+        id=uuid4(),
+        kode=kode,
+        nama_toko=nama_toko,
+        alamat=alamat if alamat else None,
+    )
+    db.add(customer)
+    db.flush()  # dapet customer.id
+
+    admin_id = UUID(current_user["user_id"])
+    submission.status = 'APPROVED'
+    submission.approved_customer_id = customer.id
+    submission.reviewed_by = admin_id
+    submission.reviewed_at = datetime.now(timezone.utc)
+    submission.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(customer)
+    db.refresh(submission)
+
+    return {
+        "submission": _serialize(submission, db),
+        "customer": {
+            "id": customer.id,
+            "kode": customer.kode,
+            "nama_toko": customer.nama_toko,
+            "alamat": customer.alamat,
+        },
+    }
+
+
+@router.post("/{submission_id}/reject")
+def reject_submission(
+    submission_id: UUID,
+    payload: CustomerSubmissionReject,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Reject submission → status jadi REJECTED dengan reject_reason (opsional)."""
+    submission = (
+        db.query(CustomerRegistrationSubmission)
+        .filter(CustomerRegistrationSubmission.id == submission_id)
+        .with_for_update()
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+    if submission.status != "PENDING":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pengajuan tidak bisa di-reject (status saat ini: {submission.status})",
+        )
+
+    admin_id = UUID(_current_user["user_id"])
+    submission.status = 'REJECTED'
+    submission.reject_reason = payload.reject_reason
+    submission.reviewed_by = admin_id
+    submission.reviewed_at = datetime.now(timezone.utc)
+    submission.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(submission)
+    return _serialize(submission, db)

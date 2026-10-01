@@ -244,6 +244,9 @@ class _OrderTotalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final raw = draft.totalRaw;
+    final l1 = draft.discountLayer1Total;
+    final l2 = draft.discountLayer2Total;
+    final l3 = draft.discountLayer3Total;
 
     return Container(
       decoration: BoxDecoration(
@@ -275,26 +278,18 @@ class _OrderTotalCard extends StatelessWidget {
                   ],
                 ),
 
-                if (draft.totalDiscount > 0) ...[
+                // Breakdown per-layer diskon — tampil hanya yang > 0
+                if (l1 > 0) ...[
                   const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Hemat',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.success,
-                        ),
-                      ),
-                      Text(
-                        currency.format(draft.totalDiscount),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  _discountRow('Diskon 1', l1),
+                ],
+                if (l2 > 0) ...[
+                  const SizedBox(height: 4),
+                  _discountRow('Diskon 2', l2),
+                ],
+                if (l3 > 0) ...[
+                  const SizedBox(height: 4),
+                  _discountRow('Diskon 3', l3),
                 ],
 
                 const Divider(height: 20),
@@ -325,6 +320,27 @@ class _OrderTotalCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _discountRow(String label, int amount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.success,
+          ),
+        ),
+        Text(
+          '- ${currency.format(amount)}',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.success,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ProductRow extends StatefulWidget {
@@ -343,19 +359,36 @@ class _ProductRow extends StatefulWidget {
 
 class _ProductRowState extends State<_ProductRow> {
   bool _showDiscount = false;
-  late TextEditingController _discountController;
-  String _discountType = 'PERCENT';
-
-  @override
-  void initState() {
-    super.initState();
-    _discountController = TextEditingController();
-  }
+  String _layer1Type = 'PERCENT';
+  String _layer2Type = 'PERCENT';
+  String _layer3Type = 'PERCENT';
+  final TextEditingController _layer1Controller = TextEditingController();
+  final TextEditingController _layer2Controller = TextEditingController();
+  final TextEditingController _layer3Controller = TextEditingController();
 
   @override
   void dispose() {
-    _discountController.dispose();
+    _layer1Controller.dispose();
+    _layer2Controller.dispose();
+    _layer3Controller.dispose();
     super.dispose();
+  }
+
+  /// Sinkronkan controller + type chip dengan state diskon saat panel dibuka.
+  void _syncFromState(ItemDiscount? disc) {
+    _syncOne(1, disc?.layer1, _layer1Controller, (t) => _layer1Type = t);
+    _syncOne(2, disc?.layer2, _layer2Controller, (t) => _layer2Type = t);
+    _syncOne(3, disc?.layer3, _layer3Controller, (t) => _layer3Type = t);
+  }
+
+  void _syncOne(int idx, DiscountLayer? layer, TextEditingController ctrl,
+      void Function(String) setType) {
+    if (layer == null) {
+      ctrl.text = '';
+    } else {
+      ctrl.text = '${layer.value}';
+      setType(layer.type);
+    }
   }
 
   @override
@@ -371,17 +404,24 @@ class _ProductRowState extends State<_ProductRow> {
     final rawSubtotal = price * widget.qty;
 
     final disc = draft.discounts[widget.productId];
-    int subtotal = rawSubtotal;
-    if (disc != null) {
-      if (disc.type == 'NOMINAL') {
-        // Per-subtotal: potong sekali di akhir, di-cap agar tidak minus.
-        final nominalDiskon = disc.value > rawSubtotal ? rawSubtotal : disc.value;
-        subtotal = rawSubtotal - nominalDiskon;
-      } else {
-        subtotal = rawSubtotal - (rawSubtotal * disc.value / 100).round();
-      }
+
+    // Hitung chain 3 layers untuk display subtotal item.
+    int running = rawSubtotal;
+    int d1 = 0, d2 = 0, d3 = 0;
+    if (disc?.layer1 != null) {
+      d1 = disc!.layer1!.cutFrom(running);
+      running -= d1;
     }
-    final nominalDiskon = rawSubtotal - subtotal;
+    if (disc?.layer2 != null) {
+      d2 = disc!.layer2!.cutFrom(running);
+      running -= d2;
+    }
+    if (disc?.layer3 != null) {
+      d3 = disc!.layer3!.cutFrom(running);
+      running -= d3;
+    }
+    final subtotal = running;
+    final totalCut = d1 + d2 + d3;
 
     return Column(
       children: [
@@ -407,7 +447,7 @@ class _ProductRowState extends State<_ProductRow> {
                       ],
                     ),
                   ),
-                  if (nominalDiskon > 0) ...[
+                  if (totalCut > 0) ...[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -437,12 +477,21 @@ class _ProductRowState extends State<_ProductRow> {
                   const SizedBox(width: 4),
                   IconButton(
                     icon: Icon(
-                      disc != null ? Icons.edit_outlined : Icons.discount_outlined,
+                      disc != null
+                          ? Icons.edit_outlined
+                          : Icons.discount_outlined,
                       size: 18,
-                      color: disc != null ? AppColors.success : AppColors.textSecondary,
+                      color: disc != null
+                          ? AppColors.success
+                          : AppColors.textSecondary,
                     ),
                     tooltip: disc != null ? 'Edit diskon' : 'Tambah diskon',
-                    onPressed: () => setState(() => _showDiscount = !_showDiscount),
+                    onPressed: () {
+                      setState(() {
+                        _showDiscount = !_showDiscount;
+                        if (_showDiscount) _syncFromState(disc);
+                      });
+                    },
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline,
@@ -452,107 +501,234 @@ class _ProductRowState extends State<_ProductRow> {
                   ),
                 ],
               ),
-              if (disc != null)
+              if (disc != null && !disc.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    disc.type == 'NOMINAL'
-                        ? 'Diskon Rp ${currency.format(disc.value)}'
-                        : 'Diskon ${disc.value}%',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  padding: const EdgeInsets.only(top: 4),
+                  child: _activeLayersSummary(disc, currency),
                 ),
             ],
           ),
         ),
-        if (_showDiscount)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-            child: Row(
-              children: [
-                ChoiceChip(
-                  label: const Text('%'),
-                  selected: _discountType == 'PERCENT',
-                  selectedColor: AppColors.primaryLight,
-                  labelStyle: TextStyle(
-                    color: _discountType == 'PERCENT' ? Colors.white : AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                  onSelected: (sel) {
-                    if (!sel) return;
-                    setState(() {
-                      _discountType = 'PERCENT';
-                      _discountController.clear();
-                    });
-                  },
-                ),
-                const SizedBox(width: 6),
-                ChoiceChip(
-                  label: const Text('Rp'),
-                  selected: _discountType == 'NOMINAL',
-                  selectedColor: AppColors.primaryLight,
-                  labelStyle: TextStyle(
-                    color: _discountType == 'NOMINAL' ? Colors.white : AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                  onSelected: (sel) {
-                    if (!sel) return;
-                    setState(() {
-                      _discountType = 'NOMINAL';
-                      _discountController.clear();
-                    });
-                  },
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _discountController,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      prefixText: _discountType == 'NOMINAL' ? 'Rp ' : null,
-                      suffixText: _discountType == 'PERCENT' ? '%' : null,
-                      hintText: '0',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onChanged: (v) {
-                      final parsed = int.tryParse(v) ?? 0;
-                      draft.setDiscount(
-                        productId: widget.productId,
-                        type: _discountType,
-                        value: parsed,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (disc != null)
-                  TextButton(
-                    onPressed: () {
-                      draft.setDiscount(
-                        productId: widget.productId,
-                        type: _discountType,
-                        value: 0,
-                      );
-                      _discountController.clear();
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Hapus', style: TextStyle(fontSize: 12)),
-                  ),
-              ],
+        if (_showDiscount) ...[
+          for (var entry in const [
+            _LayerSpec(1, 'Diskon 1'),
+            _LayerSpec(2, 'Diskon 2'),
+            _LayerSpec(3, 'Diskon 3'),
+          ])
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+              child: _LayerInputRow(
+                spec: entry,
+                type: _typeFor(entry.idx),
+                controller: _ctrlFor(entry.idx),
+                currency: currency,
+                onTypeChanged: (newType) {
+                  setState(() => _setTypeFor(entry.idx, newType));
+                  _ctrlFor(entry.idx).clear();
+                },
+                onValueChanged: (parsed) {
+                  draft.setDiscountLayer(
+                    productId: widget.productId,
+                    layer: entry.idx,
+                    type: _typeFor(entry.idx),
+                    value: parsed,
+                  );
+                },
+                onClear: () {
+                  draft.setDiscountLayer(
+                    productId: widget.productId,
+                    layer: entry.idx,
+                    type: _typeFor(entry.idx),
+                    value: 0,
+                  );
+                  _ctrlFor(entry.idx).clear();
+                },
+                hasValue: _hasValueFor(entry.idx, disc),
+              ),
             ),
+        ],
+      ],
+    );
+  }
+
+  String _typeFor(int idx) {
+    switch (idx) {
+      case 1:
+        return _layer1Type;
+      case 2:
+        return _layer2Type;
+      case 3:
+        return _layer3Type;
+    }
+    return 'PERCENT';
+  }
+
+  void _setTypeFor(int idx, String t) {
+    switch (idx) {
+      case 1:
+        _layer1Type = t;
+        break;
+      case 2:
+        _layer2Type = t;
+        break;
+      case 3:
+        _layer3Type = t;
+        break;
+    }
+  }
+
+  TextEditingController _ctrlFor(int idx) {
+    switch (idx) {
+      case 1:
+        return _layer1Controller;
+      case 2:
+        return _layer2Controller;
+      case 3:
+        return _layer3Controller;
+    }
+    return _layer1Controller;
+  }
+
+  bool _hasValueFor(int idx, ItemDiscount? disc) {
+    if (disc == null) return false;
+    switch (idx) {
+      case 1:
+        return disc.layer1 != null;
+      case 2:
+        return disc.layer2 != null;
+      case 3:
+        return disc.layer3 != null;
+    }
+    return false;
+  }
+
+  Widget _activeLayersSummary(ItemDiscount disc, NumberFormat currency) {
+    final parts = <String>[];
+    for (final entry in [(1, disc.layer1), (2, disc.layer2), (3, disc.layer3)]) {
+      final l = entry.$2;
+      if (l == null) continue;
+      final label = entry.$1 == 1
+          ? 'Diskon 1'
+          : entry.$1 == 2
+              ? 'Diskon 2'
+              : 'Diskon 3';
+      if (l.type == 'NOMINAL') {
+        parts.add('$label: Rp ${currency.format(l.value)}');
+      } else {
+        parts.add('$label: ${l.value}%');
+      }
+    }
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text(
+      parts.join(' · '),
+      style: AppTextStyles.bodySmall.copyWith(
+        color: AppColors.success,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _LayerSpec {
+  final int idx;
+  final String label;
+  const _LayerSpec(this.idx, this.label);
+}
+
+class _LayerInputRow extends StatelessWidget {
+  final _LayerSpec spec;
+  final String type;
+  final TextEditingController controller;
+  final NumberFormat currency;
+  final ValueChanged<String> onTypeChanged;
+  final ValueChanged<int> onValueChanged;
+  final VoidCallback onClear;
+  final bool hasValue;
+
+  const _LayerInputRow({
+    required this.spec,
+    required this.type,
+    required this.controller,
+    required this.currency,
+    required this.onTypeChanged,
+    required this.onValueChanged,
+    required this.onClear,
+    required this.hasValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(
+            spec.label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        ChoiceChip(
+          label: const Text('%'),
+          selected: type == 'PERCENT',
+          selectedColor: AppColors.primaryLight,
+          labelStyle: TextStyle(
+            color: type == 'PERCENT' ? Colors.white : AppColors.textSecondary,
+            fontSize: 12,
+          ),
+          onSelected: (sel) {
+            if (!sel) return;
+            onTypeChanged('PERCENT');
+          },
+        ),
+        const SizedBox(width: 4),
+        ChoiceChip(
+          label: const Text('Rp'),
+          selected: type == 'NOMINAL',
+          selectedColor: AppColors.primaryLight,
+          labelStyle: TextStyle(
+            color: type == 'NOMINAL' ? Colors.white : AppColors.textSecondary,
+            fontSize: 12,
+          ),
+          onSelected: (sel) {
+            if (!sel) return;
+            onTypeChanged('NOMINAL');
+          },
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 90,
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              prefixText: type == 'NOMINAL' ? 'Rp ' : null,
+              suffixText: type == 'PERCENT' ? '%' : null,
+              hintText: '0',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onChanged: (v) => onValueChanged(int.tryParse(v) ?? 0),
+          ),
+        ),
+        const SizedBox(width: 4),
+        if (hasValue)
+          TextButton(
+            onPressed: onClear,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.error,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Hapus', style: TextStyle(fontSize: 11)),
           ),
       ],
     );

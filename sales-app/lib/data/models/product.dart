@@ -10,6 +10,9 @@ class Product {
   final String? satuan;
   final String? namaSupplier;
 
+  /// Tipe order: 'REGULER' (default) atau '4P'. Filter produk di order flow.
+  final String orderType;
+
   Product({
     required this.id,
     required this.namaBarang,
@@ -21,6 +24,7 @@ class Product {
     this.kategori,
     this.satuan,
     this.namaSupplier,
+    this.orderType = 'REGULER',
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -35,6 +39,7 @@ class Product {
       kategori: json['kategori'] as String?,
       satuan: json['satuan'] as String?,
       namaSupplier: json['nama_supplier'] as String?,
+      orderType: (json['order_type'] as String?) ?? 'REGULER',
     );
   }
 
@@ -50,6 +55,7 @@ class Product {
       'kategori': kategori,
       'satuan': satuan,
       'nama_supplier': namaSupplier,
+      'order_type': orderType,
     };
   }
 }

@@ -210,8 +210,9 @@ class _StatsCards extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 1.4,
+        childAspectRatio: 1.1,
         children: const [
+          _SkeletonCard(),
           _SkeletonCard(),
           _SkeletonCard(),
           _SkeletonCard(),
@@ -241,6 +242,32 @@ class _StatsCards extends StatelessWidget {
               subtitle: 'menunggu admin',
               icon: Icons.hourglass_top_outlined,
               color: AppColors.info,
+            ),
+            _StatCard(
+              label: 'Target Bulanan',
+              value: stats?.targetType != null
+                  ? _formatTargetProgress(
+                      stats?.targetType,
+                      stats?.targetValue ?? 0,
+                      stats?.selesaiBulanIniCount ?? 0,
+                      stats?.selesaiBulanIniTotal ?? 0,
+                    )
+                  : '—',
+              subtitle: stats?.targetType != null
+                  ? (stats?.targetType == 'ORDER_COUNT'
+                      ? 'order bulan ini'
+                      : 'revenue bulan ini')
+                  : 'belum diset',
+              extraText: stats?.incentiveAmount != null && stats!.incentiveAmount! > 0
+                  ? '+ ${currency.format(stats.incentiveAmount)}'
+                  : null,
+              icon: Icons.track_changes_outlined,
+              color: _targetColor(
+                stats?.targetType,
+                stats?.targetValue ?? 0,
+                stats?.selesaiBulanIniCount ?? 0,
+                stats?.selesaiBulanIniTotal ?? 0,
+              ),
             ),
             _StatCard(
               label: 'Selesai (Bulan)',
@@ -286,6 +313,34 @@ class _StatsCards extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  String _formatTargetProgress(
+    String? targetType,
+    int targetValue,
+    int selesaiCount,
+    int selesaiTotal,
+  ) {
+    if (targetType == 'ORDER_COUNT') {
+      return '$selesaiCount / $targetValue';
+    }
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
+    return '${currency.format(selesaiTotal)} / ${currency.format(targetValue)}';
+  }
+
+  Color _targetColor(
+    String? targetType,
+    int targetValue,
+    int selesaiCount,
+    int selesaiTotal,
+  ) {
+    if (targetType == null || targetValue == 0) return AppColors.textMuted;
+    final progress = targetType == 'ORDER_COUNT'
+        ? selesaiCount / targetValue
+        : selesaiTotal / targetValue;
+    if (progress >= 1.0) return AppColors.success;
+    if (progress >= 0.5) return AppColors.warning;
+    return AppColors.info;
   }
 }
 

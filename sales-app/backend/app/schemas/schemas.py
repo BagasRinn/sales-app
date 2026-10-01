@@ -82,6 +82,7 @@ class ProductBase(BaseModel):
     harga: int
     kategori: Optional[str] = None
     satuan: Optional[str] = None
+    order_type: Optional[str] = None  # 'REGULER' atau '4P', default REGULER
 
 
 class ProductCreate(ProductBase):
@@ -89,10 +90,21 @@ class ProductCreate(ProductBase):
     stok_booking: int = 0
     kategori: Optional[str] = None
     satuan: Optional[str] = None
+    order_type: str = 'REGULER'
 
 
 class ProductUpdateStock(BaseModel):
     stok_sistem: int = Field(..., ge=0, description="Nilai stok_sistem baru")
+
+
+class ProductUpdate(BaseModel):
+    """Partial update untuk produk — admin only.
+    Semua field opsional, hanya yang dikirim yang berubah.
+    Dipakai untuk set kategori/satuan/nama_supplier/order_type."""
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
+    nama_supplier: Optional[str] = None
+    order_type: Optional[str] = None  # 'REGULER' atau '4P'
 
 
 class ProductResponse(BaseModel):
@@ -106,6 +118,7 @@ class ProductResponse(BaseModel):
     kategori: Optional[str] = None
     satuan: Optional[str] = None
     nama_supplier: Optional[str] = None
+    order_type: str = 'REGULER'
 
     class Config:
         from_attributes = True
@@ -132,9 +145,18 @@ class SyncResultResponse(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: str
     qty: int = Field(..., gt=0)
+    # --- Discount Layer 1 ---
     discount_type: str = Field(default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
     discount_percent: int = Field(default=0, ge=0, le=100)
     discount_nominal: int = Field(default=0, ge=0)
+    # --- Discount Layer 2 ---
+    discount2_type: str = Field(default='PERCENT')
+    discount2_percent: int = Field(default=0, ge=0, le=100)
+    discount2_nominal: int = Field(default=0, ge=0)
+    # --- Discount Layer 3 ---
+    discount3_type: str = Field(default='PERCENT')
+    discount3_percent: int = Field(default=0, ge=0, le=100)
+    discount3_nominal: int = Field(default=0, ge=0)
 
 
 class OrderCreate(BaseModel):
@@ -144,6 +166,7 @@ class OrderCreate(BaseModel):
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
+    order_type: str = Field(default='REGULER')  # 'REGULER' atau '4P'
 
 
 class OrderItemResponse(BaseModel):
@@ -152,9 +175,19 @@ class OrderItemResponse(BaseModel):
     nama_barang: Optional[str] = None
     qty: int
     harga_satuan: int = 0
+    # --- Discount Layer 1 ---
     discount_type: str = 'PERCENT'
     discount_percent: int = 0
     discount_nominal: int = 0
+    # --- Discount Layer 2 ---
+    discount2_type: str = 'PERCENT'
+    discount2_percent: int = 0
+    discount2_nominal: int = 0
+    # --- Discount Layer 3 ---
+    discount3_type: str = 'PERCENT'
+    discount3_percent: int = 0
+    discount3_nominal: int = 0
+    # --- Derived ---
     harga_setelah_diskon: int = 0
     subtotal: Optional[int] = None
 
@@ -164,9 +197,18 @@ class OrderItemResponse(BaseModel):
 
 class OrderDiscountUpdateItem(BaseModel):
     item_id: UUID
+    # --- Discount Layer 1 ---
     discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
     discount_percent: int = Field(default=0, ge=0, le=100)
     discount_nominal: int = Field(default=0, ge=0)
+    # --- Discount Layer 2 ---
+    discount2_type: str = Field(default='PERCENT')
+    discount2_percent: int = Field(default=0, ge=0, le=100)
+    discount2_nominal: int = Field(default=0, ge=0)
+    # --- Discount Layer 3 ---
+    discount3_type: str = Field(default='PERCENT')
+    discount3_percent: int = Field(default=0, ge=0, le=100)
+    discount3_nominal: int = Field(default=0, ge=0)
 
 
 class OrderDiscountUpdate(BaseModel):
@@ -191,6 +233,7 @@ class OrderResponse(BaseModel):
     store_address: Optional[str] = None
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
+    order_type: str = 'REGULER'
 
     class Config:
         from_attributes = True
@@ -232,6 +275,7 @@ class OrderListWithItemsResponse(BaseModel):
     store_address: Optional[str] = None
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
+    order_type: str = 'REGULER'
 
     class Config:
         from_attributes = True
@@ -317,6 +361,159 @@ class ImportLogResponse(BaseModel):
     skipped: int
     file_name: Optional[str]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ==================== CUSTOMER REGISTRATION SUBMISSIONS ====================
+
+class CustomerSubmissionCreate(BaseModel):
+    """Payload dari mobile saat sales submit pengajuan customer baru.
+    sales_id otomatis dari token, tidak perlu di payload."""
+    # Section 1: Identitas
+    nama_langganan: str = Field(..., min_length=1, max_length=200)
+    nomor_id_ktp: Optional[str] = Field(None, max_length=50)
+    alamat_ktp: Optional[str] = None
+    nama_kontak_pemilik: Optional[str] = Field(None, max_length=200)
+    telpon_hp: Optional[str] = Field(None, max_length=50)
+    alamat_kirim: Optional[str] = None
+    propinsi: Optional[str] = Field(None, max_length=100)
+    kecamatan: Optional[str] = Field(None, max_length=100)
+    area_route: Optional[str] = Field(None, max_length=100)
+    tipe_langganan: Optional[str] = Field(None, max_length=50)
+    # Section 2: Tipe Pembayaran
+    tipe_pembayaran: Optional[str] = Field(None, max_length=20)
+    nama_pasar: Optional[str] = Field(None, max_length=200)
+    jangka_kredit_hari: Optional[int] = None
+    # Section 3: Batas Kredit
+    batas_kredit_rupiah: Optional[int] = None
+    # Section 4: Channel
+    channel_kategori: Optional[str] = Field(None, max_length=50)
+    # Section 5: Salesman
+    key_account_ref_id: Optional[str] = Field(None, max_length=50)
+    cluster_langganan: Optional[str] = Field(None, max_length=100)
+    kode_nama_salesman: Optional[str] = Field(None, max_length=200)
+    siklus_kunjungan: Optional[str] = Field(None, max_length=100)
+
+
+class CustomerSubmissionApprove(BaseModel):
+    """Body untuk approve submission. kode wajib (diinput admin manual),
+    nama_toko & alamat opsional (default pakai value dari submission)."""
+    kode: str = Field(..., min_length=1, max_length=50)
+    nama_toko: Optional[str] = Field(None, min_length=1, max_length=200)
+    alamat: Optional[str] = Field(None, min_length=1, max_length=500)
+
+
+class CustomerSubmissionReject(BaseModel):
+    """Body untuk reject submission. reject_reason opsional."""
+    reject_reason: Optional[str] = None
+
+
+class CustomerSubmissionResponse(BaseModel):
+    id: UUID
+    sales_id: UUID
+    sales_nama: Optional[str] = None
+    sales_username: Optional[str] = None
+    status: str
+    reject_reason: Optional[str] = None
+    approved_customer_id: Optional[UUID] = None
+    reviewed_by: Optional[UUID] = None
+    reviewed_by_nama: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    # Form fields
+    nama_langganan: str
+    nomor_id_ktp: Optional[str] = None
+    alamat_ktp: Optional[str] = None
+    nama_kontak_pemilik: Optional[str] = None
+    telpon_hp: Optional[str] = None
+    alamat_kirim: Optional[str] = None
+    propinsi: Optional[str] = None
+    kecamatan: Optional[str] = None
+    area_route: Optional[str] = None
+    tipe_langganan: Optional[str] = None
+    tipe_pembayaran: Optional[str] = None
+    nama_pasar: Optional[str] = None
+    jangka_kredit_hari: Optional[int] = None
+    batas_kredit_rupiah: Optional[int] = None
+    channel_kategori: Optional[str] = None
+    key_account_ref_id: Optional[str] = None
+    cluster_langganan: Optional[str] = None
+    kode_nama_salesman: Optional[str] = None
+    siklus_kunjungan: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ==================== SALES TARGETS ====================
+
+class SalesTargetUpdate(BaseModel):
+    """Body untuk PUT /sales-targets/{user_id}."""
+    period: str = Field(..., description="Periode dalam format YYYY-MM")
+    target_type: str = Field(..., description="'ORDER_COUNT' atau 'REVENUE'")
+    target_value: int = Field(..., ge=0, description="Nilai target")
+    incentive_amount: int = Field(default=0, ge=0, description="Bonus jika target tercapai")
+
+
+class SalesTargetResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    period: str
+    target_type: str
+    target_value: int
+    incentive_amount: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ==================== SALES PERFORMANCE ====================
+
+class SalesPerformanceItem(BaseModel):
+    user_id: UUID
+    username: str
+    nama: Optional[str] = None
+    order_count: int = 0
+    revenue: int = 0
+    submission_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class SalesPerformanceResponse(BaseModel):
+    sales: List[SalesPerformanceItem]
+
+
+# ==================== BULLETINS ====================
+
+class BulletinCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    pdf_url: Optional[str] = Field(None, max_length=500)
+    expire_at: Optional[datetime] = None
+
+
+class BulletinUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    pdf_url: Optional[str] = Field(None, max_length=500)
+    expire_at: Optional[datetime] = None
+
+
+class BulletinResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    pdf_url: Optional[str] = None
+    expire_at: Optional[datetime] = None
+    created_at: datetime
+    is_read: bool = False  # sudah di-dismiss oleh sales ini atau belum
 
     class Config:
         from_attributes = True

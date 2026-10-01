@@ -6,6 +6,7 @@ import '../../../data/models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/draft_order_provider.dart';
 import 'step_pick_customer.dart';
+import 'step_pick_order_type.dart';
 import 'step_pick_products.dart';
 import 'step_review.dart';
 
@@ -49,12 +50,45 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   }
 
   void _next() {
-    if (_step < 3) setState(() => _step++);
+    if (_step < 4) setState(() => _step++);
   }
 
   void _back() {
     if (_step > 1) {
       setState(() => _step--);
+    }
+  }
+
+  /// Back dari step 3 (Produk) ke step 2 (Tipe). Kalau sudah ada item, dialog konfirmasi.
+  Future<void> _backFromProducts() async {
+    final draft = context.read<DraftOrderProvider>();
+    if (!draft.hasItems) {
+      _back();
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Kembali ke halaman tipe order?'),
+        content: const Text(
+          'Item & diskon yang sudah dipilih tetap tersimpan. '
+          'Anda bisa ganti tipe order tanpa kehilangan item yang dipilih.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Tetap di sini'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kembali'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      _back();
     }
   }
 
@@ -113,6 +147,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
             items: draft.items,
             discounts: draft.discounts,
             notes: draft.notes,
+            orderType: draft.orderType,
           );
       _hideLoading();
 
@@ -145,7 +180,9 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
 
       final orderProvider = context.read<OrderProvider>();
 
-      _showLoading('Mengirim order...');
+      _showLoading(
+        draft.isEditingPending ? 'Menyimpan perubahan...' : 'Mengirim order...',
+      );
       Order? result;
       if (draft.isEditing && draft.editingOrderId != null) {
         result = await orderProvider.updateDraftOrder(
@@ -154,6 +191,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: draft.items,
           discounts: draft.discounts,
           notes: draft.notes,
+          orderType: draft.orderType,
         );
       } else {
         result = await orderProvider.createOrder(
@@ -161,6 +199,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: draft.items,
           discounts: draft.discounts,
           notes: draft.notes,
+          orderType: draft.orderType,
         );
       }
 
@@ -171,15 +210,22 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         return;
       }
 
-      final success = await orderProvider.submitOrder(result.id);
+      // Edit PENDING: order sudah PENDING, skip submit (status tetap PENDING).
+      // Edit DRAFT / order baru: perlu submit untuk jadi PENDING.
+      bool success = true;
+      if (!draft.isEditingPending) {
+        success = await orderProvider.submitOrder(result.id);
+      }
       _hideLoading();
       if (!mounted) return;
 
       if (success) {
         context.read<DraftOrderProvider>().reset();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order berhasil dikirim'),
+          SnackBar(
+            content: Text(draft.isEditingPending || draft.isEditing
+                ? 'Order berhasil diperbarui'
+                : 'Order berhasil dikirim'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -192,56 +238,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       }
     } finally {
       _isSubmitting = false;
-    }
-  }
-
-  Future<void> _deleteDraft() async {
-    final draft = context.read<DraftOrderProvider>();
-    final orderProvider = context.read<OrderProvider>();
-    if (draft.editingOrderId == null) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus Draft?'),
-        content: const Text('Order ini akan dihapus permanen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final success = await orderProvider.deleteOrder(draft.editingOrderId!);
-    if (!mounted) return;
-
-    if (success) {
-      // Kembali ke halaman pesanan + refresh list supaya draft langsung hilang.
-      context.read<DraftOrderProvider>().reset();
-      // Refresh orders di background sebelum pop supaya list update saat masuk.
-      await context.read<OrderProvider>().refreshOrders();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Draft dihapus'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      if (Navigator.of(context).canPop()) {
-        Navigator.pop(context);
-      }
-    } else {
-      _showError(orderProvider.errorMessage ?? 'Gagal menghapus');
     }
   }
 
@@ -267,18 +263,11 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
             onPressed: _handleClose,
           ),
           title: Text(
-            isEditing ? 'Edit Draft' : 'Order Baru',
+            isEditing
+                ? (draft.isEditingPending ? 'Edit Order' : 'Edit Draft')
+                : 'Order Baru',
             style: const TextStyle(fontSize: 18),
           ),
-          actions: [
-            if (isEditing && _step == 3)
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                color: AppColors.error,
-                tooltip: 'Hapus Draft',
-                onPressed: _deleteDraft,
-              ),
-          ],
         ),
         body: Column(
           children: [
@@ -286,7 +275,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
             Expanded(
               child: switch (_step) {
                 1 => StepPickCustomer(onNext: _next),
-                2 => StepPickProducts(onNext: _next, onBack: _back),
+                2 => StepPickOrderType(onNext: _next, onBack: _back),
+                3 => StepPickProducts(onNext: _next, onBack: _backFromProducts),
                 _ => StepReview(
                     onBack: _back,
                     onSaveDraft: _submitDraft,
@@ -305,17 +295,18 @@ class _StepIndicator extends StatelessWidget {
   final int currentStep;
   const _StepIndicator({required this.currentStep});
 
+  static const _labels = ['Toko', 'Tipe', 'Produk', 'Review'];
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          _dot('Toko', 1, currentStep),
-          _connector(1, currentStep),
-          _dot('Produk', 2, currentStep),
-          _connector(2, currentStep),
-          _dot('Review', 3, currentStep),
+          for (var i = 0; i < _labels.length; i++) ...[
+            _dot(_labels[i], i + 1, currentStep),
+            if (i < _labels.length - 1) _connector(i + 1, currentStep),
+          ],
         ],
       ),
     );

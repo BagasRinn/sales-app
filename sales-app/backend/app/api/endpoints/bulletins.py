@@ -1,0 +1,177 @@
+"""Bulletin API endpoints — CRUD + dismiss."""
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from uuid import UUID
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
+
+from app.models.database import get_db
+from app.models.models import Bulletin, BulletinDismiss
+from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
+from app.core.security import require_auth, require_manager, CurrentUser
+
+
+router = APIRouter(prefix="/bulletins", tags=["Bulletins"])
+
+
+def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
+    return {
+        "id": bulletin.id,
+        "title": bulletin.title,
+        "description": bulletin.description,
+        "pdf_url": bulletin.pdf_url,
+        "expire_at": bulletin.expire_at,
+        "created_at": bulletin.created_at,
+        "is_read": is_read,
+    }
+
+
+@router.get("", response_model=List[BulletinResponse])
+def list_bulletins(
+    include_read: bool = Query(
+        False,
+        alias="include_read",
+        description="Jika true, include bulletins yang sudah di-dismiss oleh user ini",
+    ),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """List semua active bulletins (tidak expired).
+    Non-expired = expire_at IS NULL OR expire_at >= now().
+    Join BulletinDismiss untuk menyisipkan is_read flag per user.
+    """
+    wita = timezone(timedelta(hours=8))
+    now_wita = datetime.now(wita)
+    sales_id = UUID(current_user["user_id"])
+
+    # Subquery: bulletins yang sudah di-dismiss oleh user ini
+    dismissed_subq = (
+        db.query(BulletinDismiss.bulletin_id)
+        .filter(BulletinDismiss.sales_id == sales_id)
+        .subquery()
+    )
+
+    query = (
+        db.query(Bulletin, BulletinDismiss.id.isnot(None).label("is_read"))
+        .outerjoin(dismissed_subq, Bulletin.id == dismissed_subq.c.bulletin_id)
+        .filter(
+            or_(
+                Bulletin.expire_at.is_(None),
+                Bulletin.expire_at >= now_wita,
+            )
+        )
+    )
+
+    if not include_read:
+        query = query.filter(BulletinDismiss.id.is_(None))
+
+    results = query.order_by(Bulletin.created_at.desc()).all()
+    return [_build_bulletin_response(b, bool(is_read)) for b, is_read in results]
+
+
+@router.post("", response_model=BulletinResponse)
+def create_bulletin(
+    body: BulletinCreate,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Create bulletin. MANAGER or ADMIN only."""
+    bulletin = Bulletin(
+        title=body.title,
+        description=body.description,
+        pdf_url=body.pdf_url,
+        expire_at=body.expire_at,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(bulletin)
+    db.commit()
+    db.refresh(bulletin)
+    return _build_bulletin_response(bulletin, is_read=False)
+
+
+@router.put("/{bulletin_id}", response_model=BulletinResponse)
+def update_bulletin(
+    bulletin_id: UUID,
+    body: BulletinUpdate,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Update bulletin. MANAGER or ADMIN only."""
+    bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
+    if not bulletin:
+        raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+
+    if body.title is not None:
+        bulletin.title = body.title
+    if body.description is not None:
+        bulletin.description = body.description
+    if body.pdf_url is not None:
+        bulletin.pdf_url = body.pdf_url
+    if body.expire_at is not None:
+        bulletin.expire_at = body.expire_at
+
+    bulletin.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(bulletin)
+
+    # is_read untuk current user (walaupun ini endpoint manager,
+    # is_read di-response adalah field utilitarian — not critical)
+    sales_id = UUID(_current_user["user_id"])
+    dismiss = (
+        db.query(BulletinDismiss)
+        .filter(BulletinDismiss.bulletin_id == bulletin_id, BulletinDismiss.sales_id == sales_id)
+        .first()
+    )
+    return _build_bulletin_response(bulletin, is_read=bool(dismiss))
+
+
+@router.delete("/{bulletin_id}", status_code=204)
+def delete_bulletin(
+    bulletin_id: UUID,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Delete bulletin dan semua dismiss record terkait. MANAGER or ADMIN only."""
+    bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
+    if not bulletin:
+        raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+
+    db.query(BulletinDismiss).filter(BulletinDismiss.bulletin_id == bulletin_id).delete(
+        synchronize_session=False
+    )
+    db.delete(bulletin)
+    db.commit()
+    return None
+
+
+@router.post("/{bulletin_id}/dismiss")
+def dismiss_bulletin(
+    bulletin_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Mark bulletin sebagai di-dismiss (popup sudah ditutup) oleh current user.
+    Idempotent — memanggil ulang tidak error."""
+    bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
+    if not bulletin:
+        raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+
+    sales_id = UUID(current_user["user_id"])
+
+    existing = (
+        db.query(BulletinDismiss)
+        .filter(BulletinDismiss.bulletin_id == bulletin_id, BulletinDismiss.sales_id == sales_id)
+        .first()
+    )
+    if existing:
+        return {"message": "Already dismissed", "bulletin_id": str(bulletin_id)}
+
+    dismiss = BulletinDismiss(
+        bulletin_id=bulletin_id,
+        sales_id=sales_id,
+        dismissed_at=datetime.now(timezone.utc),
+    )
+    db.add(dismiss)
+    db.commit()
+    return {"message": "Dismissed", "bulletin_id": str(bulletin_id)}

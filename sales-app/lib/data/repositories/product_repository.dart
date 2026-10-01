@@ -10,6 +10,7 @@ class ProductRepository {
     int skip = 0,
     int limit = 50,
     String? search,
+    String? orderType,
   }) async {
     final queryParams = <String, String>{
       'skip': skip.toString(),
@@ -17,6 +18,9 @@ class ProductRepository {
     };
     if (search != null && search.isNotEmpty) {
       queryParams['search'] = search;
+    }
+    if (orderType != null && orderType.isNotEmpty) {
+      queryParams['order_type'] = orderType;
     }
 
     final data = await _api.get('/products', queryParams: queryParams);

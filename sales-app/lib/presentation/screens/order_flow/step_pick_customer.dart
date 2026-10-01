@@ -5,6 +5,7 @@ import '../../../core/design_system.dart';
 import '../../../data/models/customer.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../providers/draft_order_provider.dart';
+import '../customers/customer_registration_screen.dart';
 
 class StepPickCustomer extends StatefulWidget {
   final VoidCallback onNext;
@@ -40,9 +41,7 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
     });
     try {
       final repo = context.read<CustomerRepository>();
-      final result = await repo.getMyCustomers(
-        search: _search.isEmpty ? null : _search,
-      );
+      final result = await repo.getMyCustomers();
       if (!mounted) return;
       setState(() {
         _customers = result;
@@ -67,7 +66,7 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Cari nama toko...',
+              hintText: 'Cari nama, kode, atau alamat toko...',
               prefixIcon: const Icon(Icons.search, size: 20),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -126,21 +125,41 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
       );
     }
     final list = _customers ?? [];
-    if (list.isEmpty) {
+    final filtered = _search.isEmpty
+        ? list
+        : list.where((c) {
+            final q = _search.toLowerCase();
+            return c.namaToko.toLowerCase().contains(q) ||
+                (c.kode?.toLowerCase().contains(q) ?? false) ||
+                (c.alamat?.toLowerCase().contains(q) ?? false);
+          }).toList();
+    if (filtered.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.store_outlined, size: 48, color: AppColors.textMuted),
-              SizedBox(height: 12),
-              Text('Tidak ada toko', style: AppTextStyles.headlineSmall),
-              SizedBox(height: 4),
-              Text(
-                'Belum ada toko yang di-assign ke kamu.\nHubungi admin.',
+            children: [
+              const Icon(Icons.store_outlined, size: 48, color: AppColors.textMuted),
+              const SizedBox(height: 12),
+              const Text('Tidak ada toko', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 4),
+              const Text(
+                'Belum ada toko yang di-assign ke kamu.\nAtau ajukan customer baru di bawah.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CustomerRegistrationScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.person_add_alt_1, size: 18),
+                label: const Text('+ Ajukan Customer Baru'),
               ),
             ],
           ),
@@ -150,10 +169,10 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      itemCount: list.length,
+      itemCount: filtered.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
-        final c = list[i];
+        final c = filtered[i];
         return _CustomerTile(
           customer: c,
           onTap: () {

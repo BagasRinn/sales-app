@@ -1,0 +1,11 @@
+aplikasi sales nama produk saat di klik menjadi full D
+aplikasi sales jenis transwksi setelqh memilih toko, 4p atau reguler, muncul produk 4p / reguler saja D
+admin filter kategori produk diganti  jadi filter supplier D
+ngedit orderan dari sales client D
+search kode toko di sales client D
+produk untuk toko itu filternya dengan supplier D
+form penambahan toko, sales client D
+Bulletin board dan pop up diskon (halaman sendiri berupa buka file pdf) dan wajib menghapus isinya ketika tanggal 1, bisa juga memberikan periode post nya jadi kalau udah lewat otomatis menghapus.
+Layer Diskon dihalaman checkout D
+Halaman khusus dimanager untuk monitoring performa masing2 sales D
+Card stats target di halaman utama app mobile D

@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -35,6 +35,10 @@ class Product(Base):
     kategori = Column(String, nullable=True)
     satuan = Column(String, nullable=True)
     nama_supplier = Column(String, nullable=True)
+    # Tipe order: 'REGULER' atau '4P'. Default REGULER — supervisor yg
+    # nanti set 4P per produk via admin web. Dipakai buat filter order flow
+    # mobile + validasi item harus cocok dgn order.order_type.
+    order_type = Column(String(10), nullable=False, default='REGULER')
 
 
 class Customer(Base):
@@ -64,6 +68,8 @@ class Order(Base):
     store_name = Column(String(200), nullable=True)
     store_contact = Column(String(50), nullable=True)
     store_address = Column(String(500), nullable=True)
+    # Tipe order: 'REGULER' atau '4P'. Diset saat create order dari mobile.
+    order_type = Column(String(10), nullable=False, default='REGULER')
 
     __table_args__ = (
         Index("ix_orders_status", "status"),
@@ -86,9 +92,21 @@ class OrderItem(Base):
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"))
     product_id = Column(String, ForeignKey("products.id"))
     qty = Column(Integer)
+
+    # --- Discount Layer 1 (existing single discount, retained as layer 1) ---
     discount_percent = Column(Integer, default=0)  # dipakai kalau discount_type == 'PERCENT'
     discount_type = Column(String(10), default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
     discount_nominal = Column(Integer, default=0)  # dipakai kalau discount_type == 'NOMINAL', dalam IDR
+
+    # --- Discount Layer 2 (stacked setelah Layer 1, sequential) ---
+    discount2_type = Column(String(10), default='PERCENT', nullable=False)
+    discount2_percent = Column(Integer, default=0, nullable=False)
+    discount2_nominal = Column(Integer, default=0, nullable=False)
+
+    # --- Discount Layer 3 (stacked setelah Layer 2, sequential) ---
+    discount3_type = Column(String(10), default='PERCENT', nullable=False)
+    discount3_percent = Column(Integer, default=0, nullable=False)
+    discount3_nominal = Column(Integer, default=0, nullable=False)
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
@@ -107,6 +125,50 @@ class StokLog(Base):
     actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CustomerRegistrationSubmission(Base):
+    """Pengajuan customer baru dari sales. Approve → bikin Customer baru dengan kode yg diinput admin."""
+    __tablename__ = "customer_registration_submissions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sales_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), nullable=False, default='PENDING')
+    reject_reason = Column(Text, nullable=True)
+    approved_customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Section 1: Identitas
+    nama_langganan = Column(String(200), nullable=False)
+    nomor_id_ktp = Column(String(50), nullable=True)
+    alamat_ktp = Column(Text, nullable=True)
+    nama_kontak_pemilik = Column(String(200), nullable=True)
+    telpon_hp = Column(String(50), nullable=True)
+    alamat_kirim = Column(Text, nullable=True)
+    propinsi = Column(String(100), nullable=True)
+    kecamatan = Column(String(100), nullable=True)
+    area_route = Column(String(100), nullable=True)
+    tipe_langganan = Column(String(50), nullable=True)
+
+    # Section 2: Tipe Pembayaran
+    tipe_pembayaran = Column(String(20), nullable=True)
+    nama_pasar = Column(String(200), nullable=True)
+    jangka_kredit_hari = Column(Integer, nullable=True)
+
+    # Section 3: Batas Kredit
+    batas_kredit_rupiah = Column(BigInteger, nullable=True)
+
+    # Section 4: Channel/Kategori
+    channel_kategori = Column(String(50), nullable=True)
+
+    # Section 5: Salesman
+    key_account_ref_id = Column(String(50), nullable=True)
+    cluster_langganan = Column(String(100), nullable=True)
+    kode_nama_salesman = Column(String(200), nullable=True)
+    siklus_kunjungan = Column(String(100), nullable=True)
 
 
 class SyncValidationError(Base):
@@ -135,3 +197,59 @@ class ImportLog(Base):
     skipped = Column(Integer, default=0)
     file_name = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SalesTarget(Base):
+    """Target dan incentive per sales per periode (bulanan)."""
+    __tablename__ = "sales_targets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # periode dalam format YYYY-MM
+    period = Column(String(7), nullable=False, index=True)
+    # Tipe target: 'ORDER_COUNT' atau 'REVENUE'
+    target_type = Column(String(20), nullable=False, default='ORDER_COUNT')
+    # Nilai target (jumlah order atau nominal revenue)
+    target_value = Column(BigInteger, nullable=False, default=0)
+    # Bonus/incentive kalau target tercapai
+    incentive_amount = Column(BigInteger, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_sales_targets_user_period", "user_id", "period", unique=True),
+    )
+
+    user = relationship("User")
+
+
+class Bulletin(Base):
+    __tablename__ = "bulletins"
+    __table_args__ = (
+        Index("ix_bulletins_expire_at", "expire_at"),
+        Index("ix_bulletins_created_at", "created_at"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)  # teks promo/deskripsi
+    pdf_url = Column(String(500), nullable=True)  # URL ke file PDF
+    expire_at = Column(DateTime(timezone=True), nullable=True)  # nullable = tidak expire
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BulletinDismiss(Base):
+    """Tracking apakah sales sudah dismiss popup bulletin."""
+    __tablename__ = "bulletin_dismisses"
+    __table_args__ = (
+        Index("ix_bd_bulletin_user", "bulletin_id", "sales_id", unique=True),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    bulletin_id = Column(UUID(as_uuid=True), ForeignKey("bulletins.id"), nullable=False)
+    sales_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    dismissed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    bulletin = relationship("Bulletin")
+    user = relationship("User")

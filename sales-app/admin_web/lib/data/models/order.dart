@@ -77,9 +77,22 @@ class OrderItem {
   final String namaBarang;
   final int qty;
   final int hargaSatuan;
-  final String discountType; // 'PERCENT' atau 'NOMINAL'
+
+  // --- Discount Layer 1 ---
+  final String discountType;
   final int discountPercent;
   final int discountNominal;
+
+  // --- Discount Layer 2 ---
+  final String discount2Type;
+  final int discount2Percent;
+  final int discount2Nominal;
+
+  // --- Discount Layer 3 ---
+  final String discount3Type;
+  final int discount3Percent;
+  final int discount3Nominal;
+
   /// Harga per pcs setelah diskon — langsung dari backend (bukan dihitung client).
   /// Untuk NOMINAL: harga_satuan − (nominal / qty). Untuk PERCENT: sama.
   final int hargaSetelahDiskon;
@@ -95,6 +108,12 @@ class OrderItem {
     this.discountType = 'PERCENT',
     this.discountPercent = 0,
     this.discountNominal = 0,
+    this.discount2Type = 'PERCENT',
+    this.discount2Percent = 0,
+    this.discount2Nominal = 0,
+    this.discount3Type = 'PERCENT',
+    this.discount3Percent = 0,
+    this.discount3Nominal = 0,
     this.hargaSetelahDiskon = 0,
     this.subtotal = 0,
   });
@@ -115,6 +134,12 @@ class OrderItem {
       discountType: (json['discount_type'] as String?) ?? 'PERCENT',
       discountPercent: json['discount_percent'] as int? ?? 0,
       discountNominal: json['discount_nominal'] as int? ?? 0,
+      discount2Type: (json['discount2_type'] as String?) ?? 'PERCENT',
+      discount2Percent: json['discount2_percent'] as int? ?? 0,
+      discount2Nominal: json['discount2_nominal'] as int? ?? 0,
+      discount3Type: (json['discount3_type'] as String?) ?? 'PERCENT',
+      discount3Percent: json['discount3_percent'] as int? ?? 0,
+      discount3Nominal: json['discount3_nominal'] as int? ?? 0,
       hargaSetelahDiskon: hargaStlhDiskon,
       subtotal: subtotal,
     );

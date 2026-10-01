@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, users, reports
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins
+from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 
 scheduler = AsyncIOScheduler()
@@ -128,6 +129,8 @@ async def lifespan(app: FastAPI):
     run_scheduler = os.getenv("RUN_SCHEDULER", "true").lower() == "true"
     if run_scheduler:
         scheduler.add_job(expire_pending_orders, "interval", minutes=5, id="auto_expire")
+        scheduler.add_job(expire_bulletins, "cron", hour=0, minute=5, timezone="Asia/Makassar", id="expire_bulletins")
+        scheduler.add_job(reset_all_bulletins, "cron", day=1, hour=0, minute=10, timezone="Asia/Makassar", id="reset_all_bulletins")
         scheduler.start()
         logger.info("[STARTUP] Auto-expire scheduler started.")
     else:
@@ -160,8 +163,11 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(customers.router, prefix="/api/v1")
+app.include_router(customer_submissions.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(sales_targets.router, prefix="/api/v1")
+app.include_router(bulletins.router, prefix="/api/v1")
 
 
 @app.get("/")

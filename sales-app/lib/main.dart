@@ -4,18 +4,22 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/theme.dart';
 import 'core/jwt_utils.dart';
+import 'core/design_system.dart';
 import 'data/repositories/api_service.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/product_repository.dart';
 import 'data/repositories/order_repository.dart';
 import 'data/repositories/customer_repository.dart';
+import 'data/repositories/bulletin_repository.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/product_provider.dart';
 import 'presentation/providers/order_provider.dart';
 import 'presentation/providers/draft_order_provider.dart';
 import 'presentation/providers/home_stats_provider.dart';
+import 'presentation/providers/bulletin_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
+import 'presentation/screens/bulletin/bulletin_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Locale data harus diinisialisasi sebelum NumberFormat/DateFormat dengan locale kustom.
@@ -45,11 +49,15 @@ class _SalesAppState extends State<SalesApp> {
     final productRepository = ProductRepository(_apiService);
     final orderRepository = OrderRepository(_apiService);
     final customerRepository = CustomerRepository(_apiService);
+    final bulletinRepository = BulletinRepository(_apiService);
 
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => AuthProvider(authRepository),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => BulletinProvider(bulletinRepository),
         ),
         ChangeNotifierProvider(
           create: (_) => ProductProvider(productRepository),
@@ -173,6 +181,98 @@ class _AuthWrapperState extends State<AuthWrapper>
     await _checkBackgroundTimeout();
   }
 
+  Future<void> _maybeShowBulletinPopup(BuildContext context) async {
+    final bulletinProvider = context.read<BulletinProvider>();
+    final navigator = Navigator.of(context);
+    await bulletinProvider.loadBulletins();
+
+    if (!mounted) return;
+    if (!bulletinProvider.hasUnread) return;
+
+    final bulletin = bulletinProvider.latestUnread;
+    if (bulletin == null) return;
+
+    // Avoid re-showing on hot rebuild
+    if (navigator.canPop()) return;
+
+    // ignore: use_build_context_synchronously — context is captured before await at line 185
+    final navigate = await showDialog<bool>(
+      // ignore: use_build_context_synchronously
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.campaign,
+                  color: AppColors.primaryLight, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Promo & Diskon',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              bulletin.title,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary),
+            ),
+            if (bulletin.description != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                bulletin.description!,
+                style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    height: 1.4),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Lihat Promo'),
+          ),
+        ],
+      ),
+    );
+    if (navigate == true) {
+      await bulletinProvider.dismissBulletin(bulletin.id);
+      if (mounted) {
+        // ignore: use_build_context_synchronously — mounted is State.mounted, context is State.context
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const BulletinScreen(),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -201,6 +301,10 @@ class _AuthWrapperState extends State<AuthWrapper>
     _lastAuthState = authState;
 
     if (authState == AuthState.authenticated) {
+      // Load bulletins after confirming authenticated state
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _maybeShowBulletinPopup(context);
+      });
       return const HomeScreen();
     }
 

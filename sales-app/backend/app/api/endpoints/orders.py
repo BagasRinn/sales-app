@@ -33,6 +33,53 @@ def _get_customer(customer_id, db):
     return customer
 
 
+# ==================== 3-LAYER DISCOUNT HELPERS ====================
+
+# Tiap layer = (type, percent, nominal). Type 'PERCENT' | 'NOMINAL'.
+# Kalkulasi sequential: tiap layer dipotong dari sisa running subtotal.
+
+def _layer_cut(type_val: str, percent: int, nominal: int, running: int) -> int:
+    """Potongan untuk 1 layer. NOMINAL di-cap ke running; PERCENT dari running."""
+    if type_val == "NOMINAL":
+        return min(max(0, nominal), running)
+    # PERCENT
+    return int(round(running * max(0, percent) / 100))
+
+
+def _apply_3_layers(
+    raw_subtotal: int,
+    layer1_type: str, layer1_percent: int, layer1_nominal: int,
+    layer2_type: str, layer2_percent: int, layer2_nominal: int,
+    layer3_type: str, layer3_percent: int, layer3_nominal: int,
+):
+    """Chain 3 layers sequential. Return (final_subtotal, layer1_cut, layer2_cut, layer3_cut, total_cut)."""
+    s = max(0, raw_subtotal)
+    d1 = _layer_cut(layer1_type, layer1_percent, layer1_nominal, s)
+    s -= d1
+    d2 = _layer_cut(layer2_type, layer2_percent, layer2_nominal, s)
+    s -= d2
+    d3 = _layer_cut(layer3_type, layer3_percent, layer3_nominal, s)
+    s -= d3
+    return s, d1, d2, d3, d1 + d2 + d3
+
+
+def _normalize_layer(type_val: str | None, percent: int | None, nominal: int | None):
+    """Coerce nullable inputs from DB rows to a clean (type, percent, nominal) tuple."""
+    t = (type_val or "PERCENT").upper()
+    return t, percent or 0, nominal or 0
+
+
+def _layer_cut_sql(type_col, percent_col, nominal_col, base):
+    """SQLAlchemy case expression: cut amount untuk 1 layer, di-clamp ke base.
+    NOMINAL: min(nominal, base). PERCENT: round(base * percent / 100)."""
+    nominal_cut = case(
+        (func.coalesce(nominal_col, 0) <= base, func.coalesce(nominal_col, 0)),
+        else_=base,
+    )
+    percent_cut = func.round(base * func.coalesce(percent_col, 0) / 100)
+    return case((type_col == "NOMINAL", nominal_cut), else_=percent_cut)
+
+
 def _build_order_response(order: Order) -> dict:
     items_data = []
     total_amount = 0
@@ -43,21 +90,15 @@ def _build_order_response(order: Order) -> dict:
         qty = item.qty or 0
         raw_subtotal = harga_satuan * qty
 
-        discount_type = (item.discount_type or 'PERCENT').upper()
-        discount_percent = item.discount_percent or 0
-        discount_nominal = item.discount_nominal or 0
+        l1 = _normalize_layer(item.discount_type, item.discount_percent, item.discount_nominal)
+        l2 = _normalize_layer(item.discount2_type, item.discount2_percent, item.discount2_nominal)
+        l3 = _normalize_layer(item.discount3_type, item.discount3_percent, item.discount3_nominal)
 
-        if discount_type == 'NOMINAL':
-            # Diskon nominal (IDR) per-subtotal: potong sekali di akhir.
-            # Nominal di-cap supaya tidak melebihi raw_subtotal (tidak boleh minus).
-            nominal_diskon = min(discount_nominal, raw_subtotal)
-            subtotal = raw_subtotal - nominal_diskon
-            harga_setelah = subtotal / qty if qty > 0 else 0
-        else:
-            # Diskon persen — % dari subtotal, baru dikali qty
-            nominal_diskon = int(round(raw_subtotal * discount_percent / 100))
-            subtotal = raw_subtotal - nominal_diskon
-            harga_setelah = subtotal / qty if qty > 0 else 0
+        subtotal, d1, d2, d3, _ = _apply_3_layers(
+            raw_subtotal,
+            *l1, *l2, *l3,
+        )
+        harga_setelah = subtotal / qty if qty > 0 else 0
 
         items_data.append({
             "id": item.id,
@@ -65,14 +106,24 @@ def _build_order_response(order: Order) -> dict:
             "qty": qty,
             "harga_satuan": harga_satuan,
             "nama_barang": item.product.nama_barang if item.product else "",
-            "discount_type": discount_type,
-            "discount_percent": discount_percent if discount_type == 'PERCENT' else 0,
-            "discount_nominal": discount_nominal if discount_type == 'NOMINAL' else 0,
+            # Layer 1
+            "discount_type": l1[0],
+            "discount_percent": l1[1] if l1[0] == "PERCENT" else 0,
+            "discount_nominal": l1[2] if l1[0] == "NOMINAL" else 0,
+            # Layer 2
+            "discount2_type": l2[0],
+            "discount2_percent": l2[1] if l2[0] == "PERCENT" else 0,
+            "discount2_nominal": l2[2] if l2[0] == "NOMINAL" else 0,
+            # Layer 3
+            "discount3_type": l3[0],
+            "discount3_percent": l3[1] if l3[0] == "PERCENT" else 0,
+            "discount3_nominal": l3[2] if l3[0] == "NOMINAL" else 0,
+            # Derived
             "harga_setelah_diskon": int(harga_setelah),
             "subtotal": subtotal,
         })
         total_amount += subtotal
-        total_discount += nominal_diskon
+        total_discount += d1 + d2 + d3
 
     return {
         "id": order.id,
@@ -91,11 +142,106 @@ def _build_order_response(order: Order) -> dict:
         "store_address": order.store_address,
         "total_amount": int(total_amount),
         "total_discount": int(total_discount),
+        "order_type": order.order_type or 'REGULER',
     }
 
 
 def _sync_order_to_sheets(order_id: str):
     logger.info(f"[SHEETS SYNC] Order {order_id} submitted (sheets sync disabled)")
+
+
+def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
+    """Adjust stok_booking untuk PENDING order setelah edit items.
+    Hitung delta qty per produk antara old_items dan new_items (sum by product_id).
+    Delta > 0: atomic add (perlu stock tersedia, raise 409 kalau tidak cukup).
+    Delta < 0: release (tidak perlu check).
+    Tulis StokLog dengan sumber "EDIT" untuk tiap delta yang bukan nol.
+    """
+    old_qty: dict[str, int] = {}
+    for it in old_items:
+        old_qty[it.product_id] = old_qty.get(it.product_id, 0) + (it.qty or 0)
+
+    new_qty: dict[str, int] = {}
+    for item in new_items:
+        pid = item.product_id
+        new_qty[pid] = new_qty.get(pid, 0) + item.qty
+
+    all_pids = set(old_qty.keys()) | set(new_qty.keys())
+
+    for pid in all_pids:
+        delta = new_qty.get(pid, 0) - old_qty.get(pid, 0)
+        if delta == 0:
+            continue
+        if delta > 0:
+            # Tambah booking — perlu stock tersedia
+            result = db.execute(
+                text(
+                    "UPDATE products "
+                    "SET stok_booking = stok_booking + :delta "
+                    "WHERE id = :pid AND (stok_sistem - stok_booking) >= :delta "
+                    "RETURNING stok_booking"
+                ),
+                {"pid": pid, "delta": delta},
+            ).first()
+            if result is None:
+                db.rollback()
+                product = db.query(Product).filter(Product.id == pid).first()
+                if not product:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Produk '{pid}' tidak ditemukan",
+                    )
+                available = max(
+                    0,
+                    (product.stok_sistem or 0) - (product.stok_booking or 0),
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Stok tidak cukup untuk '{product.nama_barang}'. "
+                        f"Tersedia: {available}, tambahan diminta: {delta}"
+                    ),
+                )
+            new_booking = result[0]
+            old_booking = new_booking - delta
+            log_stock_change(
+                db=db,
+                product_id=pid,
+                sumber="EDIT",
+                field_terdampak="stok_booking",
+                delta=delta,
+                nilai_sebelum=old_booking,
+                nilai_sesudah=new_booking,
+                actor_id=sales_id,
+                order_id=order_id,
+            )
+        else:
+            # Kurangi booking (delta < 0, db akan auto-fail kalau stok_booking < abs_delta
+            # karena ada CHECK constraint — seharusnya tidak terjadi karena kita kurangi
+            # dari booking yang sebelumnya sudah kita tambahkan)
+            abs_delta = -delta
+            result = db.execute(
+                text(
+                    "UPDATE products "
+                    "SET stok_booking = stok_booking - :delta "
+                    "WHERE id = :pid "
+                    "RETURNING stok_booking"
+                ),
+                {"pid": pid, "delta": abs_delta},
+            ).first()
+            new_booking = result[0]
+            old_booking = new_booking + abs_delta
+            log_stock_change(
+                db=db,
+                product_id=pid,
+                sumber="EDIT",
+                field_terdampak="stok_booking",
+                delta=-abs_delta,
+                nilai_sebelum=old_booking,
+                nilai_sesudah=new_booking,
+                actor_id=sales_id,
+                order_id=order_id,
+            )
 
 
 def _book_items(items, db, sales_id, order_id_for_log):
@@ -151,6 +297,14 @@ def create_order(
     if not order_req.items:
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
+    # Validasi order_type dulu sebelum loop items — gagal cepat kalau invalid.
+    order_type = (order_req.order_type or 'REGULER').upper()
+    if order_type not in ('REGULER', '4P'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"order_type tidak valid: {order_req.order_type}. Harus 'REGULER' atau '4P'.",
+        )
+
     sales_id = UUID(current_user["user_id"])
     customer = _get_customer(order_req.customer_id, db)
 
@@ -162,6 +316,16 @@ def create_order(
             raise HTTPException(
                 status_code=404,
                 detail=f"Produk '{item.product_id}' tidak ditemukan",
+            )
+        # Validasi tipe produk harus cocok dengan order_type.
+        product_type = (product.order_type or 'REGULER').upper()
+        if product_type != order_type:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Produk '{product.nama_barang}' bukan tipe {order_type} "
+                    f"(tipe produk: {product_type})"
+                ),
             )
         available = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
         if item.qty > available:
@@ -183,33 +347,49 @@ def create_order(
         store_name=customer.nama_toko,
         store_contact=None,
         store_address=customer.alamat,
+        order_type=order_type,
     )
     db.add(order)
 
     for item in order_req.items:
-        discount_type = (item.discount_type or 'PERCENT').upper()
-        if discount_type not in ('PERCENT', 'NOMINAL'):
-            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+        layers = [
+            (item.discount_type, item.discount_percent, item.discount_nominal),
+            (item.discount2_type, item.discount2_percent, item.discount2_nominal),
+            (item.discount3_type, item.discount3_percent, item.discount3_nominal),
+        ]
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        harga_satuan = (product.harga or 0) if product else 0
+        raw_subtotal = harga_satuan * item.qty
 
-        if discount_type == 'NOMINAL':
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            harga_satuan = (product.harga or 0) if product else 0
-            max_nominal = harga_satuan * item.qty
-            if item.discount_nominal > max_nominal:
+        for idx, (dt, dp, dn) in enumerate(layers, start=1):
+            dt = (dt or "PERCENT").upper()
+            if dt not in ("PERCENT", "NOMINAL"):
+                raise HTTPException(status_code=400, detail=f"discount_type layer {idx} tidak valid")
+            if dt == "NOMINAL" and dn and dn > raw_subtotal:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
-                           f"melebihi subtotal ({max_nominal})",
+                    detail=f"Diskon nominal layer {idx} untuk produk '{product.nama_barang if product else item.product_id}' "
+                           f"melebihi subtotal ({raw_subtotal})",
                 )
 
+        l1, l2, l3 = layers
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-            discount_type=discount_type,
-            discount_percent=item.discount_percent if discount_type == 'PERCENT' else 0,
-            discount_nominal=item.discount_nominal if discount_type == 'NOMINAL' else 0,
+            # Layer 1
+            discount_type=(l1[0] or "PERCENT").upper(),
+            discount_percent=l1[1] if (l1[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount_nominal=l1[2] if (l1[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            # Layer 2
+            discount2_type=(l2[0] or "PERCENT").upper(),
+            discount2_percent=l2[1] if (l2[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount2_nominal=l2[2] if (l2[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            # Layer 3
+            discount3_type=(l3[0] or "PERCENT").upper(),
+            discount3_percent=l3[1] if (l3[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount3_nominal=l3[2] if (l3[0] or "PERCENT").upper() == "NOMINAL" else 0,
         ))
 
     db.commit()
@@ -240,6 +420,24 @@ def get_my_orders(
     return [_build_order_response(o) for o in orders]
 
 
+def _three_layer_subtotal_expr():
+    """SQL expression: (final_subtotal, total_discount) setelah chain 3 layer sequential.
+    Dipakai di omset aggregation supaya SQL match Python calculation di _apply_3_layers."""
+    raw = func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
+    d1 = _layer_cut_sql(
+        OrderItem.discount_type, OrderItem.discount_percent, OrderItem.discount_nominal, raw
+    )
+    after1 = raw - d1
+    d2 = _layer_cut_sql(
+        OrderItem.discount2_type, OrderItem.discount2_percent, OrderItem.discount2_nominal, after1
+    )
+    after2 = after1 - d2
+    d3 = _layer_cut_sql(
+        OrderItem.discount3_type, OrderItem.discount3_percent, OrderItem.discount3_nominal, after2
+    )
+    return after2 - d3, d1 + d2 + d3
+
+
 @router.get("/my/stats")
 def get_my_stats(
     db: Session = Depends(get_db),
@@ -256,21 +454,10 @@ def get_my_stats(
     end_of_day_utc = end_of_day_wita.astimezone(timezone.utc)
     start_of_month_utc = start_of_month_wita.astimezone(timezone.utc)
 
+    final_subtotal_expr, _ = _three_layer_subtotal_expr()
+
     omset_today = (
-        db.query(func.coalesce(func.sum(
-            # Untuk PERCENT: harga * (100-pct)/100. Untuk NOMINAL: (harga - nom)*qty.
-            # SQLite tidak punya CASE WHEN yang sama persis di semua backend — kita pakai
-            # ekspresi generatif via func.ifnull + case.
-            func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
-            - func.coalesce(
-                case(
-                    (OrderItem.discount_type == 'NOMINAL',
-                     func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
-                    else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
-                         * func.coalesce(OrderItem.discount_percent, 0) / 100,
-                ), 0
-            )
-        ), 0))
+        db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
         .filter(
@@ -294,17 +481,7 @@ def get_my_stats(
     ).scalar() or 0
 
     selesai_total = (
-        db.query(func.coalesce(func.sum(
-            func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
-            - func.coalesce(
-                case(
-                    (OrderItem.discount_type == 'NOMINAL',
-                     func.coalesce(OrderItem.discount_nominal, 0) * func.coalesce(OrderItem.qty, 0)),
-                    else_=func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
-                         * func.coalesce(OrderItem.discount_percent, 0) / 100,
-                ), 0
-            )
-        ), 0))
+        db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
         .filter(
@@ -315,12 +492,27 @@ def get_my_stats(
         .scalar()
     )
 
-    return {
+    # Target untuk bulan ini
+    current_period = f"{now_wita.year}-{now_wita.month:02d}"
+    from app.models.models import SalesTarget
+    target = (
+        db.query(SalesTarget)
+        .filter(SalesTarget.user_id == sales_id, SalesTarget.period == current_period)
+        .first()
+    )
+
+    result = {
         "omset_hari_ini": int(omset_today or 0),
         "pending_count": int(pending_count),
         "selesai_bulan_ini_count": int(selesai_count),
         "selesai_bulan_ini_total": int(selesai_total or 0),
     }
+    if target:
+        result["target_type"] = target.target_type
+        result["target_value"] = target.target_value
+        result["incentive_amount"] = target.incentive_amount
+        result["target_period"] = target.period
+    return result
 
 
 @router.put("/{order_id}")
@@ -341,42 +533,97 @@ def update_draft_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
-    if order.status != "DRAFT":
+    if order.status not in ("DRAFT", "PENDING"):
         raise HTTPException(
             status_code=400,
-            detail=f"Hanya pesanan berstatus DRAFT yang bisa diedit. Status saat ini: {order.status}",
+            detail=(
+                f"Pesanan hanya bisa diedit saat berstatus DRAFT atau PENDING. "
+                f"Status saat ini: {order.status}"
+            ),
         )
 
     if not order_update.items:
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
+    # Validasi order_type (jika dikirim). Order existing mungkin punya tipe yg berbeda;
+    # sales boleh ganti tipe, asal items baru cocok dgn tipe baru.
+    new_order_type = (order_update.order_type or order.order_type or 'REGULER').upper()
+    if new_order_type not in ('REGULER', '4P'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"order_type tidak valid: {order_update.order_type}. Harus 'REGULER' atau '4P'.",
+        )
+
     sales_id = UUID(current_user["user_id"])
+
+    # Lock OrderItem rows sebelum delete — defense against concurrent reads
+    # yang tidak nge-lock Order. Order row sudah di-lock via with_for_update() di atas,
+    # jadi approve/cancel/update_discounts dari concurrent caller akan blocking.
+    old_items = (
+        db.query(OrderItem)
+        .filter(OrderItem.order_id == order.id)
+        .with_for_update()
+        .all()
+    )
+
     customer = _get_customer(order_update.customer_id, db)
+
+    # Validasi setiap item.product.order_type cocok dengan new_order_type.
+    for item in order_update.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Produk '{item.product_id}' tidak ditemukan",
+            )
+        product_type = (product.order_type or 'REGULER').upper()
+        if product_type != new_order_type:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Produk '{product.nama_barang}' bukan tipe {new_order_type} "
+                    f"(tipe produk: {product_type})"
+                ),
+            )
 
     # Hapus item lama, replace dengan item baru
     db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
     for item in order_update.items:
-        discount_type = (item.discount_type or 'PERCENT').upper()
-        if discount_type not in ('PERCENT', 'NOMINAL'):
-            raise HTTPException(status_code=400, detail="discount_type tidak valid")
-        if discount_type == 'NOMINAL':
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            harga_satuan = (product.harga or 0) if product else 0
-            max_nominal = harga_satuan * item.qty
-            if item.discount_nominal > max_nominal:
+        layers = [
+            (item.discount_type, item.discount_percent, item.discount_nominal),
+            (item.discount2_type, item.discount2_percent, item.discount2_nominal),
+            (item.discount3_type, item.discount3_percent, item.discount3_nominal),
+        ]
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        harga_satuan = (product.harga or 0) if product else 0
+        raw_subtotal = harga_satuan * item.qty
+
+        for idx, (dt, dp, dn) in enumerate(layers, start=1):
+            dt = (dt or "PERCENT").upper()
+            if dt not in ("PERCENT", "NOMINAL"):
+                raise HTTPException(status_code=400, detail=f"discount_type layer {idx} tidak valid")
+            if dt == "NOMINAL" and dn and dn > raw_subtotal:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Diskon nominal untuk produk '{product.nama_barang if product else item.product_id}' "
-                           f"melebihi subtotal ({max_nominal})",
+                    detail=f"Diskon nominal layer {idx} untuk produk '{product.nama_barang if product else item.product_id}' "
+                           f"melebihi subtotal ({raw_subtotal})",
                 )
+
+        l1, l2, l3 = layers
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
             qty=item.qty,
-            discount_type=discount_type,
-            discount_percent=item.discount_percent if discount_type == 'PERCENT' else 0,
-            discount_nominal=item.discount_nominal if discount_type == 'NOMINAL' else 0,
+            discount_type=(l1[0] or "PERCENT").upper(),
+            discount_percent=l1[1] if (l1[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount_nominal=l1[2] if (l1[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            discount2_type=(l2[0] or "PERCENT").upper(),
+            discount2_percent=l2[1] if (l2[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount2_nominal=l2[2] if (l2[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            discount3_type=(l3[0] or "PERCENT").upper(),
+            discount3_percent=l3[1] if (l3[0] or "PERCENT").upper() == "PERCENT" else 0,
+            discount3_nominal=l3[2] if (l3[0] or "PERCENT").upper() == "NOMINAL" else 0,
         ))
 
     order.customer_id = customer.id
@@ -384,6 +631,20 @@ def update_draft_order(
     order.store_name = customer.nama_toko
     order.store_contact = None
     order.store_address = customer.alamat
+    order.order_type = new_order_type
+
+    # PENDING order sudah punya stok_booking terisi — rebalance setelah items berubah.
+    # DRAFT ga punya booking, skip. Kalau rebalance raise 409, db.rollback() di helper
+    # akan membatalkan semua perubahan (delete + insert + customer update) supaya
+    # konsisten.
+    if order.status == "PENDING":
+        _rebalance_booking(
+            db=db,
+            sales_id=sales_id,
+            order_id=order.id,
+            old_items=old_items,
+            new_items=order_update.items,
+        )
 
     db.commit()
     db.refresh(order)
@@ -671,21 +932,45 @@ def update_discounts(
                 detail=f"Item '{update_item.item_id}' tidak ditemukan di pesanan ini",
             )
 
-        discount_type = update_item.discount_type.upper()
-        if discount_type not in ('PERCENT', 'NOMINAL'):
-            raise HTTPException(status_code=400, detail="discount_type tidak valid")
+        # Apply 3 layers sequential dengan cap di running residual.
+        # Layer 1 NOMINAL di-cap ke raw_subtotal; layer 2/3 ke running residual setelah layer sebelumnya.
+        harga_satuan = order_item.product.harga if order_item.product else 0
+        qty = order_item.qty or 0
+        raw_subtotal = harga_satuan * qty
 
-        order_item.discount_type = discount_type
-        if discount_type == 'NOMINAL':
-            # Cap nominal at subtotal item (harga × qty) supaya tidak minus
-            harga_satuan = order_item.product.harga if order_item.product else 0
-            qty = order_item.qty or 0
-            max_nominal = harga_satuan * qty
-            order_item.discount_nominal = min(update_item.discount_nominal, max_nominal)
-            order_item.discount_percent = 0
-        else:
-            order_item.discount_percent = min(update_item.discount_percent, 100)
-            order_item.discount_nominal = 0
+        layers = [
+            (update_item.discount_type, update_item.discount_percent, update_item.discount_nominal),
+            (update_item.discount2_type, update_item.discount2_percent, update_item.discount2_nominal),
+            (update_item.discount3_type, update_item.discount3_percent, update_item.discount3_nominal),
+        ]
+        running = raw_subtotal
+        applied = []
+        for dt, dp, dn in layers:
+            dt = (dt or "PERCENT").upper()
+            if dt not in ("PERCENT", "NOMINAL"):
+                raise HTTPException(status_code=400, detail="discount_type tidak valid")
+            if dt == "PERCENT":
+                pct = min(max(0, dp), 100)
+                applied.append((dt, pct, 0))
+                running -= int(round(running * pct / 100))
+            else:
+                nom = min(max(0, dn), running)
+                applied.append((dt, 0, nom))
+                running -= nom
+
+        # Setelah loop, `running` tidak dipakai lagi — yang penting applied list.
+        # PERCENT percent column selalu berisi nilai percent (walau nominal yg aktif),
+        # sesuai konvensi kolom.
+        (t1, p1, n1), (t2, p2, n2), (t3, p3, n3) = applied
+        order_item.discount_type = t1
+        order_item.discount_percent = p1
+        order_item.discount_nominal = n1
+        order_item.discount2_type = t2
+        order_item.discount2_percent = p2
+        order_item.discount2_nominal = n2
+        order_item.discount3_type = t3
+        order_item.discount3_percent = p3
+        order_item.discount3_nominal = n3
 
     db.commit()
     db.refresh(order)

@@ -141,6 +141,42 @@ class _OrderDetailContent extends StatelessWidget {
   final Order order;
   const _OrderDetailContent({required this.order});
 
+  /// Format ringkasan diskon 3 layer untuk 1 item.
+  /// Contoh: "Diskon 1: 10% · Diskon 2: Rp 2.000 · Diskon 3: 5%"
+  String _formatItemDiscounts(OrderItem item) {
+    final parts = <String>[];
+    for (var i = 1; i <= 3; i++) {
+      String type;
+      int percent;
+      int nominal;
+      switch (i) {
+        case 1:
+          type = item.discountType;
+          percent = item.discountPercent;
+          nominal = item.discountNominal;
+          break;
+        case 2:
+          type = item.discount2Type;
+          percent = item.discount2Percent;
+          nominal = item.discount2Nominal;
+          break;
+        case 3:
+          type = item.discount3Type;
+          percent = item.discount3Percent;
+          nominal = item.discount3Nominal;
+          break;
+        default:
+          continue;
+      }
+      if (type == 'NOMINAL' && nominal > 0) {
+        parts.add('Diskon $i: Rp $nominal');
+      } else if (type == 'PERCENT' && percent > 0) {
+        parts.add('Diskon $i: $percent%');
+      }
+    }
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -173,9 +209,15 @@ class _OrderDetailContent extends StatelessWidget {
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            'Tanggal: ${dateFmt.format(order.createdAt.toLocal())}',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          child: Row(
+            children: [
+              Text(
+                'Tanggal: ${dateFmt.format(order.createdAt.toLocal())}',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(width: 8),
+              _OrderTypeChip(orderType: order.orderType),
+            ],
           ),
         ),
         const SizedBox(height: 20),
@@ -254,9 +296,7 @@ class _OrderDetailContent extends StatelessWidget {
                             ),
                             if (order.items![i].hasDiscount)
                               Text(
-                                order.items![i].discountType == 'NOMINAL'
-                                    ? 'Diskon Rp ${order.items![i].discountNominal}'
-                                    : 'Diskon ${order.items![i].discountPercent}%',
+                                _formatItemDiscounts(order.items![i]),
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.success,
                                 ),
@@ -342,46 +382,160 @@ class _OrderDetailContent extends StatelessWidget {
         // Actions
         if (order.canEdit)
           OutlinedButton.icon(
-            onPressed: () {
-              final items = <String, int>{};
-              if (order.items != null) {
-                for (final item in order.items!) {
-                  items[item.productId] = item.qty;
-                }
-              }
-              final existingDiscounts = <String, DiscountInfo>{};
-              if (order.items != null) {
-                for (final item in order.items!) {
-                  if (item.hasDiscount) {
-                    existingDiscounts[item.productId] = DiscountInfo(
-                      type: item.discountType,
-                      value: item.discountType == 'NOMINAL' ? item.discountNominal : item.discountPercent,
-                    );
-                  }
-                }
-              }
-              context.read<DraftOrderProvider>().loadFromExisting(
-                orderId: order.id,
-                customerId: order.customerId ?? '',
-                customerName: order.customerName ?? order.storeName ?? '',
-                customerAddress: order.storeAddress,
-                existingItems: items,
-                existingDiscounts: existingDiscounts,
-                existingNotes: order.notes ?? '',
-              );
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const OrderFlowScreen(),
-                  fullscreenDialog: true,
-                ),
-              );
-            },
+            onPressed: () => _enterEditFlow(context, order),
             icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('Edit Draft'),
+            label: Text(order.isPending ? 'Edit Order' : 'Edit Draft'),
             style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
           ),
+        if (order.canDelete) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => order.isPending
+                ? _confirmAndCancel(context, order)
+                : _confirmAndDelete(context, order),
+            icon: Icon(
+              order.isPending ? Icons.cancel_outlined : Icons.delete_outline,
+              size: 18,
+              color: AppColors.error,
+            ),
+            label: Text(
+              order.isPending ? 'Batalkan Order' : 'Hapus Order',
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              minimumSize: const Size.fromHeight(44),
+              side: const BorderSide(color: AppColors.error),
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  void _enterEditFlow(BuildContext context, Order order) {
+    final items = <String, int>{};
+    if (order.items != null) {
+      for (final item in order.items!) {
+        items[item.productId] = item.qty;
+      }
+    }
+    final existingDiscounts = <String, ItemDiscount>{};
+    if (order.items != null) {
+      for (final item in order.items!) {
+        final rebuilt = ItemDiscount.fromOrderItem(item);
+        if (!rebuilt.isEmpty) {
+          existingDiscounts[item.productId] = rebuilt;
+        }
+      }
+    }
+    context.read<DraftOrderProvider>().loadFromExisting(
+          orderId: order.id,
+          customerId: order.customerId ?? '',
+          customerName: order.customerName ?? order.storeName ?? '',
+          customerAddress: order.storeAddress,
+          existingItems: items,
+          existingDiscounts: existingDiscounts,
+          existingNotes: order.notes ?? '',
+          existingStatus: order.status,
+          existingOrderType: order.orderType,
+        );
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const OrderFlowScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  Future<void> _confirmAndDelete(BuildContext context, Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Hapus Draft?'),
+        content: const Text('Order ini akan dihapus permanen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final orderProvider = context.read<OrderProvider>();
+    final success = await orderProvider.deleteOrder(order.id);
+    if (!context.mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Draft dihapus'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(orderProvider.errorMessage ?? 'Gagal menghapus'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmAndCancel(BuildContext context, Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Batalkan Order?'),
+        content: const Text(
+          'Order ini akan dibatalkan dan stok booking akan dilepas. '
+          'Order yang dibatalkan tidak bisa di-edit lagi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Tidak'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya, Batalkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final orderProvider = context.read<OrderProvider>();
+    final success = await orderProvider.cancelOrder(order.id);
+    if (!context.mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order dibatalkan'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(orderProvider.errorMessage ?? 'Gagal membatalkan'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Widget _sectionTitle(String label) {
@@ -428,5 +582,32 @@ class _OrderDetailContent extends StatelessWidget {
       case 'REJECTED': return Icons.cancel;
       default: return Icons.info_outline;
     }
+  }
+}
+
+class _OrderTypeChip extends StatelessWidget {
+  final String orderType;
+  const _OrderTypeChip({required this.orderType});
+
+  @override
+  Widget build(BuildContext context) {
+    final is4P = orderType == '4P';
+    final color = is4P ? AppColors.warning : AppColors.info;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        orderType,
+        style: AppTextStyles.bodySmall.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+        ),
+      ),
+    );
   }
 }

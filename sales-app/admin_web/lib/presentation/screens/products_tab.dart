@@ -18,7 +18,7 @@ class _ProductsTabState extends State<ProductsTab> {
   String _searchQuery = '';
   bool _initialized = false;
   final _searchController = TextEditingController();
-  List<String> _kategoriList = [];
+  List<String> _supplierList = [];
 
   static const _statusOptions = [
     {'value': 'tersedia', 'label': 'Tersedia'},
@@ -36,8 +36,8 @@ class _ProductsTabState extends State<ProductsTab> {
         provider.loadProducts();
       }
       try {
-        final kategori = await provider.getKategoriList();
-        if (mounted) setState(() => _kategoriList = kategori);
+        final supplier = await provider.getSupplierList();
+        if (mounted) setState(() => _supplierList = supplier);
       } catch (_) {}
     });
   }
@@ -59,8 +59,8 @@ class _ProductsTabState extends State<ProductsTab> {
     final productTotal = context.select<AdminProvider, int>(
       (p) => p.productTotal,
     );
-    final selectedKategori = context.select<AdminProvider, String?>(
-      (p) => p.selectedKategori,
+    final selectedSupplier = context.select<AdminProvider, String?>(
+      (p) => p.selectedSupplier,
     );
     final selectedStatus = context.select<AdminProvider, String?>(
       (p) => p.selectedStatus,
@@ -111,9 +111,9 @@ class _ProductsTabState extends State<ProductsTab> {
                   SizedBox(
                     width: 160,
                     child: DropdownButtonFormField<String>(
-                      initialValue: selectedKategori,
+                      initialValue: selectedSupplier,
                       decoration: InputDecoration(
-                        hintText: 'Kategori',
+                        hintText: 'Supplier',
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
                         isDense: true,
@@ -124,14 +124,14 @@ class _ProductsTabState extends State<ProductsTab> {
                       isExpanded: true,
                       items: [
                         const DropdownMenuItem(
-                            value: null, child: Text('Semua Kategori')),
-                        ..._kategoriList.map((k) => DropdownMenuItem(
-                              value: k,
+                            value: null, child: Text('Semua Supplier')),
+                        ..._supplierList.map((s) => DropdownMenuItem(
+                              value: s,
                               child:
-                                  Text(k, overflow: TextOverflow.ellipsis),
+                                  Text(s, overflow: TextOverflow.ellipsis),
                             )),
                       ],
-                      onChanged: (v) => provider.setKategoriFilter(v),
+                      onChanged: (v) => provider.setSupplierFilter(v),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -182,15 +182,15 @@ class _ProductsTabState extends State<ProductsTab> {
                   ),
                 ],
               ),
-              if (selectedKategori != null || selectedStatus != null) ...[
+              if (selectedSupplier != null || selectedStatus != null) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   children: [
-                    if (selectedKategori != null)
+                    if (selectedSupplier != null)
                       _FilterChip(
-                        label: selectedKategori,
-                        onClear: () => provider.setKategoriFilter(null),
+                        label: selectedSupplier,
+                        onClear: () => provider.setSupplierFilter(null),
                       ),
                     if (selectedStatus != null)
                       _FilterChip(
@@ -293,6 +293,7 @@ class _ProductsTabState extends State<ProductsTab> {
                     separatorBuilder: (ctx, idx) => const Divider(height: 1),
                     itemBuilder: (ctx, i) => _DataRow(products[i], colW, totalW,
                       onShowStock: (p) => _showStockDialog(context, p),
+                      onShowEdit: (p) => _showEditDialog(context, p),
                       onConfirmDelete: (p) => _confirmDelete(context, p),
                       readOnly: widget.readOnly,
                     ),
@@ -447,6 +448,176 @@ class _ProductsTabState extends State<ProductsTab> {
     }
   }
 
+  Future<void> _showEditDialog(BuildContext context, Product product) async {
+    final kategoriCtl = TextEditingController(text: product.kategori ?? '');
+    final satuanCtl = TextEditingController(text: product.satuan ?? '');
+    final supplierCtl = TextEditingController(text: product.namaSupplier ?? '');
+    String orderType = product.orderType;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: SizedBox(
+            width: 480,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.infoBg,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.edit_outlined,
+                              color: AppColors.info),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Edit Produk',
+                                  style: AppTextStyles.headlineSmall),
+                              Text(
+                                '${product.namaBarang} (SKU: ${product.id})',
+                                style: AppTextStyles.bodySmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: kategoriCtl,
+                      decoration: const InputDecoration(
+                        labelText: 'Kategori',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: satuanCtl,
+                      decoration: const InputDecoration(
+                        labelText: 'Satuan',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: supplierCtl,
+                      decoration: const InputDecoration(
+                        labelText: 'Supplier',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Tipe Order',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('REGULER'),
+                            selected: orderType == 'REGULER',
+                            onSelected: (sel) {
+                              if (sel) setState(() => orderType = 'REGULER');
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('4P'),
+                            selected: orderType == '4P',
+                            onSelected: (sel) {
+                              if (sel) setState(() => orderType = '4P');
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Batal'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Simpan'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (saved != true || !context.mounted) return;
+
+    try {
+      final updated = await context.read<AdminProvider>().adminRepository.updateProduct(
+            product.id,
+            kategori: kategoriCtl.text.trim().isEmpty
+                ? null
+                : kategoriCtl.text.trim(),
+            satuan:
+                satuanCtl.text.trim().isEmpty ? null : satuanCtl.text.trim(),
+            namaSupplier: supplierCtl.text.trim().isEmpty
+                ? null
+                : supplierCtl.text.trim(),
+            orderType: orderType,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Produk ${updated.id} diperbarui'),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memperbarui produk: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context, Product product) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -572,11 +743,15 @@ class _DataRow extends StatelessWidget {
   final List<double> colW;
   final double totalW;
   final void Function(Product) onShowStock;
+  final void Function(Product) onShowEdit;
   final void Function(Product) onConfirmDelete;
   final bool readOnly;
 
   const _DataRow(this.product, this.colW, this.totalW,
-      {required this.onShowStock, required this.onConfirmDelete, this.readOnly = false});
+      {required this.onShowStock,
+      required this.onShowEdit,
+      required this.onConfirmDelete,
+      this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -687,6 +862,10 @@ class _DataRow extends StatelessWidget {
                           TextButton(
                             onPressed: () => onShowStock(product),
                             child: const Text('Ubah'),
+                          ),
+                          TextButton(
+                            onPressed: () => onShowEdit(product),
+                            child: const Text('Edit'),
                           ),
                           IconButton(
                             onPressed: () => onConfirmDelete(product),

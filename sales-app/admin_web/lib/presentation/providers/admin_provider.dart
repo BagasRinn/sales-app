@@ -5,8 +5,12 @@ import '../../data/models/order.dart';
 import '../../data/models/product.dart';
 import '../../data/models/sync_result.dart';
 import '../../data/models/customer.dart';
+import '../../data/models/customer_submission.dart';
 import '../../data/models/sales_user.dart';
 import '../../data/models/user_item.dart';
+import '../../data/models/sales_performance.dart';
+import '../../data/models/sales_target.dart';
+import '../../data/models/bulletin.dart';
 import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
@@ -21,6 +25,8 @@ class AdminProvider extends ChangeNotifier {
   List<Order> _allOrders = [];
   List<Product> _products = [];
   List<Customer> _customers = [];
+  List<CustomerSubmission> _customerSubmissions = [];
+  String? _customerSubmissionsStatus; // filter aktif: null = semua
   SyncResult? _lastSyncResult;
   Map<String, int> _stats = {};
   String? _loadingMessage;
@@ -40,7 +46,7 @@ class AdminProvider extends ChangeNotifier {
   String _customerSearch = '';
 
   // Filters
-  String? _selectedKategori;
+  String? _selectedSupplier;
   String? _selectedStatus;
   String? _orderFilter; // persists filter across approve/reject actions
   DateTime? _orderDateFrom;
@@ -55,6 +61,19 @@ class AdminProvider extends ChangeNotifier {
   // (mis. user di tab User mengetik saat auto-refresh timer tick di background).
   Timer? _userSearchDebounceTimer;
 
+  // ===== Sales Performance (Manager only) =====
+  List<SalesPerformance> _performanceList = [];
+  DateTime? _performanceDateFrom;
+  DateTime? _performanceDateTo;
+  String _performanceSort = 'revenue'; // 'revenue' atau 'order_count'
+  bool _performanceLoading = false;
+  List<SalesTarget> _salesTargets = [];
+  bool _targetsLoading = false;
+
+  // ===== Bulletins =====
+  List<Bulletin> _bulletins = [];
+  bool _bulletinsLoading = false;
+
   AdminProvider(this._repo);
 
   /// Expose repo untuk widget yang butuh akses langsung (mis. download file).
@@ -66,6 +85,10 @@ class AdminProvider extends ChangeNotifier {
   List<Order> get allOrders => _allOrders;
   List<Product> get products => _products;
   List<Customer> get customers => _customers;
+  List<CustomerSubmission> get customerSubmissions => _customerSubmissions;
+  String? get customerSubmissionsStatus => _customerSubmissionsStatus;
+  int get customerSubmissionsPendingCount =>
+      _customerSubmissions.where((s) => s.status == 'PENDING').length;
   SyncResult? get lastSyncResult => _lastSyncResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
@@ -78,7 +101,7 @@ class AdminProvider extends ChangeNotifier {
   bool get hasPrevProductPage => _productPage > 0;
   bool get hasNextProductPage => _productPage < productTotalPages - 1;
   String get productSearch => _productSearch;
-  String? get selectedKategori => _selectedKategori;
+  String? get selectedSupplier => _selectedSupplier;
   String? get selectedStatus => _selectedStatus;
   String? get orderFilter => _orderFilter;
   DateTime? get orderDateFrom => _orderDateFrom;
@@ -92,6 +115,19 @@ class AdminProvider extends ChangeNotifier {
   bool get hasPrevCustomerPage => _customerPage > 0;
   bool get hasNextCustomerPage => _customerPage < customerTotalPages - 1;
   String get customerSearch => _customerSearch;
+
+  // ===== Sales Performance =====
+  List<SalesPerformance> get performanceList => _performanceList;
+  DateTime? get performanceDateFrom => _performanceDateFrom;
+  DateTime? get performanceDateTo => _performanceDateTo;
+  String get performanceSort => _performanceSort;
+  bool get performanceLoading => _performanceLoading;
+  List<SalesTarget> get salesTargets => _salesTargets;
+  bool get targetsLoading => _targetsLoading;
+
+  // ===== Bulletins =====
+  List<Bulletin> get bulletins => _bulletins;
+  bool get bulletinsLoading => _bulletinsLoading;
 
   String _userRole = 'ADMIN';
   String get userRole => _userRole;
@@ -127,18 +163,28 @@ class AdminProvider extends ChangeNotifier {
     try {
       final prevLength = _pendingOrders.length;
       final prevStats = Map<String, int>.from(_stats);
+      final prevSubmissionsLen = _customerSubmissions.length;
+      final prevSubmissionsPending =
+          _customerSubmissions.where((s) => s.status == 'PENDING').length;
       final tasks = <Future<void>>[
         _loadPendingOrders(),
         if (isAdmin) _loadStats(),
+        // Refresh customer submissions only kalau sudah pernah di-load (avoid
+        // hitting endpoint saat tab belum pernah dibuka).
+        if (_customerSubmissions.isNotEmpty || _customerSubmissionsStatus != null)
+          _loadCustomerSubmissionsSilent(),
       ];
       await Future.wait(tasks);
       // Only rebuild UI if data actually changed
       final pendingChanged = _pendingOrders.length != prevLength;
       final statsChanged = isAdmin && !_mapEquals(_stats, prevStats);
+      final submissionsChanged = _customerSubmissions.length != prevSubmissionsLen ||
+          _customerSubmissions.where((s) => s.status == 'PENDING').length !=
+              prevSubmissionsPending;
       if (pendingChanged) {
         _hasNewPending = _pendingOrders.length > prevLength;
       }
-      if (pendingChanged || statsChanged) {
+      if (pendingChanged || statsChanged || submissionsChanged) {
         notifyListeners();
       }
     } catch (_) {
@@ -205,12 +251,12 @@ class AdminProvider extends ChangeNotifier {
           page: _productPage,
           limit: _productLimit,
           search: _productSearch.isEmpty ? null : _productSearch,
-          kategori: _selectedKategori,
+          supplier: _selectedSupplier,
           status: _selectedStatus,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
-          kategori: _selectedKategori,
+          supplier: _selectedSupplier,
           status: _selectedStatus,
         ),
       ]);
@@ -223,8 +269,8 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> setKategoriFilter(String? kategori) async {
-    _selectedKategori = kategori;
+  Future<void> setSupplierFilter(String? supplier) async {
+    _selectedSupplier = supplier;
     _productPage = 0;
     await loadProducts();
   }
@@ -236,7 +282,7 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<void> clearAllFilters() async {
-    _selectedKategori = null;
+    _selectedSupplier = null;
     _selectedStatus = null;
     _productSearch = '';
     _productPage = 0;
@@ -244,8 +290,8 @@ class AdminProvider extends ChangeNotifier {
     await loadProducts();
   }
 
-  Future<List<String>> getKategoriList() async {
-    return await _repo.getKategoriList();
+  Future<List<String>> getSupplierList() async {
+    return await _repo.getSupplierList();
   }
 
   Future<void> searchProducts(String query) async {
@@ -303,6 +349,71 @@ class AdminProvider extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
+    }
+  }
+
+  Future<void> loadCustomerSubmissions({String? status}) async {
+    try {
+      _customerSubmissionsStatus = status;
+      _customerSubmissions = await _repo.getCustomerSubmissions(status: status);
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    }
+    notifyListeners();
+  }
+
+  Future<CustomerSubmission> approveCustomerSubmission(
+    String submissionId, {
+    required String kode,
+    String? namaToko,
+    String? alamat,
+  }) async {
+    try {
+      final result = await _repo.approveCustomerSubmission(
+        submissionId,
+        kode: kode,
+        namaToko: namaToko,
+        alamat: alamat,
+      );
+      // Refresh list supaya status update kelihatan.
+      await loadCustomerSubmissions(status: _customerSubmissionsStatus);
+      // Return updated submission dari response.
+      return CustomerSubmission.fromJson(
+          result['submission'] as Map<String, dynamic>);
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<CustomerSubmission> rejectCustomerSubmission(
+    String submissionId, {
+    String? rejectReason,
+  }) async {
+    try {
+      final updated = await _repo.rejectCustomerSubmission(
+        submissionId,
+        rejectReason: rejectReason,
+      );
+      await loadCustomerSubmissions(status: _customerSubmissionsStatus);
+      return updated;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Silent variant untuk auto-refresh — tidak notify saat error, tidak set errorMessage.
+  Future<void> _loadCustomerSubmissionsSilent() async {
+    try {
+      _customerSubmissions = await _repo.getCustomerSubmissions(
+        status: _customerSubmissionsStatus,
+      );
+    } catch (_) {
+      // silent
     }
   }
 
@@ -528,12 +639,12 @@ class AdminProvider extends ChangeNotifier {
           page: _productPage,
           limit: _productLimit,
           search: _productSearch.isEmpty ? null : _productSearch,
-          kategori: _selectedKategori,
+          supplier: _selectedSupplier,
           status: _selectedStatus,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
-          kategori: _selectedKategori,
+          supplier: _selectedSupplier,
           status: _selectedStatus,
         ),
       ]);
@@ -673,5 +784,177 @@ class AdminProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // ===== Sales Performance (Manager only) =====
+
+  Future<void> loadSalesPerformance({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    _performanceLoading = true;
+    _performanceDateFrom = from;
+    _performanceDateTo = to;
+    notifyListeners();
+    try {
+      _performanceList = await _repo.getSalesPerformance(fromDate: from, toDate: to);
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _performanceLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void setPerformanceSort(String sort) {
+    _performanceSort = sort;
+    notifyListeners();
+  }
+
+  Future<void> loadSalesTargets({String? period}) async {
+    _targetsLoading = true;
+    notifyListeners();
+    try {
+      _salesTargets = await _repo.getSalesTargets(period: period);
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _targetsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateSalesTarget({
+    required String userId,
+    required String period,
+    required String targetType,
+    required int targetValue,
+    required int incentiveAmount,
+  }) async {
+    try {
+      final updated = await _repo.updateSalesTarget(
+        userId: userId,
+        period: period,
+        targetType: targetType,
+        targetValue: targetValue,
+        incentiveAmount: incentiveAmount,
+      );
+      // Upsert: replace existing or add new
+      final idx = _salesTargets.indexWhere(
+        (t) => t.userId == userId && t.period == period,
+      );
+      if (idx >= 0) {
+        _salesTargets[idx] = updated;
+      } else {
+        _salesTargets.add(updated);
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Return target for a given userId + period, or null if not set.
+  SalesTarget? getTargetFor(String userId, String period) {
+    try {
+      return _salesTargets.firstWhere(
+        (t) => t.userId == userId && t.period == period,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ===== Bulletins =====
+
+  Future<void> loadBulletins({bool includeRead = false}) async {
+    _bulletinsLoading = true;
+    notifyListeners();
+    try {
+      _bulletins = await _repo.getBulletins(includeRead: includeRead);
+      // Sort newest first
+      _bulletins.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _bulletinsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createBulletin({
+    required String title,
+    String? description,
+    String? pdfUrl,
+    DateTime? expireAt,
+  }) async {
+    _setLoading(true, 'Membuat bulletin...');
+    try {
+      final bulletin = await _repo.createBulletin(
+        title: title,
+        description: description,
+        pdfUrl: pdfUrl,
+        expireAt: expireAt,
+      );
+      _bulletins = [bulletin, ..._bulletins];
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateBulletin(
+    String id, {
+    String? title,
+    String? description,
+    String? pdfUrl,
+    DateTime? expireAt,
+  }) async {
+    _setLoading(true, 'Menyimpan bulletin...');
+    try {
+      final updated = await _repo.updateBulletin(
+        id,
+        title: title,
+        description: description,
+        pdfUrl: pdfUrl,
+        expireAt: expireAt,
+      );
+      final idx = _bulletins.indexWhere((b) => b.id == id);
+      if (idx >= 0) {
+        _bulletins[idx] = updated;
+      }
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteBulletin(String id) async {
+    _setLoading(true, 'Menghapus bulletin...');
+    try {
+      await _repo.deleteBulletin(id);
+      _bulletins.removeWhere((b) => b.id == id);
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 }

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../auth/change_password_dialog.dart';
+import '../customers/customer_registration_screen.dart';
+import '../customers/my_submissions_screen.dart';
 
 class MiscScreen extends StatelessWidget {
   const MiscScreen({super.key});
@@ -69,6 +71,37 @@ class MiscScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: Column(
                 children: [
+                  _MenuTile(
+                    icon: Icons.person_add_alt_1,
+                    label: 'Pengajuan Customer Baru',
+                    subtitle: 'Ajukan toko/outlet baru untuk direview admin',
+                    onTap: () async {
+                      final created = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => const CustomerRegistrationScreen(),
+                        ),
+                      );
+                      if (created == true && context.mounted) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const MySubmissionsScreen(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  _MenuTile(
+                    icon: Icons.assignment_outlined,
+                    label: 'Status Pengajuan Saya',
+                    subtitle: 'Lihat history pengajuan customer & statusnya',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MySubmissionsScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, indent: 56),
                   _MenuTile(
                     icon: Icons.help_outline,
                     label: 'Bantuan',

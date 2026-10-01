@@ -24,12 +24,18 @@ class StepPickProducts extends StatefulWidget {
 class _StepPickProductsState extends State<StepPickProducts> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
+  String? _lastLoadedType;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProductProvider>().loadProducts().then((_) {
+      final draft = context.read<DraftOrderProvider>();
+      _lastLoadedType = draft.orderType;
+      context
+          .read<ProductProvider>()
+          .loadProducts(orderType: draft.orderType)
+          .then((_) {
         if (!mounted) return;
         final products = context.read<ProductProvider>().products;
         final cache = {for (final p in products) p.id: p.harga};
@@ -49,7 +55,8 @@ class _StepPickProductsState extends State<StepPickProducts> {
     final q = _search.toLowerCase();
     return products.where((p) {
       return p.namaBarang.toLowerCase().contains(q) ||
-          p.id.toLowerCase().contains(q);
+          p.id.toLowerCase().contains(q) ||
+          (p.namaSupplier?.toLowerCase().contains(q) ?? false);
     }).toList();
   }
 
@@ -59,9 +66,51 @@ class _StepPickProductsState extends State<StepPickProducts> {
     final productProvider = context.watch<ProductProvider>();
     final products = _filtered(productProvider.products);
 
+    // Kalau orderType berubah (user back ke step 2 & ganti tipe), re-fetch produk.
+    if (_lastLoadedType != null && _lastLoadedType != draft.orderType) {
+      _lastLoadedType = draft.orderType;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context
+            .read<ProductProvider>()
+            .loadProducts(orderType: draft.orderType);
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Tipe Order banner
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.cardSurface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                draft.orderType == '4P'
+                    ? Icons.star_rounded
+                    : Icons.store_rounded,
+                size: 16,
+                color: draft.orderType == '4P'
+                    ? AppColors.warning
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Tipe: ${draft.orderType}',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
         // Customer header with "Ganti" button
         Container(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -97,7 +146,7 @@ class _StepPickProductsState extends State<StepPickProducts> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Cari produk...',
+              hintText: 'Cari kode, nama, atau supplier...',
               prefixIcon: const Icon(Icons.search, size: 20),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -209,50 +258,183 @@ class _ProductRow extends StatelessWidget {
       decimalDigits: 0,
     );
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.cardSurface,
+    return Material(
+      color: AppColors.cardSurface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.inventory_2_outlined,
-                size: 20, color: AppColors.textMuted),
+        onTap: () => _showDetail(context),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.borderLight),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.inventory_2_outlined,
+                    size: 20, color: AppColors.textMuted),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.namaBarang,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${currency.format(product.harga)} · Stok: ${product.stokTersedia}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _QtyStepper(productId: product.id, qty: qty, available: product.stokTersedia),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDetail(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  product.namaBarang,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 28,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        product.namaBarang,
+                        style: AppTextStyles.headlineSmall,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${currency.format(product.harga)} · Stok: ${product.stokTersedia}',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+                const SizedBox(height: 20),
+                _detailRow('Kode Item', product.id),
+                if (product.satuan != null && product.satuan!.isNotEmpty)
+                  _detailRow('Satuan', product.satuan!),
+                if (product.kategori != null && product.kategori!.isNotEmpty)
+                  _detailRow('Kategori', product.kategori!),
+                if (product.namaSupplier != null && product.namaSupplier!.isNotEmpty)
+                  _detailRow('Supplier', product.namaSupplier!),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Harga', style: AppTextStyles.bodySmall),
+                          const SizedBox(height: 4),
+                          Text(
+                            currency.format(product.harga),
+                            style: AppTextStyles.headlineMedium.copyWith(
+                              color: AppColors.primaryLight,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Stok', style: AppTextStyles.bodySmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${product.stokTersedia}',
+                          style: AppTextStyles.headlineMedium.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: product.stokTersedia == 0
+                                ? AppColors.error
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Tutup'),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _QtyStepper(productId: product.id, qty: qty, available: product.stokTersedia),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(label, style: AppTextStyles.bodySmall),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );

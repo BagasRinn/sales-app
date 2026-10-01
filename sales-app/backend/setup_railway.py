@@ -84,11 +84,13 @@ def setup_schema(conn):
                 stok_booking  INTEGER     NOT NULL DEFAULT 0,
                 kategori      VARCHAR,
                 satuan        VARCHAR,
-                nama_supplier VARCHAR
+                nama_supplier VARCHAR,
+                order_type    VARCHAR(10) NOT NULL DEFAULT 'REGULER'
             )
         """))
         conn.execute(text("CREATE INDEX ix_products_nama_barang ON products(nama_barang)"))
         conn.execute(text("CREATE INDEX ix_products_nama_supplier ON products(nama_supplier)"))
+        conn.execute(text("CREATE INDEX ix_products_order_type ON products(order_type)"))
         print("  + products")
     else:
         print("  ~ products (sudah ada)")
@@ -134,7 +136,8 @@ def setup_schema(conn):
                 expired_at    TIMESTAMPTZ,
                 store_name    VARCHAR(200),
                 store_contact VARCHAR(50),
-                store_address VARCHAR(500)
+                store_address VARCHAR(500),
+                order_type    VARCHAR(10) NOT NULL DEFAULT 'REGULER'
             )
         """))
         conn.execute(text("CREATE INDEX ix_orders_status ON orders(status)"))
@@ -155,9 +158,18 @@ def setup_schema(conn):
                 order_id         UUID    REFERENCES orders(id) ON DELETE CASCADE,
                 product_id       VARCHAR REFERENCES products(id),
                 qty              INTEGER,
+                -- Discount Layer 1
                 discount_percent INTEGER NOT NULL DEFAULT 0,
                 discount_type    VARCHAR(10) NOT NULL DEFAULT 'PERCENT',
-                discount_nominal INTEGER NOT NULL DEFAULT 0
+                discount_nominal INTEGER NOT NULL DEFAULT 0,
+                -- Discount Layer 2
+                discount2_percent INTEGER NOT NULL DEFAULT 0,
+                discount2_type    VARCHAR(10) NOT NULL DEFAULT 'PERCENT',
+                discount2_nominal INTEGER NOT NULL DEFAULT 0,
+                -- Discount Layer 3
+                discount3_percent INTEGER NOT NULL DEFAULT 0,
+                discount3_type    VARCHAR(10) NOT NULL DEFAULT 'PERCENT',
+                discount3_nominal INTEGER NOT NULL DEFAULT 0
             )
         """))
         print("  + order_items")

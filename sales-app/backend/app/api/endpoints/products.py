@@ -9,6 +9,7 @@ from app.models.models import Product, Order, ImportLog, SyncValidationError
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
+    ProductUpdate,
     SyncResultResponse,
     ImportLogResponse,
 )
@@ -26,7 +27,9 @@ def list_products(
     search: Optional[str] = None,
     needs_review: Optional[bool] = None,
     kategori: Optional[str] = None,
+    supplier: Optional[str] = None,
     status: Optional[str] = None,
+    order_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -45,6 +48,12 @@ def list_products(
 
     if kategori:
         query = query.filter(Product.kategori == kategori)
+
+    if supplier:
+        query = query.filter(Product.nama_supplier == supplier)
+
+    if order_type:
+        query = query.filter(Product.order_type == order_type)
 
     # Apply stock status filter at SQL level so pagination stays correct
     if status:
@@ -77,6 +86,7 @@ def list_products(
                 kategori=p.kategori,
                 satuan=p.satuan,
                 nama_supplier=p.nama_supplier,
+                order_type=p.order_type or 'REGULER',
             )
         )
 
@@ -97,6 +107,24 @@ def get_kategori_list(
         .filter(Product.kategori.isnot(None), Product.kategori != "")
         .distinct()
         .order_by(Product.kategori)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+@router.get("/supplier", response_model=List[str])
+def get_supplier_list(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Return distinct supplier values for the filter dropdown (admin + manager).
+    Dipakai untuk filter produk berdasarkan supplier — lebih sering dipakai daripada
+    kategori per supervisor."""
+    rows = (
+        db.query(Product.nama_supplier)
+        .filter(Product.nama_supplier.isnot(None), Product.nama_supplier != "")
+        .distinct()
+        .order_by(Product.nama_supplier)
         .all()
     )
     return [r[0] for r in rows]
@@ -277,7 +305,9 @@ def get_admin_stats(
 def get_product_count(
     search: Optional[str] = None,
     kategori: Optional[str] = None,
+    supplier: Optional[str] = None,
     status: Optional[str] = None,
+    order_type: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
@@ -291,6 +321,10 @@ def get_product_count(
         )
     if kategori:
         query = query.filter(Product.kategori == kategori)
+    if supplier:
+        query = query.filter(Product.nama_supplier == supplier)
+    if order_type:
+        query = query.filter(Product.order_type == order_type)
     if status:
         stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
         if status == "tersedia":
@@ -326,6 +360,62 @@ def get_product(
         kategori=product.kategori,
         satuan=product.satuan,
         nama_supplier=product.nama_supplier,
+        order_type=product.order_type or 'REGULER',
+    )
+
+
+@router.put("/{product_id}", response_model=ProductResponse)
+def update_product(
+    product_id: str,
+    payload: ProductUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    """Partial update untuk produk — admin only. Field yang None di-skip.
+    order_type hanya menerima 'REGULER' atau '4P'."""
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id)
+        .with_for_update()
+        .first()
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    if payload.order_type is not None and payload.order_type not in ('REGULER', '4P'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"order_type tidak valid: {payload.order_type}. Harus 'REGULER' atau '4P'.",
+        )
+
+    if payload.kategori is not None:
+        product.kategori = payload.kategori
+    if payload.satuan is not None:
+        product.satuan = payload.satuan
+    if payload.nama_supplier is not None:
+        product.nama_supplier = payload.nama_supplier
+    if payload.order_type is not None:
+        product.order_type = payload.order_type
+
+    db.commit()
+    db.refresh(product)
+
+    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+    return ProductResponse(
+        id=product.id,
+        nama_barang=product.nama_barang,
+        harga=product.harga,
+        stok_sistem=product.stok_sistem or 0,
+        stok_booking=product.stok_booking or 0,
+        stok_tersedia=stok_tersedia,
+        perlu_ditinjau=(
+            (product.stok_sistem or 0) < (product.stok_booking or 0)
+            if current_user["role"] == "ADMIN" else None
+        ),
+        kategori=product.kategori,
+        satuan=product.satuan,
+        nama_supplier=product.nama_supplier,
+        order_type=product.order_type or 'REGULER',
     )
 
 

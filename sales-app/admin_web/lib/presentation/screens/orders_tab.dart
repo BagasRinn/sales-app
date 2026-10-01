@@ -662,19 +662,28 @@ class _OrderCardState extends State<_OrderCard> {
   }
 
   Future<void> _openItemDiscountDialog(OrderItem item) async {
-    final currentValue = item.discountType == 'NOMINAL'
-        ? item.discountNominal
-        : item.discountPercent;
-
     final result = await showDialog<_DiscountEditResult>(
       context: context,
       builder: (_) => _DiscountEditDialog(
         namaBarang: item.namaBarang.isNotEmpty
             ? item.namaBarang
             : 'Produk ${item.productId}',
-        currentType: item.discountType,
-        currentValue: currentValue,
         maxNominal: item.hargaSatuan * item.qty,
+        // Layer 1
+        type1: item.discountType,
+        value1: item.discountType == 'NOMINAL'
+            ? item.discountNominal
+            : item.discountPercent,
+        // Layer 2
+        type2: item.discount2Type,
+        value2: item.discount2Type == 'NOMINAL'
+            ? item.discount2Nominal
+            : item.discount2Percent,
+        // Layer 3
+        type3: item.discount3Type,
+        value3: item.discount3Type == 'NOMINAL'
+            ? item.discount3Nominal
+            : item.discount3Percent,
       ),
     );
     if (result == null || !mounted) return;
@@ -686,9 +695,18 @@ class _OrderCardState extends State<_OrderCard> {
         items: [
           {
             'item_id': item.id,
-            'discount_type': result.type,
-            'discount_percent': result.type == 'PERCENT' ? result.value : 0,
-            'discount_nominal': result.type == 'NOMINAL' ? result.value : 0,
+            // Layer 1
+            'discount_type': result.type1,
+            'discount_percent': result.type1 == 'PERCENT' ? result.value1 : 0,
+            'discount_nominal': result.type1 == 'NOMINAL' ? result.value1 : 0,
+            // Layer 2
+            'discount2_type': result.type2,
+            'discount2_percent': result.type2 == 'PERCENT' ? result.value2 : 0,
+            'discount2_nominal': result.type2 == 'NOMINAL' ? result.value2 : 0,
+            // Layer 3
+            'discount3_type': result.type3,
+            'discount3_percent': result.type3 == 'PERCENT' ? result.value3 : 0,
+            'discount3_nominal': result.type3 == 'NOMINAL' ? result.value3 : 0,
           }
         ],
       );
@@ -1000,9 +1018,7 @@ class _OrderItemRow extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      item.discountType == 'NOMINAL'
-                          ? 'Diskon Rp ${currencyFormat.format(item.discountNominal)}'
-                          : 'Diskon ${item.discountPercent}%',
+                      _formatItemDiscounts(item),
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.success,
                         fontWeight: FontWeight.w500,
@@ -1063,25 +1079,88 @@ class _OrderItemRow extends StatelessWidget {
       ),
     );
   }
+
+  /// Format ringkasan diskon 3 layer untuk 1 item.
+  /// Contoh: "Diskon 1: 10% · Diskon 2: Rp 2.000 · Diskon 3: 5%"
+  static String _formatItemDiscounts(OrderItem item) {
+    final parts = <String>[];
+    for (var i = 1; i <= 3; i++) {
+      String type;
+      int percent;
+      int nominal;
+      switch (i) {
+        case 1:
+          type = item.discountType;
+          percent = item.discountPercent;
+          nominal = item.discountNominal;
+          break;
+        case 2:
+          type = item.discount2Type;
+          percent = item.discount2Percent;
+          nominal = item.discount2Nominal;
+          break;
+        case 3:
+          type = item.discount3Type;
+          percent = item.discount3Percent;
+          nominal = item.discount3Nominal;
+          break;
+        default:
+          continue;
+      }
+      if (type == 'NOMINAL' && nominal > 0) {
+        parts.add('Diskon $i: Rp ${nominal.toString()}');
+      } else if (type == 'PERCENT' && percent > 0) {
+        parts.add('Diskon $i: $percent%');
+      }
+    }
+    return parts.join(' · ');
+  }
 }
 
 class _DiscountEditResult {
-  final String type; // 'PERCENT' atau 'NOMINAL'
-  final int value;
-  _DiscountEditResult(this.type, this.value);
+  // Layer 1
+  final String type1;
+  final int value1;
+  // Layer 2
+  final String type2;
+  final int value2;
+  // Layer 3
+  final String type3;
+  final int value3;
+
+  _DiscountEditResult({
+    required this.type1,
+    required this.value1,
+    required this.type2,
+    required this.value2,
+    required this.type3,
+    required this.value3,
+  });
 }
 
 class _DiscountEditDialog extends StatefulWidget {
   final String namaBarang;
-  final String currentType;
-  final int currentValue;
-  final int maxNominal; // harga × qty — untuk cap diskon NOMINAL per-subtotal
+  final int maxNominal; // harga × qty — untuk cap diskon NOMINAL Layer 1
+
+  // Layer 1
+  final String type1;
+  final int value1;
+  // Layer 2
+  final String type2;
+  final int value2;
+  // Layer 3
+  final String type3;
+  final int value3;
 
   const _DiscountEditDialog({
     required this.namaBarang,
-    required this.currentType,
-    required this.currentValue,
     required this.maxNominal,
+    required this.type1,
+    required this.value1,
+    required this.type2,
+    required this.value2,
+    required this.type3,
+    required this.value3,
   });
 
   @override
@@ -1089,63 +1168,119 @@ class _DiscountEditDialog extends StatefulWidget {
 }
 
 class _DiscountEditDialogState extends State<_DiscountEditDialog> {
-  late String _type;
-  late TextEditingController _valueController;
+  late String _type1;
+  late String _type2;
+  late String _type3;
+  late TextEditingController _ctrl1;
+  late TextEditingController _ctrl2;
+  late TextEditingController _ctrl3;
 
   @override
   void initState() {
     super.initState();
-    _type = widget.currentType;
-    _valueController = TextEditingController(
-      text: widget.currentValue > 0 ? widget.currentValue.toString() : '',
-    );
+    _type1 = widget.type1;
+    _type2 = widget.type2;
+    _type3 = widget.type3;
+    _ctrl1 = TextEditingController(
+        text: widget.value1 > 0 ? widget.value1.toString() : '');
+    _ctrl2 = TextEditingController(
+        text: widget.value2 > 0 ? widget.value2.toString() : '');
+    _ctrl3 = TextEditingController(
+        text: widget.value3 > 0 ? widget.value3.toString() : '');
   }
 
   @override
   void dispose() {
-    _valueController.dispose();
+    _ctrl1.dispose();
+    _ctrl2.dispose();
+    _ctrl3.dispose();
     super.dispose();
   }
 
-  void _switchType(String newType) {
-    setState(() {
-      _type = newType;
-      _valueController.clear();
-    });
+  /// Hitung running residual setelah layer N untuk validasi cap NOMINAL layer N+1.
+  int _runningAfter(int uptoLayer) {
+    int s = widget.maxNominal;
+    final layers = [
+      (_type1, _parseOr0(_ctrl1)),
+      (_type2, _parseOr0(_ctrl2)),
+      (_type3, _parseOr0(_ctrl3)),
+    ];
+    for (int i = 0; i < uptoLayer && i < 3; i++) {
+      final (t, v) = layers[i];
+      if (v <= 0) continue;
+      if (t == 'NOMINAL') {
+        s -= v > s ? s : v;
+      } else if (t == 'PERCENT') {
+        s -= (s * v / 100).round();
+      }
+    }
+    return s < 0 ? 0 : s;
   }
 
-  void _save() {
-    final raw = _valueController.text.trim();
-    if (raw.isEmpty) {
-      Navigator.of(context).pop(_DiscountEditResult(_type, 0));
-      return;
+  int _parseOr0(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
+
+  bool _validateAndSave() {
+    final values = <int>[];
+    final types = [_type1, _type2, _type3];
+    final ctrls = [_ctrl1, _ctrl2, _ctrl3];
+
+    for (int i = 0; i < 3; i++) {
+      final v = _parseOr0(ctrls[i]);
+      if (v < 0) {
+        _snack('Layer ${i + 1}: nilai tidak valid');
+        return false;
+      }
+      if (types[i] == 'PERCENT' && v > 100) {
+        _snack('Layer ${i + 1}: persen tidak boleh lebih dari 100');
+        return false;
+      }
+      if (types[i] == 'NOMINAL') {
+        final running = _runningAfter(i);
+        if (v > running) {
+          _snack(
+              'Layer ${i + 1}: nominal (Rp $v) melebihi sisa subtotal (Rp $running)');
+          return false;
+        }
+      }
+      values.add(v);
     }
-    final value = int.tryParse(raw) ?? 0;
-    if (value <= 0) {
-      Navigator.of(context).pop(_DiscountEditResult(_type, 0));
-      return;
-    }
-    if (_type == 'PERCENT' && value > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Persen tidak boleh lebih dari 100')),
-      );
-      return;
-    }
-    if (_type == 'NOMINAL' && value > widget.maxNominal) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Diskon nominal tidak boleh melebihi subtotal (${widget.maxNominal})'),
-        ),
-      );
-      return;
-    }
-    Navigator.of(context).pop(_DiscountEditResult(_type, value));
+
+    Navigator.of(context).pop(_DiscountEditResult(
+      type1: types[0],
+      value1: values[0],
+      type2: types[1],
+      value2: values[1],
+      type3: types[2],
+      value3: values[2],
+    ));
+    return true;
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _switchType(int idx, String newType) {
+    setState(() {
+      switch (idx) {
+        case 0:
+          _type1 = newType;
+          _ctrl1.clear();
+          break;
+        case 1:
+          _type2 = newType;
+          _ctrl2.clear();
+          break;
+        case 2:
+          _type3 = newType;
+          _ctrl3.clear();
+          break;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasCurrentDiscount = widget.currentValue > 0;
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
@@ -1154,61 +1289,50 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Subtotal: Rp ${widget.maxNominal}',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          if (hasCurrentDiscount)
-            Text(
-              'Diskon saat ini: ${widget.currentType == 'NOMINAL' ? 'Rp ${widget.currentValue}' : '${widget.currentValue}%'}',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
-            ),
-          const SizedBox(height: 16),
-          Row(
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: ChoiceChip(
-                  label: const Text('% Persen'),
-                  selected: _type == 'PERCENT',
-                  onSelected: (sel) => sel ? _switchType('PERCENT') : null,
-                ),
+              Text(
+                'Subtotal: Rp ${widget.maxNominal}',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ChoiceChip(
-                  label: const Text('Rp Nominal'),
-                  selected: _type == 'NOMINAL',
-                  onSelected: (sel) => sel ? _switchType('NOMINAL') : null,
-                ),
+              const SizedBox(height: 4),
+              Text(
+                'Layer diskon dipotong berurutan dari sisa subtotal.',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 16),
+              _LayerField(
+                label: 'Diskon 1',
+                type: _type1,
+                controller: _ctrl1,
+                maxRunning: widget.maxNominal,
+                onTypeChanged: (t) => _switchType(0, t),
+              ),
+              const SizedBox(height: 12),
+              _LayerField(
+                label: 'Diskon 2',
+                type: _type2,
+                controller: _ctrl2,
+                maxRunning: _runningAfter(1),
+                onTypeChanged: (t) => _switchType(1, t),
+              ),
+              const SizedBox(height: 12),
+              _LayerField(
+                label: 'Diskon 3',
+                type: _type3,
+                controller: _ctrl3,
+                maxRunning: _runningAfter(2),
+                onTypeChanged: (t) => _switchType(2, t),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _valueController,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: _type == 'PERCENT' ? 'Persen diskon' : 'Nominal diskon (Rp)',
-              hintText: '0',
-              prefixText: _type == 'NOMINAL' ? 'Rp ' : null,
-              suffixText: _type == 'PERCENT' ? '%' : null,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _type == 'PERCENT'
-                ? 'Diskon diterapkan ke subtotal. Contoh: 10% dari Rp ${widget.maxNominal}'
-                : 'Potong sekali di akhir. Maks: Rp ${widget.maxNominal}',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -1216,8 +1340,72 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           child: const Text('Batal'),
         ),
         FilledButton(
-          onPressed: _save,
+          onPressed: _validateAndSave,
           child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
+}
+
+class _LayerField extends StatelessWidget {
+  final String label;
+  final String type;
+  final TextEditingController controller;
+  final int maxRunning;
+  final ValueChanged<String> onTypeChanged;
+
+  const _LayerField({
+    required this.label,
+    required this.type,
+    required this.controller,
+    required this.maxRunning,
+    required this.onTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(fontWeight: FontWeight.w600)),
+            ),
+            ChoiceChip(
+              label: const Text('%'),
+              selected: type == 'PERCENT',
+              onSelected: (sel) => sel ? onTypeChanged('PERCENT') : null,
+            ),
+            const SizedBox(width: 4),
+            ChoiceChip(
+              label: const Text('Rp'),
+              selected: type == 'NOMINAL',
+              onSelected: (sel) => sel ? onTypeChanged('NOMINAL') : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: '0',
+            prefixText: type == 'NOMINAL' ? 'Rp ' : null,
+            suffixText: type == 'PERCENT' ? '%' : null,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          type == 'PERCENT'
+              ? 'Diterapkan ke sisa subtotal (maks 100%)'
+              : 'Maks: Rp $maxRunning',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
         ),
       ],
     );

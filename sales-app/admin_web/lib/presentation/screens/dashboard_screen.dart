@@ -14,8 +14,11 @@ import 'orders_tab.dart';
 import 'products_tab.dart';
 import 'sync_tab.dart';
 import 'stats_tab.dart';
+import 'customer_submissions_tab.dart';
 import 'customers_tab.dart';
 import 'users_tab.dart';
+import 'performance_tab.dart';
+import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -121,11 +124,14 @@ class _DashboardContentState extends State<_DashboardContent>
       const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
       const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
       const _NavItem(icon: Icons.store_outlined, selectedIcon: Icons.store, label: 'Toko'),
+      const _NavItem(icon: Icons.person_add_alt_1_outlined, selectedIcon: Icons.person_add_alt_1, label: 'Pengajuan Customer'),
       const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
       const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
     ];
     if (_isManager) {
       items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
+      items.add(const _NavItem(icon: Icons.trending_up_outlined, selectedIcon: Icons.trending_up, label: 'Performa Sales'));
+      items.add(const _NavItem(icon: Icons.campaign_outlined, selectedIcon: Icons.campaign, label: 'Bulletin'));
     }
     return items;
   }
@@ -135,10 +141,13 @@ class _DashboardContentState extends State<_DashboardContent>
       'Dashboard',
       'Pesanan',
       'Toko',
+      'Pengajuan Customer',
       'Produk & Stok',
       'Sinkronisasi',
     ];
     if (_isManager) titles.add('User');
+    if (_isManager) titles.add('Performa Sales');
+    if (_isManager) titles.add('Bulletin');
     return titles;
   }
 
@@ -248,7 +257,8 @@ class _DashboardContentState extends State<_DashboardContent>
     final readOnly = !_isAdmin;
 
     // Indexes shared untuk ADMIN dan MANAGER: 0=Dashboard, 1=Pesanan, 2=Toko,
-    // 3=Produk & Stok, 4=Sinkronisasi. MANAGER punya index 5=User.
+    // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
+    // MANAGER punya index 6=User, 7=Performa Sales.
     switch (i) {
       case 0:
         return const StatsTab();
@@ -257,11 +267,19 @@ class _DashboardContentState extends State<_DashboardContent>
       case 2:
         return const CustomersTab();
       case 3:
-        return ProductsTab(readOnly: readOnly);
+        return const CustomerSubmissionsTab();
       case 4:
-        return SyncTab(readOnly: readOnly);
+        return ProductsTab(readOnly: readOnly);
       case 5:
+        return SyncTab(readOnly: readOnly);
+      case 6:
         if (_isManager) return const UsersTab();
+        break;
+      case 7:
+        if (_isManager) return const PerformanceTab();
+        break;
+      case 8:
+        if (_isManager) return const BulletinsTab();
         break;
     }
     return const StatsTab();

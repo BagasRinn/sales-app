@@ -118,7 +118,7 @@ class ProductProvider extends ChangeNotifier {
   ProductStatusFilter get statusFilter => _statusFilter;
   String? get categoryFilter => _categoryFilter;
 
-  Future<void> loadProducts({String? search}) async {
+  Future<void> loadProducts({String? search, String? orderType}) async {
     _isLoading = true;
     _errorMessage = null;
     _hasMore = true;
@@ -130,6 +130,7 @@ class ProductProvider extends ChangeNotifier {
         skip: 0,
         limit: _pageSize,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        orderType: orderType,
       );
       _hasMore = _allProducts.length >= _pageSize;
     } on ApiException catch (e) {
