@@ -51,9 +51,9 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
 
     return Column(
       children: [
-        // Header bar
+        // Stats row + Filter chips di satu tempat
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           decoration: const BoxDecoration(
             color: AppColors.surface,
             border: Border(bottom: BorderSide(color: AppColors.borderLight)),
@@ -61,34 +61,88 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Filter pengajuan',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
                 children: [
-                  _filterChip('Semua', 'ALL', total),
-                  _filterChip('Pending', 'PENDING', pending),
-                  _filterChip('Disetujui', 'APPROVED', approved),
-                  _filterChip('Ditolak', 'REJECTED', rejected),
+                  Text(
+                    'Pengajuan Customer',
+                    style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$total total',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.inbox_outlined,
+                      label: 'Semua',
+                      count: total,
+                      color: AppColors.textSecondary,
+                      active: _filter == 'ALL',
+                      onTap: () => _changeFilter('ALL'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.schedule,
+                      label: 'Pending',
+                      count: pending,
+                      color: AppColors.warning,
+                      active: _filter == 'PENDING',
+                      onTap: () => _changeFilter('PENDING'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.check_circle_outline,
+                      label: 'Disetujui',
+                      count: approved,
+                      color: AppColors.success,
+                      active: _filter == 'APPROVED',
+                      onTap: () => _changeFilter('APPROVED'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.cancel_outlined,
+                      label: 'Ditolak',
+                      count: rejected,
+                      color: AppColors.error,
+                      active: _filter == 'REJECTED',
+                      onTap: () => _changeFilter('REJECTED'),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
+
         // List
         Expanded(
           child: submissions.isEmpty
               ? _EmptyState()
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                   itemCount: submissions.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
@@ -99,18 +153,76 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
       ],
     );
   }
+}
 
-  Widget _filterChip(String label, String value, int count) {
-    final selected = _filter == value;
-    return FilterChip(
-      label: Text('$label ($count)'),
-      selected: selected,
-      onSelected: (_) => _changeFilter(value),
-      selectedColor: AppColors.primaryLight,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppColors.textPrimary,
-        fontWeight: FontWeight.w600,
-        fontSize: 12,
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? color.withValues(alpha: 0.08) : AppColors.surface,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: active ? color.withValues(alpha: 0.5) : AppColors.borderLight,
+              width: active ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    color: active ? color : AppColors.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: active ? color : AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: active ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
