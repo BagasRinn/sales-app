@@ -166,7 +166,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
           icon: const Icon(Icons.calendar_month, size: 18),
           label: Text(_useCustomRange ? rangeLabel : monthLabel),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
+            foregroundColor: AppColors.primaryLight,
             side: const BorderSide(color: AppColors.border),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
@@ -178,7 +178,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
           icon: const Icon(Icons.date_range, size: 18),
           label: const Text('Custom Range'),
           style: TextButton.styleFrom(
-            foregroundColor: _useCustomRange ? AppColors.primary : AppColors.textMuted,
+            foregroundColor: _useCustomRange ? AppColors.primaryLight : AppColors.textMuted,
           ),
         ),
       ],
@@ -417,8 +417,6 @@ class _PerformanceTabState extends State<PerformanceTab> {
                     ...sorted.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final perf = entry.value;
-                      final medals = ['🥇', '🥈', '🥉'];
-                      final medal = idx < 3 ? medals[idx] : '#${idx + 1}';
                       final rowBg = idx % 2 == 0
                           ? AppColors.surface
                           : AppColors.borderLight.withValues(alpha: 0.5);
@@ -436,10 +434,13 @@ class _PerformanceTabState extends State<PerformanceTab> {
                             SizedBox(
                               width: 36,
                               child: Text(
-                                medal,
+                                '#${idx + 1}',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  color: idx < 3 ? Colors.amber : AppColors.textMuted,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: idx == 0
+                                      ? AppColors.primaryLight
+                                      : AppColors.textMuted,
                                 ),
                               ),
                             ),
@@ -599,7 +600,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
                                   target,
                                 ),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.primary,
+                                  foregroundColor: AppColors.primaryLight,
                                   padding: EdgeInsets.zero,
                                 ),
                                 child: Text(
