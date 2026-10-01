@@ -68,8 +68,6 @@ class _BulletinsTabState extends State<BulletinsTab> {
             onPressed: () => _showFormDialog(context, null),
             icon: const Icon(Icons.add),
             label: const Text('Buat Bulletin'),
-            backgroundColor: AppColors.info,
-            foregroundColor: Colors.white,
           ),
         ),
       ],
@@ -255,7 +253,6 @@ class _BulletinsTabState extends State<BulletinsTab> {
                 child: const Text('Batal'),
               ),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: AppColors.info),
                 onPressed: () {
                   if (titleCtrl.text.trim().isEmpty) {
                     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -551,7 +548,6 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.info),
               onPressed: onCreate,
               icon: const Icon(Icons.add),
               label: const Text('Buat Bulletin'),
