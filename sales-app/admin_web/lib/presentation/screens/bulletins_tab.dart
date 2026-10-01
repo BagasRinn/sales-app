@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/bulletin.dart';
+import 'bulletin_pdf_picker_stub.dart'
+    if (dart.library.html) 'bulletin_pdf_picker_web.dart' as picker;
 
 /// Tab "Bulletin" — manager-only bulletin management.
 class BulletinsTab extends StatefulWidget {
@@ -87,34 +89,42 @@ class _BulletinsTabState extends State<BulletinsTab> {
     final provider = context.read<AdminProvider>();
     final scaffold = ScaffoldMessenger.of(context);
 
-    Future<void> pickAndUploadPdf(StateSetter setDialogState) async {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      if (file.bytes == null || file.bytes!.isEmpty) {
-        setDialogState(() => uploadError = 'File kosong');
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        setDialogState(() => uploadError = 'Ukuran maksimal 10MB');
-        return;
-      }
-
+    Future<void> doUpload(StateSetter setDialogState) async {
+      if (uploading) return;
       setDialogState(() {
         uploading = true;
         uploadError = null;
       });
 
       try {
-        final url = await provider.adminRepository.uploadBulletinPdf(
-          file.bytes!,
-          file.name,
-        );
+        final picked = await picker.pickPdfFile();
+        if (picked == null) {
+          if (!mounted) return;
+          setDialogState(() => uploading = false);
+          return;
+        }
+
+        if (picked.bytes.isEmpty) {
+          if (!mounted) return;
+          setDialogState(() {
+            uploadError = 'File kosong';
+            uploading = false;
+          });
+          return;
+        }
+        if (picked.bytes.length > 10 * 1024 * 1024) {
+          if (!mounted) return;
+          setDialogState(() {
+            uploadError = 'Ukuran maksimal 10MB';
+            uploading = false;
+          });
+          return;
+        }
+
+        // Capture provider before await so we don't use context across gap
+        final repo = provider.adminRepository;
+        final url = await repo.uploadBulletinPdf(picked.bytes, picked.name);
+
         if (!mounted) return;
         pdfCtrl.text = url;
         setDialogState(() => uploading = false);
@@ -162,50 +172,35 @@ class _BulletinsTabState extends State<BulletinsTab> {
                     ),
                     const SizedBox(height: 12),
 
-                    // PDF — upload atau manual URL
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: pdfCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'File PDF',
-                              hintText: 'Upload atau isi URL manual',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
+                    // PDF URL dengan tombol upload di kanan (suffix icon)
+                    TextField(
+                      controller: pdfCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'URL PDF',
+                        hintText: 'Atau klik ikon di kanan untuk upload',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          tooltip: uploading ? 'Mengupload...' : 'Upload PDF',
+                          icon: uploading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.upload_file),
+                          onPressed: uploading ? null : () => doUpload(setDialogState),
                         ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: OutlinedButton.icon(
-                            onPressed: uploading
-                                ? null
-                                : () => pickAndUploadPdf(setDialogState),
-                            icon: uploading
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.upload_file, size: 18),
-                            label: Text(uploading ? 'Upload...' : 'Upload PDF'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(50),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                     if (uploadError != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         uploadError!,
                         style: const TextStyle(color: AppColors.error, fontSize: 12),
                       ),
                     ],
                     const SizedBox(height: 12),
+
                     Row(
                       children: [
                         Checkbox(
@@ -278,6 +273,7 @@ class _BulletinsTabState extends State<BulletinsTab> {
     );
 
     if (ok != true) return;
+
     bool success;
     if (isEditing) {
       success = await provider.updateBulletin(
@@ -488,7 +484,7 @@ class _BulletinCard extends StatelessWidget {
                   Icon(Icons.schedule, size: 12, color: AppColors.textMuted),
                   const SizedBox(width: 4),
                   Text(
-                    'Dibuat ${_formatDate(bulletin.createdAt)}',
+                    'Dibuat ${_fmtDate(bulletin.createdAt)}',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: AppColors.textMuted,
                       fontSize: 11,
@@ -504,8 +500,8 @@ class _BulletinCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       isExpired
-                          ? 'Kedaluwarsa ${_formatDate(bulletin.expireAt!)}'
-                          : 'Berlaku sampai ${_formatDate(bulletin.expireAt!)}',
+                          ? 'Kedaluwarsa ${_fmtDate(bulletin.expireAt!)}'
+                          : 'Berlaku sampai ${_fmtDate(bulletin.expireAt!)}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: isExpired ? AppColors.error : AppColors.textMuted,
                         fontSize: 11,
@@ -521,11 +517,9 @@ class _BulletinCard extends StatelessWidget {
     );
   }
 
-  void _openPdf(String url) {
-    // In web, open URL in a new tab via JavaScript interop or url_launcher
-  }
+  void _openPdf(String url) {}
 
-  String _formatDate(DateTime dt) {
+  String _fmtDate(DateTime dt) {
     return '${dt.day.toString().padLeft(2, '0')}/'
         '${dt.month.toString().padLeft(2, '0')}/'
         '${dt.year}';
