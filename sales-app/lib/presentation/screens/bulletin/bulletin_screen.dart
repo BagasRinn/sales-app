@@ -15,11 +15,15 @@ class BulletinScreen extends StatefulWidget {
 }
 
 class _BulletinScreenState extends State<BulletinScreen> {
+  bool _showExpired = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BulletinProvider>().loadBulletins();
+      // Selalu includeRead supaya user bisa lihat bulletin yang sudah lewat
+      // (expired) maupun yang masih aktif.
+      context.read<BulletinProvider>().loadBulletins(includeRead: true);
     });
   }
 
@@ -28,10 +32,19 @@ class _BulletinScreenState extends State<BulletinScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Promo & Diskon'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () => context
+                .read<BulletinProvider>()
+                .loadBulletins(includeRead: true),
+          ),
+        ],
       ),
       body: Consumer<BulletinProvider>(
         builder: (context, provider, _) {
-          if (provider.loading) {
+          if (provider.loading && provider.bulletins.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -44,14 +57,15 @@ class _BulletinScreenState extends State<BulletinScreen> {
                       size: 48, color: AppColors.textMuted),
                   const SizedBox(height: 16),
                   Text(
-                    'Gagal memuat bulletin',
+                    'Gagal memuat promo',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: () => provider.loadBulletins(),
+                    onPressed: () =>
+                        provider.loadBulletins(includeRead: true),
                     child: const Text('Coba lagi'),
                   ),
                 ],
@@ -59,38 +73,80 @@ class _BulletinScreenState extends State<BulletinScreen> {
             );
           }
 
-          final bulletins = provider.bulletins;
+          // Filter: hanya tampilkan yang aktif + toggle untuk show expired.
+          final now = DateTime.now();
+          final active = provider.bulletins.where((b) {
+            final isExpired =
+                b.expireAt != null && b.expireAt!.isBefore(now);
+            return _showExpired ? true : !isExpired;
+          }).toList();
 
-          if (bulletins.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.campaign_outlined,
-                      size: 48, color: AppColors.textMuted),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Belum ada promo',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: AppColors.textSecondary,
+          return Column(
+            children: [
+              // Filter toggle
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _showExpired
+                            ? 'Semua promo (termasuk yang sudah berakhir)'
+                            : 'Promo yang sedang berlangsung',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    Switch(
+                      value: _showExpired,
+                      onChanged: (v) => setState(() => _showExpired = v),
+                    ),
+                    Text(
+                      _showExpired ? 'Semua' : 'Aktif',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: bulletins.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final bulletin = bulletins[index];
-              return _BulletinCard(
-                bulletin: bulletin,
-                onTap: () => _showBulletinDetail(context, bulletin),
-              );
-            },
+              Expanded(
+                child: active.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.campaign_outlined,
+                                size: 48, color: AppColors.textMuted),
+                            const SizedBox(height: 16),
+                            Text(
+                              _showExpired
+                                  ? 'Belum ada promo'
+                                  : 'Tidak ada promo aktif',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        itemCount: active.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final bulletin = active[index];
+                          return _BulletinCard(
+                            bulletin: bulletin,
+                            onTap: () => _showBulletinDetail(context, bulletin),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
@@ -211,9 +267,15 @@ class _BulletinScreenState extends State<BulletinScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () async {
-                          await context
-                              .read<BulletinProvider>()
-                              .dismissBulletin(bulletin.id);
+                          // Dismiss best-effort: kalau network error, popup
+                          // tetap harus ditutup supaya user tidak terjebak.
+                          try {
+                            await context
+                                .read<BulletinProvider>()
+                                .dismissBulletin(bulletin.id);
+                          } catch (_) {
+                            // Ignore — popup tetap ditutup.
+                          }
                           if (ctx.mounted) Navigator.pop(ctx);
                         },
                         child: const Text('Tutup'),

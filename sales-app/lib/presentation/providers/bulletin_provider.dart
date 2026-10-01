@@ -23,12 +23,12 @@ class BulletinProvider extends ChangeNotifier {
   Bulletin? get latestUnread =>
       unreadBulletins.isNotEmpty ? unreadBulletins.first : null;
 
-  Future<void> loadBulletins() async {
+  Future<void> loadBulletins({bool includeRead = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
     try {
-      _bulletins = await _repo.getBulletins();
+      _bulletins = await _repo.getBulletins(includeRead: includeRead);
     } catch (e) {
       _error = e.toString();
     } finally {

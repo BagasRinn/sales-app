@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/bulletin_provider.dart';
 import '../auth/change_password_dialog.dart';
 import '../customers/customer_registration_screen.dart';
 import '../customers/my_submissions_screen.dart';
+import '../bulletin/bulletin_screen.dart';
 
 class MiscScreen extends StatelessWidget {
   const MiscScreen({super.key});
@@ -71,6 +73,25 @@ class MiscScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: Column(
                 children: [
+                  _MenuTile(
+                    icon: Icons.local_offer_outlined,
+                    iconColor: AppColors.primaryLight,
+                    label: 'Promo & Diskon',
+                    subtitle: 'Lihat promo yang sedang berlangsung dari admin',
+                    onTap: () async {
+                      // Pre-load supaya halaman Promo langsung menampilkan data.
+                      await context
+                          .read<BulletinProvider>()
+                          .loadBulletins(includeRead: true);
+                      if (!context.mounted) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const BulletinScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1, indent: 56),
                   _MenuTile(
                     icon: Icons.person_add_alt_1,
                     label: 'Pengajuan Customer Baru',
