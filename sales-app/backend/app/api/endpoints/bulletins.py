@@ -1,7 +1,7 @@
 """Bulletin API endpoints — CRUD + dismiss + PDF upload."""
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, exists
 from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -46,26 +46,24 @@ def list_bulletins(
     now_wita = datetime.now(wita)
     sales_id = UUID(current_user["user_id"])
 
-    # Subquery: bulletins yang sudah di-dismiss oleh user ini
-    dismissed_subq = (
-        db.query(BulletinDismiss.bulletin_id)
-        .filter(BulletinDismiss.sales_id == sales_id)
-        .subquery()
+    # EXISTS subquery: cek apakah bulletin sudah di-dismiss oleh user ini.
+    # EXISTS lebih clean dari outer-join dengan subquery karena SQLAlchemy
+    # tidak perlu treat BulletinDismiss sebagai FROM element tambahan.
+    is_dismissed_by_me = exists().where(
+        BulletinDismiss.bulletin_id == Bulletin.id,
+        BulletinDismiss.sales_id == sales_id,
     )
 
-    query = (
-        db.query(Bulletin, BulletinDismiss.id.isnot(None).label("is_read"))
-        .outerjoin(dismissed_subq, Bulletin.id == dismissed_subq.c.bulletin_id)
-        .filter(
-            or_(
-                Bulletin.expire_at.is_(None),
-                Bulletin.expire_at >= now_wita,
-            )
-        )
-    )
-
+    # When include_read=false: only show bulletins not yet dismissed
+    base_filters = [
+        or_(Bulletin.expire_at.is_(None), Bulletin.expire_at >= now_wita),
+    ]
     if not include_read:
-        query = query.filter(BulletinDismiss.id.is_(None))
+        base_filters.append(~is_dismissed_by_me)
+
+    query = db.query(Bulletin, is_dismissed_by_me.label("is_read")).filter(
+        *base_filters,
+    )
 
     results = query.order_by(Bulletin.created_at.desc()).all()
     return [_build_bulletin_response(b, bool(is_read)) for b, is_read in results]
