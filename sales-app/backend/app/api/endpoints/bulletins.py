@@ -1,5 +1,5 @@
-"""Bulletin API endpoints — CRUD + dismiss."""
-from fastapi import APIRouter, Depends, HTTPException, Query
+"""Bulletin API endpoints — CRUD + dismiss + PDF upload."""
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from uuid import UUID
@@ -10,6 +10,7 @@ from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
 from app.core.security import require_auth, require_manager, CurrentUser
+from app.services.supabase_storage import upload_pdf, delete_file
 
 
 router = APIRouter(prefix="/bulletins", tags=["Bulletins"])
@@ -90,6 +91,31 @@ def create_bulletin(
     return _build_bulletin_response(bulletin, is_read=False)
 
 
+@router.post("/upload-pdf")
+def bulletin_upload_pdf(
+    file: UploadFile = File(...),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """Upload file PDF ke Supabase Storage. MANAGER or ADMIN only."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Hanya file PDF yang diizinkan")
+
+    content = file.file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File kosong")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Ukuran file maksimal 10MB")
+
+    try:
+        public_url = upload_pdf(content, file.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"Upload gagal: {e}")
+
+    return {"pdf_url": public_url}
+
+
 @router.put("/{bulletin_id}", response_model=BulletinResponse)
 def update_bulletin(
     bulletin_id: UUID,
@@ -140,8 +166,16 @@ def delete_bulletin(
     db.query(BulletinDismiss).filter(BulletinDismiss.bulletin_id == bulletin_id).delete(
         synchronize_session=False
     )
+    pdf_url = bulletin.pdf_url
     db.delete(bulletin)
     db.commit()
+
+    if pdf_url:
+        try:
+            delete_file(pdf_url)
+        except Exception:
+            pass  # Non-critical — file orphan boleh
+
     return None
 
 

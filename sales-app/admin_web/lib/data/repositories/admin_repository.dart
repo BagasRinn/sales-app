@@ -523,4 +523,9 @@ class AdminRepository {
   Future<void> deleteBulletin(String id) async {
     await _api.delete('/bulletins/$id');
   }
+
+  Future<String> uploadBulletinPdf(List<int> fileBytes, String fileName) async {
+    final data = await _api.postFile('/bulletins/upload-pdf', fileBytes, fileName);
+    return data['pdf_url'] as String;
+  }
 }

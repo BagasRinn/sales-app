@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../core/design_system.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/bulletin.dart';
@@ -80,14 +81,56 @@ class _BulletinsTabState extends State<BulletinsTab> {
     final isEditing = bulletin != null;
     DateTime? selectedDate = bulletin?.expireAt;
     bool noExpiration = bulletin?.expireAt == null;
+    bool uploading = false;
+    String? uploadError;
 
     final provider = context.read<AdminProvider>();
     final scaffold = ScaffoldMessenger.of(context);
 
+    Future<void> pickAndUploadPdf(StateSetter setDialogState) async {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null || file.bytes!.isEmpty) {
+        setDialogState(() => uploadError = 'File kosong');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setDialogState(() => uploadError = 'Ukuran maksimal 10MB');
+        return;
+      }
+
+      setDialogState(() {
+        uploading = true;
+        uploadError = null;
+      });
+
+      try {
+        final url = await provider.adminRepository.uploadBulletinPdf(
+          file.bytes!,
+          file.name,
+        );
+        if (!mounted) return;
+        pdfCtrl.text = url;
+        setDialogState(() => uploading = false);
+      } catch (e) {
+        if (!mounted) return;
+        setDialogState(() {
+          uploadError = 'Upload gagal: $e';
+          uploading = false;
+        });
+      }
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) {
+        builder: (ctx, setDialogState) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(isEditing ? 'Edit Bulletin' : 'Buat Bulletin Baru'),
@@ -118,21 +161,57 @@ class _BulletinsTabState extends State<BulletinsTab> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: pdfCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'URL PDF',
-                        hintText: 'https://example.com/file.pdf',
-                        border: OutlineInputBorder(),
-                      ),
+
+                    // PDF — upload atau manual URL
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: pdfCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'File PDF',
+                              hintText: 'Upload atau isi URL manual',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: OutlinedButton.icon(
+                            onPressed: uploading
+                                ? null
+                                : () => pickAndUploadPdf(setDialogState),
+                            icon: uploading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.upload_file, size: 18),
+                            label: Text(uploading ? 'Upload...' : 'Upload PDF'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(50),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (uploadError != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        uploadError!,
+                        style: const TextStyle(color: AppColors.error, fontSize: 12),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Checkbox(
                           value: noExpiration,
                           onChanged: (v) {
-                            setState(() {
+                            setDialogState(() {
                               noExpiration = v ?? false;
                               if (noExpiration) selectedDate = null;
                             });
@@ -150,7 +229,7 @@ class _BulletinsTabState extends State<BulletinsTab> {
                                 lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
                               );
                               if (picked != null) {
-                                setState(() => selectedDate = picked);
+                                setDialogState(() => selectedDate = picked);
                               }
                             },
                             icon: const Icon(Icons.calendar_today, size: 16),
