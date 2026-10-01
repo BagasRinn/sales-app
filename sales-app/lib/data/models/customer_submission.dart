@@ -21,6 +21,8 @@ class CustomerSubmission {
   final String? alamatKirim;
   final String? propinsi;
   final String? kecamatan;
+  final String? kota;
+  final String? kelurahan;
   final String? areaRoute;
   final String? tipeLangganan;
   final String? tipePembayaran;
@@ -30,8 +32,10 @@ class CustomerSubmission {
   final String? channelKategori;
   final String? keyAccountRefId;
   final String? clusterLangganan;
-  final String? kodeNamaSalesman;
+  final String? kodeSalesman;
+  final String? namaSalesman;
   final String? siklusKunjungan;
+  final String? hariKunjungan;
 
   CustomerSubmission({
     required this.id,
@@ -54,6 +58,8 @@ class CustomerSubmission {
     this.alamatKirim,
     this.propinsi,
     this.kecamatan,
+    this.kota,
+    this.kelurahan,
     this.areaRoute,
     this.tipeLangganan,
     this.tipePembayaran,
@@ -63,8 +69,10 @@ class CustomerSubmission {
     this.channelKategori,
     this.keyAccountRefId,
     this.clusterLangganan,
-    this.kodeNamaSalesman,
+    this.kodeSalesman,
+    this.namaSalesman,
     this.siklusKunjungan,
+    this.hariKunjungan,
   });
 
   factory CustomerSubmission.fromJson(Map<String, dynamic> json) {
@@ -91,6 +99,8 @@ class CustomerSubmission {
       alamatKirim: json['alamat_kirim'] as String?,
       propinsi: json['propinsi'] as String?,
       kecamatan: json['kecamatan'] as String?,
+      kota: json['kota'] as String?,
+      kelurahan: json['kelurahan'] as String?,
       areaRoute: json['area_route'] as String?,
       tipeLangganan: json['tipe_langganan'] as String?,
       tipePembayaran: json['tipe_pembayaran'] as String?,
@@ -100,8 +110,10 @@ class CustomerSubmission {
       channelKategori: json['channel_kategori'] as String?,
       keyAccountRefId: json['key_account_ref_id'] as String?,
       clusterLangganan: json['cluster_langganan'] as String?,
-      kodeNamaSalesman: json['kode_nama_salesman'] as String?,
+      kodeSalesman: json['kode_salesman'] as String?,
+      namaSalesman: json['nama_salesman'] as String?,
       siklusKunjungan: json['siklus_kunjungan'] as String?,
+      hariKunjungan: json['hari_kunjungan'] as String?,
     );
   }
 

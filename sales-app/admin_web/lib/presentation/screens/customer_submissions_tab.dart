@@ -471,6 +471,8 @@ class _SubmissionDetailScreen extends StatelessWidget {
             _row('Alamat Kirim', s.alamatKirim),
             _row('Propinsi', s.propinsi),
             _row('Kecamatan', s.kecamatan),
+            _row('Kota', s.kota),
+            _row('Kelurahan', s.kelurahan),
             _row('Area / Route', s.areaRoute),
             _row('Tipe Langganan', s.tipeLangganan),
           ]),
@@ -486,8 +488,10 @@ class _SubmissionDetailScreen extends StatelessWidget {
             _row('Channel / Kategori', s.channelKategori),
             _row('Key Account', s.keyAccountRefId),
             _row('Cluster', s.clusterLangganan),
-            _row('Kode & Nama Salesman', s.kodeNamaSalesman),
+            _row('Kode Salesman', s.kodeSalesman),
+            _row('Nama Salesman', s.namaSalesman),
             _row('Siklus Kunjungan', s.siklusKunjungan),
+            _row('Hari Kunjungan', s.hariKunjungan),
           ]),
 
           _section('Audit', [

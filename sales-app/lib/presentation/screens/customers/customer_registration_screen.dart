@@ -25,11 +25,12 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   final _alamatKirimCtl = TextEditingController();
   final _propinsiCtl = TextEditingController();
   final _kecamatanCtl = TextEditingController();
+  final _kotaCtl = TextEditingController();
+  final _kelurahanCtl = TextEditingController();
   final _areaCtl = TextEditingController();
-  final _tipeLanggananCtl = TextEditingController();
-
-  // Section 2: Pembayaran
-  String? _tipePembayaran;
+  // Tipe langganan (Pasar / Non-Pasar) — sebelumnya tidak ada di Identitas,
+  // sekarang pindah ke sini sesuai spec terbaru.
+  String? _tipeLanggananKategori; // PASAR | NON PASAR
   final _namaPasarCtl = TextEditingController();
   final _jangkaKreditCtl = TextEditingController();
 
@@ -42,8 +43,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   // Section 5: Salesman
   final _keyAccountCtl = TextEditingController();
   final _clusterCtl = TextEditingController();
-  final _salesmanCtl = TextEditingController();
-  final _siklusCtl = TextEditingController();
+  final _kodeSalesmanCtl = TextEditingController();
+  final _namaSalesmanCtl = TextEditingController();
+  String? _siklusKunjungan;
+  String? _hariKunjungan;
 
   bool _isSubmitting = false;
 
@@ -60,7 +63,25 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     'LANGGANAN KANTOR',
   ];
 
-  static const _tipeBayarOptions = ['NON PASAR', 'PASAR', 'TUNAI', 'KREDIT'];
+  static const _tipeLanggananKategoriOptions = ['PASAR', 'NON PASAR'];
+
+  static const _tipeBayarOptions = ['TUNAI', 'KREDIT'];
+
+  static const _siklusKunjunganOptions = [
+    'W (Mingguan)',
+    'W1 W3 (Minggu Ganjil)',
+    'W2 W4 (Minggu Genap)',
+  ];
+
+  static const _hariKunjunganOptions = [
+    'Senin',
+    'Selasa',
+    'Rabu',
+    'Kamis',
+    'Jumat',
+    'Sabtu',
+    'Minggu',
+  ];
 
   @override
   void dispose() {
@@ -72,15 +93,16 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     _alamatKirimCtl.dispose();
     _propinsiCtl.dispose();
     _kecamatanCtl.dispose();
+    _kotaCtl.dispose();
+    _kelurahanCtl.dispose();
     _areaCtl.dispose();
-    _tipeLanggananCtl.dispose();
     _namaPasarCtl.dispose();
     _jangkaKreditCtl.dispose();
     _batasKreditCtl.dispose();
     _keyAccountCtl.dispose();
     _clusterCtl.dispose();
-    _salesmanCtl.dispose();
-    _siklusCtl.dispose();
+    _kodeSalesmanCtl.dispose();
+    _namaSalesmanCtl.dispose();
     super.dispose();
   }
 
@@ -90,6 +112,13 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       if (t.isEmpty) return null;
       return int.tryParse(t);
     }
+
+    // Tipe langganan di Identitas: kalau "PASAR" gabung dengan nama_pasar.
+    // Backend masih menyimpan `tipe_langganan` sebagai single string.
+    final tipeLangganan =
+        _tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isNotEmpty
+            ? 'PASAR (${_namaPasarCtl.text.trim()})'
+            : _tipeLanggananKategori;
 
     return {
       // Section 1
@@ -101,8 +130,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       'alamat_kirim': _orNull(_alamatKirimCtl.text),
       'propinsi': _orNull(_propinsiCtl.text),
       'kecamatan': _orNull(_kecamatanCtl.text),
+      'kota': _orNull(_kotaCtl.text),
+      'kelurahan': _orNull(_kelurahanCtl.text),
       'area_route': _orNull(_areaCtl.text),
-      'tipe_langganan': _orNull(_tipeLanggananCtl.text),
+      'tipe_langganan': tipeLangganan,
       // Section 2
       'tipe_pembayaran': _tipePembayaran,
       'nama_pasar': _orNull(_namaPasarCtl.text),
@@ -114,10 +145,15 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       // Section 5
       'key_account_ref_id': _orNull(_keyAccountCtl.text),
       'cluster_langganan': _orNull(_clusterCtl.text),
-      'kode_nama_salesman': _orNull(_salesmanCtl.text),
-      'siklus_kunjungan': _orNull(_siklusCtl.text),
+      'kode_salesman': _orNull(_kodeSalesmanCtl.text),
+      'nama_salesman': _orNull(_namaSalesmanCtl.text),
+      'siklus_kunjungan': _siklusKunjungan,
+      'hari_kunjungan': _hariKunjungan,
     };
   }
+
+  // ignore: prefer_final_fields
+  String? _tipePembayaran;
 
   String? _orNull(String s) {
     final t = s.trim();
@@ -235,20 +271,33 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
+          // ============================================================
+          // Section 1: Identitas Pelanggan
+          // ============================================================
           _SectionHeader(title: '1. Identitas Pelanggan'),
           const SizedBox(height: 8),
           _Field(label: 'Nama Langganan / Outlet *', controller: _namaCtl, required: true),
-          _Field(label: 'Nomor ID / KTP', controller: _ktpCtl),
+          _Field(label: 'Nomor ID /KTP', controller: _ktpCtl),
           _Field(label: 'Alamat KTP', controller: _alamatKtpCtl, maxLines: 3),
-          _Field(label: 'Nama Kontak / Pemilik', controller: _kontakCtl),
+          _Field(label: 'Nama Kontak /Pemilik', controller: _kontakCtl),
           _Field(label: 'Telpon / HP', controller: _telponCtl, keyboardType: TextInputType.phone),
           _Field(label: 'Alamat Kirim', controller: _alamatKirimCtl, maxLines: 3),
           _Field(label: 'Propinsi', controller: _propinsiCtl),
           _Field(label: 'Kecamatan', controller: _kecamatanCtl),
+          _Field(label: 'Kota', controller: _kotaCtl),
+          _Field(label: 'Kelurahan', controller: _kelurahanCtl),
           _Field(label: 'Area / Route', controller: _areaCtl),
-          _Field(label: 'Tipe Langganan', controller: _tipeLanggananCtl),
+          _FieldLabel(text: 'Tipe Langganan'),
+          _ChoiceRow(
+            options: _tipeLanggananKategoriOptions,
+            selected: _tipeLanggananKategori,
+            onSelected: (v) => setState(() => _tipeLanggananKategori = v),
+          ),
           const SizedBox(height: 24),
 
+          // ============================================================
+          // Section 2: Tipe Pembayaran
+          // ============================================================
           _SectionHeader(title: '2. Tipe Pembayaran'),
           const SizedBox(height: 8),
           _ChoiceRow(
@@ -257,14 +306,17 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             onSelected: (v) => setState(() => _tipePembayaran = v),
           ),
           const SizedBox(height: 8),
-          _Field(label: 'Nama Pasar', controller: _namaPasarCtl),
           _Field(
             label: 'Jangka Kredit (hari)',
             controller: _jangkaKreditCtl,
             keyboardType: TextInputType.number,
+            helperText: '14 hari (fixed)',
           ),
           const SizedBox(height: 24),
 
+          // ============================================================
+          // Section 3: Batas Kredit
+          // ============================================================
           _SectionHeader(title: '3. Batas Kredit (Rp)'),
           const SizedBox(height: 8),
           _Field(
@@ -274,21 +326,41 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           ),
           const SizedBox(height: 24),
 
+          // ============================================================
+          // Section 4: Channel / Kategori Langganan
+          // ============================================================
           _SectionHeader(title: '4. Channel / Kategori'),
           const SizedBox(height: 8),
+          _FieldLabel(text: 'Tipe Langganan'),
           _ChoiceWrap(
             options: _channelOptions,
             selected: _channelKategori,
             onSelected: (v) => setState(() => _channelKategori = v),
           ),
+          _Field(label: 'Key Account (REF ID)', controller: _keyAccountCtl),
+          _FieldLabel(text: 'Cluster Langganan'),
+          _ClusterField(controller: _clusterCtl),
           const SizedBox(height: 24),
 
-          _SectionHeader(title: '5. Salesman'),
+          // ============================================================
+          // Section 5: Kunjungan Salesman
+          // ============================================================
+          _SectionHeader(title: '5. Kunjungan Salesman'),
           const SizedBox(height: 8),
-          _Field(label: 'Key Account (REF ID)', controller: _keyAccountCtl),
-          _Field(label: 'Cluster Langganan', controller: _clusterCtl),
-          _Field(label: 'Kode & Nama Salesman', controller: _salesmanCtl),
-          _Field(label: 'Siklus Kunjungan', controller: _siklusCtl),
+          _Field(label: 'Kode Salesman', controller: _kodeSalesmanCtl),
+          _Field(label: 'Nama Salesman', controller: _namaSalesmanCtl),
+          _FieldLabel(text: 'Siklus Kunjungan'),
+          _ChoiceWrap(
+            options: _siklusKunjunganOptions,
+            selected: _siklusKunjungan,
+            onSelected: (v) => setState(() => _siklusKunjungan = v),
+          ),
+          _FieldLabel(text: 'Hari Kunjungan'),
+          _ChoiceWrap(
+            options: _hariKunjunganOptions,
+            selected: _hariKunjungan,
+            onSelected: (v) => setState(() => _hariKunjungan = v),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -333,12 +405,63 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 6),
+      child: Text(
+        text,
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _ClusterField extends StatelessWidget {
+  final TextEditingController controller;
+  const _ClusterField({required this.controller});
+
+  static const _clusterOptions = ['STOCKIEST', 'SUBDIST', 'NO CLUSTER'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _clusterOptions.map((o) {
+        final isSel = o == (controller.text);
+        return ChoiceChip(
+          label: Text(o),
+          selected: isSel,
+          onSelected: (sel) {
+            if (sel) controller.text = o;
+          },
+          selectedColor: AppColors.primaryLight,
+          labelStyle: TextStyle(
+            color: isSel ? Colors.white : AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
 class _Field extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final bool required;
   final int maxLines;
   final TextInputType keyboardType;
+  final String? helperText;
 
   const _Field({
     required this.label,
@@ -346,6 +469,7 @@ class _Field extends StatelessWidget {
     this.required = false,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
+    this.helperText,
   });
 
   @override
@@ -358,6 +482,7 @@ class _Field extends StatelessWidget {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
+          helperText: helperText,
           filled: true,
           fillColor: AppColors.cardSurface,
           border: OutlineInputBorder(
@@ -423,25 +548,28 @@ class _ChoiceWrap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((o) {
-        final isSel = o == selected;
-        return ChoiceChip(
-          label: Text(o),
-          selected: isSel,
-          onSelected: (sel) {
-            if (sel) onSelected(o);
-          },
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: isSel ? Colors.white : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-        );
-      }).toList(),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: options.map((o) {
+          final isSel = o == selected;
+          return ChoiceChip(
+            label: Text(o),
+            selected: isSel,
+            onSelected: (sel) {
+              if (sel) onSelected(o);
+            },
+            selectedColor: AppColors.primaryLight,
+            labelStyle: TextStyle(
+              color: isSel ? Colors.white : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

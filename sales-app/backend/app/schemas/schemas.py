@@ -380,6 +380,8 @@ class CustomerSubmissionCreate(BaseModel):
     alamat_kirim: Optional[str] = None
     propinsi: Optional[str] = Field(None, max_length=100)
     kecamatan: Optional[str] = Field(None, max_length=100)
+    kota: Optional[str] = Field(None, max_length=100)
+    kelurahan: Optional[str] = Field(None, max_length=100)
     area_route: Optional[str] = Field(None, max_length=100)
     tipe_langganan: Optional[str] = Field(None, max_length=50)
     # Section 2: Tipe Pembayaran
@@ -393,8 +395,10 @@ class CustomerSubmissionCreate(BaseModel):
     # Section 5: Salesman
     key_account_ref_id: Optional[str] = Field(None, max_length=50)
     cluster_langganan: Optional[str] = Field(None, max_length=100)
-    kode_nama_salesman: Optional[str] = Field(None, max_length=200)
+    kode_salesman: Optional[str] = Field(None, max_length=50)
+    nama_salesman: Optional[str] = Field(None, max_length=200)
     siklus_kunjungan: Optional[str] = Field(None, max_length=100)
+    hari_kunjungan: Optional[str] = Field(None, max_length=50)
 
 
 class CustomerSubmissionApprove(BaseModel):
@@ -432,6 +436,8 @@ class CustomerSubmissionResponse(BaseModel):
     alamat_kirim: Optional[str] = None
     propinsi: Optional[str] = None
     kecamatan: Optional[str] = None
+    kota: Optional[str] = None
+    kelurahan: Optional[str] = None
     area_route: Optional[str] = None
     tipe_langganan: Optional[str] = None
     tipe_pembayaran: Optional[str] = None
@@ -441,8 +447,10 @@ class CustomerSubmissionResponse(BaseModel):
     channel_kategori: Optional[str] = None
     key_account_ref_id: Optional[str] = None
     cluster_langganan: Optional[str] = None
-    kode_nama_salesman: Optional[str] = None
+    kode_salesman: Optional[str] = None
+    nama_salesman: Optional[str] = None
     siklus_kunjungan: Optional[str] = None
+    hari_kunjungan: Optional[str] = None
 
     class Config:
         from_attributes = True

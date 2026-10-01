@@ -150,6 +150,8 @@ class CustomerRegistrationSubmission(Base):
     alamat_kirim = Column(Text, nullable=True)
     propinsi = Column(String(100), nullable=True)
     kecamatan = Column(String(100), nullable=True)
+    kota = Column(String(100), nullable=True)
+    kelurahan = Column(String(100), nullable=True)
     area_route = Column(String(100), nullable=True)
     tipe_langganan = Column(String(50), nullable=True)
 
@@ -167,8 +169,10 @@ class CustomerRegistrationSubmission(Base):
     # Section 5: Salesman
     key_account_ref_id = Column(String(50), nullable=True)
     cluster_langganan = Column(String(100), nullable=True)
-    kode_nama_salesman = Column(String(200), nullable=True)
+    kode_salesman = Column(String(50), nullable=True)
+    nama_salesman = Column(String(200), nullable=True)
     siklus_kunjungan = Column(String(100), nullable=True)
+    hari_kunjungan = Column(String(50), nullable=True)
 
 
 class SyncValidationError(Base):
