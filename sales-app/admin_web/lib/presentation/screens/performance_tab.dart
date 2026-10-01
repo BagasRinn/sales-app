@@ -167,7 +167,8 @@ class _PerformanceTabState extends State<PerformanceTab> {
           label: Text(_useCustomRange ? rangeLabel : monthLabel),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primaryLight,
-            side: const BorderSide(color: AppColors.border),
+            backgroundColor: AppColors.primaryLight.withValues(alpha: 0.08),
+            side: BorderSide(color: AppColors.primaryLight.withValues(alpha: 0.4)),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
         ),
@@ -178,7 +179,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
           icon: const Icon(Icons.date_range, size: 18),
           label: const Text('Custom Range'),
           style: TextButton.styleFrom(
-            foregroundColor: _useCustomRange ? AppColors.primaryLight : AppColors.textMuted,
+            foregroundColor: _useCustomRange ? Colors.white : AppColors.textMuted,
+            backgroundColor: _useCustomRange ? AppColors.primaryLight : null,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
         ),
       ],
@@ -369,12 +372,19 @@ class _PerformanceTabState extends State<PerformanceTab> {
                             label: const Text('Revenue', style: TextStyle(fontSize: 12)),
                             selected: sortBy == 'revenue',
                             onSelected: (_) => provider.setPerformanceSort('revenue'),
-                            selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                            selectedColor: AppColors.primaryLight,
+                            backgroundColor: AppColors.background,
+                            side: BorderSide(
+                              color: sortBy == 'revenue'
+                                  ? AppColors.primaryLight
+                                  : AppColors.border,
+                            ),
                             labelStyle: TextStyle(
                               color: sortBy == 'revenue'
-                                  ? AppColors.primary
+                                  ? Colors.white
                                   : AppColors.textSecondary,
                               fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -382,12 +392,19 @@ class _PerformanceTabState extends State<PerformanceTab> {
                             label: const Text('Order', style: TextStyle(fontSize: 12)),
                             selected: sortBy == 'order_count',
                             onSelected: (_) => provider.setPerformanceSort('order_count'),
-                            selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                            selectedColor: AppColors.primaryLight,
+                            backgroundColor: AppColors.background,
+                            side: BorderSide(
+                              color: sortBy == 'order_count'
+                                  ? AppColors.primaryLight
+                                  : AppColors.border,
+                            ),
                             labelStyle: TextStyle(
                               color: sortBy == 'order_count'
-                                  ? AppColors.primary
+                                  ? Colors.white
                                   : AppColors.textSecondary,
                               fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

@@ -55,14 +55,17 @@ def get_customer_count(
 @router.get("/my", response_model=List[CustomerResponse])
 def list_my_customers(
     search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Semua customer — semua sales dapat melihat dan membuat order untuk semua toko."""
+    """Semua customer — semua sales dapat melihat dan membuat order untuk semua toko.
+    Pagination ditambah untuk mencegah query lambat kalau customer banyak."""
     query = _exclude_deleted(db.query(Customer))
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
-    return query.order_by(Customer.nama_toko).all()
+    return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
