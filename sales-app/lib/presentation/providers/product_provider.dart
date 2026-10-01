@@ -19,6 +19,11 @@ class ProductProvider extends ChangeNotifier {
   ProductStatusFilter _statusFilter = ProductStatusFilter.all;
   String? _categoryFilter;
 
+  /// Daftar supplier yang dikategorikan sebagai 4P (dari backend).
+  /// Loaded once saat app init, dipakai untuk label/badge produk.
+  final List<String> _suppliers4p = [];
+  bool _suppliers4pLoaded = false;
+
   ProductProvider(this._productRepo);
 
   List<Product> get products {
@@ -117,6 +122,21 @@ class ProductProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   ProductStatusFilter get statusFilter => _statusFilter;
   String? get categoryFilter => _categoryFilter;
+
+  /// Daftar supplier 4P — null = belum di-load, empty list = tidak ada.
+  List<String> get suppliers4p => _suppliers4p;
+
+  Future<void> loadSuppliers4p() async {
+    if (_suppliers4pLoaded) return;
+    try {
+      _suppliers4p.clear();
+      _suppliers4p.addAll(await _productRepo.get4pSuppliers());
+    } catch (_) {
+      // Non-critical — 4P suppliers gagal di-load, filter tetap pakai backend
+    }
+    _suppliers4pLoaded = true;
+    notifyListeners();
+  }
 
   Future<void> loadProducts({String? search, String? orderType}) async {
     _isLoading = true;

@@ -15,6 +15,7 @@ class CustomerSubmissionsTab extends StatefulWidget {
 
 class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
   String _filter = 'ALL'; // ALL | PENDING | APPROVED | REJECTED
+  bool _firstLoad = true;
 
   @override
   void initState() {
@@ -22,8 +23,9 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AdminProvider>();
       if (provider.customerSubmissions.isEmpty) {
-        provider.loadCustomerSubmissions(); // default: semua status (log view)
+        provider.loadCustomerSubmissions();
       }
+      _firstLoad = false;
     });
   }
 
@@ -38,41 +40,55 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
   Widget build(BuildContext context) {
     final provider = context.watch<AdminProvider>();
     final submissions = provider.customerSubmissions;
+    final total = submissions.length;
+    final pending = provider.customerSubmissionsPendingCount;
+    final approved = submissions.where((s) => s.status == 'APPROVED').length;
+    final rejected = submissions.where((s) => s.status == 'REJECTED').length;
+
+    if (_firstLoad && submissions.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Column(
       children: [
-        // Filter chips
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
+        // Header bar
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _filterChip('Semua', 'ALL', provider.customerSubmissions.length),
-              _filterChip(
-                'Pending',
-                'PENDING',
-                provider.customerSubmissionsPendingCount,
+              Text(
+                'Filter pengajuan',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              _filterChip(
-                'Disetujui',
-                'APPROVED',
-                submissions.where((s) => s.status == 'APPROVED').length,
-              ),
-              _filterChip(
-                'Ditolak',
-                'REJECTED',
-                submissions.where((s) => s.status == 'REJECTED').length,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _filterChip('Semua', 'ALL', total),
+                  _filterChip('Pending', 'PENDING', pending),
+                  _filterChip('Disetujui', 'APPROVED', approved),
+                  _filterChip('Ditolak', 'REJECTED', rejected),
+                ],
               ),
             ],
           ),
         ),
+        const Divider(height: 1),
         // List
         Expanded(
           child: submissions.isEmpty
-              ? const _EmptyState()
+              ? _EmptyState()
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   itemCount: submissions.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
@@ -259,18 +275,35 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.assignment_outlined, size: 56, color: AppColors.textMuted),
-            SizedBox(height: 12),
-            Text('Belum ada pengajuan', style: AppTextStyles.headlineSmall),
-            SizedBox(height: 4),
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.assignment_outlined,
+                size: 40,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Belum ada pengajuan',
+              style: AppTextStyles.headlineSmall,
+            ),
+            const SizedBox(height: 6),
             Text(
               'Pengajuan customer baru dari sales akan muncul di sini.',
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),

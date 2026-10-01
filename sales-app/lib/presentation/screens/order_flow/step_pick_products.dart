@@ -29,18 +29,22 @@ class _StepPickProductsState extends State<StepPickProducts> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final draft = context.read<DraftOrderProvider>();
+      final productProvider = context.read<ProductProvider>();
+
       _lastLoadedType = draft.orderType;
-      context
-          .read<ProductProvider>()
-          .loadProducts(orderType: draft.orderType)
-          .then((_) {
-        if (!mounted) return;
-        final products = context.read<ProductProvider>().products;
-        final cache = {for (final p in products) p.id: p.harga};
-        context.read<DraftOrderProvider>().setPricingCache(cache);
-      });
+
+      // Load daftar supplier 4P (di-cache, hanya 1× per app session)
+      await productProvider.loadSuppliers4p();
+
+      if (!mounted) return;
+      await productProvider.loadProducts(orderType: draft.orderType);
+
+      if (!mounted) return;
+      final products = productProvider.products;
+      final cache = {for (final p in products) p.id: p.harga};
+      context.read<DraftOrderProvider>().setPricingCache(cache);
     });
   }
 
@@ -251,12 +255,20 @@ class _ProductRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final draft = context.watch<DraftOrderProvider>();
+    final productProvider = context.watch<ProductProvider>();
     final qty = draft.items[product.id] ?? 0;
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
       decimalDigits: 0,
     );
+
+    final supplier = product.namaSupplier;
+    final is4pSupplier = supplier != null &&
+        supplier.isNotEmpty &&
+        productProvider.suppliers4p.any(
+          (s) => s.toLowerCase() == supplier.toLowerCase(),
+        );
 
     return Material(
       color: AppColors.cardSurface,
@@ -287,13 +299,41 @@ class _ProductRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      product.namaBarang,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            product.namaBarang,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (is4pSupplier) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.green.shade300),
+                            ),
+                            child: Text(
+                              '4P',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer, cast, Date
 from typing import List, Optional
 from uuid import UUID
+import os
 
 from app.models.database import get_db
 from app.models.models import Product, Order, ImportLog, SyncValidationError
@@ -18,6 +19,24 @@ from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+
+def _get_4p_suppliers() -> List[str]:
+    """Parse SUPPLIERS_4P env var (comma-separated supplier names) into a list.
+    Returns empty list if env var is not set."""
+    raw = os.getenv("SUPPLIERS_4P", "").strip()
+    if not raw:
+        return []
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+@router.get("/suppliers/4p", response_model=List[str])
+def get_suppliers_4p(
+    _current_user: CurrentUser = Depends(require_auth),
+):
+    """Return daftar supplier yang dikategorikan sebagai 4P (dari env SUPPLIERS_4P).
+    Mobile fetch endpoint ini saat app init, lalu filter produk 4P berdasarkan daftar ini."""
+    return _get_4p_suppliers()
 
 
 @router.get("", response_model=List[ProductResponse])
@@ -53,7 +72,13 @@ def list_products(
         query = query.filter(Product.nama_supplier == supplier)
 
     if order_type:
-        query = query.filter(Product.order_type == order_type)
+        if order_type == "4P":
+            # Filter by supplier — 4P products are identified by their supplier name.
+            suppliers_4p = _get_4p_suppliers()
+            if suppliers_4p:
+                query = query.filter(Product.nama_supplier.in_(suppliers_4p))
+        else:
+            query = query.filter(Product.order_type == order_type)
 
     # Apply stock status filter at SQL level so pagination stays correct
     if status:
@@ -324,7 +349,12 @@ def get_product_count(
     if supplier:
         query = query.filter(Product.nama_supplier == supplier)
     if order_type:
-        query = query.filter(Product.order_type == order_type)
+        if order_type == "4P":
+            suppliers_4p = _get_4p_suppliers()
+            if suppliers_4p:
+                query = query.filter(Product.nama_supplier.in_(suppliers_4p))
+        else:
+            query = query.filter(Product.order_type == order_type)
     if status:
         stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
         if status == "tersedia":

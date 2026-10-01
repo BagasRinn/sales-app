@@ -27,6 +27,11 @@ class ProductRepository {
     return (data as List).map((e) => Product.fromJson(e)).toList();
   }
 
+  Future<List<String>> get4pSuppliers() async {
+    final data = await _api.get('/products/suppliers/4p');
+    return (data as List).map((e) => e.toString()).toList();
+  }
+
   Future<Product> getProduct(String productId) async {
     final data = await _api.get('/products/$productId');
     return Product.fromJson(data);
