@@ -9,3 +9,7 @@ Bulletin board dan pop up diskon (halaman sendiri berupa buka file pdf) dan waji
 Layer Diskon dihalaman checkout D
 Halaman khusus dimanager untuk monitoring performa masing2 sales D
 Card stats target di halaman utama app mobile D
+
+Bulletin Admin Stuck ketika hapus, tapi sudah hilang dari database, harus reload ulang web.
+Tombol bawah nempel ketika ke nav button bagi yang menggunakan button untuk kembali, home, switch tab.
+halaman promo state nya seperti nyangkut jadi perlu loading lama, tidak seperti tombol yang lainnya.

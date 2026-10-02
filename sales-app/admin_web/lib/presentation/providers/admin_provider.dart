@@ -961,10 +961,9 @@ class AdminProvider extends ChangeNotifier {
         pdfUrl: pdfUrl,
         expireAt: expireAt,
       );
-      final idx = _bulletins.indexWhere((b) => b.id == id);
-      if (idx >= 0) {
-        _bulletins[idx] = updated;
-      }
+      _bulletins = [
+        for (final b in _bulletins) b.id == id ? updated : b,
+      ];
       _setLoading(false);
       return true;
     } catch (e) {
@@ -979,7 +978,7 @@ class AdminProvider extends ChangeNotifier {
     _setLoading(true, 'Menghapus bulletin...');
     try {
       await _repo.deleteBulletin(id);
-      _bulletins.removeWhere((b) => b.id == id);
+      _bulletins = _bulletins.where((b) => b.id != id).toList();
       _setLoading(false);
       return true;
     } catch (e) {

@@ -60,7 +60,8 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "channel_kategori": submission.channel_kategori,
         "key_account_ref_id": submission.key_account_ref_id,
         "cluster_langganan": submission.cluster_langganan,
-        "kode_nama_salesman": submission.kode_nama_salesman,
+        "kode_salesman": submission.kode_salesman,
+        "nama_salesman": submission.nama_salesman,
         "siklus_kunjungan": submission.siklus_kunjungan,
     }
 
