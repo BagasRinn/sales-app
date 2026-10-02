@@ -396,6 +396,8 @@ class CustomerSubmissionCreate(BaseModel):
     nama_salesman: Optional[str] = Field(None, max_length=200)
     siklus_kunjungan: Optional[str] = Field(None, max_length=100)
     hari_kunjungan: Optional[str] = Field(None, max_length=50)
+    # Flag: kalau True, customer langsung dibuat saat submit (untuk flow "bareng order").
+    bareng_order: bool = Field(default=False)
 
 
 class CustomerSubmissionApprove(BaseModel):
@@ -419,6 +421,8 @@ class CustomerSubmissionResponse(BaseModel):
     status: str
     reject_reason: Optional[str] = None
     approved_customer_id: Optional[UUID] = None
+    # customer_id yang langsung dibuat saat bareng_order=True
+    bareng_customer_id: Optional[UUID] = None
     reviewed_by: Optional[UUID] = None
     reviewed_by_nama: Optional[str] = None
     reviewed_at: Optional[datetime] = None

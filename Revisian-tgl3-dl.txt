@@ -11,8 +11,8 @@ Halaman khusus dimanager untuk monitoring performa masing2 sales D
 Card stats target di halaman utama app mobile D
 
 Bulletin Admin Stuck ketika hapus, tapi sudah hilang dari database, harus reload ulang web. D
-Tombol bawah nempel ketika ke nav button bagi yang menggunakan button untuk kembali, home, switch tab.
+Tombol bawah nempel ketika ke nav button bagi yang menggunakan button untuk kembali, home, switch tab. D
 halaman promo state nya seperti nyangkut jadi perlu loading lama, tidak seperti tombol yang lainnya.
-Logic pembelian cth beli 2 gratis 1, jadi bisa duplikat barang yang dibeli. jadi yang 2 harga full, yang 1 diskon 100%
-Pendaftaran customer / NOO itu bisa langsung dibarengin dengan orderan
-Hilangkan auto expire di orderan
+Logic pembelian cth beli 2 gratis 1, jadi bisa duplikat barang yang dibeli. jadi yang 2 harga full, yang 1 diskon 100% D
+Pendaftaran customer / NOO itu bisa langsung dibarengin dengan orderan / Tidak itu sales yang pilih. Lalu untuk Kode salesman dan nama salesman itu tidak usah input manual dari sales tapi langsung rekam dari siapa akun yang mengajukan saja(kode diambil dari usernname dan nama itu dari nama usernya). Lalu pada pemilihan Cluster Langganan itu agak nyangkut ketika ditekan tidak berpindah langsung tapi harus menekan tombol lain dulu. Tipe Langganan juga jika memilih pasar, maka muncul kolom nama pasar yang wajib diisi, kalau non pasar tidak usah munculkan kolomnya. lalu untuk jangka kredit itu tidak perlu kolom input, hanya berikan label Jangka Kredit (Hari) itu 14 Hari.
+Hilangkan auto expire di orderan D

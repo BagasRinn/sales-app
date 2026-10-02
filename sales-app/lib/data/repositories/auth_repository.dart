@@ -32,6 +32,8 @@ class AuthRepository {
     await _storage.write(key: AppConfig.refreshTokenKey, value: refreshToken);
     await _storage.write(key: AppConfig.userRoleKey, value: role);
     await _storage.write(key: AppConfig.userIdKey, value: data['id']?.toString());
+    await _storage.write(key: AppConfig.userUsernameKey, value: data['username']?.toString());
+    await _storage.write(key: AppConfig.userNamaKey, value: data['nama']?.toString());
 
     // Login baru = sesi baru, bersihkan sisa timestamp background pause.
     await _storage.delete(key: _backgroundPausedAtKey);
@@ -68,6 +70,14 @@ class AuthRepository {
 
   Future<String?> getRefreshToken() async {
     return _storage.read(key: AppConfig.refreshTokenKey);
+  }
+
+  Future<String?> getUsername() async {
+    return _storage.read(key: AppConfig.userUsernameKey);
+  }
+
+  Future<String?> getNama() async {
+    return _storage.read(key: AppConfig.userNamaKey);
   }
 
   Future<void> saveTokens(String accessToken, String refreshToken) async {

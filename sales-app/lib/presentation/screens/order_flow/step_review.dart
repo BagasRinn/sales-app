@@ -196,7 +196,7 @@ class _StepReviewState extends State<StepReview> {
 
         // Sticky bottom buttons
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           decoration: BoxDecoration(
             color: AppColors.cardSurface,
             boxShadow: [

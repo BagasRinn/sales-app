@@ -6,6 +6,8 @@ class CustomerSubmission {
   final String status; // PENDING | APPROVED | REJECTED
   final String? rejectReason;
   final String? approvedCustomerId;
+  /// Customer ID yang langsung dibuat saat submission dengan bareng_order=True.
+  final String? barengCustomerId;
   final String? reviewedBy;
   final String? reviewedByNama;
   final DateTime? reviewedAt;
@@ -45,6 +47,7 @@ class CustomerSubmission {
     required this.status,
     this.rejectReason,
     this.approvedCustomerId,
+    this.barengCustomerId,
     this.reviewedBy,
     this.reviewedByNama,
     this.reviewedAt,
@@ -86,6 +89,7 @@ class CustomerSubmission {
       status: json['status'] as String,
       rejectReason: json['reject_reason'] as String?,
       approvedCustomerId: json['approved_customer_id'] as String?,
+      barengCustomerId: json['bareng_customer_id'] as String?,
       reviewedBy: json['reviewed_by'] as String?,
       reviewedByNama: json['reviewed_by_nama'] as String?,
       reviewedAt: parseDt(json['reviewed_at'] as String?),

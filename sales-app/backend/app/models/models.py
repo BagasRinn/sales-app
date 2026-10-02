@@ -134,6 +134,8 @@ class CustomerRegistrationSubmission(Base):
     status = Column(String(20), nullable=False, default='PENDING')
     reject_reason = Column(Text, nullable=True)
     approved_customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    # Customer ID yang langsung dibuat saat submission dengan bareng_order=True.
+    bareng_customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -192,7 +192,7 @@ class _StepPickProductsState extends State<StepPickProducts> {
 
         // Sticky bottom bar
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           decoration: BoxDecoration(
             color: AppColors.cardSurface,
             boxShadow: [

@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../core/design_system.dart';
 import '../../../data/repositories/customer_repository.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/draft_order_provider.dart';
+import '../order_flow/order_flow_screen.dart';
 
 /// Form pengajuan customer baru dari sales.
 /// 5 section: Identitas, Pembayaran, Kredit, Channel, Salesman.
@@ -28,27 +31,37 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   final _kotaCtl = TextEditingController();
   final _kelurahanCtl = TextEditingController();
   final _areaCtl = TextEditingController();
-  // Tipe langganan (Pasar / Non-Pasar) — sebelumnya tidak ada di Identitas,
-  // sekarang pindah ke sini sesuai spec terbaru.
   String? _tipeLanggananKategori; // PASAR | NON PASAR
   final _namaPasarCtl = TextEditingController();
-  final _jangkaKreditCtl = TextEditingController();
 
   // Section 3: Kredit
   final _batasKreditCtl = TextEditingController();
 
   // Section 4: Channel
   String? _channelKategori;
-
-  // Section 5: Salesman
+  String? _clusterLangganan;
   final _keyAccountCtl = TextEditingController();
-  final _clusterCtl = TextEditingController();
+
+  // Section 5: Salesman (auto-fill dari akun login, read-only)
   final _kodeSalesmanCtl = TextEditingController();
   final _namaSalesmanCtl = TextEditingController();
   String? _siklusKunjungan;
   String? _hariKunjungan;
 
+  // Toggle bareng order
+  bool _barengOrder = false;
+
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      if (auth.username != null) _kodeSalesmanCtl.text = auth.username!;
+      if (auth.nama != null) _namaSalesmanCtl.text = auth.nama!;
+    });
+  }
 
   static const _channelOptions = [
     'GT',
@@ -97,10 +110,8 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     _kelurahanCtl.dispose();
     _areaCtl.dispose();
     _namaPasarCtl.dispose();
-    _jangkaKreditCtl.dispose();
     _batasKreditCtl.dispose();
     _keyAccountCtl.dispose();
-    _clusterCtl.dispose();
     _kodeSalesmanCtl.dispose();
     _namaSalesmanCtl.dispose();
     super.dispose();
@@ -113,8 +124,6 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       return int.tryParse(t);
     }
 
-    // Tipe langganan di Identitas: kalau "PASAR" gabung dengan nama_pasar.
-    // Backend masih menyimpan `tipe_langganan` sebagai single string.
     final tipeLangganan =
         _tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isNotEmpty
             ? 'PASAR (${_namaPasarCtl.text.trim()})'
@@ -137,18 +146,20 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       // Section 2
       'tipe_pembayaran': _tipePembayaran,
       'nama_pasar': _orNull(_namaPasarCtl.text),
-      'jangka_kredit_hari': parseIntOrNull(_jangkaKreditCtl.text),
+      'jangka_kredit_hari': 14, // Fixed 14 hari
       // Section 3
       'batas_kredit_rupiah': parseIntOrNull(_batasKreditCtl.text),
       // Section 4
       'channel_kategori': _channelKategori,
       // Section 5
       'key_account_ref_id': _orNull(_keyAccountCtl.text),
-      'cluster_langganan': _orNull(_clusterCtl.text),
-      'kode_salesman': _orNull(_kodeSalesmanCtl.text),
-      'nama_salesman': _orNull(_namaSalesmanCtl.text),
+      'cluster_langganan': _clusterLangganan,
+      'kode_salesman': _kodeSalesmanCtl.text.trim().isEmpty ? null : _kodeSalesmanCtl.text.trim(),
+      'nama_salesman': _namaSalesmanCtl.text.trim().isEmpty ? null : _namaSalesmanCtl.text.trim(),
       'siklus_kunjungan': _siklusKunjungan,
       'hari_kunjungan': _hariKunjungan,
+      // Flag: buat customer langsung juga (untuk flow bareng order)
+      'bareng_order': _barengOrder,
     };
   }
 
@@ -166,6 +177,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       return;
     }
 
+    if (_tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isEmpty) {
+      _snack('Nama Pasar wajib diisi');
+      return;
+    }
+
     final repo = context.read<CustomerRepository>();
     final scaffold = ScaffoldMessenger.of(context);
 
@@ -174,17 +190,41 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
     setState(() => _isSubmitting = true);
     try {
-      await repo.submitCustomerRegistration(_buildPayload());
+      final result = await repo.submitCustomerRegistration(_buildPayload());
       if (!mounted) return;
+
       scaffold.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Pengajuan customer terkirim. Admin akan review dan approve.',
+            _barengOrder
+                ? 'Customer berhasil diajukan. Lanjut buat order.'
+                : 'Pengajuan customer terkirim. Admin akan review dan approve.',
           ),
           backgroundColor: AppColors.success,
         ),
       );
-      Navigator.of(context).pop(true); // return true supaya caller bisa refresh
+
+      if (_barengOrder && result.barengCustomerId != null) {
+        // Customer sudah dibuat backend saat bareng_order=True.
+        final newCustomerId = result.barengCustomerId;
+        final newCustomerName = _namaCtl.text.trim();
+
+        if (newCustomerId != null && mounted) {
+          final draft = context.read<DraftOrderProvider>();
+          draft.reset();
+          draft.setCustomerDirect(id: newCustomerId, namaToko: newCustomerName);
+
+          if (!mounted) return;
+          await Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const OrderFlowScreen(),
+            ),
+          );
+          return;
+        }
+      }
+
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       _snack('Gagal kirim pengajuan: $e');
     } finally {
@@ -204,7 +244,6 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         alamat: alamat,
       );
     } catch (_) {
-      // Kalau check gagal, tetap izinkan submit
       dupResult = null;
     }
 
@@ -272,6 +311,60 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           // ============================================================
+          // Toggle: Bareng Order?
+          // ============================================================
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.infoBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.infoBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.shopping_cart_outlined, size: 18, color: AppColors.info),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Langsung buat order juga?',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.info,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _toggleChip(
+                      label: 'Ya',
+                      selected: _barengOrder,
+                      onSelected: () => setState(() => _barengOrder = true),
+                    ),
+                    const SizedBox(width: 8),
+                    _toggleChip(
+                      label: 'Tidak',
+                      selected: !_barengOrder,
+                      onSelected: () => setState(() => _barengOrder = false),
+                    ),
+                  ],
+                ),
+                if (_barengOrder) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Setelah customer disubmit, akan langsung diarahkan ke langkah order.',
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.info),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ============================================================
           // Section 1: Identitas Pelanggan
           // ============================================================
           _SectionHeader(title: '1. Identitas Pelanggan'),
@@ -293,7 +386,17 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             selected: _tipeLanggananKategori,
             onSelected: (v) => setState(() => _tipeLanggananKategori = v),
           ),
-          const SizedBox(height: 24),
+          // Nama Pasar — hanya kalau PASAR
+          if (_tipeLanggananKategori == 'PASAR') ...[
+            const SizedBox(height: 4),
+            _Field(
+              label: 'Nama Pasar *',
+              controller: _namaPasarCtl,
+              required: true,
+              hintText: 'Contoh: Pasar Senen',
+            ),
+          ],
+          const SizedBox(height: 20),
 
           // ============================================================
           // Section 2: Tipe Pembayaran
@@ -306,13 +409,33 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             onSelected: (v) => setState(() => _tipePembayaran = v),
           ),
           const SizedBox(height: 8),
-          _Field(
-            label: 'Jangka Kredit (hari)',
-            controller: _jangkaKreditCtl,
-            keyboardType: TextInputType.number,
-            helperText: '14 hari (fixed)',
+          // Jangka kredit fixed 14 hari — label saja, bukan input.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Jangka Kredit (Hari): ',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  '14 Hari',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ============================================================
           // Section 3: Batas Kredit
@@ -324,7 +447,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             controller: _batasKreditCtl,
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ============================================================
           // Section 4: Channel / Kategori Langganan
@@ -339,16 +462,20 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           ),
           _Field(label: 'Key Account (REF ID)', controller: _keyAccountCtl),
           _FieldLabel(text: 'Cluster Langganan'),
-          _ClusterField(controller: _clusterCtl),
-          const SizedBox(height: 24),
+          _ClusterField(
+            selected: _clusterLangganan,
+            onChanged: (v) => setState(() => _clusterLangganan = v),
+          ),
+          const SizedBox(height: 20),
 
           // ============================================================
           // Section 5: Kunjungan Salesman
           // ============================================================
           _SectionHeader(title: '5. Kunjungan Salesman'),
           const SizedBox(height: 8),
-          _Field(label: 'Kode Salesman', controller: _kodeSalesmanCtl),
-          _Field(label: 'Nama Salesman', controller: _namaSalesmanCtl),
+          // Kode & Nama Salesman — auto-fill, read-only display.
+          _ReadOnlyField(label: 'Kode Salesman', value: _kodeSalesmanCtl.text),
+          _ReadOnlyField(label: 'Nama Salesman', value: _namaSalesmanCtl.text),
           _FieldLabel(text: 'Siklus Kunjungan'),
           _ChoiceWrap(
             options: _siklusKunjunganOptions,
@@ -375,10 +502,38 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.send),
-            label: const Text('Submit Pengajuan'),
+            label: Text(_barengOrder ? 'Submit & Buat Order' : 'Submit Pengajuan'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _toggleChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    return GestureDetector(
+      onTap: onSelected,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.info : AppColors.cardSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.info : AppColors.borderLight,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textSecondary,
           ),
         ),
       ),
@@ -425,8 +580,10 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _ClusterField extends StatelessWidget {
-  final TextEditingController controller;
-  const _ClusterField({required this.controller});
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  const _ClusterField({required this.selected, required this.onChanged});
 
   static const _clusterOptions = ['STOCKIEST', 'SUBDIST', 'NO CLUSTER'];
 
@@ -436,12 +593,12 @@ class _ClusterField extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: _clusterOptions.map((o) {
-        final isSel = o == (controller.text);
+        final isSel = o == selected;
         return ChoiceChip(
           label: Text(o),
           selected: isSel,
           onSelected: (sel) {
-            if (sel) controller.text = o;
+            onChanged(sel ? o : null);
           },
           selectedColor: AppColors.primaryLight,
           labelStyle: TextStyle(
@@ -461,7 +618,7 @@ class _Field extends StatelessWidget {
   final bool required;
   final int maxLines;
   final TextInputType keyboardType;
-  final String? helperText;
+  final String? hintText;
 
   const _Field({
     required this.label,
@@ -469,7 +626,7 @@ class _Field extends StatelessWidget {
     this.required = false,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
-    this.helperText,
+    this.hintText,
   });
 
   @override
@@ -482,7 +639,7 @@ class _Field extends StatelessWidget {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
-          helperText: helperText,
+          hintText: hintText,
           filled: true,
           fillColor: AppColors.cardSurface,
           border: OutlineInputBorder(
@@ -493,6 +650,41 @@ class _Field extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: AppColors.borderLight),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Read-only display field — greyed out, tidak bisa diedit.
+class _ReadOnlyField extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReadOnlyField({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: TextEditingController(text: value),
+        readOnly: true,
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: AppColors.background,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.borderLight),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.borderLight),
+          ),
+        ),
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.textSecondary,
         ),
       ),
     );

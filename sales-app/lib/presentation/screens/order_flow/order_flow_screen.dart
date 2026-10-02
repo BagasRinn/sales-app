@@ -266,22 +266,24 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
             style: const TextStyle(fontSize: 18),
           ),
         ),
-        body: Column(
-          children: [
-            _StepIndicator(currentStep: _step),
-            Expanded(
-              child: switch (_step) {
-                1 => StepPickCustomer(onNext: _next),
-                2 => StepPickOrderType(onNext: _next, onBack: _back),
-                3 => StepPickProducts(onNext: _next, onBack: _backFromProducts),
-                _ => StepReview(
-                    onBack: _back,
-                    onSaveDraft: _submitDraft,
-                    onSubmit: _submitToPENDING,
-                  ),
-              },
-            ),
-          ],
+        body: SafeArea(
+          child: Column(
+            children: [
+              _StepIndicator(currentStep: _step),
+              Expanded(
+                child: switch (_step) {
+                  1 => StepPickCustomer(onNext: _next),
+                  2 => StepPickOrderType(onNext: _next, onBack: _back),
+                  3 => StepPickProducts(onNext: _next, onBack: _backFromProducts),
+                  _ => StepReview(
+                      onBack: _back,
+                      onSaveDraft: _submitDraft,
+                      onSubmit: _submitToPENDING,
+                    ),
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

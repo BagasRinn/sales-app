@@ -147,6 +147,17 @@ def setup_schema(conn):
         print("  + orders")
     else:
         print("  ~ orders (sudah ada)")
+        # Tambahkan kolom bareng_customer_id jika belum ada (migrasi)
+        r = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'customer_registration_submissions' AND column_name = 'bareng_customer_id'
+        """))
+        if r.fetchone() is None:
+            conn.execute(text(
+                "ALTER TABLE customer_registration_submissions ADD COLUMN bareng_customer_id UUID REFERENCES customers(id)"
+            ))
+            conn.commit()
+            print("  + bareng_customer_id column di customer_registration_submissions")
 
     # --- order_items ---
     if not _table_exists(conn, "order_items"):
@@ -248,7 +259,7 @@ def cleanup_data(conn):
     ]
     for tbl in tables_in_order:
         if _table_exists(conn, tbl):
-            conn.execute(text(f"TRUNCATE TABLE {tbl} CASCADE RESTART IDENTITY"))
+            conn.execute(text(f"TRUNCATE TABLE {tbl} RESTART IDENTITY CASCADE"))
             print(f"  ~ {tbl} truncated")
     # Soft-delete semua user (jangan hard-delete karena FK)
     conn.execute(text("UPDATE users SET deleted_at = NOW()"))

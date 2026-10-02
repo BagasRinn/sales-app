@@ -38,6 +38,7 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "status": submission.status,
         "reject_reason": submission.reject_reason,
         "approved_customer_id": submission.approved_customer_id,
+        "bareng_customer_id": submission.bareng_customer_id,
         "reviewed_by": submission.reviewed_by,
         "reviewed_by_nama": (reviewer.nama or reviewer.username) if reviewer else None,
         "reviewed_at": submission.reviewed_at,
@@ -72,20 +73,46 @@ def submit_customer_registration(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Submit pengajuan customer baru. Status langsung PENDING — ga ada draft.
-    sales_id otomatis dari token (siapa yang login)."""
+    """Submit pengajuan customer baru.
+    - Jika bareng_order=True, customer langsung dibuat agar sales bisa langsung order.
+    - Status submission tetap PENDING — admin perlu approve untuk mengesahkan.
+    sales_id otomatis dari token (siapa yang login).
+    """
     sales_id = UUID(current_user["user_id"])
+
+    # Buat dict payload, pisahkan bareng_order (flag, bukan field database).
+    payload_dict = payload.model_dump()
+    bareng_order = payload_dict.pop("bareng_order", False)
 
     submission = CustomerRegistrationSubmission(
         id=uuid4(),
         sales_id=sales_id,
         status='PENDING',
-        **payload.model_dump(),
+        **payload_dict,
     )
     db.add(submission)
+    db.flush()  # dapat UUID submission
+
+    bareng_customer_id = None
+    if bareng_order:
+        # Auto-create customer sekarang juga agar sales bisa langsung order.
+        # Nama_toko diambil dari nama_langganan, alamat dari alamat_kirim.
+        customer_id = uuid4()
+        customer = Customer(
+            id=customer_id,
+            nama_toko=payload.nama_langganan,
+            alamat=payload.alamat_kirim or payload.alamat_ktp or '',
+        )
+        db.add(customer)
+        submission.bareng_customer_id = customer_id
+        bareng_customer_id = customer_id
+
     db.commit()
     db.refresh(submission)
-    return _serialize(submission, db)
+
+    result = _serialize(submission, db)
+    result["bareng_customer_id"] = bareng_customer_id
+    return result
 
 
 @router.get("/my", response_model=List[CustomerSubmissionResponse])
@@ -194,17 +221,42 @@ def approve_submission(
             detail=f"Pengajuan tidak bisa di-approve (status saat ini: {submission.status})",
         )
 
-    # Cek kode belum dipakai customer lain
+    # Cek kode belum dipakai customer lain (kecuali customer bareng_order).
     kode = payload.kode.strip()
     existing = db.query(Customer).filter(
         Customer.deleted_at.is_(None),
         Customer.kode == kode,
     ).first()
-    if existing:
+    if existing and existing.id != submission.bareng_customer_id:
         raise HTTPException(
             status_code=409,
             detail=f"Kode '{kode}' sudah dipakai customer lain",
         )
+
+    admin_id = UUID(current_user["user_id"])
+    submission.status = 'APPROVED'
+    submission.reviewed_by = admin_id
+    submission.reviewed_at = datetime.now(timezone.utc)
+    submission.updated_at = datetime.now(timezone.utc)
+
+    # Kalau customer sudah dibuat saat submission (via bareng_order),
+    # cukup update kode-nya. Jangan bikin customer baru.
+    if submission.bareng_customer_id:
+        existing_customer = db.query(Customer).filter(
+            Customer.id == submission.bareng_customer_id
+        ).first()
+        if existing_customer:
+            existing_customer.kode = kode
+        submission.approved_customer_id = submission.bareng_customer_id
+        db.commit()
+        db.refresh(submission)
+        return {
+            "message": "Submission disetujui (customer sudah dibuat saat pengajuan).",
+            "customer_id": str(submission.bareng_customer_id),
+            "customer_kode": kode,
+            "customer_nama_toko": existing_customer.nama_toko if existing_customer else submission.nama_langganan,
+            "customer_alamat": existing_customer.alamat if existing_customer else None,
+        }
 
     # Bikin Customer baru. Nama & alamat dari submission, override kalau admin isi.
     nama_toko = (payload.nama_toko or submission.nama_langganan).strip()
@@ -219,12 +271,7 @@ def approve_submission(
     db.add(customer)
     db.flush()  # dapet customer.id
 
-    admin_id = UUID(current_user["user_id"])
-    submission.status = 'APPROVED'
     submission.approved_customer_id = customer.id
-    submission.reviewed_by = admin_id
-    submission.reviewed_at = datetime.now(timezone.utc)
-    submission.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(customer)

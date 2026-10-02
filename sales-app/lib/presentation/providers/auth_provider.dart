@@ -9,19 +9,29 @@ class AuthProvider extends ChangeNotifier {
 
   AuthState _state = AuthState.initial;
   String? _errorMessage;
+  String? _username;
+  String? _nama;
 
   AuthProvider(this._authRepo);
 
   AuthState get state => _state;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _state == AuthState.authenticated;
+  String? get username => _username;
+  String? get nama => _nama;
 
   Future<String?> getToken() => _authRepo.getToken();
+
+  Future<void> _loadUserInfo() async {
+    _username = await _authRepo.getUsername();
+    _nama = await _authRepo.getNama();
+  }
 
   Future<void> checkLoginStatus() async {
     try {
       final isLoggedIn = await _authRepo.isLoggedIn();
       _state = isLoggedIn ? AuthState.authenticated : AuthState.unauthenticated;
+      if (isLoggedIn) await _loadUserInfo();
     } catch (e) {
       _state = AuthState.unauthenticated;
     }
@@ -35,6 +45,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await _authRepo.login(username, password);
+      await _loadUserInfo();
       _state = AuthState.authenticated;
       notifyListeners();
       return true;
@@ -54,6 +65,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authRepo.logout();
     _state = AuthState.unauthenticated;
+    _username = null;
+    _nama = null;
     notifyListeners();
   }
 
