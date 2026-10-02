@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerRegistrationSubmission, User
+from app.models.models import Customer, CustomerRegistrationSubmission, Order, User
 from app.schemas.schemas import (
     CustomerSubmissionCreate,
     CustomerSubmissionResponse,
@@ -241,6 +241,7 @@ def approve_submission(
 
     # Kalau customer sudah dibuat saat submission (via bareng_order),
     # cukup update kode-nya. Jangan bikin customer baru.
+    bareng_order_confirmed = None
     if submission.bareng_customer_id:
         existing_customer = db.query(Customer).filter(
             Customer.id == submission.bareng_customer_id
@@ -248,15 +249,33 @@ def approve_submission(
         if existing_customer:
             existing_customer.kode = kode
         submission.approved_customer_id = submission.bareng_customer_id
+
+        # Auto-confirm order DRAFT milik sales yang linked ke customer ini.
+        # Verifikasi sales_id supaya tidak salah confirm order orang lain.
+        bareng_order = db.query(Order).filter(
+            Order.customer_id == submission.bareng_customer_id,
+            Order.sales_id == submission.sales_id,
+            Order.status == 'DRAFT',
+        ).first()
+        if bareng_order:
+            bareng_order.status = 'CONFIRMED'
+            bareng_order_confirmed = {
+                "id": str(bareng_order.id),
+                "status": bareng_order.status,
+            }
+
         db.commit()
         db.refresh(submission)
-        return {
+        result = {
             "message": "Submission disetujui (customer sudah dibuat saat pengajuan).",
             "customer_id": str(submission.bareng_customer_id),
             "customer_kode": kode,
             "customer_nama_toko": existing_customer.nama_toko if existing_customer else submission.nama_langganan,
             "customer_alamat": existing_customer.alamat if existing_customer else None,
         }
+        if bareng_order_confirmed:
+            result["bareng_order"] = bareng_order_confirmed
+        return result
 
     # Bikin Customer baru. Nama & alamat dari submission, override kalau admin isi.
     nama_toko = (payload.nama_toko or submission.nama_langganan).strip()

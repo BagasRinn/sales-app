@@ -18,8 +18,16 @@ class OrderFlowScreen extends StatefulWidget {
 }
 
 class _OrderFlowScreenState extends State<OrderFlowScreen> {
-  int _step = 1;
+  late int _step;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Jika sudah ada customer (edit existing order), langsung ke step review.
+    final draft = context.read<DraftOrderProvider>();
+    _step = draft.hasCustomer ? 4 : 1;
+  }
 
   Future<bool> _confirmCancel() async {
     final draft = context.read<DraftOrderProvider>();
