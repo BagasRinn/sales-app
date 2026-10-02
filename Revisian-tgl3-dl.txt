@@ -5,11 +5,14 @@ ngedit orderan dari sales client D
 search kode toko di sales client D
 produk untuk toko itu filternya dengan supplier D
 form penambahan toko, sales client D
-Bulletin board dan pop up diskon (halaman sendiri berupa buka file pdf) dan wajib menghapus isinya ketika tanggal 1, bisa juga memberikan periode post nya jadi kalau udah lewat otomatis menghapus.
+Bulletin board dan pop up diskon (halaman sendiri berupa buka file pdf) dan wajib menghapus isinya ketika tanggal 1, bisa juga memberikan periode post nya jadi kalau udah lewat otomatis menghapus. D
 Layer Diskon dihalaman checkout D
 Halaman khusus dimanager untuk monitoring performa masing2 sales D
 Card stats target di halaman utama app mobile D
 
-Bulletin Admin Stuck ketika hapus, tapi sudah hilang dari database, harus reload ulang web.
+Bulletin Admin Stuck ketika hapus, tapi sudah hilang dari database, harus reload ulang web. D
 Tombol bawah nempel ketika ke nav button bagi yang menggunakan button untuk kembali, home, switch tab.
 halaman promo state nya seperti nyangkut jadi perlu loading lama, tidak seperti tombol yang lainnya.
+Logic pembelian cth beli 2 gratis 1, jadi bisa duplikat barang yang dibeli. jadi yang 2 harga full, yang 1 diskon 100%
+Pendaftaran customer / NOO itu bisa langsung dibarengin dengan orderan
+Hilangkan auto expire di orderan

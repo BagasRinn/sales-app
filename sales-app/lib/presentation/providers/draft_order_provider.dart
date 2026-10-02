@@ -7,21 +7,17 @@ class DraftOrderProvider extends ChangeNotifier {
   String? customerId;
   String? customerName;
   String? customerAddress;
-  Map<String, int> items = {}; // productId -> qty
 
-  /// Diskon per item: productId -> ItemDiscount (3 layer stacked, sequential).
-  /// Setiap item bisa punya sampai 3 layer diskon. Tiap layer bertipe
-  /// 'PERCENT' (value 0-100) atau 'NOMINAL' (value dalam IDR per pcs).
-  Map<String, ItemDiscount> discounts = {};
+  /// Daftar line item — bisa ada multiple line untuk produk yang sama
+  /// (untuk mencatat promo "beli X gratis Y" secara manual).
+  List<OrderLine> items = [];
 
   String notes = '';
   String? editingOrderId;
-  String? editingOriginalStatus; // 'DRAFT' atau 'PENDING' saat mulai edit — dipakai di submit flow
+  String? editingOriginalStatus;
 
-  /// Tipe order: 'REGULER' atau '4P'. Diset di Step 2 (pilih tipe), default REGULER.
   String orderType = 'REGULER';
 
-  // Optional pricing cache: productId -> unit price. Diisi dari ProductProvider saat fetch.
   Map<String, int> _priceCache = {};
 
   void setPricingCache(Map<String, int> prices) {
@@ -46,20 +42,47 @@ class DraftOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setQty(String productId, int qty) {
-    if (qty <= 0) {
-      items.remove(productId);
-    } else {
-      items[productId] = qty;
-    }
+  // -------------------------------------------------------------------------
+  // Line-based API (new)
+  // -------------------------------------------------------------------------
+
+  /// Tambah satu line baru. Append ke akhir list.
+  OrderLine addLine(String productId, {int qty = 1, ItemDiscount? discount}) {
+    final line = OrderLine(
+      id: _generateId(),
+      productId: productId,
+      qty: qty,
+      discount: discount,
+    );
+    items = [...items, line];
+    notifyListeners();
+    return line;
+  }
+
+  /// Hapus line by id.
+  void removeLine(String lineId) {
+    items = items.where((l) => l.id != lineId).toList();
     notifyListeners();
   }
 
-  /// Set satu layer diskon untuk produk. [layer] harus 1, 2, atau 3.
-  /// Value <= 0 akan menghapus layer tersebut (bukan menghapus produk).
-  /// Kalau semua 3 layer kosong setelah update, entry produk dihapus dari map.
+  /// Set qty untuk line by id. Kalau qty <= 0 → removeLine.
+  void setLineQty(String lineId, int qty) {
+    if (qty <= 0) {
+      removeLine(lineId);
+      return;
+    }
+    items = items.map((l) {
+      if (l.id == lineId) {
+        return l.copyWith(qty: qty);
+      }
+      return l;
+    }).toList();
+    notifyListeners();
+  }
+
+  /// Set satu layer diskon untuk line by id. [layer] harus 1, 2, atau 3.
   void setDiscountLayer({
-    required String productId,
+    required String lineId,
     required int layer,
     required String type,
     required int value,
@@ -72,7 +95,11 @@ class DraftOrderProvider extends ChangeNotifier {
           'discount type harus PERCENT atau NOMINAL, dapat: $type');
     }
 
-    final existing = discounts[productId] ?? const ItemDiscount();
+    final lineIndex = items.indexWhere((l) => l.id == lineId);
+    if (lineIndex < 0) return;
+    final line = items[lineIndex];
+
+    final existing = line.discount ?? const ItemDiscount();
     DiscountLayer? newLayer;
     if (value <= 0) {
       newLayer = null;
@@ -82,38 +109,86 @@ class DraftOrderProvider extends ChangeNotifier {
         capped = 100;
       }
       if (type == 'NOMINAL') {
-        // Cap ke raw_subtotal (harga × qty) — cap tertinggi yang mungkin.
-        // Cap tambahan ke running residual setelah layer sebelumnya dilakukan
-        // oleh kalkulasi (min()), bukan di sini.
-        final harga = _priceCache[productId] ?? 0;
-        final qty = items[productId] ?? 0;
-        final max = harga * qty;
+        final price = _priceCache[line.productId] ?? 0;
+        final max = price * line.qty;
         capped = value > max ? max : value;
       }
       newLayer = DiscountLayer(type: type, value: capped);
     }
 
     final updated = existing.withLayer(layer, newLayer);
-    if (updated.isEmpty) {
-      discounts.remove(productId);
-    } else {
-      discounts[productId] = updated;
-    }
+    final newDiscount = updated.isEmpty ? null : updated;
+    items = [
+      for (int i = 0; i < items.length; i++)
+        if (i == lineIndex) line.copyWith(discount: newDiscount) else items[i],
+    ];
     notifyListeners();
   }
+
+  /// Lookup helpers.
+  OrderLine? getLineById(String lineId) {
+    for (final l in items) {
+      if (l.id == lineId) return l;
+    }
+    return null;
+  }
+
+  /// Semua line untuk satu productId.
+  List<OrderLine> linesForProduct(String productId) {
+    return items.where((l) => l.productId == productId).toList();
+  }
+
+  /// Total qty untuk satu productId (semua line dijumlahkan).
+  int totalQtyForProduct(String productId) {
+    return linesForProduct(productId)
+        .fold(0, (sum, l) => sum + l.qty);
+  }
+
+  // -------------------------------------------------------------------------
+  // Legacy API — backward compat untuk caller yang masih pakai Map<productId, qty>
+  // Dipakai step_pick_products & step_review saat belum di-convert.
+  // Implementasi: beroperasi di line PERTAMA untuk produk tersebut.
+  // -------------------------------------------------------------------------
+
+  /// Legacy: set qty untuk produk (line pertama). qty=0 → removeLine(line pertama).
+  void setQty(String productId, int qty) {
+    final lines = linesForProduct(productId);
+    if (lines.isEmpty) {
+      if (qty > 0) {
+        addLine(productId, qty: qty);
+      }
+      return;
+    }
+    final first = lines.first;
+    setLineQty(first.id, qty);
+  }
+
+  /// Legacy: set layer diskon untuk produk (line pertama).
+  void setDiscountLayerLegacy({
+    required String productId,
+    required int layer,
+    required String type,
+    required int value,
+  }) {
+    final lines = linesForProduct(productId);
+    if (lines.isEmpty) return;
+    setDiscountLayer(lineId: lines.first.id, layer: layer, type: type, value: value);
+  }
+
+  // -------------------------------------------------------------------------
+  // Computed totals
+  // -------------------------------------------------------------------------
 
   /// Total harga TANPA diskon — harga dasar semua item.
   int get totalRaw {
     int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      total += price * qty;
-    });
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      total += price * line.qty;
+    }
     return total;
   }
 
-  /// Hitung chain 3 layer sequential untuk satu item.
-  /// Return (final_subtotal, d1, d2, d3, total_discount).
   ({int subtotal, int d1, int d2, int d3, int total}) _applyItemLayers(
     int rawSubtotal,
     ItemDiscount? disc,
@@ -137,64 +212,72 @@ class DraftOrderProvider extends ChangeNotifier {
     return (subtotal: s, d1: d1, d2: d2, d3: d3, total: d1 + d2 + d3);
   }
 
-  /// Total harga setelah 3-layer diskon sequential per-item.
+  /// Total harga setelah 3-layer diskon sequential per-line.
   int get totalPrice {
     int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      final rawSubtotal = price * qty;
-      final r = _applyItemLayers(rawSubtotal, discounts[productId]);
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      final rawSubtotal = price * line.qty;
+      final r = _applyItemLayers(rawSubtotal, line.discount);
       total += r.subtotal;
-    });
+    }
     return total;
   }
 
-  /// Total potongan layer 1 (semua item).
   int get discountLayer1Total {
     int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      final r = _applyItemLayers(price * qty, discounts[productId]);
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      final r = _applyItemLayers(price * line.qty, line.discount);
       total += r.d1;
-    });
+    }
     return total;
   }
 
   int get discountLayer2Total {
     int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      final r = _applyItemLayers(price * qty, discounts[productId]);
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      final r = _applyItemLayers(price * line.qty, line.discount);
       total += r.d2;
-    });
+    }
     return total;
   }
 
   int get discountLayer3Total {
     int total = 0;
-    items.forEach((productId, qty) {
-      final price = _priceCache[productId] ?? 0;
-      final r = _applyItemLayers(price * qty, discounts[productId]);
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      final r = _applyItemLayers(price * line.qty, line.discount);
       total += r.d3;
-    });
+    }
     return total;
   }
 
   /// Estimasi hemat — selisih totalRaw dan totalPrice.
   int get totalDiscount => totalRaw - totalPrice;
 
+  /// Jumlah line yang adalah "GRATIS" (layer1 >= 100%).
+  int get freeItemsCount {
+    int count = 0;
+    for (final line in items) {
+      if (line.isFree) count += line.qty;
+    }
+    return count;
+  }
+
   void setNotes(String value) {
     notes = value;
     notifyListeners();
   }
 
+  /// Load dari existing order rows — rehydrate List<OrderLine>.
   void loadFromExisting({
     required String orderId,
     required String customerId,
     required String customerName,
     required String? customerAddress,
-    required Map<String, int> existingItems,
-    required Map<String, ItemDiscount> existingDiscounts,
+    required List<OrderLine> existingLines,
     required String existingNotes,
     String? existingStatus,
     String existingOrderType = 'REGULER',
@@ -205,8 +288,7 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerId = customerId;
     this.customerName = customerName;
     this.customerAddress = customerAddress;
-    items = Map<String, int>.from(existingItems);
-    discounts = Map<String, ItemDiscount>.from(existingDiscounts);
+    items = List<OrderLine>.from(existingLines);
     notes = existingNotes;
     notifyListeners();
   }
@@ -215,8 +297,7 @@ class DraftOrderProvider extends ChangeNotifier {
     customerId = null;
     customerName = null;
     customerAddress = null;
-    items = {};
-    discounts = {};
+    items = [];
     notes = '';
     editingOrderId = null;
     editingOriginalStatus = null;
@@ -225,20 +306,78 @@ class DraftOrderProvider extends ChangeNotifier {
   }
 
   bool get hasCustomer => customerId != null;
-  bool get hasItems => items.values.any((q) => q > 0);
-  int get totalItems => items.values.fold(0, (a, b) => a + b);
+  bool get hasItems => items.any((l) => l.qty > 0);
+  int get totalItems => items.fold(0, (sum, l) => sum + l.qty);
   bool get isEditing => editingOrderId != null;
   bool get isEditingPending => isEditing && editingOriginalStatus == 'PENDING';
+
+  // -------------------------------------------------------------------------
+  // Submit helpers
+  // -------------------------------------------------------------------------
+
+  /// Bangun payload items untuk submit ke backend.
+  /// Loop semua line, skip qty=0, build ItemDiscount.toJson per line.
+  List<Map<String, dynamic>> buildItemsPayload() {
+    final result = <Map<String, dynamic>>[];
+    for (final line in items) {
+      if (line.qty <= 0) continue;
+      final base = <String, dynamic>{
+        'product_id': line.productId,
+        'qty': line.qty,
+      };
+      if (line.discount != null) {
+        base.addAll(line.discount!.toJson());
+      }
+      result.add(base);
+    }
+    return result;
+  }
+
+  String _generateId() {
+    // Gunakan timestamp + random sebagai simple ID
+    return '${DateTime.now().microsecondsSinceEpoch}_${(1000 + (mathRandom() * 9000).toInt())}';
+  }
 }
 
-/// Satu layer diskon. Layer kosong = null di [ItemDiscount].
+double mathRandom() => (DateTime.now().microsecondsSinceEpoch % 1000) / 1000;
+
+/// Satu baris item di cart. Boleh ada banyak baris untuk produk yang sama.
+class OrderLine {
+  final String id;         // client UUID, stabil across edits + rehydrate
+  final String productId;
+  int qty;
+  ItemDiscount? discount;
+
+  OrderLine({
+    required this.id,
+    required this.productId,
+    required this.qty,
+    this.discount,
+  });
+
+  /// Layer1 >= 100% PERCENT → label "GRATIS".
+  bool get isFree {
+    final l1 = discount?.layer1;
+    return l1 != null && l1.type == 'PERCENT' && l1.value >= 100;
+  }
+
+  OrderLine copyWith({int? qty, ItemDiscount? discount, bool clearDiscount = false}) {
+    return OrderLine(
+      id: id,
+      productId: productId,
+      qty: qty ?? this.qty,
+      discount: clearDiscount ? null : (discount ?? this.discount),
+    );
+  }
+}
+
+/// Satu layer diskon.
 class DiscountLayer {
   final String type; // 'PERCENT' atau 'NOMINAL'
   final int value;
 
   const DiscountLayer({required this.type, required this.value});
 
-  /// Potongan untuk layer ini dari running subtotal. NOMINAL di-cap ke running.
   int cutFrom(int running) {
     if (running <= 0) return 0;
     if (type == 'NOMINAL') {
@@ -256,7 +395,7 @@ class DiscountLayer {
   }
 }
 
-/// Kumpulan 3 layer diskon untuk satu item. Layer null = tidak ada diskon di layer tsb.
+/// Kumpulan 3 layer diskon untuk satu item.
 class ItemDiscount {
   final DiscountLayer? layer1;
   final DiscountLayer? layer2;
@@ -264,8 +403,7 @@ class ItemDiscount {
 
   const ItemDiscount({this.layer1, this.layer2, this.layer3});
 
-  bool get isEmpty =>
-      layer1 == null && layer2 == null && layer3 == null;
+  bool get isEmpty => layer1 == null && layer2 == null && layer3 == null;
 
   ItemDiscount withLayer(int layer, DiscountLayer? newLayer) {
     switch (layer) {
@@ -280,7 +418,6 @@ class ItemDiscount {
     }
   }
 
-  /// Serialisasi untuk dikirim ke backend (9 field, cocok dengan Pydantic OrderItemCreate).
   Map<String, dynamic> toJson() {
     final out = <String, dynamic>{};
     if (layer1 != null) {
@@ -301,7 +438,6 @@ class ItemDiscount {
     return out;
   }
 
-  /// Build dari [OrderItem] (dipakai saat edit draft — rehydrate dari response).
   factory ItemDiscount.fromOrderItem(OrderItem item) {
     DiscountLayer? build(String type, int percent, int nominal) {
       if ((type == 'PERCENT' && percent > 0) ||

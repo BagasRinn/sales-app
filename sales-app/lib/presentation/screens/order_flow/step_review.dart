@@ -111,12 +111,11 @@ class _StepReviewState extends State<StepReview> {
                 ),
                 child: Column(
                   children: [
-                    for (final entry in draft.items.entries)
-                      if (entry.value > 0)
-                        _ProductRow(
-                          product: productMap[entry.key],
-                          qty: entry.value,
-                          productId: entry.key,
+                    for (final line in draft.items)
+                      if (line.qty > 0)
+                        _LineRow(
+                          line: line,
+                          product: productMap[line.productId],
                         ),
                     const Divider(height: 1, indent: 14, endIndent: 14),
                     InkWell(
@@ -133,6 +132,26 @@ class _StepReviewState extends State<StepReview> {
                               'Tambah Produk',
                               style: AppTextStyles.bodyMedium.copyWith(
                                 color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _showAddLineSheet(context),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.library_add,
+                                size: 16, color: AppColors.primaryLight),
+                            const SizedBox(width: 6),
+                            Text(
+                              '+ Tambah Line',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.primaryLight,
                               ),
                             ),
                           ],
@@ -216,6 +235,27 @@ class _StepReviewState extends State<StepReview> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showAddLineSheet(BuildContext context) {
+    final draft = context.read<DraftOrderProvider>();
+    final products = context.read<ProductProvider>().products;
+    final productMap = {for (final p in products) p.id: p};
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _AddLineSheet(
+        products: products,
+        productMap: productMap,
+        onAdd: (productId, qty, disc) {
+          draft.addLine(productId, qty: qty, discount: disc);
+        },
+      ),
     );
   }
 
@@ -313,6 +353,16 @@ class _OrderTotalCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (draft.freeItemsCount > 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Item gratis: ${draft.freeItemsCount}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.success,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -343,21 +393,16 @@ class _OrderTotalCard extends StatelessWidget {
   }
 }
 
-class _ProductRow extends StatefulWidget {
+class _LineRow extends StatefulWidget {
+  final OrderLine line;
   final Product? product;
-  final int qty;
-  final String productId;
-  const _ProductRow({
-    required this.product,
-    required this.qty,
-    required this.productId,
-  });
+  const _LineRow({required this.line, required this.product});
 
   @override
-  State<_ProductRow> createState() => _ProductRowState();
+  State<_LineRow> createState() => _LineRowState();
 }
 
-class _ProductRowState extends State<_ProductRow> {
+class _LineRowState extends State<_LineRow> {
   bool _showDiscount = false;
   String _layer1Type = 'PERCENT';
   String _layer2Type = 'PERCENT';
@@ -399,11 +444,11 @@ class _ProductRowState extends State<_ProductRow> {
       decimalDigits: 0,
     );
     final draft = context.watch<DraftOrderProvider>();
-    final name = widget.product?.namaBarang ?? widget.productId;
+    final name = widget.product?.namaBarang ?? widget.line.productId;
     final price = widget.product?.harga ?? 0;
-    final rawSubtotal = price * widget.qty;
+    final rawSubtotal = price * widget.line.qty;
 
-    final disc = draft.discounts[widget.productId];
+    final disc = widget.line.discount;
 
     // Hitung chain 3 layers untuk display subtotal item.
     int running = rawSubtotal;
@@ -423,131 +468,186 @@ class _ProductRowState extends State<_ProductRow> {
     final subtotal = running;
     final totalCut = d1 + d2 + d3;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(name, style: AppTextStyles.bodyMedium),
-                        const SizedBox(height: 2),
-                        Text(
-                          '× ${widget.qty} · ${currency.format(price)}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
+    final isFree = widget.line.isFree;
+
+    return Opacity(
+      opacity: isFree ? 0.6 : 1.0,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name, style: AppTextStyles.bodyMedium),
+                          if (widget.line.isFree) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+                              ),
+                              child: const Text(
+                                'GRATIS',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 2),
+                          Text(
+                            '× ${widget.line.qty} · ${currency.format(price)}',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (totalCut > 0) ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          currency.format(rawSubtotal),
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textMuted,
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                        Text(
-                          currency.format(subtotal),
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ] else
-                    Text(
-                      currency.format(subtotal),
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
+                        ],
                       ),
                     ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: Icon(
-                      disc != null
-                          ? Icons.edit_outlined
-                          : Icons.discount_outlined,
-                      size: 18,
-                      color: disc != null
-                          ? AppColors.success
-                          : AppColors.textSecondary,
+                    if (totalCut > 0) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            currency.format(rawSubtotal),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          Text(
+                            currency.format(subtotal),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else
+                      Text(
+                        currency.format(subtotal),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(
+                        disc != null
+                            ? Icons.edit_outlined
+                            : Icons.discount_outlined,
+                        size: 18,
+                        color: disc != null
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                      ),
+                      tooltip: disc != null ? 'Edit diskon' : 'Tambah diskon',
+                      onPressed: () {
+                        setState(() {
+                          _showDiscount = !_showDiscount;
+                          if (_showDiscount) _syncFromState(disc);
+                        });
+                      },
                     ),
-                    tooltip: disc != null ? 'Edit diskon' : 'Tambah diskon',
-                    onPressed: () {
-                      setState(() {
-                        _showDiscount = !_showDiscount;
-                        if (_showDiscount) _syncFromState(disc);
-                      });
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        size: 18, color: AppColors.error),
-                    tooltip: 'Hapus',
-                    onPressed: () => draft.setQty(widget.productId, 0),
-                  ),
-                ],
-              ),
-              if (disc != null && !disc.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: _activeLayersSummary(disc, currency),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
+                      tooltip: 'Menu',
+                      onSelected: (value) {
+                        if (value == 'duplicate') {
+                          draft.addLine(
+                            widget.line.productId,
+                            qty: widget.line.qty,
+                            discount: widget.line.discount,
+                          );
+                        } else if (value == 'delete') {
+                          draft.removeLine(widget.line.id);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'duplicate',
+                          child: Row(
+                            children: [
+                              Icon(Icons.copy, size: 16, color: AppColors.textSecondary),
+                              SizedBox(width: 8),
+                              Text('Duplikat line'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                              SizedBox(width: 8),
+                              Text('Hapus line', style: TextStyle(color: AppColors.error)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-            ],
-          ),
-        ),
-        if (_showDiscount) ...[
-          for (var entry in const [
-            _LayerSpec(1, 'Diskon 1'),
-            _LayerSpec(2, 'Diskon 2'),
-            _LayerSpec(3, 'Diskon 3'),
-          ])
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-              child: _LayerInputRow(
-                spec: entry,
-                type: _typeFor(entry.idx),
-                controller: _ctrlFor(entry.idx),
-                currency: currency,
-                onTypeChanged: (newType) {
-                  setState(() => _setTypeFor(entry.idx, newType));
-                  _ctrlFor(entry.idx).clear();
-                },
-                onValueChanged: (parsed) {
-                  draft.setDiscountLayer(
-                    productId: widget.productId,
-                    layer: entry.idx,
-                    type: _typeFor(entry.idx),
-                    value: parsed,
-                  );
-                },
-                onClear: () {
-                  draft.setDiscountLayer(
-                    productId: widget.productId,
-                    layer: entry.idx,
-                    type: _typeFor(entry.idx),
-                    value: 0,
-                  );
-                  _ctrlFor(entry.idx).clear();
-                },
-                hasValue: _hasValueFor(entry.idx, disc),
-              ),
+                if (disc != null && !disc.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: _activeLayersSummary(disc, currency),
+                  ),
+              ],
             ),
+          ),
+          if (_showDiscount) ...[
+            for (var entry in const [
+              _LayerSpec(1, 'Diskon 1'),
+              _LayerSpec(2, 'Diskon 2'),
+              _LayerSpec(3, 'Diskon 3'),
+            ])
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                child: _LayerInputRow(
+                  spec: entry,
+                  type: _typeFor(entry.idx),
+                  controller: _ctrlFor(entry.idx),
+                  currency: currency,
+                  onTypeChanged: (newType) {
+                    setState(() => _setTypeFor(entry.idx, newType));
+                    _ctrlFor(entry.idx).clear();
+                  },
+                  onValueChanged: (parsed) {
+                    draft.setDiscountLayer(
+                      lineId: widget.line.id,
+                      layer: entry.idx,
+                      type: _typeFor(entry.idx),
+                      value: parsed,
+                    );
+                  },
+                  onClear: () {
+                    draft.setDiscountLayer(
+                      lineId: widget.line.id,
+                      layer: entry.idx,
+                      type: _typeFor(entry.idx),
+                      value: 0,
+                    );
+                    _ctrlFor(entry.idx).clear();
+                  },
+                  hasValue: _hasValueFor(entry.idx, disc),
+                ),
+              ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -731,6 +831,159 @@ class _LayerInputRow extends StatelessWidget {
             child: const Text('Hapus', style: TextStyle(fontSize: 11)),
           ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet untuk tambah line diskon/promo manual.
+class _AddLineSheet extends StatefulWidget {
+  final List<Product> products;
+  final Map<String, Product> productMap;
+  final void Function(String productId, int qty, ItemDiscount? discount) onAdd;
+
+  const _AddLineSheet({
+    required this.products,
+    required this.productMap,
+    required this.onAdd,
+  });
+
+  @override
+  State<_AddLineSheet> createState() => _AddLineSheetState();
+}
+
+class _AddLineSheetState extends State<_AddLineSheet> {
+  String? _selectedProductId;
+  int _qty = 1;
+  String _layer1Type = 'PERCENT';
+  final _layer1Controller = TextEditingController();
+  ItemDiscount? _buildDiscount() {
+    final v = int.tryParse(_layer1Controller.text) ?? 0;
+    if (v <= 0) return null;
+    int capped = v;
+    if (_layer1Type == 'PERCENT' && v > 100) capped = 100;
+    return ItemDiscount(layer1: DiscountLayer(type: _layer1Type, value: capped));
+  }
+
+  @override
+  void dispose() {
+    _layer1Controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedProduct = _selectedProductId != null ? widget.productMap[_selectedProductId] : null;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.borderLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Tambah Line', style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 16),
+
+          DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              labelText: 'Produk',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            initialValue: _selectedProductId,
+            items: widget.products.map((p) => DropdownMenuItem(
+              value: p.id,
+              child: Text(p.namaBarang, overflow: TextOverflow.ellipsis),
+            )).toList(),
+            onChanged: (v) => setState(() {
+              _selectedProductId = v;
+              _qty = 1;
+            }),
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 12),
+              IconButton(
+                onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
+                icon: const Icon(Icons.remove),
+              ),
+              Text('$_qty', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+              IconButton(
+                onPressed: selectedProduct != null && _qty < selectedProduct.stokTersedia
+                    ? () => setState(() => _qty++)
+                    : null,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          const Text('Diskon Layer 1 (opsional):', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              ChoiceChip(
+                label: const Text('%'),
+                selected: _layer1Type == 'PERCENT',
+                onSelected: (sel) { if (sel) setState(() => _layer1Type = 'PERCENT'); },
+              ),
+              const SizedBox(width: 4),
+              ChoiceChip(
+                label: const Text('Rp'),
+                selected: _layer1Type == 'NOMINAL',
+                onSelected: (sel) { if (sel) setState(() => _layer1Type = 'NOMINAL'); },
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _layer1Controller,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: _layer1Type == 'PERCENT' ? '0%' : 'Rp 0',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _selectedProductId == null
+                  ? null
+                  : () {
+                      final disc = _buildDiscount();
+                      widget.onAdd(_selectedProductId!, _qty, disc);
+                      Navigator.pop(context);
+                    },
+              child: const Text('Tambah Line'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

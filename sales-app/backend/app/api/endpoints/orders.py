@@ -135,7 +135,6 @@ def _build_order_response(order: Order) -> dict:
         "status": order.status,
         "notes": order.notes,
         "created_at": order.created_at,
-        "expired_at": order.expired_at,
         "items": items_data,
         "store_name": order.store_name,
         "store_contact": order.store_contact,
@@ -683,7 +682,6 @@ def submit_draft_order(
     _book_items(items, db, UUID(current_user["user_id"]), order.id)
 
     order.status = "PENDING"
-    order.expired_at = datetime.now(timezone.utc) + timedelta(hours=24)
     db.commit()
     db.refresh(order)
 

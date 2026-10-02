@@ -133,7 +133,6 @@ def setup_schema(conn):
                 status        VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
                 notes         VARCHAR(1000),
                 created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                expired_at    TIMESTAMPTZ,
                 store_name    VARCHAR(200),
                 store_contact VARCHAR(50),
                 store_address VARCHAR(500),
@@ -142,7 +141,6 @@ def setup_schema(conn):
         """))
         conn.execute(text("CREATE INDEX ix_orders_status ON orders(status)"))
         conn.execute(text("CREATE INDEX ix_orders_created_at ON orders(created_at)"))
-        conn.execute(text("CREATE INDEX ix_orders_expired_at ON orders(expired_at)"))
         conn.execute(text("CREATE INDEX ix_orders_status_created_at ON orders(status, created_at)"))
         conn.execute(text("CREATE INDEX ix_orders_sales_id ON orders(sales_id)"))
         conn.execute(text("CREATE INDEX ix_orders_customer_id ON orders(customer_id)"))

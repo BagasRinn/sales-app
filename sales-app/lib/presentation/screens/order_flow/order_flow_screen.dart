@@ -144,8 +144,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       _showLoading('Menyimpan draft...');
       final result = await context.read<OrderProvider>().createOrder(
             customerId: draft.customerId!,
-            items: draft.items,
-            discounts: draft.discounts,
+            items: draft.buildItemsPayload(),
             notes: draft.notes,
             orderType: draft.orderType,
           );
@@ -188,16 +187,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         result = await orderProvider.updateDraftOrder(
           orderId: draft.editingOrderId!,
           customerId: draft.customerId!,
-          items: draft.items,
-          discounts: draft.discounts,
+          items: draft.buildItemsPayload(),
           notes: draft.notes,
           orderType: draft.orderType,
         );
       } else {
         result = await orderProvider.createOrder(
           customerId: draft.customerId!,
-          items: draft.items,
-          discounts: draft.discounts,
+          items: draft.buildItemsPayload(),
           notes: draft.notes,
           orderType: draft.orderType,
         );

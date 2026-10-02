@@ -64,7 +64,6 @@ class Order(Base):
     status = Column(String(20), default="DRAFT")
     notes = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    expired_at = Column(DateTime(timezone=True))
     store_name = Column(String(200), nullable=True)
     store_contact = Column(String(50), nullable=True)
     store_address = Column(String(500), nullable=True)
@@ -74,7 +73,6 @@ class Order(Base):
     __table_args__ = (
         Index("ix_orders_status", "status"),
         Index("ix_orders_created_at", "created_at"),
-        Index("ix_orders_expired_at", "expired_at"),
         Index("ix_orders_status_created_at", "status", "created_at"),
         Index("ix_orders_sales_id", "sales_id"),
         Index("ix_orders_customer_id", "customer_id"),

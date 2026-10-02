@@ -413,19 +413,17 @@ class _OrderDetailContent extends StatelessWidget {
   }
 
   void _enterEditFlow(BuildContext context, Order order) {
-    final items = <String, int>{};
+    // Convert OrderItem rows → List<OrderLine> for DraftOrderProvider.
+    final lines = <OrderLine>[];
+    int idx = 0;
     if (order.items != null) {
       for (final item in order.items!) {
-        items[item.productId] = item.qty;
-      }
-    }
-    final existingDiscounts = <String, ItemDiscount>{};
-    if (order.items != null) {
-      for (final item in order.items!) {
-        final rebuilt = ItemDiscount.fromOrderItem(item);
-        if (!rebuilt.isEmpty) {
-          existingDiscounts[item.productId] = rebuilt;
-        }
+        lines.add(OrderLine(
+          id: 'rehydrated_${idx++}',
+          productId: item.productId,
+          qty: item.qty,
+          discount: ItemDiscount.fromOrderItem(item),
+        ));
       }
     }
     context.read<DraftOrderProvider>().loadFromExisting(
@@ -433,8 +431,7 @@ class _OrderDetailContent extends StatelessWidget {
           customerId: order.customerId ?? '',
           customerName: order.customerName ?? order.storeName ?? '',
           customerAddress: order.storeAddress,
-          existingItems: items,
-          existingDiscounts: existingDiscounts,
+          existingLines: lines,
           existingNotes: order.notes ?? '',
           existingStatus: order.status,
           existingOrderType: order.orderType,

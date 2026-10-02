@@ -89,7 +89,6 @@ class Order {
   final String status;
   final String? notes;
   final DateTime createdAt;
-  final DateTime? expiredAt;
   final List<OrderItem>? items;
   final String? storeName;
   final String? storeContact;
@@ -107,7 +106,6 @@ class Order {
     required this.status,
     this.notes,
     required this.createdAt,
-    this.expiredAt,
     this.items,
     this.storeName,
     this.storeContact,
@@ -124,9 +122,6 @@ class Order {
       status: json['status'] as String,
       notes: json['notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
-      expiredAt: json['expired_at'] != null
-          ? DateTime.parse(json['expired_at'] as String)
-          : null,
       items: json['items'] != null
           ? (json['items'] as List)
               .map((e) => OrderItem.fromJson(e as Map<String, dynamic>))

@@ -226,7 +226,6 @@ class OrderResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     created_at: datetime
-    expired_at: Optional[datetime]
     items: List[OrderItemResponse] = []
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
@@ -249,7 +248,6 @@ class OrderListResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     created_at: datetime
-    expired_at: Optional[datetime]
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
@@ -268,7 +266,6 @@ class OrderListWithItemsResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     created_at: datetime
-    expired_at: Optional[datetime]
     items: List[OrderItemResponse] = []
     store_name: Optional[str] = None
     store_contact: Optional[str] = None
