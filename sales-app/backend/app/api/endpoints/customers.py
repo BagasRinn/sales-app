@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -56,15 +56,23 @@ def get_customer_count(
 def list_my_customers(
     search: Optional[str] = None,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
     """Semua customer — semua sales dapat melihat dan membuat order untuk semua toko.
-    Pagination ditambah untuk mencegah query lambat kalau customer banyak."""
+    Limit dinaikkan ke 1000 supaya mobile (yang belum paginai) ngga kehilangan
+    customer di luar 100 pertama urut nama_toko. Search cocokkan nama/kode/alamat."""
     query = _exclude_deleted(db.query(Customer))
     if search:
-        query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
+        pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.nama_toko.ilike(pattern),
+                Customer.kode.ilike(pattern),
+                Customer.alamat.ilike(pattern),
+            )
+        )
     return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
 
 
