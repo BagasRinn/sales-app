@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -30,6 +31,10 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   DateTime? _customDateFrom;
   DateTime? _customDateTo;
 
+  // Search state
+  final _searchController = TextEditingController();
+  Timer? _searchDebounce;
+
   // Pagination state untuk tab Semua Pesanan.
   static const int _pageSize = 20;
   int _currentPage = 1; // 1-indexed
@@ -46,6 +51,8 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -75,11 +82,19 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     if (resetPage) _currentPage = 1;
     provider.loadAllOrders(
       status: _filterStatus,
+      search: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
       dateFrom: range.from,
       dateTo: range.to,
       skip: (_currentPage - 1) * _pageSize,
       limit: _pageSize,
     );
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      _applyFilters();
+    });
   }
 
   void _goToPage(int page) {
@@ -151,7 +166,44 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         Container(
           color: AppColors.surface,
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: TabBar(
+          child: Column(
+            children: [
+              // Search field
+              TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Cari nama toko atau sales...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            _applyFilters();
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppColors.background,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.primaryLight),
+                  ),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TabBar(
             controller: _tabController,
             labelColor: AppColors.primaryLight,
             unselectedLabelColor: AppColors.textMuted,
@@ -188,6 +240,8 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 ),
               ),
               const Tab(text: 'Semua Pesanan'),
+            ],
+          ),
             ],
           ),
         ),
@@ -833,6 +887,14 @@ class _OrderCardState extends State<_OrderCard> {
                 'Order #${_order.id.substring(0, 8)}',
                 style: AppTextStyles.mono,
               ),
+              if (_order.invoiceNumber != null && _order.invoiceNumber!.isNotEmpty)
+                Text(
+                  'Invoice: ${_order.invoiceNumber}',
+                  style: AppTextStyles.mono.copyWith(
+                    color: AppColors.primaryLight,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               if (_order.salesUsername != null || _order.salesNama != null)
                 Text(
                   'Sales: ${_order.salesDisplayName}',

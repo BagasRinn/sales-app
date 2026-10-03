@@ -52,6 +52,7 @@ class AdminProvider extends ChangeNotifier {
   String? _orderFilter; // persists filter across approve/reject actions
   DateTime? _orderDateFrom;
   DateTime? _orderDateTo;
+  String? _orderSearch; // search by store name or sales name
   int _orderTotal = 0; // total pesanan yang match filter (untuk pagination)
 
   // Debounce timer for search
@@ -122,6 +123,7 @@ class AdminProvider extends ChangeNotifier {
   String? get orderFilter => _orderFilter;
   DateTime? get orderDateFrom => _orderDateFrom;
   DateTime? get orderDateTo => _orderDateTo;
+  String? get orderSearch => _orderSearch;
   int get orderTotal => _orderTotal;
 
   int get customerPage => _customerPage;
@@ -235,17 +237,20 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> loadAllOrders({
     String? status,
+    String? search,
     DateTime? dateFrom,
     DateTime? dateTo,
     int skip = 0,
     int limit = 20,
   }) async {
     _orderFilter = status;
+    _orderSearch = search;
     _orderDateFrom = dateFrom;
     _orderDateTo = dateTo;
     try {
       final result = await _repo.getAllOrdersPaginated(
         status: status,
+        search: search,
         dateFrom: dateFrom,
         dateTo: dateTo,
         skip: skip,
@@ -643,7 +648,10 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _loadPendingOrders([CancelToken? cancelToken]) async {
     try {
-      _pendingOrders = await _repo.getPendingOrders(cancelToken: cancelToken);
+      _pendingOrders = await _repo.getPendingOrders(
+        search: _orderSearch,
+        cancelToken: cancelToken,
+      );
       _errorMessage = null;
     } catch (e) {
       if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();

@@ -103,6 +103,9 @@ class Order {
   /// Alasan penolakan order oleh admin.
   final String? rejectReason;
 
+  /// Nomor invoice untuk tracking order dengan invoice yang sama.
+  final String? invoiceNumber;
+
   Order({
     required this.id,
     required this.salesId,
@@ -118,6 +121,7 @@ class Order {
     this.orderType = 'REGULER',
     this.cancelledItems = const [],
     this.rejectReason,
+    this.invoiceNumber,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -144,6 +148,7 @@ class Order {
               .toList()
           : const [],
       rejectReason: json['reject_reason'] as String?,
+      invoiceNumber: json['invoice_number'] as String?,
     );
   }
 

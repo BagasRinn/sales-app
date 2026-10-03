@@ -29,13 +29,17 @@ class AdminRepository {
   void clearTokens() => _api.clearTokens();
   bool get hasToken => _api.hasToken;
 
-  Future<List<Order>> getPendingOrders({CancelToken? cancelToken}) async {
-    final data = await _api.get('/orders/pending', cancelToken: cancelToken);
+  Future<List<Order>> getPendingOrders({String? search, CancelToken? cancelToken}) async {
+    final params = <String, String>{};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    final qs = params.isEmpty ? '' : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/orders/pending$qs', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
   Future<List<Order>> getAllOrders({
     String? status,
+    String? search,
     DateTime? dateFrom,
     DateTime? dateTo,
     int skip = 0,
@@ -47,6 +51,7 @@ class AdminRepository {
       'limit': limit.toString(),
     };
     if (status != null && status.isNotEmpty) params['status'] = status;
+    if (search != null && search.isNotEmpty) params['search'] = search;
     if (dateFrom != null) {
       params['date_from'] =
           '${dateFrom.year.toString().padLeft(4, '0')}-'
@@ -69,6 +74,7 @@ class AdminRepository {
   /// response.headers.
   Future<({List<Order> orders, int total})> getAllOrdersPaginated({
     String? status,
+    String? search,
     DateTime? dateFrom,
     DateTime? dateTo,
     int skip = 0,
@@ -79,6 +85,7 @@ class AdminRepository {
       'limit': limit.toString(),
     };
     if (status != null && status.isNotEmpty) params['status'] = status;
+    if (search != null && search.isNotEmpty) params['search'] = search;
     if (dateFrom != null) {
       params['date_from'] =
           '${dateFrom.year.toString().padLeft(4, '0')}-'

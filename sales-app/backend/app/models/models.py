@@ -74,6 +74,8 @@ class Order(Base):
     cancelled_items = Column(JSON, nullable=True)
     # Alasan penolakan order oleh admin — sales bisa lihat di mobile.
     reject_reason = Column(Text, nullable=True)
+    # Nomor invoice untuk tracking order dengan invoice yang sama.
+    invoice_number = Column(String(50), nullable=True, index=True)
 
     __table_args__ = (
         Index("ix_orders_status", "status"),

@@ -167,6 +167,7 @@ class OrderCreate(BaseModel):
     store_contact: Optional[str] = None
     store_address: Optional[str] = None
     order_type: str = Field(default='REGULER')  # 'REGULER' atau '4P'
+    invoice_number: Optional[str] = Field(None, max_length=50)
 
 
 class OrderItemResponse(BaseModel):
@@ -251,6 +252,7 @@ class OrderResponse(BaseModel):
     order_type: str = 'REGULER'
     cancelled_items: Optional[List[CancelledItemResponse]] = None
     reject_reason: Optional[str] = None
+    invoice_number: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -291,6 +293,7 @@ class OrderListWithItemsResponse(BaseModel):
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
     order_type: str = 'REGULER'
+    invoice_number: Optional[str] = None
 
     class Config:
         from_attributes = True

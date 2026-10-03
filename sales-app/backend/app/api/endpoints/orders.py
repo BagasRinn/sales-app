@@ -146,6 +146,7 @@ def _build_order_response(order: Order) -> dict:
         "order_type": order.order_type or 'REGULER',
         "cancelled_items": order.cancelled_items,
         "reject_reason": order.reject_reason,
+        "invoice_number": order.invoice_number,
     }
 
 
@@ -790,21 +791,30 @@ def cancel_order(
 def list_pending_orders(
     skip: int = 0,
     limit: int = 50,
+    search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
-    orders = (
+    query = (
         db.query(Order)
         .options(
             joinedload(Order.items).joinedload(OrderItem.product),
             joinedload(Order.sales),
+            joinedload(Order.customer),
         )
         .filter(Order.status == "PENDING")
-        .order_by(Order.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
     )
+    if search:
+        term = f"%{search}%"
+        query = query.outerjoin(User, Order.sales_id == User.id).filter(
+            db.or_(
+                Order.store_name.ilike(term),
+                User.nama.ilike(term),
+                User.username.ilike(term),
+                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+            )
+        )
+    orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return [_build_order_response(o) for o in orders]
 
 
@@ -820,6 +830,7 @@ def list_all_orders(
         None,
         description="Tanggal akhir inklusif (YYYY-MM-DD, WITA). Filter created_at < (date_to+1) 00:00 WITA.",
     ),
+    search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -832,6 +843,7 @@ def list_all_orders(
     query = db.query(Order).options(
         joinedload(Order.items).joinedload(OrderItem.product),
         joinedload(Order.sales),
+        joinedload(Order.customer),
     )
     count_query = db.query(Order)
     if status_filter:
@@ -867,6 +879,25 @@ def list_all_orders(
             end_utc = end_wita_exclusive.astimezone(timezone.utc)
             query = query.filter(Order.created_at < end_utc)
             count_query = count_query.filter(Order.created_at < end_utc)
+
+    if search:
+        term = f"%{search}%"
+        query = query.outerjoin(User, Order.sales_id == User.id).filter(
+            db.or_(
+                Order.store_name.ilike(term),
+                User.nama.ilike(term),
+                User.username.ilike(term),
+                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+            )
+        )
+        count_query = count_query.outerjoin(User, Order.sales_id == User.id).filter(
+            db.or_(
+                Order.store_name.ilike(term),
+                User.nama.ilike(term),
+                User.username.ilike(term),
+                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+            )
+        )
 
     total = count_query.count()
     response.headers["X-Total-Count"] = str(total)
