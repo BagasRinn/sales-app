@@ -543,6 +543,7 @@ class _LineRowState extends State<_LineRow> {
                         ),
                       ),
                     const SizedBox(width: 4),
+                    if (!isFree) _LineQtyStepper(line: widget.line, available: widget.product?.stokTersedia ?? 0),
                     IconButton(
                       icon: Icon(
                         disc != null
@@ -565,27 +566,11 @@ class _LineRowState extends State<_LineRow> {
                       icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
                       tooltip: 'Menu',
                       onSelected: (value) {
-                        if (value == 'duplicate') {
-                          draft.addLine(
-                            widget.line.productId,
-                            qty: widget.line.qty,
-                            discount: widget.line.discount,
-                          );
-                        } else if (value == 'delete') {
+                        if (value == 'delete') {
                           draft.removeLine(widget.line.id);
                         }
                       },
                       itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'duplicate',
-                          child: Row(
-                            children: [
-                              Icon(Icons.copy, size: 16, color: AppColors.textSecondary),
-                              SizedBox(width: 8),
-                              Text('Duplikat line'),
-                            ],
-                          ),
-                        ),
                         const PopupMenuItem(
                           value: 'delete',
                           child: Row(
@@ -724,6 +709,79 @@ class _LineRowState extends State<_LineRow> {
       style: AppTextStyles.bodySmall.copyWith(
         color: AppColors.success,
         fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class _LineQtyStepper extends StatelessWidget {
+  final OrderLine line;
+  final int available;
+  const _LineQtyStepper({required this.line, required this.available});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MiniStepperBtn(
+          icon: Icons.remove,
+          onTap: line.qty > 1
+              ? () => context.read<DraftOrderProvider>().setQty(line.productId, line.qty - 1)
+              : null,
+        ),
+        SizedBox(
+          width: 36,
+          child: Text(
+            '${line.qty}',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        _MiniStepperBtn(
+          icon: Icons.add,
+          onTap: line.qty < available
+              ? () => context.read<DraftOrderProvider>().setQty(line.productId, line.qty + 1)
+              : null,
+          primary: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniStepperBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool primary;
+  const _MiniStepperBtn({required this.icon, this.onTap, this.primary = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: primary
+          ? (onTap != null ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4))
+          : AppColors.cardSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: primary
+            ? BorderSide.none
+            : BorderSide(color: onTap != null ? AppColors.border : AppColors.border.withValues(alpha: 0.4)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: Icon(
+            icon,
+            size: 14,
+            color: primary
+                ? Colors.white
+                : (onTap != null ? AppColors.textPrimary : AppColors.textMuted),
+          ),
+        ),
       ),
     );
   }

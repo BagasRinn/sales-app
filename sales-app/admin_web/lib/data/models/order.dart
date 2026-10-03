@@ -10,6 +10,7 @@ class Order {
   final String? storeName;
   final String? storeContact;
   final String? storeAddress;
+  final List<CancelledItem> cancelledItems;
 
   Order({
     required this.id,
@@ -23,6 +24,7 @@ class Order {
     this.storeName,
     this.storeContact,
     this.storeAddress,
+    this.cancelledItems = const [],
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,10 @@ class Order {
       storeName: json['store_name'],
       storeContact: json['store_contact'],
       storeAddress: json['store_address'],
+      cancelledItems: (json['cancelled_items'] as List?)
+              ?.map((e) => CancelledItem.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -148,4 +154,24 @@ class OrderItem {
   int get nominalDiskon => hargaSatuan * qty - subtotal;
 
   bool get hasDiscount => nominalDiskon > 0;
+}
+
+class CancelledItem {
+  final String productId;
+  final int qty;
+  final String reason;
+
+  CancelledItem({
+    required this.productId,
+    required this.qty,
+    required this.reason,
+  });
+
+  factory CancelledItem.fromJson(Map<String, dynamic> json) {
+    return CancelledItem(
+      productId: json['product_id'] ?? '',
+      qty: json['qty'] ?? 0,
+      reason: json['reason'] ?? '',
+    );
+  }
 }

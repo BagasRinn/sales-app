@@ -1,18 +1,18 @@
 """
 Customer sync service — Excel import logic untuk tabel customers.
-Prototipe: kolom wajib kode (opsional), nama_toko, alamat.
-Semua sales dapat melihat dan membuat order untuk semua toko.
 
 Identity toko = (nama_toko, alamat) keduanya. Boleh ada dua toko dengan
 nama sama selama alamatnya beda, dan sebaliknya.
 
+Pola bulk upsert: 1 bulk SELECT + 1 bulk INSERT ON CONFLICT DO UPDATE + 1 commit.
 Pattern mirror dari app/services/sheets_sync.py.
 """
 import logging
 from io import BytesIO
 from typing import List, Dict, Any
-from sqlalchemy import func
+from uuid import UUID
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,6 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
     ws = wb.active
 
-    # Find header row by scanning for "nama_toko" or "kode" in first 10 rows
     header_row_idx = None
     for i, row in enumerate(ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
         cells_lower = [str(cell).strip().lower() for cell in row if cell is not None]
@@ -49,11 +48,9 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
             "Pastikan header ada di baris 1-10."
         )
 
-    # Read headers from found row
     headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[header_row_idx]]
     headers_lower = [h.lower() for h in headers]
 
-    # Build expected index mapping using lowercase match
     col_map = {}
     for col_name in EXCEL_COLUMNS:
         try:
@@ -97,6 +94,92 @@ def _str_or_none(value: Any) -> str | None:
     return text if text else None
 
 
+def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int, int]:
+    """
+    Bulk upsert customers using PostgreSQL ON CONFLICT DO UPDATE.
+    Identity key: (lower(nama_toko), lower(alamat)).
+    Returns (inserted_count, updated_count).
+    Requires ix_customers_nama_alamat_lower index to exist.
+    """
+    if not rows:
+        return 0, 0
+
+    # Build normalized key -> id mapping from existing rows
+    keys_needed = [(r["nama_norm"], r["alamat_norm"]) for r in rows]
+    lower_nama = [k[0] for k in keys_needed]
+    lower_alamat = [k[1] for k in keys_needed]
+
+    # Bulk SELECT all matching customers (active + deleted) by normalized (nama_toko, alamat)
+    # Kita handle reaktivasi: jika ada deleted customer dengan key yang sama,
+    # UPDATE deleted_at=NULL-nya, bukan insert baru.
+    from sqlalchemy import and_, or_
+    existing_rows = (
+        db.query(Customer.id, Customer.nama_toko, Customer.alamat, Customer.deleted_at)
+        .filter(
+            and_(
+                Customer.nama_toko.isnot(None),
+                Customer.alamat.isnot(None),
+            )
+        )
+        .all()
+    )
+    # Build lookup: (lower_nama, lower_alamat) -> (customer_id, is_deleted)
+    existing_map: Dict[tuple, tuple] = {}
+    for row in existing_rows:
+        key = (_normalize(row.nama_toko), _normalize(row.alamat))
+        existing_map[key] = (str(row.id), row.deleted_at is not None)
+
+    to_insert = []   # new customers (no existing at all)
+    to_update = []  # re-activate deleted customers (found but deleted_at IS NOT NULL)
+
+    for r in rows:
+        key = (r["nama_norm"], r["alamat_norm"])
+        if key in existing_map:
+            cid, is_deleted = existing_map[key]
+            if is_deleted:
+                to_update.append((cid, r))
+            # else: active customer exists — ON CONFLICT DO UPDATE handles it
+        else:
+            to_insert.append(r)
+
+    inserted = len(to_insert)
+    updated = len(to_update)
+
+    if to_insert:
+        stmt = insert(Customer).values([
+            {
+                "kode": r.get("kode"),
+                "nama_toko": r["nama_toko"],
+                "alamat": r["alamat"],
+            }
+            for r in to_insert
+        ])
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["id"],
+            set_={
+                "kode": stmt.excluded.kode,
+                "nama_toko": stmt.excluded.nama_toko,
+                "alamat": stmt.excluded.alamat,
+                "deleted_at": None,
+            },
+        )
+        db.execute(stmt)
+        logger.info(f"[SYNC] Bulk inserted {len(to_insert)} customers")
+
+    if to_update:
+        # Re-activate deleted customers by id
+        for customer_id_str, r in to_update:
+            kode_val = r.get("kode")
+            result = db.query(Customer).filter(Customer.id == UUID(customer_id_str)).with_for_update().first()
+            if result:
+                if kode_val is not None:
+                    result.kode = kode_val
+                result.deleted_at = None
+        logger.info(f"[SYNC] Re-activated {len(to_update)} deleted customers")
+
+    return inserted, updated
+
+
 def sync_customers_from_excel(
     file_bytes: bytes,
     db: Session,
@@ -104,16 +187,12 @@ def sync_customers_from_excel(
     file_name: str,
 ) -> Dict[str, Any]:
     """
-    Read customer data from uploaded Excel, upsert into customers table.
-    Creates an ImportLog row and persists per-row validation errors with FK
-    so the admin Riwayat Error panel can show context (file name, type, time).
-    Returns summary dict. Per-row savepoint so 1 failure doesn't rollback others.
+    Read customer data from uploaded Excel, bulk upsert into customers table.
+    Creates an ImportLog row and persists per-row validation errors with FK.
     """
     validation_errors: List[Dict[str, str]] = []
-    inserted = 0
-    updated = 0
+    validated_rows: List[Dict[str, Any]] = []
     skipped = 0
-    seen_keys: set = set()  # (normalized_nama_toko, normalized_alamat) tuples
 
     import_log = ImportLog(
         user_id=current_user.get("user_id"),
@@ -148,17 +227,15 @@ def sync_customers_from_excel(
         }
 
     total_rows = len(raw_rows)
+    seen_keys: set = set()
 
     for idx, row in enumerate(raw_rows, start=1):
         nama_toko_raw = row.get("nama_toko")
         alamat_raw = row.get("alamat")
+
         error = _validate_row(idx, nama_toko_raw, alamat_raw)
         if error:
-            validation_errors.append({
-                "row": idx,
-                "sku": str(nama_toko_raw or ""),
-                "reason": error,
-            })
+            validation_errors.append({"row": idx, "sku": str(nama_toko_raw or ""), "reason": error})
             skipped += 1
             continue
 
@@ -179,61 +256,42 @@ def sync_customers_from_excel(
             continue
         seen_keys.add(key)
 
-        kode_value = _str_or_none(row.get("kode"))
-        alamat_value = _str_or_none(alamat_raw)
+        validated_rows.append({
+            "kode": _str_or_none(row.get("kode")),
+            "nama_toko": str(nama_toko_raw).strip(),
+            "alamat": _str_or_none(alamat_raw),
+            "nama_norm": nama_norm,
+            "alamat_norm": alamat_norm,
+        })
 
-        sp = db.begin_nested()
+    inserted = updated = 0
+    if validated_rows:
         try:
-            # Identity toko = (nama_toko, alamat) — case-insensitive exact match.
-            # Pakai func.lower() bukan ilike() supaya karakter '_' / '%' di alamat
-            # tidak dianggap wildcard SQL.
-            existing = (
-                db.query(Customer)
-                .filter(func.lower(Customer.nama_toko) == nama_norm)
-                .filter(func.lower(Customer.alamat) == alamat_norm)
-                .first()
-            )
-
-            if existing:
-                # Update hanya kalau Excel ada nilainya, biar tidak overwrite dengan kosong
-                if kode_value is not None:
-                    existing.kode = kode_value
-                if existing.deleted_at is not None:
-                    existing.deleted_at = None
-                updated += 1
-            else:
-                db.add(Customer(
-                    kode=kode_value,
-                    nama_toko=str(nama_toko_raw).strip(),
-                    alamat=alamat_value,
-                ))
-                db.flush()
-                inserted += 1
-
-            sp.commit()
+            inserted, updated = _bulk_upsert_customers(db, validated_rows)
         except Exception as e:
-            sp.rollback()
-            logger.error(f"Row {idx} failed: {e}")
+            logger.error(f"Bulk upsert failed: {e}")
             validation_errors.append({
-                "row": idx,
-                "sku": str(nama_toko_raw) if nama_toko_raw else "",
-                "reason": f"Gagal menyimpan baris ini ke database: {str(e)}",
+                "row": 0,
+                "sku": "",
+                "reason": f"Gagal menyimpan ke database: {str(e)}",
             })
-            skipped += 1
-            continue
+            skipped = total_rows
+            inserted = updated = 0
+
+    for err in validation_errors:
+        db.add(SyncValidationError(
+            import_log_id=import_log.id,
+            row_number=err["row"],
+            sku=err["sku"],
+            reason=err["reason"],
+        ))
+
+    import_log.total_rows = total_rows
+    import_log.inserted = inserted
+    import_log.updated = updated
+    import_log.skipped = skipped
 
     try:
-        for err in validation_errors:
-            db.add(SyncValidationError(
-                import_log_id=import_log.id,
-                row_number=err["row"],
-                sku=err["sku"],
-                reason=err["reason"],
-            ))
-        import_log.total_rows = total_rows
-        import_log.inserted = inserted
-        import_log.updated = updated
-        import_log.skipped = skipped
         db.commit()
     except Exception as e:
         db.rollback()
@@ -248,8 +306,6 @@ def sync_customers_from_excel(
             "needs_review": False,
         }
 
-    needs_review = len(validation_errors) > 0
-
     return {
         "success": True,
         "total_rows": total_rows,
@@ -257,5 +313,5 @@ def sync_customers_from_excel(
         "updated": updated,
         "skipped": skipped,
         "errors": validation_errors,
-        "needs_review": needs_review,
+        "needs_review": len(validation_errors) > 0,
     }

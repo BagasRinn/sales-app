@@ -127,6 +127,18 @@ class AdminRepository {
     return Order.fromJson(data);
   }
 
+  /// Batalkan 1 atau lebih item dari order PENDING. Admin wajib isi reason.
+  /// Returns Order terbaru (dengan cancelled_items terbaru).
+  Future<Order> cancelOrderItems(
+    String orderId, {
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final data = await _api.put('/orders/$orderId/cancel-items', body: {
+      'items': items,
+    });
+    return Order.fromJson(data);
+  }
+
   /// Download laporan harian sebagai bytes Excel. Caller yang handle
   /// blob URL / file save (browser download di web).
   Future<List<int>> downloadDailyReport({

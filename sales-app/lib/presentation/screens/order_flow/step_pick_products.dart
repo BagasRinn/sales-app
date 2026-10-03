@@ -185,7 +185,7 @@ class _StepPickProductsState extends State<StepPickProducts> {
                       itemCount: products.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
-                        return _ProductRow(product: products[i], onAddLine: () => _showAddLineSheet(context, products[i]));
+                        return _ProductRow(product: products[i]);
                       },
                     ),
         ),
@@ -246,124 +246,11 @@ class _StepPickProductsState extends State<StepPickProducts> {
       ],
     );
   }
-
-  void _showAddLineSheet(BuildContext context, Product product) {
-    final draft = context.read<DraftOrderProvider>();
-    int qty = 1;
-    String layer1Type = 'PERCENT';
-    final layer1Controller = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20, right: 20, top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('Tambah Line Promo', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 8),
-              Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-              Text('${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(product.harga)} / pcs', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    onPressed: qty > 1 ? () => setSheetState(() => qty--) : null,
-                    icon: const Icon(Icons.remove),
-                  ),
-                  Text('$qty', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-                  IconButton(
-                    onPressed: qty < product.stokTersedia
-                        ? () => setSheetState(() => qty++)
-                        : null,
-                    icon: const Icon(Icons.add),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text('Diskon Layer 1 (opsional):', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  ChoiceChip(
-                    label: const Text('%'),
-                    selected: layer1Type == 'PERCENT',
-                    onSelected: (sel) { if (sel) setSheetState(() => layer1Type = 'PERCENT'); },
-                  ),
-                  const SizedBox(width: 4),
-                  ChoiceChip(
-                    label: const Text('Rp'),
-                    selected: layer1Type == 'NOMINAL',
-                    onSelected: (sel) { if (sel) setSheetState(() => layer1Type = 'NOMINAL'); },
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 100,
-                    child: TextField(
-                      controller: layer1Controller,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: layer1Type == 'PERCENT' ? '0%' : 'Rp 0',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      ),
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    final v = int.tryParse(layer1Controller.text) ?? 0;
-                    ItemDiscount? disc;
-                    if (v > 0) {
-                      int capped = v;
-                      if (layer1Type == 'PERCENT' && v > 100) capped = 100;
-                      disc = ItemDiscount(layer1: DiscountLayer(type: layer1Type, value: capped));
-                    }
-                    draft.addLine(product.id, qty: qty, discount: disc);
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Tambah Line'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ProductRow extends StatelessWidget {
   final Product product;
-  final VoidCallback onAddLine;
-  const _ProductRow({required this.product, required this.onAddLine});
+  const _ProductRow({required this.product});
 
   @override
   Widget build(BuildContext context) {
@@ -460,14 +347,6 @@ class _ProductRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               _QtyStepper(productId: product.id, qty: qty, available: product.stokTersedia),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.library_add, size: 18, color: AppColors.primaryLight),
-                tooltip: 'Tambah line diskon',
-                onPressed: onAddLine,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
             ],
           ),
         ),

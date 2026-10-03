@@ -159,6 +159,16 @@ def setup_schema(conn):
             conn.commit()
             print("  + bareng_customer_id column di customer_registration_submissions")
 
+        # Migrasi: tambahkan cancelled_items JSONB ke orders jika belum ada
+        r2 = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'orders' AND column_name = 'cancelled_items'
+        """))
+        if r2.fetchone() is None:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN cancelled_items JSONB"))
+            conn.commit()
+            print("  + cancelled_items column di orders")
+
     # --- order_items ---
     if not _table_exists(conn, "order_items"):
         conn.execute(text("""

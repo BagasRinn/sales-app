@@ -716,6 +716,22 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> cancelOrderItem(String orderId, int qty, String reason, String productId) async {
+    _setLoading(true, 'Membatalkan item...');
+    try {
+      await _repo.cancelOrderItems(orderId, items: [
+        {'product_id': productId, 'qty': qty, 'reason': reason},
+      ]);
+      await loadAll();
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> overrideStock(String productId, int stokSistem) async {
     _setLoading(true, 'Mengubah stok...');
     try {

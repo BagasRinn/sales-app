@@ -216,6 +216,22 @@ class OrderDiscountUpdate(BaseModel):
     items: List[OrderDiscountUpdateItem]
 
 
+class CancelItemEntry(BaseModel):
+    product_id: str
+    qty: int = Field(..., ge=1)
+    reason: str = Field(..., min_length=3)
+
+
+class CancelItemsRequest(BaseModel):
+    items: List[CancelItemEntry]
+
+
+class CancelledItemResponse(BaseModel):
+    product_id: str
+    qty: int
+    reason: str
+
+
 class OrderResponse(BaseModel):
     id: UUID
     sales_id: UUID
@@ -233,6 +249,7 @@ class OrderResponse(BaseModel):
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
     order_type: str = 'REGULER'
+    cancelled_items: Optional[List[CancelledItemResponse]] = None
 
     class Config:
         from_attributes = True

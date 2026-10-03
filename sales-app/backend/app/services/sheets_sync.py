@@ -16,7 +16,33 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "STOK", "OUM", "FIX", "\\"]
+EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "\\"]
+
+
+SUPPLIERS_4P = [
+    "CANDRA FOOD, CV",
+    "CUAN BERKAT BERSAMA, PT",
+    "DARMAWAN SUKSES MANDIRI, PT",
+    "PANGAN INDUSTRI BANUA, PT",
+]
+
+
+def _get_4p_suppliers() -> list[str]:
+    """Return daftar supplier 4P. Prioritas dari env SUPPLIERS_4P, fallback ke hardcoded list."""
+    env_raw = os.getenv("SUPPLIERS_4P", "").strip()
+    if env_raw:
+        return [s.strip() for s in env_raw.split(",") if s.strip()]
+    return SUPPLIERS_4P
+
+
+def _supplier_order_type(nama_supplier: str | None) -> str:
+    """Return '4P' if supplier is in SUPPLIERS_4P list, else 'REGULER'."""
+    if not nama_supplier:
+        return "REGULER"
+    suppliers_4p = _get_4p_suppliers()
+    if not suppliers_4p:
+        return "REGULER"
+    return "4P" if nama_supplier in suppliers_4p else "REGULER"
 
 
 def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
@@ -63,12 +89,12 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     logger.info(f"[DEBUG] Headers found at row {header_row_idx}: {headers}")
     logger.info(f"[DEBUG] Column mapping: {col_map}")
     if rows:
-        logger.info(f"[DEBUG] First row sample: {rows[0]}")
+        logger.info(f"[DEBUG] First row: code={rows[0].get('code')} good={rows[0].get('GOOD')}")
 
     return rows
 
 
-def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, stok: Any) -> str | None:
+def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, good: Any) -> str | None:
     if not sku or not str(sku).strip():
         return "Kolom 'code' kosong. Wajib diisi dengan kode produk unik."
     if not nama_produk or not str(nama_produk).strip():
@@ -78,29 +104,14 @@ def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, stok: An
             int(harga)
         except (ValueError, TypeError):
             return f"Kolom 'FIX' berisi '{harga}' bukan angka. Gunakan bilangan bulat."
-    if stok is not None:
+    if good is not None:
         try:
-            stok_val = int(stok)
-            if stok_val < 0:
-                return f"Kolom 'STOK' berisi {stok_val}. Stok tidak boleh negatif."
+            good_val = int(good)
+            if good_val < 0:
+                return f"Kolom 'GOOD' berisi {good_val}. Stok tidak boleh negatif."
         except (ValueError, TypeError):
-            return f"Kolom 'STOK' berisi '{stok}' bukan angka. Gunakan bilangan bulat."
+            return f"Kolom 'GOOD' berisi '{good}' bukan angka. Gunakan bilangan bulat."
     return None
-
-
-def _parse_stok(value: Any) -> int:
-    """Parse stok value like '880 Pcs' or '3 Ktn, 2 Reg' -> integer."""
-    if value is None:
-        return 0
-    text = str(value).strip()
-    if not text:
-        return 0
-    # Extract leading integer
-    import re
-    match = re.match(r"(\d+)", text)
-    if match:
-        return int(match.group(1))
-    return 0
 
 
 def sync_products_from_excel(
@@ -156,18 +167,18 @@ def sync_products_from_excel(
         sku = str(row.get("code") or "").strip()
         nama_produk = str(row.get("NAME ITEM") or "").strip()
         harga_raw = row.get("FIX")
-        stok_raw = row.get("STOK")
+        good_raw = row.get("GOOD")
         kategori = str(row.get("KATEGORI") or "").strip() or None
         satuan = str(row.get("OUM") or "").strip() or None
 
         nama_supplier = str(row.get("\\") or "").strip() or None
 
-        error = _validate_row(row_num, sku, nama_produk, harga_raw, stok_raw)
+        error = _validate_row(row_num, sku, nama_produk, harga_raw, good_raw)
         if error:
             validation_errors.append({"row": row_num, "sku": sku, "reason": error})
             skipped += 1
             if len(validation_errors) <= 5:
-                logger.warning(f"[DEBUG] Row {row_num} validation failed: {error} | sku='{sku}' harga='{harga_raw}' stok='{stok_raw}'")
+                logger.warning(f"[DEBUG] Row {row_num} validation failed: {error} | sku='{sku}' harga='{harga_raw}' good='{good_raw}'")
             continue
 
         if sku.lower() in seen_skus:
@@ -177,7 +188,8 @@ def sync_products_from_excel(
         seen_skus.add(sku.lower())
 
         harga = int(harga_raw) if harga_raw else 0
-        stok = _parse_stok(stok_raw)
+        stok = int(good_raw) if good_raw else 0
+        order_type = _supplier_order_type(nama_supplier)
         validated_rows.append({
             "sku": sku,
             "nama_barang": nama_produk,
@@ -186,6 +198,7 @@ def sync_products_from_excel(
             "kategori": kategori,
             "satuan": satuan,
             "nama_supplier": nama_supplier,
+            "order_type": order_type,
         })
 
     inserted = updated = 0
@@ -242,7 +255,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             {"id": r["sku"], "nama_barang": r["nama_barang"],
              "harga": r["harga"], "stok_sistem": r["stok"],
              "stok_booking": 0, "kategori": r.get("kategori"),
-             "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier")}
+             "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
+             "order_type": r.get("order_type", "REGULER")}
             for r in to_insert
         ])
         db.execute(stmt)
@@ -260,7 +274,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                  "harga": r["harga"], "stok_sistem": r["stok"],
                  "stok_booking": 0,  # reset saat sync Excel baru
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
-                 "nama_supplier": r.get("nama_supplier")}
+                 "nama_supplier": r.get("nama_supplier"),
+                 "order_type": r.get("order_type", "REGULER")}
                 for r in changed
             ])
             stmt = stmt.on_conflict_do_update(
@@ -271,7 +286,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                       "stok_booking": 0,  # reset saat sync Excel baru
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan,
-                      "nama_supplier": stmt.excluded.nama_supplier},
+                      "nama_supplier": stmt.excluded.nama_supplier,
+                      "order_type": stmt.excluded.order_type},
             )
             db.execute(stmt)
             for r in changed:
@@ -287,7 +303,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"],
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
-                 "nama_supplier": r.get("nama_supplier")}
+                 "nama_supplier": r.get("nama_supplier"),
+                 "order_type": r.get("order_type", "REGULER")}
                 for r in unchanged
             ])
             stmt = stmt.on_conflict_do_update(
@@ -296,7 +313,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                       "harga": stmt.excluded.harga,
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan,
-                      "nama_supplier": stmt.excluded.nama_supplier},
+                      "nama_supplier": stmt.excluded.nama_supplier,
+                      "order_type": stmt.excluded.order_type},
             )
             db.execute(stmt)
         logger.info(f"[SYNC] Bulk updated {len(to_update)} products ({len(changed)} stock changes)")

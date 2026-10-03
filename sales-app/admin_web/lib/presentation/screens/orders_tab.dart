@@ -242,6 +242,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         order: orders[i],
         onApprove: widget.readOnly ? null : () => _approveOrder(orders[i].id),
         onReject: widget.readOnly ? null : () => _rejectOrder(orders[i].id),
+        onCancelItem: widget.readOnly ? null : (item) => _cancelItem(orders[i].id, item),
       ),
     );
   }
@@ -625,14 +626,64 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       }
     }
   }
+
+  Future<void> _cancelItem(String orderId, OrderItem item) async {
+    final result = await showDialog<_CancelItemResult>(
+      context: context,
+      builder: (_) => _CancelItemDialog(
+        namaBarang: item.namaBarang.isNotEmpty
+            ? item.namaBarang
+            : 'Produk ${item.productId}',
+        qty: item.qty,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    try {
+      final provider = context.read<AdminProvider>();
+      final success = await provider.cancelOrderItem(orderId, result.qty, result.reason, item.productId);
+      if (!mounted) return;
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Item dibatalkan: ${result.qty}x — ${result.reason}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        _applyFilters();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage ?? 'Gagal membatalkan item'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membatalkan item: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
 }
 
 class _OrderCard extends StatefulWidget {
   final Order order;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+  final void Function(OrderItem item)? onCancelItem;
 
-  const _OrderCard({required this.order, this.onApprove, this.onReject});
+  const _OrderCard({
+    required this.order,
+    this.onApprove,
+    this.onReject,
+    this.onCancelItem,
+  });
 
   @override
   State<_OrderCard> createState() => _OrderCardState();
@@ -887,8 +938,60 @@ class _OrderCardState extends State<_OrderCard> {
                         currencyFormat: currencyFormat,
                         canEdit: _order.status == 'PENDING',
                         onEdit: () => _openItemDiscountDialog(item),
+                        onCancel: widget.onCancelItem != null
+                            ? () => widget.onCancelItem!(item)
+                            : null,
                       ),
                     )),
+                // Cancelled items
+                if (_order.cancelledItems.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Item Dibatalkan:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._order.cancelledItems.map((ci) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.cancel, size: 14, color: AppColors.error),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Produk ${ci.productId} × ${ci.qty}',
+                                style: const TextStyle(
+                                  decoration: TextDecoration.lineThrough,
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.errorBg,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                ci.reason,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
                 const Divider(),
 
                 // Ringkasan harga
@@ -983,12 +1086,14 @@ class _OrderItemRow extends StatelessWidget {
   final NumberFormat currencyFormat;
   final bool canEdit;
   final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
 
   const _OrderItemRow({
     required this.item,
     required this.currencyFormat,
     this.canEdit = false,
     this.onEdit,
+    this.onCancel,
   });
 
   @override
@@ -1042,6 +1147,18 @@ class _OrderItemRow extends StatelessWidget {
                 color: item.hasDiscount ? AppColors.success : AppColors.primaryLight,
               ),
               tooltip: item.hasDiscount ? 'Edit diskon' : 'Tambah diskon',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            ),
+          if (canEdit && onCancel != null)
+            IconButton(
+              onPressed: onCancel,
+              icon: const Icon(
+                Icons.delete_outline,
+                size: 14,
+                color: AppColors.error,
+              ),
+              tooltip: 'Batalkan item',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             ),
@@ -1342,6 +1459,134 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         FilledButton(
           onPressed: _validateAndSave,
           child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CancelItemResult {
+  final int qty;
+  final String reason;
+
+  _CancelItemResult({required this.qty, required this.reason});
+}
+
+class _CancelItemDialog extends StatefulWidget {
+  final String namaBarang;
+  final int qty;
+
+  const _CancelItemDialog({required this.namaBarang, required this.qty});
+
+  @override
+  State<_CancelItemDialog> createState() => _CancelItemDialogState();
+}
+
+class _CancelItemDialogState extends State<_CancelItemDialog> {
+  late int _qty;
+  late TextEditingController _reasonController;
+
+  @override
+  void initState() {
+    super.initState();
+    _qty = widget.qty;
+    _reasonController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  bool get _isValid =>
+      _qty > 0 && _reasonController.text.trim().length >= 3;
+
+  void _submit() {
+    if (!_isValid) return;
+    Navigator.of(context).pop(_CancelItemResult(
+      qty: _qty,
+      reason: _reasonController.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Batalkan Item'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.errorBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: AppColors.error, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.namaBarang,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Jumlah yang dibatalkan:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
+                  icon: const Icon(Icons.remove),
+                ),
+                Text('$_qty', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                IconButton(
+                  onPressed: _qty < widget.qty ? () => setState(() => _qty++) : null,
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text('Alasan pembatalan *:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Contoh: Barang gudang rusak',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Minimal 3 karakter. Sales akan melihat alasan ini.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: _isValid ? _submit : null,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          child: const Text('Batalkan Item'),
         ),
       ],
     );

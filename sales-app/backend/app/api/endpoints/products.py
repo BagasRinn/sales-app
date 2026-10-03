@@ -72,13 +72,7 @@ def list_products(
         query = query.filter(Product.nama_supplier == supplier)
 
     if order_type:
-        if order_type == "4P":
-            # Filter by supplier — 4P products are identified by their supplier name.
-            suppliers_4p = _get_4p_suppliers()
-            if suppliers_4p:
-                query = query.filter(Product.nama_supplier.in_(suppliers_4p))
-        else:
-            query = query.filter(Product.order_type == order_type)
+        query = query.filter(Product.order_type == order_type)
 
     # Apply stock status filter at SQL level so pagination stays correct
     if status:
@@ -349,12 +343,7 @@ def get_product_count(
     if supplier:
         query = query.filter(Product.nama_supplier == supplier)
     if order_type:
-        if order_type == "4P":
-            suppliers_4p = _get_4p_suppliers()
-            if suppliers_4p:
-                query = query.filter(Product.nama_supplier.in_(suppliers_4p))
-        else:
-            query = query.filter(Product.order_type == order_type)
+        query = query.filter(Product.order_type == order_type)
     if status:
         stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
         if status == "tersedia":

@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -69,6 +69,9 @@ class Order(Base):
     store_address = Column(String(500), nullable=True)
     # Tipe order: 'REGULER' atau '4P'. Diset saat create order dari mobile.
     order_type = Column(String(10), nullable=False, default='REGULER')
+    # Item yang dibatalkan oleh admin (bukan dihapus, tapi dicoret). Format:
+    # [{"product_id": "...", "qty": 2, "reason": "Barang gudang rusak"}]
+    cancelled_items = Column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_orders_status", "status"),

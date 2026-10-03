@@ -111,6 +111,7 @@ class Order {
     this.storeContact,
     this.storeAddress,
     this.orderType = 'REGULER',
+    this.cancelledItems = const [],
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -131,6 +132,11 @@ class Order {
       storeContact: json['store_contact'] as String?,
       storeAddress: json['store_address'] as String?,
       orderType: (json['order_type'] as String?) ?? 'REGULER',
+      cancelledItems: json['cancelled_items'] != null
+          ? (json['cancelled_items'] as List)
+              .map((e) => CancelledItem.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : const [],
     );
   }
 
@@ -173,5 +179,28 @@ class Order {
     final list = items;
     if (list == null) return 0;
     return list.fold(0, (a, b) => a + b.nominalDiskon);
+  }
+
+  /// Item yang dibatalkan oleh admin beserta alasannya.
+  final List<CancelledItem> cancelledItems;
+}
+
+class CancelledItem {
+  final String productId;
+  final int qty;
+  final String reason;
+
+  CancelledItem({
+    required this.productId,
+    required this.qty,
+    required this.reason,
+  });
+
+  factory CancelledItem.fromJson(Map<String, dynamic> json) {
+    return CancelledItem(
+      productId: json['product_id'] as String? ?? '',
+      qty: json['qty'] as int? ?? 0,
+      reason: json['reason'] as String? ?? '',
+    );
   }
 }

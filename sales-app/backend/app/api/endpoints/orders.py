@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     OrderResponse,
     OrderListWithItemsResponse,
     OrderDiscountUpdate,
+    CancelItemsRequest,
 )
 from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.stock_logger import log_stock_change
@@ -142,6 +143,7 @@ def _build_order_response(order: Order) -> dict:
         "total_amount": int(total_amount),
         "total_discount": int(total_discount),
         "order_type": order.order_type or 'REGULER',
+        "cancelled_items": order.cancelled_items,
     }
 
 
@@ -1070,3 +1072,63 @@ def reject_order(
         "order_id": str(order.id),
         "status": "REJECTED",
     }
+
+
+@router.put("/{order_id}/cancel-items", response_model=OrderResponse)
+def cancel_order_items(
+    order_id: UUID,
+    payload: CancelItemsRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    """Batalkan 1 atau lebih item dari order PENDING.
+    Admin input reason untuk setiap item — sales bisa lihat di app."""
+    order = db.query(Order).filter(Order.id == order_id).with_for_update(of=[Order]).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+
+    if order.status != "PENDING":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pesanan sudah berstatus '{order.status}', item tidak bisa dibatalkan",
+        )
+
+    # Load existing cancelled items
+    cancelled = (order.cancelled_items or []).copy()
+
+    for entry in payload.items:
+        # Release stok_booking untuk item ini
+        item = db.query(OrderItem).filter(
+            OrderItem.order_id == order_id,
+            OrderItem.product_id == entry.product_id,
+        ).first()
+        if item:
+            product = db.query(Product).filter(
+                Product.id == entry.product_id
+            ).with_for_update().first()
+            if product:
+                old_booking = product.stok_booking or 0
+                product.stok_booking = max(0, old_booking - entry.qty)
+                log_stock_change(
+                    db=db,
+                    product_id=entry.product_id,
+                    sumber="ITEM_CANCEL",
+                    field_terdampak="stok_booking",
+                    delta=-entry.qty,
+                    nilai_sebelum=old_booking,
+                    nilai_sesudah=product.stok_booking,
+                    actor_id=UUID(current_user["user_id"]),
+                    order_id=order.id,
+                )
+
+        cancelled.append({
+            "product_id": entry.product_id,
+            "qty": entry.qty,
+            "reason": entry.reason.strip(),
+        })
+
+    order.cancelled_items = cancelled
+    db.commit()
+    db.refresh(order)
+
+    return _serialize_order(order, db)

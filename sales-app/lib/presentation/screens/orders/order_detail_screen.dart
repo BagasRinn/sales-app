@@ -342,6 +342,66 @@ class _OrderDetailContent extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
+        // Item dibatalkan
+        if (order.cancelledItems.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _sectionTitle('Item Dibatalkan (${order.cancelledItems.length})'),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.errorBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < order.cancelledItems.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.cancel, size: 16, color: AppColors.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Produk ${order.cancelledItems[i].productId} × ${order.cancelledItems[i].qty}',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  decoration: TextDecoration.lineThrough,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  order.cancelledItems[i].reason,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+
         // Total
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
