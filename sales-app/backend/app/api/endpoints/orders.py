@@ -154,12 +154,12 @@ def _sync_order_to_sheets(order_id: str):
     logger.info(f"[SHEETS SYNC] Order {order_id} submitted (sheets sync disabled)")
 
 
-def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
-    """Adjust stok_booking untuk PENDING order setelah edit items.
+def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str = "EDIT"):
+    """Adjust stok_booking untuk DRAFT/PENDING order setelah edit items.
     Hitung delta qty per produk antara old_items dan new_items (sum by product_id).
     Delta > 0: atomic add (perlu stock tersedia, raise 409 kalau tidak cukup).
     Delta < 0: release (tidak perlu check).
-    Tulis StokLog dengan sumber "EDIT" untuk tiap delta yang bukan nol.
+    Tulis StokLog dengan `sumber` untuk tiap delta yang bukan nol.
     """
     old_qty: dict[str, int] = {}
     for it in old_items:
@@ -182,7 +182,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
                 text(
                     "UPDATE products "
                     "SET stok_booking = stok_booking + :delta "
-                    "WHERE id = :pid AND (stok_sistem - stok_booking) >= :delta "
+                    "WHERE id = :pid AND (stok_sistem - stok_booking - stok_diterima) >= :delta "
                     "RETURNING stok_booking"
                 ),
                 {"pid": pid, "delta": delta},
@@ -197,7 +197,9 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
                     )
                 available = max(
                     0,
-                    (product.stok_sistem or 0) - (product.stok_booking or 0),
+                    (product.stok_sistem or 0)
+                    - (product.stok_booking or 0)
+                    - (product.stok_diterima or 0),
                 )
                 raise HTTPException(
                     status_code=409,
@@ -211,7 +213,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
             log_stock_change(
                 db=db,
                 product_id=pid,
-                sumber="EDIT",
+                sumber=sumber,
                 field_terdampak="stok_booking",
                 delta=delta,
                 nilai_sebelum=old_booking,
@@ -220,9 +222,9 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
                 order_id=order_id,
             )
         else:
-            # Kurangi booking (delta < 0, db akan auto-fail kalau stok_booking < abs_delta
-            # karena ada CHECK constraint — seharusnya tidak terjadi karena kita kurangi
-            # dari booking yang sebelumnya sudah kita tambahkan)
+            # Kurangi booking (delta < 0). Tidak ada CHECK constraint di DB,
+            # tapi kode tidak akan minta release lebih besar dari yang pernah
+            # di-book untuk order ini, jadi aman.
             abs_delta = -delta
             result = db.execute(
                 text(
@@ -238,7 +240,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
             log_stock_change(
                 db=db,
                 product_id=pid,
-                sumber="EDIT",
+                sumber=sumber,
                 field_terdampak="stok_booking",
                 delta=-abs_delta,
                 nilai_sebelum=old_booking,
@@ -248,14 +250,16 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items):
             )
 
 
-def _book_items(items, db, sales_id, order_id_for_log):
-    """Apply stok_booking for given items. Raises 409 if insufficient."""
+def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT"):
+    """Apply stok_booking for given items. Raises 409 if insufficient.
+    `sumber` adalah label StokLog — beda per caller (DRAFT, CHECKOUT, BACKFILL).
+    """
     for item in items:
         result = db.execute(
             text(
                 "UPDATE products "
                 "SET stok_booking = stok_booking + :qty "
-                "WHERE id = :product_id AND (stok_sistem - stok_booking) >= :qty "
+                "WHERE id = :product_id AND (stok_sistem - stok_booking - stok_diterima) >= :qty "
                 "RETURNING id"
             ),
             {"product_id": item.product_id, "qty": item.qty},
@@ -267,7 +271,12 @@ def _book_items(items, db, sales_id, order_id_for_log):
             if not product:
                 detail = f"Produk '{item.product_id}' tidak ditemukan"
             else:
-                available = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+                available = max(
+                    0,
+                    (product.stok_sistem or 0)
+                    - (product.stok_booking or 0)
+                    - (product.stok_diterima or 0),
+                )
                 detail = (
                     f"Stok tidak mencukupi untuk produk '{item.product_id}'. "
                     f"Tersedia: {available}, Diminta: {item.qty}"
@@ -280,7 +289,7 @@ def _book_items(items, db, sales_id, order_id_for_log):
             log_stock_change(
                 db=db,
                 product_id=item.product_id,
-                sumber="CHECKOUT",
+                sumber=sumber,
                 field_terdampak="stok_booking",
                 delta=item.qty,
                 nilai_sebelum=old_booking,
@@ -312,8 +321,9 @@ def create_order(
     sales_id = UUID(current_user["user_id"])
     customer = _get_customer(order_req.customer_id, db)
 
-    # DRAFT tidak booking stok. Validasi stok saja (cek tersedia), tapi tidak kurangi stok_booking.
-    # Booking baru dilakukan saat submit_draft_order.
+    # Validasi ringan dulu: produk ada + tipe cocok dengan order_type. Cek stok
+    # aktual dilakukan di _book_items() setelah Order+OrderItems ditambah, supaya
+    # race "stok diambil orang lain" bisa terdeteksi secara atomic.
     for item in order_req.items:
         product = db.query(Product).filter(Product.id == item.product_id).first()
         if not product:
@@ -329,15 +339,6 @@ def create_order(
                 detail=(
                     f"Produk '{product.nama_barang}' bukan tipe {order_type} "
                     f"(tipe produk: {product_type})"
-                ),
-            )
-        available = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
-        if item.qty > available:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Stok tidak cukup untuk '{product.nama_barang}'. "
-                    f"Tersedia: {available}, Diminta: {item.qty}"
                 ),
             )
 
@@ -395,6 +396,11 @@ def create_order(
             discount3_percent=l3[1] if (l3[0] or "PERCENT").upper() == "PERCENT" else 0,
             discount3_nominal=l3[2] if (l3[0] or "PERCENT").upper() == "NOMINAL" else 0,
         ))
+
+    # DRAFT sekarang langsung booking stok (sebelumnya: validation only, booking
+    # di submit). Kalau stok tidak cukup, _book_items panggil db.rollback()
+    # yang discard Order+OrderItems di session ini, lalu raise 409.
+    _book_items(order_req.items, db, sales_id, order.id, sumber="DRAFT")
 
     db.commit()
     db.refresh(order)
@@ -637,17 +643,18 @@ def update_draft_order(
     order.store_address = customer.alamat
     order.order_type = new_order_type
 
-    # PENDING order sudah punya stok_booking terisi — rebalance setelah items berubah.
-    # DRAFT ga punya booking, skip. Kalau rebalance raise 409, db.rollback() di helper
+    # DRAFT dan PENDING keduanya sekarang punya stok_booking terisi — rebalance
+    # setelah items berubah. Kalau rebalance raise 409, db.rollback() di helper
     # akan membatalkan semua perubahan (delete + insert + customer update) supaya
     # konsisten.
-    if order.status == "PENDING":
+    if order.status in ("DRAFT", "PENDING"):
         _rebalance_booking(
             db=db,
             sales_id=sales_id,
             order_id=order.id,
             old_items=old_items,
             new_items=order_update.items,
+            sumber="EDIT",
         )
 
     db.commit()
@@ -683,9 +690,8 @@ def submit_draft_order(
     if not items:
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
-    # Apply stok booking
-    _book_items(items, db, UUID(current_user["user_id"]), order.id)
-
+    # Stok sudah di-book di create_order (DRAFT langsung booking sekarang).
+    # Submit murni status transition saja.
     order.status = "PENDING"
     db.commit()
     db.refresh(order)
@@ -713,6 +719,43 @@ def delete_draft_order(
             status_code=400,
             detail=f"Hanya pesanan DRAFT yang bisa dihapus. Status saat ini: {order.status}",
         )
+
+    # DRAFT sekarang punya booking (di-book saat create_order). Lepaskan dulu
+    # sebelum delete supaya stok kembali ke tersedia.
+    items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    sales_id = UUID(current_user["user_id"])
+    for item in items:
+        result = db.execute(
+            text(
+                "UPDATE products "
+                "SET stok_booking = stok_booking - :qty "
+                "WHERE id = :pid "
+                "RETURNING stok_booking"
+            ),
+            {"pid": item.product_id, "qty": item.qty},
+        ).first()
+        if result is None:
+            # Defensive: stok_booking sudah 0 (legacy DRAFT). Lanjut saja,
+            # delete tetap dilakukan. Log warning supaya operator tahu.
+            print(
+                f"[WARN] delete_draft_order: order={order_id} product={item.product_id} "
+                f"stok_booking sudah 0, skip release (kemungkinan legacy DRAFT)"
+            )
+            continue
+        new_booking = result[0]
+        old_booking = new_booking + item.qty
+        log_stock_change(
+            db=db,
+            product_id=item.product_id,
+            sumber="DRAFT_DELETE",
+            field_terdampak="stok_booking",
+            delta=-item.qty,
+            nilai_sebelum=old_booking,
+            nilai_sesudah=new_booking,
+            actor_id=sales_id,
+            order_id=order.id,
+        )
+
     db.delete(order)
     db.commit()
     return None
@@ -1033,6 +1076,7 @@ def approve_order(
         db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
     }
 
+    actor_id = UUID(current_user["user_id"])
     for item in items:
         product = products.get(item.product_id)
         if not product:
@@ -1040,8 +1084,55 @@ def approve_order(
                 status_code=404,
                 detail=f"Produk '{item.product_id}' tidak ditemukan",
             )
-        # Approve: stok_booking TIDAK disentuh — tetap sebagai record barang yang sudah
-        # dibooking/terkirim. Stok_tersedia = stok_sistem - stok_booking tetap konsisten.
+        # Approve: pindahkan qty dari stok_booking ke stok_diterima (atomic dual-field).
+        # stok_tersedia = stok_sistem - stok_booking - stok_diterima tetap sama
+        # (keduanya turun/naik seimbang), tapi pool-nya berpindah.
+        result = db.execute(
+            text(
+                "UPDATE products "
+                "SET stok_booking = stok_booking - :qty, "
+                "    stok_diterima = stok_diterima + :qty "
+                "WHERE id = :pid AND stok_booking >= :qty "
+                "RETURNING stok_booking, stok_diterima"
+            ),
+            {"pid": item.product_id, "qty": item.qty},
+        ).first()
+        if result is None:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Stok booking produk '{product.nama_barang}' tidak cukup "
+                    f"untuk approve order ini (qty={item.qty}). Kemungkinan order sudah "
+                    f"di-reject/di-cancel sebelumnya."
+                ),
+            )
+        new_booking, new_diterima = result[0], result[1]
+        old_booking = new_booking + item.qty
+        old_diterima = new_diterima - item.qty
+        # Dua StokLog row: satu per field yang berubah.
+        log_stock_change(
+            db=db,
+            product_id=item.product_id,
+            sumber="APPROVE",
+            field_terdampak="stok_booking",
+            delta=-item.qty,
+            nilai_sebelum=old_booking,
+            nilai_sesudah=new_booking,
+            actor_id=actor_id,
+            order_id=order.id,
+        )
+        log_stock_change(
+            db=db,
+            product_id=item.product_id,
+            sumber="APPROVE",
+            field_terdampak="stok_diterima",
+            delta=item.qty,
+            nilai_sebelum=old_diterima,
+            nilai_sesudah=new_diterima,
+            actor_id=actor_id,
+            order_id=order.id,
+        )
 
     order.status = "APPROVED"
     db.commit()

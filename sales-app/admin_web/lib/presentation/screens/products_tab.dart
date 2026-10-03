@@ -267,13 +267,13 @@ class _ProductsTabState extends State<ProductsTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availW = constraints.maxWidth;
-        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Supplier | Aksi
-        // fixedW = [sku, ktgr, harga, stok, stok, stok, sat, supp, aksi] (nama ambil sisa)
-        const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 90.0, 100.0, 70.0, 200.0, 90.0];
-        const fixedTotal = 1110.0;
+        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Aksi
+        // fixedW = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, aksi] (nama ambil sisa)
+        const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 90.0];
+        const fixedTotal = 1210.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         final totalW = namaW + fixedTotal;
-        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, sat, supp, aksi]
+        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, aksi]
         final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9]];
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
@@ -387,7 +387,10 @@ class _ProductsTabState extends State<ProductsTab> {
                       _infoPill(
                           'Booking', '${product.stokBooking}', AppColors.info),
                       const SizedBox(width: 8),
-                      _infoPill('Tersedia (lama)',
+                      _infoPill('Diterima',
+                          '${product.stokDiterima}', AppColors.info),
+                      const SizedBox(width: 8),
+                      _infoPill('Tersedia',
                           '${product.stokTersedia}', AppColors.warning),
                     ],
                   ),
@@ -705,8 +708,8 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Tersedia | Satuan | Supplier | Aksi
-    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Tersedia', 'Satuan', 'Supplier', 'Aksi'];
+    // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Aksi
+    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Aksi'];
     return SizedBox(
       width: totalW,
       child: Container(
@@ -800,13 +803,20 @@ class _DataRow extends StatelessWidget {
               ),
             ),
           ),
-          // Stok Sistem — colW[4]
+          // Stok Sistem — colW[4]. Merah kalau stok_sistem < (booking + diterima)
+          // artinya stok_tersedia sudah tidak bisa dipesan, perlu audit.
           SizedBox(
             width: colW[4],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text('${product.stokSistem}', textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: product.stokSistem < product.stokBooking ? AppColors.error : null), maxLines: 2),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: product.stokSistem < (product.stokBooking + product.stokDiterima)
+                        ? AppColors.error
+                        : null,
+                  ),
+                  maxLines: 2),
             ),
           ),
           // Stok Booking — colW[5]
@@ -817,34 +827,42 @@ class _DataRow extends StatelessWidget {
               child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
             ),
           ),
-          // Stok Tersedia — colW[6]
+          // Stok Diterima — colW[6] (kolom baru, hanya admin web)
           SizedBox(
             width: colW[6],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text('${product.stokDiterima}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+            ),
+          ),
+          // Stok Tersedia — colW[7]
+          SizedBox(
+            width: colW[7],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text('${product.stokTersedia}', textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
             ),
           ),
-          // Satuan — colW[7]
+          // Satuan — colW[8]
           SizedBox(
-            width: colW[7],
+            width: colW[8],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
             ),
           ),
-          // Supplier — colW[8]
+          // Supplier — colW[9]
           SizedBox(
-            width: colW[8],
+            width: colW[9],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
           ),
-          // Aksi — colW[9]
+          // Aksi — colW[10]
           SizedBox(
-            width: colW[9],
+            width: colW[10],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(

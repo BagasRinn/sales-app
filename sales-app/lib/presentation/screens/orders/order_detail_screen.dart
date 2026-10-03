@@ -393,7 +393,7 @@ class _OrderDetailContent extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Produk ${order.cancelledItems[i].productId} × ${order.cancelledItems[i].qty}',
+                                '${order.cancelledItems[i].displayLabel} × ${order.cancelledItems[i].qty}',
                                 style: AppTextStyles.bodyMedium.copyWith(
                                   decoration: TextDecoration.lineThrough,
                                   color: AppColors.textMuted,

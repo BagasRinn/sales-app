@@ -32,6 +32,11 @@ class Product(Base):
     harga = Column(Integer)
     stok_sistem = Column(Integer, default=0)
     stok_booking = Column(Integer, default=0)
+    # Qty yang sudah di-approve (barang sudah dikirim/diterima).
+    # Ditambah saat admin approve PENDING order; tidak pernah di-decrement
+    # oleh flow order normal (sync Excel & backfill DRAFT lama boleh zero-kan).
+    # Rumus: stok_tersedia = max(0, stok_sistem - stok_booking - stok_diterima).
+    stok_diterima = Column(Integer, default=0, nullable=False)
     kategori = Column(String, nullable=True)
     satuan = Column(String, nullable=True)
     nama_supplier = Column(String, nullable=True)

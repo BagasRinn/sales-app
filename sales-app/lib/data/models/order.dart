@@ -162,10 +162,11 @@ class Order {
         return 'Diterima';
       case 'REJECTED':
         return 'Ditolak';
-      case 'EXPIRED':
-        return 'Kedaluwarsa';
       case 'CANCELLED':
         return 'Dibatalkan';
+      // EXPIRED dihapus: logika expiration sudah tidak dipakai, jadi status
+      // ini tidak akan pernah muncul di data mobile. Fallback ke raw kalau
+      // ada data lama berstatus EXPIRED.
       default:
         return status;
     }

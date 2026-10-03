@@ -339,7 +339,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                           DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
                           DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
                           DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
-                          DropdownMenuItem(value: 'EXPIRED', child: Text('Kedaluwarsa')),
                         ],
                         onChanged: (v) {
                           setState(() => _filterStatus = v);
@@ -995,6 +994,90 @@ class _OrderCardState extends State<_OrderCard> {
                               Icons.location_on, 'Alamat', _order.storeAddress!),
                         if (_order.salesUsername != null || _order.salesNama != null)
                           _infoRow(Icons.person, 'Sales', _order.salesDisplayName),
+                        // Customer di master data: beda dari storeName kalau
+                        // customer di-rename setelah order dibuat — berguna untuk
+                        // audit. Skip kalau null atau sama persis dengan storeName
+                        // supaya tidak duplicate.
+                        if (_order.customerName != null &&
+                            _order.customerName!.isNotEmpty &&
+                            _order.customerName != _order.storeName)
+                          _infoRow(Icons.contacts, 'Customer', _order.customerName!),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Catatan dari sales (jika ada). Disembunyikan kalau null/kosong
+                // supaya tidak menambah visual noise untuk order tanpa catatan.
+                if (_order.notes != null && _order.notes!.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.warningBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.sticky_note_2_outlined,
+                                size: 16, color: AppColors.warning),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Catatan dari Sales',
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _order.notes!,
+                          style: AppTextStyles.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Alasan penolakan dari admin (saat order di-reject). Sales
+                // bisa lihat ini di mobile; admin web juga supaya konsisten
+                // dan tidak perlu buka app lain untuk audit.
+                if (_order.status == 'REJECTED' &&
+                    _order.rejectReason != null &&
+                    _order.rejectReason!.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.block, size: 16, color: AppColors.error),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Alasan Penolakan',
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _order.rejectReason!,
+                          style: AppTextStyles.bodyMedium,
+                        ),
                       ],
                     ),
                   ),

@@ -16,8 +16,9 @@ class OrderStatus(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
+    # EXPIRED dihapus: logika expiration sudah tidak dipakai, tidak ada cron
+    # job yang set status ke EXPIRED, dan DB tidak pernah mencatat status ini.
 
 
 # ==================== AUTH ====================
@@ -113,6 +114,9 @@ class ProductResponse(BaseModel):
     harga: int
     stok_sistem: int
     stok_booking: int
+    # Default 0 supaya response lama (sebelum app redeploy) tidak break Pydantic
+    # validation. Setelah deploy, backend selalu mengirim nilai real.
+    stok_diterima: int = 0
     stok_tersedia: int
     perlu_ditinjau: Optional[bool] = None
     kategori: Optional[str] = None

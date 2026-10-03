@@ -4,6 +4,9 @@ class Product {
   final int harga;
   final int stokSistem;
   final int stokBooking;
+  // Qty yang sudah di-approve. Backend (sesuai revisi sistem stok) selalu
+  // mengirim field ini; kalau backend lupa, parser toleran dan default 0.
+  final int stokDiterima;
   final int stokTersedia;
   final String? kategori;
   final String? satuan;
@@ -16,6 +19,7 @@ class Product {
     required this.harga,
     required this.stokSistem,
     required this.stokBooking,
+    required this.stokDiterima,
     required this.stokTersedia,
     this.kategori,
     this.satuan,
@@ -30,6 +34,7 @@ class Product {
       harga: json['harga'] ?? 0,
       stokSistem: json['stok_sistem'] ?? 0,
       stokBooking: json['stok_booking'] ?? 0,
+      stokDiterima: (json['stok_diterima'] as int?) ?? 0,
       stokTersedia: json['stok_tersedia'] ?? 0,
       kategori: json['kategori'] as String?,
       satuan: json['satuan'] as String?,

@@ -321,7 +321,7 @@ class StockChip extends StatelessWidget {
   }
 }
 
-enum OrderStatus { pending, approved, rejected, expired, cancelled }
+enum OrderStatus { pending, approved, rejected, cancelled }
 
 Color orderStatusColor(OrderStatus s) {
   switch (s) {
@@ -331,8 +331,6 @@ Color orderStatusColor(OrderStatus s) {
       return AppColors.success;
     case OrderStatus.rejected:
       return AppColors.error;
-    case OrderStatus.expired:
-      return AppColors.warning;
     case OrderStatus.cancelled:
       return AppColors.textMuted;
   }
@@ -346,8 +344,6 @@ Color orderStatusBgColor(OrderStatus s) {
       return AppColors.successBg;
     case OrderStatus.rejected:
       return AppColors.errorBg;
-    case OrderStatus.expired:
-      return AppColors.warningBg;
     case OrderStatus.cancelled:
       return AppColors.border;
   }
@@ -361,8 +357,6 @@ String orderStatusLabel(String status) {
       return 'Disetujui';
     case 'REJECTED':
       return 'Ditolak';
-    case 'EXPIRED':
-      return 'Kedaluwarsa';
     case 'CANCELLED':
       return 'Dibatalkan';
     default:
@@ -379,8 +373,6 @@ OrderStatus? orderStatusFromString(String? s) {
       return OrderStatus.approved;
     case 'REJECTED':
       return OrderStatus.rejected;
-    case 'EXPIRED':
-      return OrderStatus.expired;
     case 'CANCELLED':
       return OrderStatus.cancelled;
     default:

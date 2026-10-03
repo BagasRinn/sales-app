@@ -76,7 +76,11 @@ def list_products(
 
     # Apply stock status filter at SQL level so pagination stays correct
     if status:
-        stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
+        stok_expr = (
+            func.coalesce(Product.stok_sistem, 0)
+            - func.coalesce(Product.stok_booking, 0)
+            - func.coalesce(Product.stok_diterima, 0)
+        )
         if status == "tersedia":
             query = query.filter(stok_expr > 5)
         elif status == "rendah":
@@ -88,8 +92,15 @@ def list_products(
 
     result = []
     for p in products:
-        stok_tersedia = max(0, (p.stok_sistem or 0) - (p.stok_booking or 0))
-        perlu_ditinjau = (p.stok_sistem or 0) < (p.stok_booking or 0)
+        stok_tersedia = max(
+            0,
+            (p.stok_sistem or 0)
+            - (p.stok_booking or 0)
+            - (p.stok_diterima or 0),
+        )
+        perlu_ditinjau = (p.stok_sistem or 0) < (
+            (p.stok_booking or 0) + (p.stok_diterima or 0)
+        )
         result.append(
             ProductResponse(
                 id=p.id,
@@ -97,11 +108,14 @@ def list_products(
                 harga=p.harga,
                 stok_sistem=p.stok_sistem or 0,
                 stok_booking=p.stok_booking or 0,
+                stok_diterima=p.stok_diterima or 0,
                 stok_tersedia=stok_tersedia,
                 perlu_ditinjau=(
-            (p.stok_sistem or 0) < (p.stok_booking or 0)
-            if current_user["role"] == "ADMIN" else None
-        ),
+                    (p.stok_sistem or 0) < (
+                        (p.stok_booking or 0) + (p.stok_diterima or 0)
+                    )
+                    if current_user["role"] == "ADMIN" else None
+                ),
                 kategori=p.kategori,
                 satuan=p.satuan,
                 nama_supplier=p.nama_supplier,
@@ -156,7 +170,7 @@ def sync_products(
 ):
     sync_result = sync_products_from_excel(None, db)
     needs_review = db.query(Product).filter(
-        Product.stok_sistem < Product.stok_booking
+        Product.stok_sistem < (Product.stok_booking + Product.stok_diterima)
     ).count() > 0
     return SyncResultResponse(
         success=sync_result["success"],
@@ -199,7 +213,7 @@ def import_excel(
     )
 
     needs_review = db.query(Product).filter(
-        Product.stok_sistem < Product.stok_booking
+        Product.stok_sistem < (Product.stok_booking + Product.stok_diterima)
     ).count() > 0
     return SyncResultResponse(
         success=sync_result["success"],
@@ -295,7 +309,10 @@ def get_admin_stats(
     # Combine both product COUNT queries into a single round-trip
     product_result = db.query(
         func.count(Product.id),
-        func.sum(cast(Product.stok_sistem < Product.stok_booking, Integer)),
+        func.sum(cast(
+            Product.stok_sistem < (Product.stok_booking + Product.stok_diterima),
+            Integer,
+        )),
     ).first()
     total_products = product_result[0] or 0
     needs_review = product_result[1] or 0
@@ -312,7 +329,6 @@ def get_admin_stats(
         "pending_orders": status_counts.get("PENDING", 0),
         "approved_orders": status_counts.get("APPROVED", 0),
         "rejected_orders": status_counts.get("REJECTED", 0),
-        "expired_orders": status_counts.get("EXPIRED", 0),
         "cancelled_orders": status_counts.get("CANCELLED", 0),
         "total_products": total_products,
         "needs_review": needs_review,
@@ -345,7 +361,11 @@ def get_product_count(
     if order_type:
         query = query.filter(Product.order_type == order_type)
     if status:
-        stok_expr = (func.coalesce(Product.stok_sistem, 0) - func.coalesce(Product.stok_booking, 0))
+        stok_expr = (
+            func.coalesce(Product.stok_sistem, 0)
+            - func.coalesce(Product.stok_booking, 0)
+            - func.coalesce(Product.stok_diterima, 0)
+        )
         if status == "tersedia":
             query = query.filter(stok_expr > 5)
         elif status == "rendah":
@@ -364,16 +384,23 @@ def get_product(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+    stok_tersedia = max(
+        0,
+        (product.stok_sistem or 0)
+        - (product.stok_booking or 0)
+        - (product.stok_diterima or 0),
+    )
     return ProductResponse(
         id=product.id,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,
         stok_booking=product.stok_booking or 0,
+        stok_diterima=product.stok_diterima or 0,
         stok_tersedia=stok_tersedia,
         perlu_ditinjau=(
-            (product.stok_sistem or 0) < (product.stok_booking or 0)
+            (product.stok_sistem or 0)
+            < ((product.stok_booking or 0) + (product.stok_diterima or 0))
             if current_user["role"] == "ADMIN" else None
         ),
         kategori=product.kategori,
@@ -419,16 +446,23 @@ def update_product(
     db.commit()
     db.refresh(product)
 
-    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
+    stok_tersedia = max(
+        0,
+        (product.stok_sistem or 0)
+        - (product.stok_booking or 0)
+        - (product.stok_diterima or 0),
+    )
     return ProductResponse(
         id=product.id,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,
         stok_booking=product.stok_booking or 0,
+        stok_diterima=product.stok_diterima or 0,
         stok_tersedia=stok_tersedia,
         perlu_ditinjau=(
-            (product.stok_sistem or 0) < (product.stok_booking or 0)
+            (product.stok_sistem or 0)
+            < ((product.stok_booking or 0) + (product.stok_diterima or 0))
             if current_user["role"] == "ADMIN" else None
         ),
         kategori=product.kategori,
@@ -489,14 +523,22 @@ def update_product_stock(
     db.commit()
     db.refresh(product)
 
-    stok_tersedia = max(0, (product.stok_sistem or 0) - (product.stok_booking or 0))
-    is_review_needed = (product.stok_sistem or 0) < (product.stok_booking or 0)
+    stok_tersedia = max(
+        0,
+        (product.stok_sistem or 0)
+        - (product.stok_booking or 0)
+        - (product.stok_diterima or 0),
+    )
+    is_review_needed = (product.stok_sistem or 0) < (
+        (product.stok_booking or 0) + (product.stok_diterima or 0)
+    )
     return ProductResponse(
         id=product.id,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,
         stok_booking=product.stok_booking or 0,
+        stok_diterima=product.stok_diterima or 0,
         stok_tersedia=stok_tersedia,
         perlu_ditinjau=is_review_needed,
         kategori=product.kategori,

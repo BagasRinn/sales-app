@@ -219,9 +219,9 @@ def sync_products_from_excel(
     import_log.skipped = skipped
     db.commit()
 
-    # Compute needs_review (products where stok_sistem < stok_booking)
+    # Compute needs_review (products where stok_sistem < stok_booking + stok_diterima)
     needs_review_count = db.query(Product).filter(
-        Product.stok_sistem < Product.stok_booking
+        Product.stok_sistem < (Product.stok_booking + Product.stok_diterima)
     ).count()
 
     return {
@@ -254,7 +254,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
         stmt = insert(Product).values([
             {"id": r["sku"], "nama_barang": r["nama_barang"],
              "harga": r["harga"], "stok_sistem": r["stok"],
-             "stok_booking": 0, "kategori": r.get("kategori"),
+             "stok_booking": 0, "stok_diterima": 0,
+             "kategori": r.get("kategori"),
              "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
              "order_type": r.get("order_type", "REGULER")}
             for r in to_insert
@@ -272,7 +273,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"], "stok_sistem": r["stok"],
-                 "stok_booking": 0,  # reset saat sync Excel baru
+                 "stok_booking": 0, "stok_diterima": 0,  # reset saat sync Excel baru
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
                  "order_type": r.get("order_type", "REGULER")}
@@ -284,6 +285,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                       "harga": stmt.excluded.harga,
                       "stok_sistem": stmt.excluded.stok_sistem,
                       "stok_booking": 0,  # reset saat sync Excel baru
+                      "stok_diterima": 0,  # reset saat sync Excel baru
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan,
                       "nama_supplier": stmt.excluded.nama_supplier,

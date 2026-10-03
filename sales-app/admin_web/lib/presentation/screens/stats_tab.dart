@@ -201,8 +201,13 @@ class _StatsTabState extends State<StatsTab> {
     final pendingOrders = stats['pending_orders'] ?? 0;
     final approvedOrders = stats['approved_orders'] ?? 0;
     final rejectedOrders = stats['rejected_orders'] ?? 0;
+    final cancelledOrders = stats['cancelled_orders'] ?? 0;
     final totalProducts = stats['total_products'] ?? 0;
     final totalCustomers = stats['total_customers'] ?? 0;
+    // Produk di mana stok_sistem < (stok_booking + stok_diterima) — perlu audit segera.
+    // Dilaporkan backend di /products/stats. Definisi predicate di-update
+    // setelah revisi sistem stok (stok_diterima pisah dari stok_booking).
+    final needsReview = stats['needs_review'] ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -291,6 +296,12 @@ class _StatsTabState extends State<StatsTab> {
                   color: AppColors.error,
                   icon: Icons.cancel,
                 ),
+                _StatCard(
+                  title: 'Dibatalkan',
+                  value: '$cancelledOrders',
+                  color: AppColors.textMuted,
+                  icon: Icons.block,
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -314,6 +325,13 @@ class _StatsTabState extends State<StatsTab> {
                   value: '$totalCustomers',
                   icon: Icons.store,
                   color: AppColors.info,
+                ),
+                _StatCard(
+                  title: 'Produk Perlu Tinjau',
+                  value: '$needsReview',
+                  icon: Icons.report_problem_outlined,
+                  // Warna bahaya kalau ada yang perlu ditinjau, netral kalau 0.
+                  color: needsReview > 0 ? AppColors.error : AppColors.success,
                 ),
               ],
             ),

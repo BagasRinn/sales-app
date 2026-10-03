@@ -3,32 +3,45 @@ class Order {
   final String salesId;
   final String status;
   final DateTime createdAt;
-  final DateTime? expiredAt;
   final List<OrderItem> items;
   final String? salesUsername;
   final String? salesNama;
   final String? storeName;
   final String? storeContact;
   final String? storeAddress;
+  /// UUID customer di master data. Null kalau order dibuat tanpa customer
+  /// (mis. legacy order, atau customer dihapus). Backend sudah suplai via
+  /// `customer_id` di response — sebelumnya di-drop oleh client ini.
+  final String? customerId;
+  /// Snapshot nama customer dari tabel customers. Beda dengan [storeName]
+  /// yang merupakan denormalized name per-order: kalau customer di-rename
+  /// setelah order dibuat, [customerName] ikut update, [storeName] tidak.
+  final String? customerName;
   final List<CancelledItem> cancelledItems;
   final String? rejectReason;
   final String? invoiceNumber;
+  /// Catatan dari sales saat membuat pesanan (mis. "toko tutup jam 5").
+  /// Backend sudah suplai via `notes` di response, tapi client ini belum parse
+  /// sebelumnya — sekarang dipakai supaya tampil di order detail admin.
+  final String? notes;
 
   Order({
     required this.id,
     required this.salesId,
     required this.status,
     required this.createdAt,
-    this.expiredAt,
     required this.items,
     this.salesUsername,
     this.salesNama,
     this.storeName,
     this.storeContact,
     this.storeAddress,
+    this.customerId,
+    this.customerName,
     this.cancelledItems = const [],
     this.rejectReason,
     this.invoiceNumber,
+    this.notes,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -37,19 +50,21 @@ class Order {
       salesId: json['sales_id'] ?? '',
       status: json['status'] ?? '',
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      expiredAt: json['expired_at'] != null ? DateTime.tryParse(json['expired_at']) : null,
       items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
       salesUsername: json['sales_username'],
       salesNama: json['sales_nama'],
       storeName: json['store_name'],
       storeContact: json['store_contact'],
       storeAddress: json['store_address'],
+      customerId: json['customer_id'] as String?,
+      customerName: json['customer_name'] as String?,
       cancelledItems: (json['cancelled_items'] as List?)
               ?.map((e) => CancelledItem.fromJson(e))
               .toList() ??
           [],
       rejectReason: json['reject_reason'] as String?,
       invoiceNumber: json['invoice_number'] as String?,
+      notes: json['notes'] as String?,
     );
   }
 
@@ -75,8 +90,11 @@ class Order {
       case 'PENDING': return 'Menunggu';
       case 'APPROVED': return 'Disetujui';
       case 'REJECTED': return 'Ditolak';
-      case 'EXPIRED': return 'Kedaluwarsa';
       case 'CANCELLED': return 'Dibatalkan';
+      // EXPIRED dihapus: logika expiration sudah tidak dipakai (tidak ada
+      // cron job yang set status ke EXPIRED), jadi status ini tidak akan
+      // pernah muncul di data. Kalau backend masih kirim data lama berstatus
+      // EXPIRED, fallback ke label raw.
       default: return status;
     }
   }
