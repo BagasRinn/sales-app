@@ -164,11 +164,15 @@ class OrderItem {
 
 class CancelledItem {
   final String productId;
+  // Snapshot nama barang saat admin cancel — disuplai backend supaya UI
+  // tidak harus lookup ke tabel products. Null kalau produk sudah dihapus.
+  final String? namaBarang;
   final int qty;
   final String reason;
 
   CancelledItem({
     required this.productId,
+    this.namaBarang,
     required this.qty,
     required this.reason,
   });
@@ -176,8 +180,15 @@ class CancelledItem {
   factory CancelledItem.fromJson(Map<String, dynamic> json) {
     return CancelledItem(
       productId: json['product_id'] ?? '',
+      namaBarang: json['nama_barang'] as String?,
       qty: json['qty'] ?? 0,
       reason: json['reason'] ?? '',
     );
+  }
+
+  /// Tampilan human-readable — pakai snapshot nama kalau ada, fallback ke id.
+  String get displayLabel {
+    if (namaBarang != null && namaBarang!.isNotEmpty) return namaBarang!;
+    return 'Produk $productId';
   }
 }

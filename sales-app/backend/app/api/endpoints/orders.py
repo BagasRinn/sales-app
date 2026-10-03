@@ -1132,32 +1132,44 @@ def cancel_order_items(
     cancelled = (order.cancelled_items or []).copy()
 
     for entry in payload.items:
-        # Release stok_booking untuk item ini
+        # Lock OrderItem row supaya delta qty atomic vs concurrent reads
         item = db.query(OrderItem).filter(
             OrderItem.order_id == order_id,
             OrderItem.product_id == entry.product_id,
-        ).first()
-        if item:
-            product = db.query(Product).filter(
-                Product.id == entry.product_id
-            ).with_for_update().first()
-            if product:
-                old_booking = product.stok_booking or 0
-                product.stok_booking = max(0, old_booking - entry.qty)
-                log_stock_change(
-                    db=db,
-                    product_id=entry.product_id,
-                    sumber="ITEM_CANCEL",
-                    field_terdampak="stok_booking",
-                    delta=-entry.qty,
-                    nilai_sebelum=old_booking,
-                    nilai_sesudah=product.stok_booking,
-                    actor_id=UUID(current_user["user_id"]),
-                    order_id=order.id,
-                )
+        ).with_for_update().first()
+        # Lookup produk sekali: dipakai untuk nama_barang + release stok_booking.
+        product = db.query(Product).filter(
+            Product.id == entry.product_id
+        ).with_for_update().first()
+        if product:
+            old_booking = product.stok_booking or 0
+            product.stok_booking = max(0, old_booking - entry.qty)
+            log_stock_change(
+                db=db,
+                product_id=entry.product_id,
+                sumber="ITEM_CANCEL",
+                field_terdampak="stok_booking",
+                delta=-entry.qty,
+                nilai_sebelum=old_booking,
+                nilai_sesudah=product.stok_booking,
+                actor_id=UUID(current_user["user_id"]),
+                order_id=order.id,
+            )
+
+        # Hapus atau kurangi OrderItem supaya total_amount otomatis exclude
+        # barang yang dibatalkan. Partial cancel → kurangi qty; full cancel → hapus row.
+        if item is not None:
+            if entry.qty >= item.qty:
+                db.delete(item)
+            else:
+                item.qty = item.qty - entry.qty
 
         cancelled.append({
             "product_id": entry.product_id,
+            # Simpan nama_barang supaya UI tidak perlu lookup ulang. Kalau
+            # produk sudah dihapus dari tabel products, nama_barang jadi null
+            # dan UI fallback ke "Produk {product_id}".
+            "nama_barang": product.nama_barang if product else None,
             "qty": entry.qty,
             "reason": entry.reason.strip(),
         })
@@ -1166,4 +1178,4 @@ def cancel_order_items(
     db.commit()
     db.refresh(order)
 
-    return _serialize_order(order, db)
+    return _build_order_response(order)

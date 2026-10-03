@@ -229,6 +229,9 @@ class CancelItemsRequest(BaseModel):
 
 class CancelledItemResponse(BaseModel):
     product_id: str
+    # Snapshot nama barang saat cancel — supaya UI tidak harus lookup ulang ke
+    # tabel products. Null kalau produk sudah dihapus setelah cancel.
+    nama_barang: Optional[str] = None
     qty: int
     reason: str
 

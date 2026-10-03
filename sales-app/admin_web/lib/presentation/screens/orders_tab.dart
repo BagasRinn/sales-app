@@ -1043,7 +1043,7 @@ class _OrderCardState extends State<_OrderCard> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Produk ${ci.productId} × ${ci.qty}',
+                                '${ci.displayLabel} × ${ci.qty}',
                                 style: const TextStyle(
                                   decoration: TextDecoration.lineThrough,
                                   color: AppColors.textMuted,

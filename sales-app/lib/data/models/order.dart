@@ -196,11 +196,15 @@ class Order {
 
 class CancelledItem {
   final String productId;
+  // Snapshot nama barang saat admin cancel — disuplai backend supaya UI
+  // tidak harus lookup ke tabel products.
+  final String? namaBarang;
   final int qty;
   final String reason;
 
   CancelledItem({
     required this.productId,
+    this.namaBarang,
     required this.qty,
     required this.reason,
   });
@@ -208,8 +212,14 @@ class CancelledItem {
   factory CancelledItem.fromJson(Map<String, dynamic> json) {
     return CancelledItem(
       productId: json['product_id'] as String? ?? '',
+      namaBarang: json['nama_barang'] as String?,
       qty: json['qty'] as int? ?? 0,
       reason: json['reason'] as String? ?? '',
     );
+  }
+
+  String get displayLabel {
+    if (namaBarang != null && namaBarang!.isNotEmpty) return namaBarang!;
+    return 'Produk $productId';
   }
 }
