@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from uuid import UUID
 from typing import List, Optional
 from datetime import datetime
@@ -250,6 +250,7 @@ class OrderResponse(BaseModel):
     total_discount: Optional[int] = None
     order_type: str = 'REGULER'
     cancelled_items: Optional[List[CancelledItemResponse]] = None
+    reject_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -297,6 +298,11 @@ class OrderListWithItemsResponse(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+
+class OrderReject(BaseModel):
+    """Body untuk POST /orders/{order_id}/reject — admin bisa kasih alasan penolakan."""
+    reject_reason: Optional[str] = Field(None, max_length=500)
 
 
 # ==================== CUSTOMERS ====================
@@ -384,37 +390,72 @@ class ImportLogResponse(BaseModel):
 
 class CustomerSubmissionCreate(BaseModel):
     """Payload dari mobile saat sales submit pengajuan customer baru.
-    sales_id otomatis dari token, tidak perlu di payload."""
+    sales_id otomatis dari token, tidak perlu di payload.
+
+    Semua field wajib diisi oleh sales (kecuali key_account_ref_id).
+    tipe_pembayaran wajib dipilih — KREDIT harus disertai jangka_kredit & batas_kredit.
+    """
     # Section 1: Identitas
     nama_langganan: str = Field(..., min_length=1, max_length=200)
     nomor_id_ktp: Optional[str] = Field(None, max_length=50)
     alamat_ktp: Optional[str] = None
-    nama_kontak_pemilik: Optional[str] = Field(None, max_length=200)
-    telpon_hp: Optional[str] = Field(None, max_length=50)
-    alamat_kirim: Optional[str] = None
-    propinsi: Optional[str] = Field(None, max_length=100)
-    kecamatan: Optional[str] = Field(None, max_length=100)
-    kota: Optional[str] = Field(None, max_length=100)
-    kelurahan: Optional[str] = Field(None, max_length=100)
+    nama_kontak_pemilik: str = Field(..., min_length=1, max_length=200)
+    telpon_hp: str = Field(..., min_length=1, max_length=50)
+    alamat_kirim: str = Field(..., min_length=1)
+    propinsi: str = Field(..., min_length=1, max_length=100)
+    kecamatan: str = Field(..., min_length=1, max_length=100)
+    kota: str = Field(..., min_length=1, max_length=100)
+    kelurahan: str = Field(..., min_length=1, max_length=100)
     area_route: Optional[str] = Field(None, max_length=100)
-    tipe_langganan: Optional[str] = Field(None, max_length=50)
+    tipe_langganan: str = Field(..., min_length=1, max_length=50)
     # Section 2: Tipe Pembayaran
-    tipe_pembayaran: Optional[str] = Field(None, max_length=20)
+    tipe_pembayaran: str = Field(..., min_length=1, max_length=20)
     nama_pasar: Optional[str] = Field(None, max_length=200)
-    jangka_kredit_hari: Optional[int] = None
+    jangka_kredit_hari: Optional[int] = Field(
+        None,
+        description="Wajib diisi jika tipe_pembayaran=KREDIT. Jumlah hari plazo."
+    )
     # Section 3: Batas Kredit
-    batas_kredit_rupiah: Optional[int] = None
+    batas_kredit_rupiah: Optional[int] = Field(
+        None,
+        description="Wajib diisi jika tipe_pembayaran=KREDIT. Batas kredit dalam IDR."
+    )
     # Section 4: Channel
-    channel_kategori: Optional[str] = Field(None, max_length=50)
+    channel_kategori: str = Field(..., min_length=1, max_length=50)
     # Section 5: Salesman
-    key_account_ref_id: Optional[str] = Field(None, max_length=50)
+    key_account_ref_id: Optional[str] = Field(None, max_length=50)  # satu-satunya field opsional
     cluster_langganan: Optional[str] = Field(None, max_length=100)
-    kode_salesman: Optional[str] = Field(None, max_length=50)
-    nama_salesman: Optional[str] = Field(None, max_length=200)
-    siklus_kunjungan: Optional[str] = Field(None, max_length=100)
-    hari_kunjungan: Optional[str] = Field(None, max_length=50)
+    kode_salesman: str = Field(..., min_length=1, max_length=50)
+    nama_salesman: str = Field(..., min_length=1, max_length=200)
+    siklus_kunjungan: str = Field(..., min_length=1, max_length=100)
+    hari_kunjungan: str = Field(..., min_length=1, max_length=50)
     # Flag: kalau True, customer langsung dibuat saat submit (untuk flow "bareng order").
     bareng_order: bool = Field(default=False)
+
+    @field_validator('tipe_pembayaran')
+    @classmethod
+    def validate_tipe_pembayaran(cls, v: str) -> str:
+        if v not in ('TUNAI', 'KREDIT'):
+            raise ValueError("tipe_pembayaran harus 'TUNAI' atau 'KREDIT'")
+        return v
+
+    @field_validator('jangka_kredit_hari', 'batas_kredit_rupiah')
+    @classmethod
+    def validate_kredit_fields(cls, v, info):
+        return v
+
+    @model_validator(mode='after')
+    def validate_kredit_required_if_kredit(self):
+        if self.tipe_pembayaran == 'KREDIT':
+            if self.jangka_kredit_hari is None or self.jangka_kredit_hari <= 0:
+                raise ValueError(
+                    "jangka_kredit_hari wajib diisi dan harus > 0 jika tipe_pembayaran=KREDIT"
+                )
+            if self.batas_kredit_rupiah is None or self.batas_kredit_rupiah <= 0:
+                raise ValueError(
+                    "batas_kredit_rupiah wajib diisi dan harus > 0 jika tipe_pembayaran=KREDIT"
+                )
+        return self
 
 
 class CustomerSubmissionApprove(BaseModel):

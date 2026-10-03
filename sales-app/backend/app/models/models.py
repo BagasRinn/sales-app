@@ -72,6 +72,8 @@ class Order(Base):
     # Item yang dibatalkan oleh admin (bukan dihapus, tapi dicoret). Format:
     # [{"product_id": "...", "qty": 2, "reason": "Barang gudang rusak"}]
     cancelled_items = Column(JSON, nullable=True)
+    # Alasan penolakan order oleh admin — sales bisa lihat di mobile.
+    reject_reason = Column(Text, nullable=True)
 
     __table_args__ = (
         Index("ix_orders_status", "status"),

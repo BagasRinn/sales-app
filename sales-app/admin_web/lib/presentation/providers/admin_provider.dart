@@ -702,10 +702,10 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> rejectOrder(String orderId) async {
+  Future<bool> rejectOrder(String orderId, {String? rejectReason}) async {
     _setLoading(true, 'Menolak pesanan...');
     try {
-      await _repo.rejectOrder(orderId);
+      await _repo.rejectOrder(orderId, rejectReason: rejectReason);
       await loadAll();
       return true;
     } catch (e) {

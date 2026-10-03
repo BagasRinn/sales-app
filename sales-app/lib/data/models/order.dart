@@ -94,9 +94,14 @@ class Order {
   final String? storeContact;
   final String? storeAddress;
 
-  /// Tipe order: 'REGULER' atau '4P'. Diset saat create order, dipakai buat
-  /// display di detail screen + validasi backend (item harus cocok dgn tipe).
+  /// Tipe order: 'REGULER' atau '4P'.
   final String orderType;
+
+  /// Item yang dibatalkan oleh admin beserta alasannya.
+  final List<CancelledItem> cancelledItems;
+
+  /// Alasan penolakan order oleh admin.
+  final String? rejectReason;
 
   Order({
     required this.id,
@@ -112,6 +117,7 @@ class Order {
     this.storeAddress,
     this.orderType = 'REGULER',
     this.cancelledItems = const [],
+    this.rejectReason,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -137,6 +143,7 @@ class Order {
               .map((e) => CancelledItem.fromJson(e as Map<String, dynamic>))
               .toList()
           : const [],
+      rejectReason: json['reject_reason'] as String?,
     );
   }
 
@@ -180,9 +187,6 @@ class Order {
     if (list == null) return 0;
     return list.fold(0, (a, b) => a + b.nominalDiskon);
   }
-
-  /// Item yang dibatalkan oleh admin beserta alasannya.
-  final List<CancelledItem> cancelledItems;
 }
 
 class CancelledItem {

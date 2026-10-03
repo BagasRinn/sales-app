@@ -11,6 +11,7 @@ class Order {
   final String? storeContact;
   final String? storeAddress;
   final List<CancelledItem> cancelledItems;
+  final String? rejectReason;
 
   Order({
     required this.id,
@@ -25,6 +26,7 @@ class Order {
     this.storeContact,
     this.storeAddress,
     this.cancelledItems = const [],
+    this.rejectReason,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -44,6 +46,7 @@ class Order {
               ?.map((e) => CancelledItem.fromJson(e))
               .toList() ??
           [],
+      rejectReason: json['reject_reason'] as String?,
     );
   }
 

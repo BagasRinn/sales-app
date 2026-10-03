@@ -52,6 +52,8 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "alamat_kirim": submission.alamat_kirim,
         "propinsi": submission.propinsi,
         "kecamatan": submission.kecamatan,
+        "kota": submission.kota,
+        "kelurahan": submission.kelurahan,
         "area_route": submission.area_route,
         "tipe_langganan": submission.tipe_langganan,
         "tipe_pembayaran": submission.tipe_pembayaran,
@@ -64,6 +66,7 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "kode_salesman": submission.kode_salesman,
         "nama_salesman": submission.nama_salesman,
         "siklus_kunjungan": submission.siklus_kunjungan,
+        "hari_kunjungan": submission.hari_kunjungan,
     }
 
 

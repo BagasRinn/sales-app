@@ -112,8 +112,12 @@ class AdminRepository {
     await _api.post('/orders/$orderId/approve');
   }
 
-  Future<void> rejectOrder(String orderId) async {
-    await _api.post('/orders/$orderId/reject');
+  Future<void> rejectOrder(String orderId, {String? rejectReason}) async {
+    final body = <String, dynamic>{};
+    if (rejectReason != null && rejectReason.isNotEmpty) {
+      body['reject_reason'] = rejectReason;
+    }
+    await _api.post('/orders/$orderId/reject', body: body);
   }
 
   /// Update diskon per item — admin only, hanya untuk pesanan PENDING.

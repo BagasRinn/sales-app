@@ -15,6 +15,7 @@ from app.schemas.schemas import (
     OrderListWithItemsResponse,
     OrderDiscountUpdate,
     CancelItemsRequest,
+    OrderReject,
 )
 from app.core.security import require_admin, require_manager, require_auth, CurrentUser
 from app.services.stock_logger import log_stock_change
@@ -144,6 +145,7 @@ def _build_order_response(order: Order) -> dict:
         "total_discount": int(total_discount),
         "order_type": order.order_type or 'REGULER',
         "cancelled_items": order.cancelled_items,
+        "reject_reason": order.reject_reason,
     }
 
 
@@ -1023,6 +1025,7 @@ def approve_order(
 @router.post("/{order_id}/reject")
 def reject_order(
     order_id: UUID,
+    payload: OrderReject,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ):
@@ -1065,6 +1068,7 @@ def reject_order(
             )
 
     order.status = "REJECTED"
+    order.reject_reason = payload.reject_reason
     db.commit()
 
     return {

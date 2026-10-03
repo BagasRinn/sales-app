@@ -544,12 +544,14 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   }
 
   Future<void> _rejectOrder(String orderId) async {
+    final reasonController = TextEditingController();
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 400),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -564,12 +566,22 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
                 ),
                 const SizedBox(height: 20),
-                const Text('Tolak Pesanan?', style: AppTextStyles.headlineSmall),
+                const Text('Tolak Pesanan', style: AppTextStyles.headlineSmall),
                 const SizedBox(height: 8),
                 const Text(
-                  'Stok booking akan dikembalikan, stok sistem tidak berubah.',
+                  'Stok booking akan dikembalikan. Alasan opsional — akan ditampilkan ke sales.',
                   style: AppTextStyles.bodyMedium,
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Alasan penolakan (opsional)',
+                    hintText: 'Contoh: Data tidak valid, duplikat order, dll.',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -601,7 +613,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
     if (confirm == true && mounted) {
       final provider = context.read<AdminProvider>();
-      final success = await provider.rejectOrder(orderId);
+      final reason = reasonController.text.trim();
+      final success = await provider.rejectOrder(
+        orderId,
+        rejectReason: reason.isEmpty ? null : reason,
+      );
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(

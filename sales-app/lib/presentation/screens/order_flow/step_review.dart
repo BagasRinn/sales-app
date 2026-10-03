@@ -138,26 +138,6 @@ class _StepReviewState extends State<StepReview> {
                         ),
                       ),
                     ),
-                    InkWell(
-                      onTap: () => _showAddLineSheet(context),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.library_add,
-                                size: 16, color: AppColors.primaryLight),
-                            const SizedBox(width: 6),
-                            Text(
-                              '+ Tambah Line',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.primaryLight,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -235,27 +215,6 @@ class _StepReviewState extends State<StepReview> {
           ),
         ),
       ],
-    );
-  }
-
-  void _showAddLineSheet(BuildContext context) {
-    final draft = context.read<DraftOrderProvider>();
-    final products = context.read<ProductProvider>().products;
-    final productMap = {for (final p in products) p.id: p};
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => _AddLineSheet(
-        products: products,
-        productMap: productMap,
-        onAdd: (productId, qty, disc) {
-          draft.addLine(productId, qty: qty, discount: disc);
-        },
-      ),
     );
   }
 
@@ -568,6 +527,8 @@ class _LineRowState extends State<_LineRow> {
                       onSelected: (value) {
                         if (value == 'delete') {
                           draft.removeLine(widget.line.id);
+                        } else if (value == 'promo_gratis') {
+                          _showPromoGratisDialog(context, widget.product?.namaBarang ?? widget.line.productId);
                         }
                       },
                       itemBuilder: (context) => [
@@ -578,6 +539,16 @@ class _LineRowState extends State<_LineRow> {
                               Icon(Icons.delete_outline, size: 16, color: AppColors.error),
                               SizedBox(width: 8),
                               Text('Hapus line', style: TextStyle(color: AppColors.error)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'promo_gratis',
+                          child: Row(
+                            children: [
+                              Icon(Icons.card_giftcard, size: 16, color: AppColors.success),
+                              SizedBox(width: 8),
+                              Text('Promo Barang Gratis', style: TextStyle(color: AppColors.success)),
                             ],
                           ),
                         ),
@@ -709,6 +680,65 @@ class _LineRowState extends State<_LineRow> {
       style: AppTextStyles.bodySmall.copyWith(
         color: AppColors.success,
         fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  void _showPromoGratisDialog(BuildContext context, String productName) {
+    final draft = context.read<DraftOrderProvider>();
+    final qtyController = TextEditingController(text: '1');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Promo Barang Gratis'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Produk: $productName',
+              style: AppTextStyles.bodyMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Item duplikat akan mendapat diskon 100% (GRATIS).',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: qtyController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Jumlah gratis (qty)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final qty = int.tryParse(qtyController.text) ?? 0;
+              if (qty <= 0) return;
+              final newLine = draft.addLine(widget.line.productId, qty: qty);
+              draft.setDiscountLayer(
+                lineId: newLine.id,
+                layer: 1,
+                type: 'PERCENT',
+                value: 100,
+              );
+              Navigator.pop(ctx);
+            },
+            child: const Text('Tambah'),
+          ),
+        ],
       ),
     );
   }

@@ -129,26 +129,30 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             ? 'PASAR (${_namaPasarCtl.text.trim()})'
             : _tipeLanggananKategori;
 
+    // KREDIT: kirim jangka_kredit_hari + batas_kredit_rupiah.
+    // TUNAI: kirim null supaya tidak mengisi field (backend hanya accept null).
+    final isKredit = _tipePembayaran == 'KREDIT';
+
     return {
       // Section 1
       'nama_langganan': _namaCtl.text.trim(),
       'nomor_id_ktp': _orNull(_ktpCtl.text),
       'alamat_ktp': _orNull(_alamatKtpCtl.text),
-      'nama_kontak_pemilik': _orNull(_kontakCtl.text),
-      'telpon_hp': _orNull(_telponCtl.text),
-      'alamat_kirim': _orNull(_alamatKirimCtl.text),
-      'propinsi': _orNull(_propinsiCtl.text),
-      'kecamatan': _orNull(_kecamatanCtl.text),
-      'kota': _orNull(_kotaCtl.text),
-      'kelurahan': _orNull(_kelurahanCtl.text),
+      'nama_kontak_pemilik': _kontakCtl.text.trim(),
+      'telpon_hp': _telponCtl.text.trim(),
+      'alamat_kirim': _alamatKirimCtl.text.trim(),
+      'propinsi': _propinsiCtl.text.trim(),
+      'kecamatan': _kecamatanCtl.text.trim(),
+      'kota': _kotaCtl.text.trim(),
+      'kelurahan': _kelurahanCtl.text.trim(),
       'area_route': _orNull(_areaCtl.text),
       'tipe_langganan': tipeLangganan,
       // Section 2
       'tipe_pembayaran': _tipePembayaran,
       'nama_pasar': _orNull(_namaPasarCtl.text),
-      'jangka_kredit_hari': 14, // Fixed 14 hari
+      'jangka_kredit_hari': isKredit ? 14 : null,
       // Section 3
-      'batas_kredit_rupiah': parseIntOrNull(_batasKreditCtl.text),
+      'batas_kredit_rupiah': isKredit ? parseIntOrNull(_batasKreditCtl.text) : null,
       // Section 4
       'channel_kategori': _channelKategori,
       // Section 5
@@ -172,15 +176,68 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   }
 
   Future<void> _submit() async {
+    // === Validasi ===
     if (_namaCtl.text.trim().isEmpty) {
       _snack('Nama langganan wajib diisi');
       return;
     }
-
+    if (_kontakCtl.text.trim().isEmpty) {
+      _snack('Nama kontak/pemilik wajib diisi');
+      return;
+    }
+    if (_telponCtl.text.trim().isEmpty) {
+      _snack('Telpon/HP wajib diisi');
+      return;
+    }
+    if (_alamatKirimCtl.text.trim().isEmpty) {
+      _snack('Alamat kirim wajib diisi');
+      return;
+    }
+    if (_propinsiCtl.text.trim().isEmpty) {
+      _snack('Propinsi wajib diisi');
+      return;
+    }
+    if (_kecamatanCtl.text.trim().isEmpty) {
+      _snack('Kecamatan wajib diisi');
+      return;
+    }
+    if (_kotaCtl.text.trim().isEmpty) {
+      _snack('Kota wajib diisi');
+      return;
+    }
+    if (_kelurahanCtl.text.trim().isEmpty) {
+      _snack('Kelurahan wajib diisi');
+      return;
+    }
+    if (_tipeLanggananKategori == null) {
+      _snack('Tipe langganan (Pasar/Non Pasar) wajib dipilih');
+      return;
+    }
     if (_tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isEmpty) {
       _snack('Nama Pasar wajib diisi');
       return;
     }
+    if (_tipePembayaran == null) {
+      _snack('Tipe pembayaran (Tunai/Kredit) wajib dipilih');
+      return;
+    }
+    if (_channelKategori == null) {
+      _snack('Channel/kategori wajib dipilih');
+      return;
+    }
+    if (_siklusKunjungan == null) {
+      _snack('Siklus kunjungan wajib dipilih');
+      return;
+    }
+    if (_hariKunjungan == null) {
+      _snack('Hari kunjungan wajib dipilih');
+      return;
+    }
+    if (_tipePembayaran == 'KREDIT' && _batasKreditCtl.text.trim().isEmpty) {
+      _snack('Batas kredit wajib diisi untuk pembayaran Kredit');
+      return;
+    }
+    // === End validasi ===
 
     final repo = context.read<CustomerRepository>();
     final scaffold = ScaffoldMessenger.of(context);
@@ -408,46 +465,61 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
             selected: _tipePembayaran,
             onSelected: (v) => setState(() => _tipePembayaran = v),
           ),
-          const SizedBox(height: 8),
-          // Jangka kredit fixed 14 hari — label saja, bukan input.
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.cardSurface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.borderLight),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'Jangka Kredit (Hari): ',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
+          // Jangka kredit — hanya tampil jika KREDIT
+          if (_tipePembayaran == 'KREDIT') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.cardSurface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'Jangka Kredit (Hari): ',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
-                Text(
-                  '14 Hari',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                  Text(
+                    '14 Hari',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
+          if (_tipePembayaran == null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Pilih tipe pembayaran di atas untuk melihat detail kredit.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           // ============================================================
-          // Section 3: Batas Kredit
+          // Section 3: Batas Kredit — hanya tampil jika KREDIT
           // ============================================================
-          _SectionHeader(title: '3. Batas Kredit (Rp)'),
-          const SizedBox(height: 8),
-          _Field(
-            label: 'Batas Kredit',
-            controller: _batasKreditCtl,
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 20),
+          if (_tipePembayaran == 'KREDIT') ...[
+            _SectionHeader(title: '3. Batas Kredit (Rp)'),
+            const SizedBox(height: 8),
+            _Field(
+              label: 'Batas Kredit *',
+              controller: _batasKreditCtl,
+              keyboardType: TextInputType.number,
+              required: true,
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // ============================================================
           // Section 4: Channel / Kategori Langganan
