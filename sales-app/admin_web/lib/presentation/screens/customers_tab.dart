@@ -169,13 +169,14 @@ class _CustomersTabState extends State<CustomersTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final avail = constraints.maxWidth;
-        // Kode fixed, Nama flex, Alamat flex, Aksi fixed
+        // Fixed: Kode, Kode Area, Aksi. Flex: Nama Toko, Alamat.
         const kodeW = 110.0;
+        const kodeAreaW = 100.0;
         const aksiW = 120.0;
-        final remaining = avail - kodeW - aksiW;
+        final remaining = avail - kodeW - kodeAreaW - aksiW;
         final namaW = remaining * 0.4;
         final alamatW = remaining * 0.6;
-        final colWidths = [kodeW, namaW, alamatW, aksiW];
+        final colWidths = [kodeW, namaW, kodeAreaW, alamatW, aksiW];
         final totalW = avail;
 
         return Column(
@@ -214,7 +215,7 @@ class _CustomersTabState extends State<CustomersTab> {
   }
 
   Widget _buildHeader(List<double> colWidths, double totalW) {
-    const labels = ['KODE', 'NAMA TOKO', 'ALAMAT', 'AKSI'];
+    const labels = ['KODE', 'NAMA TOKO', 'KODE AREA', 'ALAMAT', 'AKSI'];
     return SizedBox(
       width: totalW,
       child: Container(
@@ -266,11 +267,18 @@ class _CustomersTabState extends State<CustomersTab> {
             width: colWidths[2],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.alamat ?? '-', style: AppTextStyles.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(c.kodeArea ?? '-', style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
             ),
           ),
           SizedBox(
             width: colWidths[3],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(c.alamat ?? '-', style: AppTextStyles.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[4],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(
