@@ -16,7 +16,7 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAMA ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
+EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
 
 
 SUPPLIERS_4P = [
@@ -101,7 +101,7 @@ def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, good: An
     if not sku or not str(sku).strip():
         return "Kolom 'CCODE' kosong. Wajib diisi dengan kode produk unik."
     if not nama_produk or not str(nama_produk).strip():
-        return "Kolom 'NAMA ITEM' kosong. Wajib diisi dengan nama produk."
+        return "Kolom 'NAME ITEM' kosong. Wajib diisi dengan nama produk."
     if harga is not None:
         try:
             int(harga)
@@ -168,7 +168,7 @@ def sync_products_from_excel(
 
     for row_num, row in enumerate(raw_rows, start=2):
         sku = str(row.get("CCODE") or "").strip()
-        nama_produk = str(row.get("NAMA ITEM") or "").strip()
+        nama_produk = str(row.get("NAME ITEM") or "").strip()
         harga_raw = row.get("FIX")
         good_raw = row.get("GOOD")
         kategori = str(row.get("KATEGORI") or "").strip() or None
