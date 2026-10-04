@@ -23,9 +23,14 @@ class User(Base):
 
     orders = relationship("Order", back_populates="sales")
     # Penugasan outlet: 1 sales bisa pegang banyak customer.
-    # ON DELETE CASCADE di CustomerAssignment.sales_id auto-remove saat sales di-delete.
+    # `foreign_keys` pakai string reference karena User didefinisikan sebelum
+    # CustomerAssignment. Tanpa ini SQLAlchemy tidak bisa auto-detect join
+    # condition (ada 2 FK ke users: sales_id + assigned_by).
     customer_assignments = relationship(
-        "CustomerAssignment", back_populates="sales", cascade="all, delete-orphan"
+        "CustomerAssignment",
+        back_populates="sales",
+        cascade="all, delete-orphan",
+        foreign_keys="CustomerAssignment.sales_id",
     )
 
 
