@@ -98,7 +98,12 @@ class CustomerAssignment(Base):
     )
 
     customer = relationship("Customer", back_populates="assignments")
-    sales = relationship("User", back_populates="customer_assignments")
+    # `foreign_keys` wajib karena tabel ini punya 2 FK ke users
+    # (sales_id + assigned_by). Tanpa ini SQLAlchemy tidak bisa auto-detect
+    # join condition untuk relationship User.customer_assignments.
+    sales = relationship(
+        "User", back_populates="customer_assignments", foreign_keys=[sales_id]
+    )
 
 
 class Order(Base):
