@@ -8,7 +8,7 @@ from typing import List, Optional
 import logging
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer
+from app.models.models import Order, OrderItem, Product, Customer, CustomerAssignment
 from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
@@ -32,6 +32,41 @@ def _get_customer(customer_id, db):
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    return customer
+
+
+def _validate_customer_for_sales(customer_id, sales_id, db):
+    """Validate customer accessibility untuk sales:
+    - 404 kalau customer tidak ada
+    - 200 (return customer) kalau customer UNASSIGNED (0 row di customer_assignments)
+      — backward-compat: customer tanpa assignment visible to all sales
+    - 403 kalau customer di-assign ke sales lain tapi bukan ke sales ini
+    - 200 kalau customer di-assign ke sales ini
+
+    Dipakai hanya oleh sales-role. Admin/manager pakai _get_customer biasa.
+    """
+    customer = _get_customer(customer_id, db)
+    has_any_assignment = (
+        db.query(CustomerAssignment)
+        .filter(CustomerAssignment.customer_id == customer.id)
+        .first()
+    ) is not None
+    if not has_any_assignment:
+        # Unassigned = visible to all sales, no further check needed
+        return customer
+    mine = (
+        db.query(CustomerAssignment)
+        .filter(
+            CustomerAssignment.customer_id == customer.id,
+            CustomerAssignment.sales_id == sales_id,
+        )
+        .first()
+    ) is not None
+    if not mine:
+        raise HTTPException(
+            status_code=403,
+            detail="Customer tidak di-assign ke sales ini",
+        )
     return customer
 
 
@@ -319,7 +354,12 @@ def create_order(
         )
 
     sales_id = UUID(current_user["user_id"])
-    customer = _get_customer(order_req.customer_id, db)
+    # Validasi customer: SALES harus di-assign (atau customer unassigned);
+    # admin/manager bypass via _get_customer biasa.
+    if current_user["role"] == "SALES":
+        customer = _validate_customer_for_sales(order_req.customer_id, sales_id, db)
+    else:
+        customer = _get_customer(order_req.customer_id, db)
 
     # Validasi ringan dulu: produk ada + tipe cocok dengan order_type. Cek stok
     # aktual dilakukan di _book_items() setelah Order+OrderItems ditambah, supaya
@@ -576,7 +616,10 @@ def update_draft_order(
         .all()
     )
 
-    customer = _get_customer(order_update.customer_id, db)
+    if current_user["role"] == "SALES":
+        customer = _validate_customer_for_sales(order_update.customer_id, sales_id, db)
+    else:
+        customer = _get_customer(order_update.customer_id, db)
 
     # Validasi setiap item.product.order_type cocok dengan new_order_type.
     for item in order_update.items:
@@ -722,6 +765,10 @@ def delete_draft_order(
 
     # DRAFT sekarang punya booking (di-book saat create_order). Lepaskan dulu
     # sebelum delete supaya stok kembali ke tersedia.
+    # Catatan: StokLog rows yang reference order ini (BACKFILL, EDIT, DRAFT_DELETE)
+    # akan kena ON DELETE SET NULL (lihat migration
+    # migrate_2026_10_03_stok_log_order_id_set_null.py) — order_id jadi NULL,
+    # tapi audit trail (product_id, sumber, delta) tetap tersimpan.
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     sales_id = UUID(current_user["user_id"])
     for item in items:

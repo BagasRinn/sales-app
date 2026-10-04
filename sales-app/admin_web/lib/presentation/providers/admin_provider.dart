@@ -8,6 +8,7 @@ import '../../data/models/sync_result.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/customer_submission.dart';
 import '../../data/models/sales_user.dart';
+import '../../data/models/sales_assignment.dart';
 import '../../data/models/user_item.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
@@ -225,9 +226,9 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadPendingOrders() async {
+  Future<void> loadPendingOrders({String? search}) async {
     try {
-      _pendingOrders = await _repo.getPendingOrders();
+      _pendingOrders = await _repo.getPendingOrders(search: search);
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -474,6 +475,32 @@ class AdminProvider extends ChangeNotifier {
 
   Future<List<SalesUser>> listSalesUsers() async {
     return await _repo.listSalesUsers();
+  }
+
+  /// Assignment management untuk tab "Penugasan Sales".
+  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+    return await _repo.getCustomerAssignments(customerId);
+  }
+
+  Future<List<SalesAssignment>> putCustomerAssignments(
+    String customerId,
+    List<String> salesIds,
+  ) async {
+    _setLoading(true, 'Menyimpan penugasan...');
+    try {
+      final result = await _repo.putCustomerAssignments(customerId, salesIds);
+      _setLoading(false);
+      return result;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<List<Customer>> getSalesCustomers(String salesId) async {
+    return await _repo.getSalesCustomers(salesId);
   }
 
   Future<bool> updateCustomer(String customerId, Map<String, dynamic> body) async {

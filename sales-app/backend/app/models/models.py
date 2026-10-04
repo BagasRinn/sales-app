@@ -22,6 +22,11 @@ class User(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     orders = relationship("Order", back_populates="sales")
+    # Penugasan outlet: 1 sales bisa pegang banyak customer.
+    # ON DELETE CASCADE di CustomerAssignment.sales_id auto-remove saat sales di-delete.
+    customer_assignments = relationship(
+        "CustomerAssignment", back_populates="sales", cascade="all, delete-orphan"
+    )
 
 
 class Product(Base):
@@ -58,6 +63,42 @@ class Customer(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     orders = relationship("Order", back_populates="customer")
+    # Penugasan outlet: 1 customer bisa ditugaskan ke banyak sales.
+    assignments = relationship(
+        "CustomerAssignment", back_populates="customer", cascade="all, delete-orphan"
+    )
+
+
+class CustomerAssignment(Base):
+    """Junction table untuk many-to-many sales ↔ customer.
+    sales_id mengarah ke user dengan role=SALES; customer_id mengarah ke customer master.
+    Customer dengan 0 row di sini = 'unassigned' = visible ke semua sales (backward-compat).
+    """
+    __tablename__ = "customer_assignments"
+
+    customer_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    sales_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    assigned_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # Audit: siapa manager yang assign. ON DELETE SET NULL supaya assignment
+    # tidak hilang kalau manager user di-delete.
+    assigned_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    customer = relationship("Customer", back_populates="assignments")
+    sales = relationship("User", back_populates="customer_assignments")
 
 
 class Order(Base):

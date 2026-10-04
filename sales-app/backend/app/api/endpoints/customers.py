@@ -1,4 +1,4 @@
-"""Customer API endpoints — CRUD, Excel import."""
+"""Customer API endpoints — CRUD, Excel import, sales assignment."""
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.models.database import get_db
-from app.models.models import Customer, ImportLog
+from app.models.models import Customer, CustomerAssignment, ImportLog, User
 from app.schemas.schemas import (
+    CustomerAssignmentsPut,
     CustomerCreate,
-    CustomerUpdate,
     CustomerResponse,
+    CustomerUpdate,
+    SalesAssignmentItem,
     SyncResultResponse,
 )
 from app.core.security import require_manager, require_auth, CurrentUser
@@ -23,6 +25,26 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 
 def _exclude_deleted(query):
     return query.filter(Customer.deleted_at.is_(None))
+
+
+def _list_assignments(customer_id: UUID, db: Session) -> List[SalesAssignmentItem]:
+    """Return semua sales assigned ke customer_id, dengan display fields."""
+    rows = (
+        db.query(CustomerAssignment, User)
+        .join(User, User.id == CustomerAssignment.sales_id)
+        .filter(CustomerAssignment.customer_id == customer_id)
+        .order_by(User.username)
+        .all()
+    )
+    return [
+        SalesAssignmentItem(
+            sales_id=ca.sales_id,
+            sales_username=user.username if user else None,
+            sales_nama=user.nama if user else None,
+            assigned_at=ca.assigned_at,
+        )
+        for ca, user in rows
+    ]
 
 
 @router.get("", response_model=List[CustomerResponse])
@@ -60,10 +82,34 @@ def list_my_customers(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Semua customer — semua sales dapat melihat dan membuat order untuk semua toko.
-    Limit dinaikkan ke 1000 supaya mobile (yang belum paginai) ngga kehilangan
-    customer di luar 100 pertama urut nama_toko. Search cocokkan nama/kode/alamat."""
-    query = _exclude_deleted(db.query(Customer))
+    """Customer yang visible untuk current user.
+
+    - ADMIN/MANAGER: semua active customer.
+    - SALES: customer yang di-assign ke mereka + customer yang 0 assignment
+      (unassigned = visible to all sales, backward-compat untuk gradual rollout).
+    """
+    if current_user["role"] in ("ADMIN", "MANAGER"):
+        query = _exclude_deleted(db.query(Customer))
+    else:
+        me = UUID(current_user["user_id"])
+        # Subquery: customer yang assigned ke saya
+        mine_subq = (
+            db.query(CustomerAssignment.customer_id)
+            .filter(CustomerAssignment.sales_id == me)
+            .subquery()
+        )
+        # Subquery: semua customer yang punya assignment (untuk NOT IN)
+        all_assigned_subq = db.query(CustomerAssignment.customer_id).subquery()
+        query = (
+            _exclude_deleted(db.query(Customer))
+            .filter(
+                or_(
+                    Customer.id.in_(mine_subq),
+                    ~Customer.id.in_(all_assigned_subq),
+                )
+            )
+        )
+
     if search:
         pattern = f"%{search}%"
         query = query.filter(
@@ -141,6 +187,72 @@ def get_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
     return customer
+
+
+@router.get("/{customer_id}/assignments", response_model=List[SalesAssignmentItem])
+def list_customer_assignments(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """List sales yang di-assign ke customer ini. Manager + admin only."""
+    customer = _exclude_deleted(
+        db.query(Customer).filter(Customer.id == customer_id)
+    ).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    return _list_assignments(customer_id, db)
+
+
+@router.put("/{customer_id}/assignments", response_model=List[SalesAssignmentItem])
+def put_customer_assignments(
+    customer_id: UUID,
+    body: CustomerAssignmentsPut,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_manager),
+):
+    """Replace full set of sales assigned to a customer. Idempotent.
+    Empty sales_ids = unassign everyone (customer jadi visible-to-all).
+    """
+    customer = _exclude_deleted(
+        db.query(Customer).filter(Customer.id == customer_id)
+    ).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+
+    # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted.
+    if body.sales_ids:
+        valid = (
+            db.query(User)
+            .filter(
+                User.id.in_(body.sales_ids),
+                User.role == "SALES",
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .all()
+        )
+        found = {str(u.id) for u in valid}
+        invalid = [str(sid) for sid in body.sales_ids if str(sid) not in found]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sales ID tidak valid: {invalid}",
+            )
+
+    # Idempotent replace: delete semua assignment lama, insert yang baru.
+    db.query(CustomerAssignment).filter(
+        CustomerAssignment.customer_id == customer_id
+    ).delete()
+    actor_id = UUID(current_user["user_id"])
+    for sales_id in body.sales_ids:
+        db.add(CustomerAssignment(
+            customer_id=customer_id,
+            sales_id=sales_id,
+            assigned_by=actor_id,
+        ))
+    db.commit()
+    return _list_assignments(customer_id, db)
 
 
 @router.delete("/{customer_id}", status_code=204)

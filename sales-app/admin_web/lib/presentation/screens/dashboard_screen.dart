@@ -18,6 +18,7 @@ import 'customer_submissions_tab.dart';
 import 'customers_tab.dart';
 import 'users_tab.dart';
 import 'performance_tab.dart';
+import 'penugasan_sales_tab.dart';
 import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
 
@@ -131,6 +132,7 @@ class _DashboardContentState extends State<_DashboardContent>
     if (_isManager) {
       items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
       items.add(const _NavItem(icon: Icons.trending_up_outlined, selectedIcon: Icons.trending_up, label: 'Performa Sales'));
+      items.add(const _NavItem(icon: Icons.assignment_ind_outlined, selectedIcon: Icons.assignment_ind, label: 'Penugasan Sales'));
       items.add(const _NavItem(icon: Icons.campaign_outlined, selectedIcon: Icons.campaign, label: 'Bulletin'));
     }
     return items;
@@ -147,6 +149,7 @@ class _DashboardContentState extends State<_DashboardContent>
     ];
     if (_isManager) titles.add('User');
     if (_isManager) titles.add('Performa Sales');
+    if (_isManager) titles.add('Penugasan Sales');
     if (_isManager) titles.add('Bulletin');
     return titles;
   }
@@ -282,6 +285,9 @@ class _DashboardContentState extends State<_DashboardContent>
         if (_isManager) return const PerformanceTab();
         break;
       case 8:
+        if (_isManager) return const PenugasanSalesTab();
+        break;
+      case 9:
         if (_isManager) return const BulletinsTab();
         break;
     }

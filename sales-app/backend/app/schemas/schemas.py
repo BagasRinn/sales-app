@@ -334,6 +334,19 @@ class CustomerUpdate(BaseModel):
     alamat: Optional[str] = None
 
 
+class CustomerAssignmentsPut(BaseModel):
+    """PUT body: replace the full set of sales assigned to a customer.
+    Empty list = unassign everyone (backward-compat visible-to-all state)."""
+    sales_ids: List[UUID] = Field(default_factory=list)
+
+
+class SalesAssignmentItem(BaseModel):
+    sales_id: UUID
+    sales_username: Optional[str] = None
+    sales_nama: Optional[str] = None
+    assigned_at: datetime
+
+
 class CustomerResponse(CustomerBase):
     id: UUID
     created_at: datetime

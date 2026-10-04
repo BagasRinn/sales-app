@@ -7,6 +7,7 @@ import '../models/sync_result.dart';
 import '../models/customer.dart';
 import '../models/customer_submission.dart';
 import '../models/sales_user.dart';
+import '../models/sales_assignment.dart';
 import '../models/user_item.dart';
 import '../models/sales_performance.dart';
 import '../models/sales_target.dart';
@@ -374,6 +375,34 @@ class AdminRepository {
   Future<List<SalesUser>> listSalesUsers() async {
     final data = await _api.get('/users/sales');
     return (data as List).map((e) => SalesUser.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Assignment management — endpoint baru untuk tab "Penugasan Sales".
+  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+    final data = await _api.get('/customers/$customerId/assignments');
+    return (data as List)
+        .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<SalesAssignment>> putCustomerAssignments(
+    String customerId,
+    List<String> salesIds,
+  ) async {
+    final data = await _api.put(
+      '/customers/$customerId/assignments',
+      body: {'sales_ids': salesIds},
+    );
+    return (data as List)
+        .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<Customer>> getSalesCustomers(String salesId) async {
+    final data = await _api.get('/sales/$salesId/customers');
+    return (data as List)
+        .map((e) => Customer.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<UserItem>> getUsers({String? role, String? search}) async {

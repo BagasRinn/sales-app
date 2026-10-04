@@ -26,3 +26,4 @@ coba telusurin bagaimana selama ini cara kerja import toko, karena terasa lambat
 Fitur pencarian di halaman Pesanan di bagian web admin
 outlet persales/pengelompokan jadi sales yang ditugaskan aja yang bisa akses, nanti ini ngatur penugasannya ada di dashboard manager
 
+Penyesuaian Format Kolom Excel baru

@@ -80,14 +80,21 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     final provider = context.read<AdminProvider>();
     final range = _resolveDateRange();
     if (resetPage) _currentPage = 1;
+    final search = _searchController.text.trim().isEmpty
+        ? null
+        : _searchController.text.trim();
     provider.loadAllOrders(
       status: _filterStatus,
-      search: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+      search: search,
       dateFrom: range.from,
       dateTo: range.to,
       skip: (_currentPage - 1) * _pageSize,
       limit: _pageSize,
     );
+    // Juga refresh tab "Menunggu Persetujuan" dengan search yang sama —
+    // kalau tidak, list pending tidak ikut ter-filter waktu user ngetik di
+    // search box (provider hanya re-fetch semua pesanan, bukan pending).
+    provider.loadPendingOrders(search: search);
   }
 
   void _onSearchChanged(String value) {
