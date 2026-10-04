@@ -399,6 +399,19 @@ class _OrderDetailContent extends StatelessWidget {
                                   color: AppColors.textMuted,
                                 ),
                               ),
+                              // Harga + subtotal (kalau backend menyuplai).
+                              // Null untuk legacy data yang dicancel sebelum
+                              // field ini ada.
+                              if (order.cancelledItems[i].hargaSatuan != null &&
+                                  order.cancelledItems[i].subtotal != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${currency.format(order.cancelledItems[i].hargaSatuan)} × ${order.cancelledItems[i].qty} = ${currency.format(order.cancelledItems[i].subtotal)}',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 4),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
