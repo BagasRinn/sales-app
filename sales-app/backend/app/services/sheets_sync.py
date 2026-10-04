@@ -16,7 +16,7 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["code", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "\\"]
+EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAMA ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
 
 
 SUPPLIERS_4P = [
@@ -53,15 +53,18 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
     ws = wb.active
 
-    # Find header row by scanning for "code" in first 10 rows
+    # Find header row by scanning for "ccode" in first 10 rows
     header_row_idx = None
     for i, row in enumerate(ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
-        if any(str(cell).strip().lower() == "code" for cell in row if cell is not None):
+        if any(str(cell).strip().lower() == "ccode" for cell in row if cell is not None):
             header_row_idx = i
             break
 
     if header_row_idx is None:
-        raise ValueError("Kolom 'code' tidak ditemukan di 10 baris pertama. Pastikan header ada di baris 1-10.")
+        raise ValueError(
+            "Kolom 'CCODE' tidak ditemukan di 10 baris pertama. "
+            "Pastikan header ada di baris 1-10."
+        )
 
     # Read headers from found row
     headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[header_row_idx]]
@@ -89,16 +92,16 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     logger.info(f"[DEBUG] Headers found at row {header_row_idx}: {headers}")
     logger.info(f"[DEBUG] Column mapping: {col_map}")
     if rows:
-        logger.info(f"[DEBUG] First row: code={rows[0].get('code')} good={rows[0].get('GOOD')}")
+        logger.info(f"[DEBUG] First row: ccode={rows[0].get('CCODE')} good={rows[0].get('GOOD')}")
 
     return rows
 
 
 def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, good: Any) -> str | None:
     if not sku or not str(sku).strip():
-        return "Kolom 'code' kosong. Wajib diisi dengan kode produk unik."
+        return "Kolom 'CCODE' kosong. Wajib diisi dengan kode produk unik."
     if not nama_produk or not str(nama_produk).strip():
-        return "Kolom 'NAME ITEM' kosong. Wajib diisi dengan nama produk."
+        return "Kolom 'NAMA ITEM' kosong. Wajib diisi dengan nama produk."
     if harga is not None:
         try:
             int(harga)
@@ -164,14 +167,14 @@ def sync_products_from_excel(
     total_rows = len(raw_rows)
 
     for row_num, row in enumerate(raw_rows, start=2):
-        sku = str(row.get("code") or "").strip()
-        nama_produk = str(row.get("NAME ITEM") or "").strip()
+        sku = str(row.get("CCODE") or "").strip()
+        nama_produk = str(row.get("NAMA ITEM") or "").strip()
         harga_raw = row.get("FIX")
         good_raw = row.get("GOOD")
         kategori = str(row.get("KATEGORI") or "").strip() or None
         satuan = str(row.get("OUM") or "").strip() or None
 
-        nama_supplier = str(row.get("\\") or "").strip() or None
+        nama_supplier = str(row.get("LAST SUPPLIER") or "").strip() or None
 
         error = _validate_row(row_num, sku, nama_produk, harga_raw, good_raw)
         if error:
