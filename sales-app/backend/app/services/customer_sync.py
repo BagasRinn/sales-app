@@ -78,12 +78,21 @@ def _normalize(value: Any) -> str:
     return str(value).strip().lower()
 
 
-def _validate_row(row_num: int, nama_toko: Any, alamat: Any) -> str | None:
-    """Validate required fields. Return error string or None."""
+def _validate_row(row_num: int, nama_toko: Any, alamat: Any, kode: Any) -> str | None:
+    """Validate required fields. Return error string or None.
+
+    Identity customer = kode. nama_toko dan alamat tidak harus unik per file —
+    banyak toko boleh share nama/alamat selama kode beda. Kode nullable, kalau
+    null/empty row di-skip dari validasi kode (akan jadi insert baru tanpa
+    konflik).
+    """
     if not nama_toko or not str(nama_toko).strip():
         return "Kolom 'nama_toko' kosong. Wajib diisi dengan nama toko."
     if not alamat or not str(alamat).strip():
         return "Kolom 'alamat' kosong. Wajib diisi dengan alamat toko."
+    # kode kosong/None → OK (insert baru). kode ada → harus string non-empty.
+    if kode is not None and str(kode).strip() == "":
+        return "Kolom 'kode' kosong. Isi dengan kode toko atau kosongkan (jangan spasi saja)."
     return None
 
 
@@ -97,48 +106,60 @@ def _str_or_none(value: Any) -> str | None:
 def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int, int]:
     """
     Bulk upsert customers using PostgreSQL ON CONFLICT DO UPDATE.
-    Identity key: (lower(nama_toko), lower(alamat)).
+    Identity key: `kode` (bukan kombinasi nama_toko+alamat). Customer dengan
+    kode NULL selalu di-insert baru (partial unique index excludes NULLs).
+
     Returns (inserted_count, updated_count).
-    Requires ix_customers_nama_alamat_lower index to exist.
+    Requires ix_customers_kode_unique partial index to exist.
+
+    Flow:
+    - Bulk SELECT existing customers by kode (only those with non-null kode)
+    - For each row: if existing by kode AND deleted → re-activate via separate
+      UPDATE; if existing by kode AND active → ON CONFLICT will be no-op
+      (kode+values identical), but we still trigger the DO UPDATE clause to
+      refresh nama_toko/alamat/kode_area in case those changed
+    - Rows with NULL kode → always insert (no conflict possible)
+    - ON CONFLICT (kode) WHERE kode IS NOT NULL → re-activates deleted row
     """
     if not rows:
         return 0, 0
 
-    # Build normalized key -> id mapping from existing rows
-    keys_needed = [(r["nama_norm"], r["alamat_norm"]) for r in rows]
-    lower_nama = [k[0] for k in keys_needed]
-    lower_alamat = [k[1] for k in keys_needed]
-
-    # Bulk SELECT all matching customers (active + deleted) by normalized (nama_toko, alamat)
-    # Kita handle reaktivasi: jika ada deleted customer dengan key yang sama,
-    # UPDATE deleted_at=NULL-nya, bukan insert baru.
+    # Lookup existing customers by kode (filter to non-null)
+    # Optimized: query only the kodes we have (in the import file), bukan
+    # semua customer. Range/substring query untuk hemat memory kalau DB besar.
+    kodes_in_file = sorted({
+        r["kode"] for r in rows
+        if r.get("kode") is not None and str(r["kode"]).strip()
+    })
     from sqlalchemy import and_, or_
-    existing_rows = (
-        db.query(Customer.id, Customer.nama_toko, Customer.alamat, Customer.deleted_at)
-        .filter(
-            and_(
-                Customer.nama_toko.isnot(None),
-                Customer.alamat.isnot(None),
-            )
+    existing_rows = []
+    if kodes_in_file:
+        existing_rows = (
+            db.query(Customer.id, Customer.kode, Customer.deleted_at)
+            .filter(Customer.kode.in_(kodes_in_file))
+            .all()
         )
-        .all()
-    )
-    # Build lookup: (lower_nama, lower_alamat) -> (customer_id, is_deleted)
-    existing_map: Dict[tuple, tuple] = {}
+    # Build lookup: kode -> (customer_id, is_deleted)
+    existing_map: Dict[str, tuple] = {}
     for row in existing_rows:
-        key = (_normalize(row.nama_toko), _normalize(row.alamat))
-        existing_map[key] = (str(row.id), row.deleted_at is not None)
+        if row.kode:
+            existing_map[row.kode] = (str(row.id), row.deleted_at is not None)
 
-    to_insert = []   # new customers (no existing at all)
-    to_update = []  # re-activate deleted customers (found but deleted_at IS NOT NULL)
+    to_insert = []   # new customers (no existing at all, or NULL kode)
+    to_update = []  # re-activate deleted customers (found by kode but deleted_at IS NOT NULL)
 
     for r in rows:
-        key = (r["nama_norm"], r["alamat_norm"])
-        if key in existing_map:
-            cid, is_deleted = existing_map[key]
+        kode = r.get("kode")
+        # NULL/empty kode → always insert (no conflict possible)
+        if not kode:
+            to_insert.append(r)
+            continue
+        if kode in existing_map:
+            cid, is_deleted = existing_map[kode]
             if is_deleted:
                 to_update.append((cid, r))
-            # else: active customer exists — ON CONFLICT DO UPDATE handles it
+            # else: active customer exists — ON CONFLICT DO UPDATE will refresh
+            # other fields (nama_toko/alamat/kode_area) below.
         else:
             to_insert.append(r)
 
@@ -155,8 +176,11 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
             }
             for r in to_insert
         ])
+        # ON CONFLICT (kode): kalau kode sudah ada (active atau NULL di unique
+        # index ini tidak match), update field lain. NULL-kode rows tidak akan
+        # conflict karena partial index excludes NULL.
         stmt = stmt.on_conflict_do_update(
-            index_elements=["id"],
+            index_elements=["kode"],
             set_={
                 "kode": stmt.excluded.kode,
                 "nama_toko": stmt.excluded.nama_toko,
@@ -237,37 +261,37 @@ def sync_customers_from_excel(
     for idx, row in enumerate(raw_rows, start=1):
         nama_toko_raw = row.get("nama_toko")
         alamat_raw = row.get("alamat")
+        kode_raw = row.get("kode")
 
-        error = _validate_row(idx, nama_toko_raw, alamat_raw)
+        error = _validate_row(idx, nama_toko_raw, alamat_raw, kode_raw)
         if error:
-            validation_errors.append({"row": idx, "sku": str(nama_toko_raw or ""), "reason": error})
+            validation_errors.append({"row": idx, "sku": str(kode_raw or nama_toko_raw or ""), "reason": error})
             skipped += 1
             continue
 
-        nama_norm = _normalize(nama_toko_raw)
-        alamat_norm = _normalize(alamat_raw)
-        key = (nama_norm, alamat_norm)
-
-        if key in seen_keys:
+        # Identity customer = kode (bukan kombinasi nama_toko + alamat).
+        # Beberapa toko boleh punya nama/alamat sama selama kode beda.
+        # Kode null/empty di-skip dari unique check (akan jadi insert baru).
+        kode_norm = _normalize(kode_raw)
+        if kode_norm and kode_norm in seen_keys:
             validation_errors.append({
                 "row": idx,
-                "sku": str(nama_toko_raw),
+                "sku": str(kode_raw),
                 "reason": (
-                    f"Kombinasi nama_toko '{nama_toko_raw}' + alamat '{alamat_raw}' "
-                    "muncul lebih dari sekali di file ini. Setiap pasangan (nama, alamat) harus unik."
+                    f"Kode '{kode_raw}' muncul lebih dari sekali di file ini. "
+                    "Setiap kode harus unik."
                 ),
             })
             skipped += 1
             continue
-        seen_keys.add(key)
+        if kode_norm:
+            seen_keys.add(kode_norm)
 
         validated_rows.append({
             "kode": _str_or_none(row.get("kode")),
             "nama_toko": str(nama_toko_raw).strip(),
             "alamat": _str_or_none(alamat_raw),
             "kode_area": _str_or_none(row.get("kode_area")),
-            "nama_norm": nama_norm,
-            "alamat_norm": alamat_norm,
         })
 
     inserted = updated = 0
