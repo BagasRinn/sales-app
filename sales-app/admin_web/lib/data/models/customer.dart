@@ -3,6 +3,8 @@ class Customer {
   final String? kode;
   final String namaToko;
   final String? alamat;
+  /// Pengelompokan customer per area/rayon. Optional — null untuk legacy.
+  final String? kodeArea;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -12,6 +14,7 @@ class Customer {
     required this.namaToko,
     this.kode,
     this.alamat,
+    this.kodeArea,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -23,6 +26,9 @@ class Customer {
       kode: json['kode'] as String?,
       namaToko: json['nama_toko'] as String,
       alamat: json['alamat'] as String?,
+      // Toleran: backend bisa kirim 'kode_area' (snake_case) atau 'kodeArea'
+      // (camelCase, kalau pernah pakai serializer lain).
+      kodeArea: (json['kode_area'] as String?) ?? (json['kodeArea'] as String?),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       deletedAt: json['deleted_at'] != null
@@ -37,6 +43,7 @@ class Customer {
       'kode': kode,
       'nama_toko': namaToko,
       'alamat': alamat,
+      'kode_area': kodeArea,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'deleted_at': deletedAt?.toIso8601String(),

@@ -9,7 +9,9 @@ import '../../data/models/user_item.dart';
 import '../providers/admin_provider.dart';
 
 /// Tab "Penugasan Sales" — manager/admin only.
-/// 2 sub-view: "Per Customer" (default) dan "Per Sales".
+/// 3 sub-view: "Per Area" (default), "Per Customer", "Per Sales".
+/// Area-based assignment adalah default — manager tinggal pilih area → pilih sales
+/// → semua customer di area itu otomatis ke-cover. Customer-level jadi override.
 class PenugasanSalesTab extends StatefulWidget {
   const PenugasanSalesTab({super.key});
 
@@ -18,14 +20,14 @@ class PenugasanSalesTab extends StatefulWidget {
 }
 
 class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
-  int _subView = 0; // 0 = Per Customer, 1 = Per Sales
+  int _subView = 0; // 0=Per Area, 1=Per Customer, 2=Per Sales
   final _searchController = TextEditingController();
   String _search = '';
 
-  // Cache loaded customers + sales users (satu fetch per session)
   List<Customer> _allCustomers = [];
   List<SalesUser> _allSalesUsers = [];
-  List<UserItem> _allUsers = []; // for "Per Sales" — all SALES-role users
+  List<UserItem> _allUsers = [];
+  List<Map<String, dynamic>> _areaAssignments = [];
   bool _loading = true;
   int? _customerTotal;
 
@@ -46,7 +48,6 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
     setState(() => _loading = true);
     final provider = context.read<AdminProvider>();
     try {
-      // Load customer list + count + sales user list
       final results = await Future.wait([
         provider.adminRepository.getCustomers(
           search: null, page: 0, limit: 500,
@@ -54,6 +55,7 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
         provider.adminRepository.getCustomerCount(),
         provider.listSalesUsers(),
         provider.adminRepository.getUsers(role: 'SALES'),
+        provider.getAreaAssignments(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -61,6 +63,7 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
         _customerTotal = results[1] as int;
         _allSalesUsers = results[2] as List<SalesUser>;
         _allUsers = results[3] as List<UserItem>;
+        _areaAssignments = results[4] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } catch (_) {
@@ -75,8 +78,18 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
     return _allCustomers.where((c) {
       return c.namaToko.toLowerCase().contains(s) ||
           (c.kode?.toLowerCase().contains(s) ?? false) ||
-          (c.alamat?.toLowerCase().contains(s) ?? false);
+          (c.alamat?.toLowerCase().contains(s) ?? false) ||
+          (c.kodeArea?.toLowerCase().contains(s) ?? false);
     }).toList();
+  }
+
+  List<UserItem> get _filteredSales {
+    if (_search.isEmpty) return _allUsers;
+    final s = _search.toLowerCase();
+    return _allUsers.where((u) =>
+      u.username.toLowerCase().contains(s) ||
+      (u.nama?.toLowerCase().contains(s) ?? false)
+    ).toList();
   }
 
   @override
@@ -87,7 +100,6 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
 
     return Column(
       children: [
-        // Sub-view segmented control + search bar
         Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           color: AppColors.surface,
@@ -95,8 +107,9 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
             children: [
               SegmentedButton<int>(
                 segments: const [
-                  ButtonSegment(value: 0, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
-                  ButtonSegment(value: 1, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
+                  ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
+                  ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
+                  ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
                 ],
                 selected: {_subView},
                 onSelectionChanged: (s) => setState(() => _subView = s.first),
@@ -108,8 +121,10 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                   onChanged: (v) => setState(() => _search = v),
                   decoration: InputDecoration(
                     hintText: _subView == 0
-                        ? 'Cari customer...'
-                        : 'Cari sales...',
+                        ? 'Cari area...'
+                        : _subView == 1
+                            ? 'Cari customer...'
+                            : 'Cari sales...',
                     prefixIcon: const Icon(Icons.search, size: 18),
                     isDense: true,
                     filled: true,
@@ -132,22 +147,241 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
         const Divider(height: 1),
         Expanded(
           child: _subView == 0
-              ? _PerCustomerView(
-                  customers: _filteredCustomers,
-                  totalCount: _customerTotal ?? _allCustomers.length,
+              ? _PerAreaView(
+                  areas: _filteredAreaRows(),
+                  onChanged: _loadAll,
                   allSalesUsers: _allSalesUsers,
-                  onChanged: _loadAll,
                 )
-              : _PerSalesView(
-                  salesUsers: _allUsers
-                      .where((u) => _search.isEmpty ||
-                          u.username.toLowerCase().contains(_search.toLowerCase()) ||
-                          (u.nama?.toLowerCase().contains(_search.toLowerCase()) ?? false))
-                      .toList(),
-                  onChanged: _loadAll,
-                ),
+              : _subView == 1
+                  ? _PerCustomerView(
+                      customers: _filteredCustomers,
+                      totalCount: _customerTotal ?? _allCustomers.length,
+                      allSalesUsers: _allSalesUsers,
+                      onChanged: _loadAll,
+                    )
+                  : _PerSalesView(
+                      salesUsers: _filteredSales,
+                      onChanged: _loadAll,
+                    ),
         ),
       ],
+    );
+  }
+
+  /// Convert API response + filter by search.
+  List<_AreaRow> _filteredAreaRows() {
+    final s = _search.toLowerCase();
+    final rows = _areaAssignments
+        .map((m) => _AreaRow(
+              kodeArea: m['kode_area'] as String,
+              sales: ((m['sales'] as List?) ?? [])
+                  .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+                  .toList(),
+            ))
+        .toList();
+    if (s.isEmpty) return rows;
+    return rows.where((r) => r.kodeArea.toLowerCase().contains(s)).toList();
+  }
+}
+
+class _AreaRow {
+  final String kodeArea;
+  final List<SalesAssignment> sales;
+  _AreaRow({required this.kodeArea, required this.sales});
+}
+
+// ==================== Per Area sub-view ====================
+
+class _PerAreaView extends StatelessWidget {
+  final List<_AreaRow> areas;
+  final List<SalesUser> allSalesUsers;
+  final VoidCallback onChanged;
+
+  const _PerAreaView({
+    required this.areas,
+    required this.allSalesUsers,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (areas.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.map_outlined, size: 48, color: AppColors.textMuted),
+              const SizedBox(height: 12),
+              Text(
+                'Belum ada customer dengan kode_area. Import customer dengan kolom kode_area di Excel untuk memulai.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: areas.length + 1,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('${areas.length} area', style: AppTextStyles.bodySmall),
+          );
+        }
+        final a = areas[i - 1];
+        return _AreaAssignmentRow(
+          area: a,
+          allSalesUsers: allSalesUsers,
+          onChanged: onChanged,
+        );
+      },
+    );
+  }
+}
+
+class _AreaAssignmentRow extends StatefulWidget {
+  final _AreaRow area;
+  final List<SalesUser> allSalesUsers;
+  final VoidCallback onChanged;
+
+  const _AreaAssignmentRow({
+    required this.area,
+    required this.allSalesUsers,
+    required this.onChanged,
+  });
+
+  @override
+  State<_AreaAssignmentRow> createState() => _AreaAssignmentRowState();
+}
+
+class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
+  Future<void> _openEditor() async {
+    final selected = await showDialog<Set<String>>(
+      context: context,
+      builder: (_) => _MultiSelectSalesDialog(
+        title: 'Sales untuk area ${widget.area.kodeArea}',
+        subtitle: 'Sales yang ditugaskan akan cover semua customer di area ini.',
+        allSalesUsers: widget.allSalesUsers,
+        currentSelected: widget.area.sales.map((a) => a.salesId).toSet(),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    try {
+      await context.read<AdminProvider>().putAreaAssignment(
+        widget.area.kodeArea,
+        selected.toList(),
+      );
+      if (!mounted) return;
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Penugasan area ${widget.area.kodeArea} disimpan'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal: $e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAssignments = widget.area.sales.isNotEmpty;
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: _openEditor,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.borderLight),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.infoBg,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      widget.area.kodeArea,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.info, fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _openEditor,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Kelola'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (hasAssignments)
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: widget.area.sales
+                      .map((a) => _AssignmentChip(label: a.displayLabel))
+                      .toList(),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Text(
+                    'Belum di-assign (customer di area visible ke semua sales)',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textMuted, fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssignmentChip extends StatelessWidget {
+  final String label;
+  const _AssignmentChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.infoBg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.infoBorder),
+      ),
+      child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.info)),
     );
   }
 }
@@ -225,7 +459,6 @@ class _CustomerAssignmentRow extends StatefulWidget {
 class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
   List<SalesAssignment> _assignments = [];
   bool _loading = true;
-  bool _expanded = false;
 
   @override
   void initState() {
@@ -252,7 +485,9 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
     final selected = await showDialog<Set<String>>(
       context: context,
       builder: (_) => _MultiSelectSalesDialog(
-        customer: widget.customer,
+        title: 'Override sales untuk ${widget.customer.namaToko}',
+        subtitle:
+            'Override per-customer. Kosongkan semua = kembali ke coverage area (${widget.customer.kodeArea ?? "tanpa area"}).',
         allSalesUsers: widget.allSalesUsers,
         currentSelected: _assignments.map((a) => a.salesId).toSet(),
       ),
@@ -268,7 +503,7 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
       widget.onChanged();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Penugasan ${widget.customer.namaToko} disimpan'),
+          content: Text('Override ${widget.customer.namaToko} disimpan'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -282,13 +517,12 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
 
   @override
   Widget build(BuildContext context) {
-    final code = widget.customer.kode ?? '-';
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => setState(() => _expanded = !_expanded),
+        onTap: _openEditor,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -307,8 +541,10 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
                         Text(widget.customer.namaToko,
                             style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
-                        Text('$code • ${widget.customer.alamat ?? '-'}',
-                            style: AppTextStyles.bodySmall),
+                        Text(
+                          '${widget.customer.kode ?? '-'} • ${widget.customer.kodeArea ?? 'tanpa area'}',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                        ),
                       ],
                     ),
                   ),
@@ -316,93 +552,23 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
                   TextButton.icon(
                     onPressed: _openEditor,
                     icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Kelola'),
+                    label: const Text('Override'),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _assignments.isEmpty
-                    ? [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.borderLight),
-                          ),
-                          child: Text(
-                            'Belum di-assign (visible ke semua sales)',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textMuted, fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ]
-                    : _assignments.map((a) => _AssignmentChip(label: a.displayLabel)).toList(),
-              ),
-              if (_expanded) ...[
+              if (_assignments.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      _MetaChip(label: 'ID', value: widget.customer.id.substring(0, 8)),
-                      _MetaChip(label: 'Assignments', value: _assignments.length.toString()),
-                      if (_assignments.isNotEmpty)
-                        _MetaChip(
-                          label: 'Pertama',
-                          value: _assignments.first.assignedAt.toIso8601String().substring(0, 10),
-                        ),
-                    ],
-                  ),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _assignments
+                      .map((a) => _AssignmentChip(label: a.displayLabel))
+                      .toList(),
                 ),
               ],
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AssignmentChip extends StatelessWidget {
-  final String label;
-  const _AssignmentChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.infoBg,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.infoBorder),
-      ),
-      child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.info)),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final String label;
-  final String value;
-  const _MetaChip({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: AppTextStyles.bodySmall,
-        children: [
-          TextSpan(text: '$label: ', style: const TextStyle(color: AppColors.textMuted)),
-          TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
       ),
     );
   }
@@ -565,7 +731,7 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
                     : _customers == null || _customers!.isEmpty
                         ? Center(
                             child: Text(
-                              'Sales ini belum di-assign ke toko manapun',
+                              'Sales ini belum cover toko manapun',
                               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
                             ),
                           )
@@ -578,7 +744,7 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
                                 dense: true,
                                 leading: const Icon(Icons.store_outlined, size: 18),
                                 title: Text(c.namaToko),
-                                subtitle: Text(c.alamat ?? '-'),
+                                subtitle: Text('${c.kodeArea ?? "tanpa area"} • ${c.alamat ?? '-'}'),
                                 trailing: c.kode == null ? null : Text(c.kode!),
                               );
                             },
@@ -595,12 +761,14 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
 // ==================== Multi-select dialog ====================
 
 class _MultiSelectSalesDialog extends StatefulWidget {
-  final Customer customer;
+  final String title;
+  final String subtitle;
   final List<SalesUser> allSalesUsers;
   final Set<String> currentSelected;
 
   const _MultiSelectSalesDialog({
-    required this.customer,
+    required this.title,
+    required this.subtitle,
     required this.allSalesUsers,
     required this.currentSelected,
   });
@@ -631,13 +799,10 @@ class _MultiSelectSalesDialogState extends State<_MultiSelectSalesDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Sales untuk ${widget.customer.namaToko}',
-                  style: AppTextStyles.headlineSmall),
+              Text(widget.title, style: AppTextStyles.headlineSmall),
               const SizedBox(height: 4),
-              Text(
-                'Centang sales yang boleh order dari toko ini. Kosongkan semua = visible ke semua sales (backward-compat).',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
+              Text(widget.subtitle,
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
               const SizedBox(height: 12),
               const Divider(height: 1),
               Flexible(

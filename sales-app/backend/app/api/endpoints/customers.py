@@ -3,13 +3,21 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerAssignment, ImportLog, User
+from app.models.models import (
+    AreaAssignment,
+    Customer,
+    CustomerAssignment,
+    ImportLog,
+    User,
+)
 from app.schemas.schemas import (
+    AreaAssignmentListItem,
+    AreaAssignmentsPut,
     CustomerAssignmentsPut,
     CustomerCreate,
     CustomerResponse,
@@ -85,27 +93,54 @@ def list_my_customers(
     """Customer yang visible untuk current user.
 
     - ADMIN/MANAGER: semua active customer.
-    - SALES: customer yang di-assign ke mereka + customer yang 0 assignment
-      (unassigned = visible to all sales, backward-compat untuk gradual rollout).
+    - SALES: customer yang COCOK dengan salah satu dari (semua di-OR):
+        * `customer_assignments` punya row untuk sales ini (per-customer override)
+        * `area_assignments` punya row untuk sales ini DAN customer.kode_area
+          cocok dengan area_assignments.kode_area (default coverage by area)
+        * customer tanpa assignment dan customer.kode_area tanpa assignment
+          (unassigned = visible to all, backward-compat untuk gradual rollout)
     """
     if current_user["role"] in ("ADMIN", "MANAGER"):
         query = _exclude_deleted(db.query(Customer))
     else:
         me = UUID(current_user["user_id"])
-        # Subquery: customer yang assigned ke saya
+        # Subquery 1: customer yang punya assignment langsung ke saya
         mine_subq = (
             db.query(CustomerAssignment.customer_id)
             .filter(CustomerAssignment.sales_id == me)
             .subquery()
         )
-        # Subquery: semua customer yang punya assignment (untuk NOT IN)
-        all_assigned_subq = db.query(CustomerAssignment.customer_id).subquery()
+        # Subquery 2: kode_area yang saya cover
+        my_areas_subq = (
+            db.query(AreaAssignment.kode_area)
+            .filter(AreaAssignment.sales_id == me)
+            .subquery()
+        )
+        # Subquery 3: semua customer yang punya assignment apapun (untuk NOT IN)
+        all_customer_assigned = (
+            db.query(CustomerAssignment.customer_id).subquery()
+        )
+        # Subquery 4: semua kode_area yang punya assignment
+        all_assigned_areas = (
+            db.query(AreaAssignment.kode_area).subquery()
+        )
         query = (
             _exclude_deleted(db.query(Customer))
             .filter(
                 or_(
+                    # Saya di-assign langsung ke customer
                     Customer.id.in_(mine_subq),
-                    ~Customer.id.in_(all_assigned_subq),
+                    # Customer di area yang saya cover
+                    Customer.kode_area.in_(my_areas_subq),
+                    # Unassigned: customer tanpa assignment apapun
+                    # DAN customer.kode_area tanpa assignment apapun
+                    and_(
+                        ~Customer.id.in_(all_customer_assigned),
+                        or_(
+                            Customer.kode_area.is_(None),
+                            ~Customer.kode_area.in_(all_assigned_areas),
+                        ),
+                    ),
                 )
             )
         )
@@ -117,6 +152,7 @@ def list_my_customers(
                 Customer.nama_toko.ilike(pattern),
                 Customer.kode.ilike(pattern),
                 Customer.alamat.ilike(pattern),
+                Customer.kode_area.ilike(pattern),
             )
         )
     return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()

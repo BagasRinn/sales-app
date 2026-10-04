@@ -1,13 +1,24 @@
-"""Sales-centric endpoints — list customer assigned to a sales user."""
+"""Sales-centric endpoints — list customer assigned to a sales user, plus area assignments."""
 from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerAssignment, User
-from app.schemas.schemas import CustomerResponse
+from app.models.models import (
+    AreaAssignment,
+    Customer,
+    CustomerAssignment,
+    User,
+)
+from app.schemas.schemas import (
+    AreaAssignmentListItem,
+    AreaAssignmentsPut,
+    CustomerResponse,
+    SalesAssignmentItem,
+)
 from app.core.security import require_manager, CurrentUser
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
@@ -19,7 +30,7 @@ def list_sales_customers(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager),
 ):
-    """Semua customer yang di-assign ke sales ini (exclude soft-deleted).
+    """Semua customer yang visible untuk sales ini (hybrid: area + direct override).
     Manager + admin only — untuk tab 'Per Sales' di admin web."""
     user = db.query(User).filter(
         User.id == sales_id,
@@ -28,14 +39,158 @@ def list_sales_customers(
     if not user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
 
+    # Subquery: area yang di-cover sales ini
+    my_areas_subq = (
+        db.query(AreaAssignment.kode_area)
+        .filter(AreaAssignment.sales_id == sales_id)
+        .subquery()
+    )
+    # Subquery: customer yang di-assign langsung ke sales ini
+    my_direct_subq = (
+        db.query(CustomerAssignment.customer_id)
+        .filter(CustomerAssignment.sales_id == sales_id)
+        .subquery()
+    )
+
     rows = (
         db.query(Customer)
-        .join(CustomerAssignment, CustomerAssignment.customer_id == Customer.id)
         .filter(
-            CustomerAssignment.sales_id == sales_id,
             Customer.deleted_at.is_(None),
         )
-        .order_by(Customer.nama_toko)
+        .filter(
+            # Direct override ATAU area coverage. Exclude 'unassigned fallback'
+            # (kode_area null AND no direct) — itu bukan assignment spesifik.
+            (Customer.id.in_(my_direct_subq)) |
+            (Customer.kode_area.in_(my_areas_subq))
+        )
+        .order_by(Customer.kode_area, Customer.nama_toko)
         .all()
     )
     return rows
+
+
+# ==================== Area assignment endpoints ====================
+
+def _list_area_assignments(db: Session) -> List[AreaAssignmentListItem]:
+    """Return all distinct kode_area dengan sales yang di-assign.
+    Areas tanpa assignment TETAP di-include (sales=[]), supaya manager bisa
+    lihat area mana yang belum di-handle.
+    """
+    # Subquery: distinct kode_area dari customer (exclude null)
+    customer_areas_subq = (
+        db.query(Customer.kode_area)
+        .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
+        .distinct()
+        .subquery()
+    )
+    # LEFT JOIN ke area_assignments + User
+    rows = (
+        db.query(AreaAssignment, User)
+        .outerjoin(
+            User,
+            (User.id == AreaAssignment.sales_id) & (User.deleted_at.is_(None)),
+        )
+        .filter(AreaAssignment.kode_area.in_(customer_areas_subq))
+        .order_by(AreaAssignment.kode_area, User.username)
+        .all()
+    )
+    # Group by kode_area
+    grouped: dict[str, List[SalesAssignmentItem]] = {}
+    for ca, user in rows:
+        grouped.setdefault(ca.kode_area, []).append(
+            SalesAssignmentItem(
+                sales_id=ca.sales_id,
+                sales_username=user.username if user else None,
+                sales_nama=user.nama if user else None,
+                assigned_at=ca.assigned_at,
+            )
+        )
+    # Include area tanpa assignment
+    all_areas = [r[0] for r in db.query(customer_areas_subq.c.kode_area).all()]
+    return [
+        AreaAssignmentListItem(kode_area=area, sales=grouped.get(area, []))
+        for area in sorted(all_areas)
+    ]
+
+
+@router.get("/area-assignments", response_model=List[AreaAssignmentListItem])
+def list_area_assignments(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
+    Manager + admin only — untuk tab 'Penugasan Sales' sub-view 'Per Area'."""
+    return _list_area_assignments(db)
+
+
+@router.get("/area-assignments/{kode_area}", response_model=List[SalesAssignmentItem])
+def list_area_assignment_detail(
+    kode_area: str,
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager),
+):
+    """List sales yang di-assign ke kode_area tertentu."""
+    rows = (
+        db.query(AreaAssignment, User)
+        .outerjoin(
+            User,
+            (User.id == AreaAssignment.sales_id) & (User.deleted_at.is_(None)),
+        )
+        .filter(AreaAssignment.kode_area == kode_area)
+        .order_by(User.username)
+        .all()
+    )
+    return [
+        SalesAssignmentItem(
+            sales_id=ca.sales_id,
+            sales_username=user.username if user else None,
+            sales_nama=user.nama if user else None,
+            assigned_at=ca.assigned_at,
+        )
+        for ca, user in rows
+    ]
+
+
+@router.put("/area-assignments/{kode_area}", response_model=List[SalesAssignmentItem])
+def put_area_assignment(
+    kode_area: str,
+    body: AreaAssignmentsPut,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_manager),
+):
+    """Replace full set of sales assigned to kode_area. Idempotent.
+    Empty sales_ids = unassign semua sales dari area ini (customer di area
+    kembali ke 'unassigned' state, visible to all sales)."""
+    # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted
+    if body.sales_ids:
+        valid = (
+            db.query(User)
+            .filter(
+                User.id.in_(body.sales_ids),
+                User.role == "SALES",
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .all()
+        )
+        found = {str(u.id) for u in valid}
+        invalid = [str(sid) for sid in body.sales_ids if str(sid) not in found]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sales ID tidak valid: {invalid}",
+            )
+
+    # Idempotent replace
+    db.query(AreaAssignment).filter(
+        AreaAssignment.kode_area == kode_area
+    ).delete()
+    actor_id = UUID(current_user["user_id"])
+    for sales_id in body.sales_ids:
+        db.add(AreaAssignment(
+            kode_area=kode_area,
+            sales_id=sales_id,
+            assigned_by=actor_id,
+        ))
+    db.commit()
+    return list_area_assignment_detail(kode_area, db)

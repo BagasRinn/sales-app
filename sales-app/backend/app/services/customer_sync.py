@@ -24,7 +24,7 @@ except ImportError:
 
 from app.models.models import Customer, SyncValidationError, ImportLog
 
-EXCEL_COLUMNS = ["kode", "nama_toko", "alamat"]
+EXCEL_COLUMNS = ["kode", "nama_toko", "alamat", "kode_area"]
 
 
 def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
@@ -151,6 +151,7 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
                 "kode": r.get("kode"),
                 "nama_toko": r["nama_toko"],
                 "alamat": r["alamat"],
+                "kode_area": r.get("kode_area"),
             }
             for r in to_insert
         ])
@@ -160,6 +161,7 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
                 "kode": stmt.excluded.kode,
                 "nama_toko": stmt.excluded.nama_toko,
                 "alamat": stmt.excluded.alamat,
+                "kode_area": stmt.excluded.kode_area,
                 "deleted_at": None,
             },
         )
@@ -170,10 +172,13 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
         # Re-activate deleted customers by id
         for customer_id_str, r in to_update:
             kode_val = r.get("kode")
+            kode_area_val = r.get("kode_area")
             result = db.query(Customer).filter(Customer.id == UUID(customer_id_str)).with_for_update().first()
             if result:
                 if kode_val is not None:
                     result.kode = kode_val
+                if kode_area_val is not None:
+                    result.kode_area = kode_area_val
                 result.deleted_at = None
         logger.info(f"[SYNC] Re-activated {len(to_update)} deleted customers")
 
@@ -260,6 +265,7 @@ def sync_customers_from_excel(
             "kode": _str_or_none(row.get("kode")),
             "nama_toko": str(nama_toko_raw).strip(),
             "alamat": _str_or_none(alamat_raw),
+            "kode_area": _str_or_none(row.get("kode_area")),
             "nama_norm": nama_norm,
             "alamat_norm": alamat_norm,
         })

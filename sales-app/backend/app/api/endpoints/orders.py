@@ -8,7 +8,7 @@ from typing import List, Optional
 import logging
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, CustomerAssignment
+from app.models.models import Order, OrderItem, Product, Customer, CustomerAssignment, AreaAssignment
 from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
@@ -36,38 +36,77 @@ def _get_customer(customer_id, db):
 
 
 def _validate_customer_for_sales(customer_id, sales_id, db):
-    """Validate customer accessibility untuk sales:
+    """Validate customer accessibility untuk sales (hybrid: area + customer override):
     - 404 kalau customer tidak ada
-    - 200 (return customer) kalau customer UNASSIGNED (0 row di customer_assignments)
-      — backward-compat: customer tanpa assignment visible to all sales
-    - 403 kalau customer di-assign ke sales lain tapi bukan ke sales ini
-    - 200 kalau customer di-assign ke sales ini
+    - 200 (return customer) kalau salah satu cocok:
+        * customer di-assign langsung ke sales ini
+        * customer.kode_area di-assign ke sales ini (area coverage)
+        * customer tidak punya direct assignment DAN customer.kode_area
+          null/unassigned (unassigned = visible to all, backward-compat)
+    - 403 kalau customer di-assign ke sales lain (direct override priority)
 
-    Dipakai hanya oleh sales-role. Admin/manager pakai _get_customer biasa.
+    Logic yang sama dengan /customers/my — jadi konsistensi antara "customer
+    visible di list" dan "customer boleh di-order".
     """
     customer = _get_customer(customer_id, db)
-    has_any_assignment = (
+
+    has_direct_assignment = (
         db.query(CustomerAssignment)
         .filter(CustomerAssignment.customer_id == customer.id)
         .first()
     ) is not None
-    if not has_any_assignment:
-        # Unassigned = visible to all sales, no further check needed
-        return customer
-    mine = (
-        db.query(CustomerAssignment)
-        .filter(
-            CustomerAssignment.customer_id == customer.id,
-            CustomerAssignment.sales_id == sales_id,
-        )
-        .first()
-    ) is not None
-    if not mine:
+    is_assigned_to_other = False
+    if has_direct_assignment:
+        mine = (
+            db.query(CustomerAssignment)
+            .filter(
+                CustomerAssignment.customer_id == customer.id,
+                CustomerAssignment.sales_id == sales_id,
+            )
+            .first()
+        ) is not None
+        if mine:
+            return customer
+        # Direct assignment exists, tapi bukan untuk sales ini → 403
+        is_assigned_to_other = True
+    # Sampai sini: either no direct assignment, or direct assignment to others.
+
+    # Cek area coverage
+    if customer.kode_area:
+        my_area = (
+            db.query(AreaAssignment)
+            .filter(
+                AreaAssignment.kode_area == customer.kode_area,
+                AreaAssignment.sales_id == sales_id,
+            )
+            .first()
+        ) is not None
+        if my_area:
+            return customer
+        # Ada kode_area, bukan di area saya. Cek apakah area di-assign ke orang lain.
+        if is_assigned_to_other:
+            # Direct assignment ke orang lain, area juga ke orang lain → 403
+            raise HTTPException(
+                status_code=403,
+                detail="Customer tidak di-assign ke sales ini",
+            )
+        # Ada kode_area tapi tidak ada assignment sama sekali (backward compat
+        # untuk area baru). Tolak juga — sales belum di-assign.
+        # Sebenarnya untuk konsistensi dengan /customers/my, kalau area belum
+        # di-assign siapapun, customer harus visible. Tapi kalau ada explicit
+        # 'unassigned' state di area, kita tolak — biar sales tunjuk manager.
         raise HTTPException(
             status_code=403,
-            detail="Customer tidak di-assign ke sales ini",
+            detail="Area customer belum di-assign ke sales manapun. Hubungi manager.",
         )
-    return customer
+    # Tidak ada kode_area. Cek apakah ini unassigned fallback.
+    if not is_assigned_to_other:
+        # No direct, no area → unassigned, visible to all (backward-compat)
+        return customer
+    raise HTTPException(
+        status_code=403,
+        detail="Customer tidak di-assign ke sales ini",
+    )
 
 
 # ==================== 3-LAYER DISCOUNT HELPERS ====================

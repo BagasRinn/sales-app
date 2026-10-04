@@ -503,6 +503,32 @@ class AdminProvider extends ChangeNotifier {
     return await _repo.getSalesCustomers(salesId);
   }
 
+  /// Area-based assignment.
+  Future<List<Map<String, dynamic>>> getAreaAssignments() async {
+    return await _repo.getAreaAssignments();
+  }
+
+  Future<List<SalesAssignment>> getAreaAssignmentDetail(String kodeArea) async {
+    return await _repo.getAreaAssignmentDetail(kodeArea);
+  }
+
+  Future<List<SalesAssignment>> putAreaAssignment(
+    String kodeArea,
+    List<String> salesIds,
+  ) async {
+    _setLoading(true, 'Menyimpan penugasan area...');
+    try {
+      final result = await _repo.putAreaAssignment(kodeArea, salesIds);
+      _setLoading(false);
+      return result;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<bool> updateCustomer(String customerId, Map<String, dynamic> body) async {
     _setLoading(true, 'Menyimpan perubahan...');
     try {

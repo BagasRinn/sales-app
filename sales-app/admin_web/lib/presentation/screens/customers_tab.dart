@@ -386,6 +386,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
   late TextEditingController _kodeC;
   late TextEditingController _namaC;
   late TextEditingController _alamatC;
+  late TextEditingController _kodeAreaC;
 
   @override
   void initState() {
@@ -393,6 +394,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
     _kodeC = TextEditingController();
     _namaC = TextEditingController();
     _alamatC = TextEditingController();
+    _kodeAreaC = TextEditingController();
     _loadDetail();
   }
 
@@ -401,6 +403,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
     _kodeC.dispose();
     _namaC.dispose();
     _alamatC.dispose();
+    _kodeAreaC.dispose();
     super.dispose();
   }
 
@@ -417,6 +420,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
         _kodeC.text = c.kode ?? '';
         _namaC.text = c.namaToko;
         _alamatC.text = c.alamat ?? '';
+        _kodeAreaC.text = c.kodeArea ?? '';
         _loadingDetail = false;
       });
     } catch (e) {
@@ -444,6 +448,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
       'nama_toko': _namaC.text.trim(),
       if (_kodeC.text.trim().isNotEmpty) 'kode': _kodeC.text.trim(),
       'alamat': _alamatC.text.trim().isEmpty ? null : _alamatC.text.trim(),
+      if (_kodeAreaC.text.trim().isNotEmpty) 'kode_area': _kodeAreaC.text.trim(),
     };
     final ok = await provider.updateCustomer(_customer!.id, body);
     if (!mounted) return;
@@ -598,6 +603,12 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
             controller: _alamatC,
             hint: 'cth: Jl. Sudirman No. 12',
             maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          _Field(
+            label: 'Kode Area',
+            controller: _kodeAreaC,
+            hint: 'cth: MULIA2',
           ),
         ],
       ),

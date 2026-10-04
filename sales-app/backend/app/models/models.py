@@ -63,6 +63,11 @@ class Customer(Base):
     kode = Column(String(50), nullable=True, index=True)
     nama_toko = Column(String(200), nullable=False, index=True)
     alamat = Column(String(500), nullable=True)
+    # Pengelompokan customer per area/rayon. Default assignment sales pakai
+    # kolom ini — manager assign 1 sales ke "MULIA2" → semua customer dengan
+    # kode_area='MULIA2' otomatis dapat coverage. Optional (legacy customer
+    # tanpa kode_area = visible-to-all seperti area tanpa assignment).
+    kode_area = Column(String(50), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -108,6 +113,38 @@ class CustomerAssignment(Base):
     # join condition untuk relationship User.customer_assignments.
     sales = relationship(
         "User", back_populates="customer_assignments", foreign_keys=[sales_id]
+    )
+
+
+class AreaAssignment(Base):
+    """Sales coverage by area — default assignment unit.
+    Sales di-assign ke kode_area tertentu; semua customer dengan kode_area yang
+    sama otomatis visible (kecuali ada per-customer override di CustomerAssignment).
+
+    kode_area adalah VARCHAR (bukan FK ke tabel area) — fleksibel, area bisa
+    di-create on-the-fly via import excel atau manual edit.
+    """
+    __tablename__ = "area_assignments"
+
+    kode_area = Column(String(50), primary_key=True)
+    sales_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    assigned_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    assigned_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Lihat komentar di CustomerAssignment.sales untuk kenapa foreign_keys
+    # wajib di sini juga — assigned_by juga FK ke users.
+    sales = relationship(
+        "User", foreign_keys=[sales_id]
     )
 
 

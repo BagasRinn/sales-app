@@ -332,6 +332,7 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     nama_toko: Optional[str] = None
     alamat: Optional[str] = None
+    kode_area: Optional[str] = None
 
 
 class CustomerAssignmentsPut(BaseModel):
@@ -347,8 +348,23 @@ class SalesAssignmentItem(BaseModel):
     assigned_at: datetime
 
 
+class AreaAssignmentsPut(BaseModel):
+    """PUT body: replace full set of sales assigned to a kode_area.
+    Empty list = unassign semua sales dari area ini (customer di area
+    kembali visible-to-all)."""
+    sales_ids: List[UUID] = Field(default_factory=list)
+
+
+class AreaAssignmentListItem(BaseModel):
+    """Response untuk GET /area-assignments — list per-area dengan sales assigned."""
+    kode_area: str
+    sales: List[SalesAssignmentItem] = Field(default_factory=list)
+
+
 class CustomerResponse(CustomerBase):
     id: UUID
+    # Pengelompokan per area/rayon. Optional — legacy customer bisa null.
+    kode_area: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None

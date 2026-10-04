@@ -405,6 +405,32 @@ class AdminRepository {
         .toList();
   }
 
+  /// Area-based assignment — list area dengan sales yang di-assign.
+  Future<List<Map<String, dynamic>>> getAreaAssignments() async {
+    final data = await _api.get('/sales/area-assignments');
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<SalesAssignment>> getAreaAssignmentDetail(String kodeArea) async {
+    final data = await _api.get('/sales/area-assignments/$kodeArea');
+    return (data as List)
+        .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<SalesAssignment>> putAreaAssignment(
+    String kodeArea,
+    List<String> salesIds,
+  ) async {
+    final data = await _api.put(
+      '/sales/area-assignments/$kodeArea',
+      body: {'sales_ids': salesIds},
+    );
+    return (data as List)
+        .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<UserItem>> getUsers({String? role, String? search}) async {
     final params = <String, String>{};
     if (role != null && role.isNotEmpty) params['role'] = role;
