@@ -8,7 +8,15 @@ from typing import List, Optional
 import logging
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, CustomerAssignment, AreaAssignment
+from app.models.models import (
+    AreaAssignment,
+    Customer,
+    CustomerAssignment,
+    Order,
+    OrderItem,
+    Product,
+    User,
+)
 from app.schemas.schemas import (
     OrderCreate,
     OrderResponse,
@@ -1348,6 +1356,12 @@ def cancel_order_items(
             # dan UI fallback ke "Produk {product_id}".
             "nama_barang": product.nama_barang if product else None,
             "qty": entry.qty,
+            # Simpan harga_satuan + subtotal saat cancel — admin perlu lihat
+            # impact finansial dari item yang dibatalkan (mis. "barang rusak
+            # Rp 12.000"). Kalau product sudah dihapus, harga jadi 0 dan
+            # subtotal jadi 0.
+            "harga_satuan": product.harga if product else 0,
+            "subtotal": (product.harga or 0) * entry.qty,
             "reason": entry.reason.strip(),
         })
 

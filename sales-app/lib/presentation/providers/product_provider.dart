@@ -8,7 +8,11 @@ enum ProductStatusFilter { all, available, low, outOfStock }
 
 class ProductProvider extends ChangeNotifier {
   final ProductRepository _productRepo;
-  static const int _pageSize = 1000;
+  // Dinaikkan dari 1000 ke 3000 supaya mobile load semua product dalam
+  // 1 API call. Sebelumnya 1000 cukup untuk kebanyakan kasus, tapi dengan
+  // 2025+ product di DB, 3 batch = 3 request. Backend endpoint `list_products`
+  // accept limit apapun (tidak ada max), jadi aman.
+  static const int _pageSize = 3000;
 
   List<Product> _allProducts = [];
   bool _isLoading = false;

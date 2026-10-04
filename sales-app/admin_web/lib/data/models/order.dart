@@ -186,12 +186,18 @@ class CancelledItem {
   // tidak harus lookup ke tabel products. Null kalau produk sudah dihapus.
   final String? namaBarang;
   final int qty;
+  // Snapshot harga saat cancel — supaya admin bisa lihat impact finansial
+  // dari item yang dibatalkan. Null kalau produk sudah dihapus setelah cancel.
+  final int? hargaSatuan;
+  final int? subtotal;
   final String reason;
 
   CancelledItem({
     required this.productId,
     this.namaBarang,
     required this.qty,
+    this.hargaSatuan,
+    this.subtotal,
     required this.reason,
   });
 
@@ -200,6 +206,8 @@ class CancelledItem {
       productId: json['product_id'] ?? '',
       namaBarang: json['nama_barang'] as String?,
       qty: json['qty'] ?? 0,
+      hargaSatuan: json['harga_satuan'] as int?,
+      subtotal: json['subtotal'] as int?,
       reason: json['reason'] ?? '',
     );
   }

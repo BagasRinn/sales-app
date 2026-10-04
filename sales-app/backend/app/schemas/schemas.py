@@ -237,6 +237,10 @@ class CancelledItemResponse(BaseModel):
     # tabel products. Null kalau produk sudah dihapus setelah cancel.
     nama_barang: Optional[str] = None
     qty: int
+    # Snapshot harga saat cancel — supaya admin bisa lihat impact finansial
+    # dari item yang dibatalkan. Null/0 kalau produk sudah dihapus.
+    harga_satuan: Optional[int] = None
+    subtotal: Optional[int] = None
     reason: str
 
 

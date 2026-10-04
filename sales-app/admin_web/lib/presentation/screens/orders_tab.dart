@@ -1128,17 +1128,36 @@ class _OrderCardState extends State<_OrderCard> {
                   ..._order.cancelledItems.map((ci) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.cancel, size: 14, color: AppColors.error),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                '${ci.displayLabel} × ${ci.qty}',
-                                style: const TextStyle(
-                                  decoration: TextDecoration.lineThrough,
-                                  color: AppColors.textMuted,
-                                  fontSize: 13,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${ci.displayLabel} × ${ci.qty}',
+                                    style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: AppColors.textMuted,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  // Harga + subtotal (kalau backend menyuplai).
+                                  // Null untuk legacy data yang dicancel sebelum
+                                  // field ini ada.
+                                  if (ci.hargaSatuan != null && ci.subtotal != null) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_fmt(ci.hargaSatuan!)} × ${ci.qty} = ${_fmt(ci.subtotal!)}',
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             Container(

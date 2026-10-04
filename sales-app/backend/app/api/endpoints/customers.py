@@ -86,7 +86,7 @@ def get_customer_count(
 def list_my_customers(
     search: Optional[str] = None,
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 3000,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -99,6 +99,11 @@ def list_my_customers(
           cocok dengan area_assignments.kode_area (default coverage by area)
         * customer tanpa assignment dan customer.kode_area tanpa assignment
           (unassigned = visible to all, backward-compat untuk gradual rollout)
+
+    Limit dinaikkan ke 3000 (sebelumnya 1000) supaya muat ~2025 customer
+    untuk sales. Mobile belum paginate jadi list harus include semua customer
+    yang visible dalam 1 fetch. Kalau di masa depan >> 3000, switch mobile
+    ke pagination proper.
     """
     if current_user["role"] in ("ADMIN", "MANAGER"):
         query = _exclude_deleted(db.query(Customer))
