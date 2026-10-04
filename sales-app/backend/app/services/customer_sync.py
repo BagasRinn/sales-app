@@ -231,6 +231,10 @@ def sync_customers_from_excel(
     )
     db.add(import_log)
     db.flush()
+    # Commit import_log segera — supaya ID-nya persistent di DB dan tidak ikut
+    # ter-rollback kalau bulk upsert di bawah gagal. SyncValidationError butuh
+    # FK ke import_log.id yang valid.
+    db.commit()
 
     try:
         raw_rows = _read_excel(file_bytes)
@@ -299,6 +303,10 @@ def sync_customers_from_excel(
         try:
             inserted, updated = _bulk_upsert_customers(db, validated_rows)
         except Exception as e:
+            # PENTING: rollback dulu supaya session tidak tinggal di state aborted.
+            # Kalau tidak, command berikutnya (db.add SyncValidationError, db.commit)
+            # akan error "current transaction is aborted, commands ignored".
+            db.rollback()
             logger.error(f"Bulk upsert failed: {e}")
             validation_errors.append({
                 "row": 0,
