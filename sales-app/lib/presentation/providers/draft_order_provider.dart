@@ -85,7 +85,7 @@ class DraftOrderProvider extends ChangeNotifier {
     required String lineId,
     required int layer,
     required String type,
-    required int value,
+    required double value,
   }) {
     if (layer < 1 || layer > 3) {
       throw ArgumentError('layer harus 1, 2, atau 3 — dapat: $layer');
@@ -104,23 +104,26 @@ class DraftOrderProvider extends ChangeNotifier {
     if (value <= 0) {
       newLayer = null;
     } else {
-      int capped = value;
-      if (type == 'PERCENT' && value > 100) {
-        capped = 100;
-      }
-      if (type == 'NOMINAL') {
+      if (type == 'PERCENT') {
+        double pct = value > 100 ? 100.0 : value;
+        newLayer = DiscountLayer(type: type, value: pct);
+      } else {
+        // NOMINAL — stored as int IDR
         final price = _priceCache[line.productId] ?? 0;
         final max = price * line.qty;
-        capped = value > max ? max : value;
+        int capped = value > max ? max : value.toInt();
+        newLayer = DiscountLayer(type: type, value: capped.toDouble());
       }
-      newLayer = DiscountLayer(type: type, value: capped);
     }
 
     final updated = existing.withLayer(layer, newLayer);
     final newDiscount = updated.isEmpty ? null : updated;
     items = [
       for (int i = 0; i < items.length; i++)
-        if (i == lineIndex) line.copyWith(discount: newDiscount) else items[i],
+        if (i == lineIndex)
+          line.copyWith(clearDiscount: newDiscount == null)
+        else
+          items[i],
     ];
     notifyListeners();
   }
@@ -168,7 +171,7 @@ class DraftOrderProvider extends ChangeNotifier {
     required String productId,
     required int layer,
     required String type,
-    required int value,
+    required double value,
   }) {
     final lines = linesForProduct(productId);
     if (lines.isEmpty) return;
@@ -374,14 +377,14 @@ class OrderLine {
 /// Satu layer diskon.
 class DiscountLayer {
   final String type; // 'PERCENT' atau 'NOMINAL'
-  final int value;
+  final double value;
 
   const DiscountLayer({required this.type, required this.value});
 
   int cutFrom(int running) {
     if (running <= 0) return 0;
     if (type == 'NOMINAL') {
-      return value > running ? running : value;
+      return value.toInt() > running ? running : value.toInt();
     }
     return (running * value / 100).round();
   }
@@ -439,10 +442,10 @@ class ItemDiscount {
   }
 
   factory ItemDiscount.fromOrderItem(OrderItem item) {
-    DiscountLayer? build(String type, int percent, int nominal) {
+    DiscountLayer? build(String type, double percent, int nominal) {
       if ((type == 'PERCENT' && percent > 0) ||
           (type == 'NOMINAL' && nominal > 0)) {
-        return DiscountLayer(type: type, value: type == 'PERCENT' ? percent : nominal);
+        return DiscountLayer(type: type, value: type == 'PERCENT' ? percent : nominal.toDouble());
       }
       return null;
     }

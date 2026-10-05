@@ -758,7 +758,9 @@ class _LineQtyStepper extends StatelessWidget {
           icon: Icons.remove,
           onTap: line.qty > 1
               ? () => context.read<DraftOrderProvider>().setQty(line.productId, line.qty - 1)
-              : null,
+              : line.qty == 1
+                  ? () => context.read<DraftOrderProvider>().removeLine(line.id)
+                  : null,
         ),
         SizedBox(
           width: 36,
@@ -829,7 +831,7 @@ class _LayerInputRow extends StatelessWidget {
   final TextEditingController controller;
   final NumberFormat currency;
   final ValueChanged<String> onTypeChanged;
-  final ValueChanged<int> onValueChanged;
+  final ValueChanged<double> onValueChanged;
   final VoidCallback onClear;
   final bool hasValue;
 
@@ -903,7 +905,7 @@ class _LayerInputRow extends StatelessWidget {
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onChanged: (v) => onValueChanged(int.tryParse(v) ?? 0),
+            onChanged: (v) => onValueChanged(double.tryParse(v.replaceAll(',', '.')) ?? 0.0),
           ),
         ),
         const SizedBox(width: 4),
@@ -945,10 +947,10 @@ class _AddLineSheetState extends State<_AddLineSheet> {
   String _layer1Type = 'PERCENT';
   final _layer1Controller = TextEditingController();
   ItemDiscount? _buildDiscount() {
-    final v = int.tryParse(_layer1Controller.text) ?? 0;
+    final v = double.tryParse(_layer1Controller.text.replaceAll(',', '.')) ?? 0.0;
     if (v <= 0) return null;
-    int capped = v;
-    if (_layer1Type == 'PERCENT' && v > 100) capped = 100;
+    double capped = v;
+    if (_layer1Type == 'PERCENT' && v > 100) capped = 100.0;
     return ItemDiscount(layer1: DiscountLayer(type: _layer1Type, value: capped));
   }
 

@@ -148,7 +148,7 @@ class _OrderDetailContent extends StatelessWidget {
     final parts = <String>[];
     for (var i = 1; i <= 3; i++) {
       String type;
-      int percent;
+      double percent;
       int nominal;
       switch (i) {
         case 1:

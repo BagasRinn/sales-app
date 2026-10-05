@@ -54,6 +54,8 @@ class AdminProvider extends ChangeNotifier {
   DateTime? _orderDateFrom;
   DateTime? _orderDateTo;
   String? _orderSearch; // search by store name or sales name
+  int _orderSkip = 0; // pagination offset
+  int _orderLimit = 20; // pagination page size
   int _orderTotal = 0; // total pesanan yang match filter (untuk pagination)
 
   // Debounce timer for search
@@ -248,6 +250,8 @@ class AdminProvider extends ChangeNotifier {
     _orderSearch = search;
     _orderDateFrom = dateFrom;
     _orderDateTo = dateTo;
+    _orderSkip = skip;
+    _orderLimit = limit;
     try {
       final result = await _repo.getAllOrdersPaginated(
         status: status,
@@ -713,10 +717,16 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _loadAllOrders([CancelToken? cancelToken]) async {
     try {
-      _allOrders = await _repo.getAllOrders(
+      final result = await _repo.getAllOrdersPaginated(
         status: _orderFilter,
-        cancelToken: cancelToken,
+        search: _orderSearch,
+        dateFrom: _orderDateFrom,
+        dateTo: _orderDateTo,
+        skip: _orderSkip,
+        limit: _orderLimit,
       );
+      _allOrders = result.orders;
+      _orderTotal = result.total;
       _errorMessage = null;
     } catch (e) {
       if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
@@ -777,11 +787,11 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> cancelOrderItem(String orderId, int qty, String reason, String productId) async {
+  Future<bool> cancelOrderItem(String orderId, int qty, String reason, String itemId) async {
     _setLoading(true, 'Membatalkan item...');
     try {
       await _repo.cancelOrderItems(orderId, items: [
-        {'product_id': productId, 'qty': qty, 'reason': reason},
+        {'item_id': itemId, 'qty': qty, 'reason': reason},
       ]);
       await loadAll();
       return true;

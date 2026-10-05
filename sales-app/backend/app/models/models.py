@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger, JSON, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -192,18 +192,18 @@ class OrderItem(Base):
     qty = Column(Integer)
 
     # --- Discount Layer 1 (existing single discount, retained as layer 1) ---
-    discount_percent = Column(Integer, default=0)  # dipakai kalau discount_type == 'PERCENT'
+    discount_percent = Column(Numeric(10, 4), default=0)  # dipakai kalau discount_type == 'PERCENT'
     discount_type = Column(String(10), default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
     discount_nominal = Column(Integer, default=0)  # dipakai kalau discount_type == 'NOMINAL', dalam IDR
 
     # --- Discount Layer 2 (stacked setelah Layer 1, sequential) ---
     discount2_type = Column(String(10), default='PERCENT', nullable=False)
-    discount2_percent = Column(Integer, default=0, nullable=False)
+    discount2_percent = Column(Numeric(10, 4), default=0, nullable=False)
     discount2_nominal = Column(Integer, default=0, nullable=False)
 
     # --- Discount Layer 3 (stacked setelah Layer 2, sequential) ---
     discount3_type = Column(String(10), default='PERCENT', nullable=False)
-    discount3_percent = Column(Integer, default=0, nullable=False)
+    discount3_percent = Column(Numeric(10, 4), default=0, nullable=False)
     discount3_nominal = Column(Integer, default=0, nullable=False)
 
     order = relationship("Order", back_populates="items")

@@ -24,6 +24,17 @@ Migration produk 4p berdasarkan supplier, aku ada data supplier mana yang 4p yan
 coba telusurin bagaimana selama ini cara kerja import toko, karena terasa lambat banget dibanding import produk D
 
 Fitur pencarian di halaman Pesanan di bagian web admin
-outlet persales/pengelompokan jadi sales yang ditugaskan aja yang bisa akses, nanti ini ngatur penugasannya ada di dashboard manager
+outlet persales/pengelompokan jadi sales yang ditugaskan aja yang bisa akses, nanti ini ngatur penugasannya ada di dashboard manager D
 
-Penyesuaian Format Kolom Excel Stok baru
+Penyesuaian Format Kolom Excel Stok baru D
+
+taruh di railway env
+CORS_ORIGINS = https://sales-order-web.web.app,https://sales-admin-web.web.app
+
+Diskon Bisa pakai koma misal 5,9%
+Halaman tidak bisa di block untuk di copy di halaman admin
+Redesign Keranjang Produk di halaman review agar lebih user friendly di pengguna mobile
+
+pada saat ingin menghapus diskon pada barang dikeranjang itu tidak terhapus kalau sudah terinput angkanya
+halaman pesanan di web admin ada kode item tampil D
+

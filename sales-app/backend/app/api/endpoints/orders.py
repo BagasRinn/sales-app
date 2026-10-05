@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, func, case
+from sqlalchemy import text, func, case, or_
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import uuid4
 from typing import List, Optional
 import logging
@@ -119,7 +120,7 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
 # Tiap layer = (type, percent, nominal). Type 'PERCENT' | 'NOMINAL'.
 # Kalkulasi sequential: tiap layer dipotong dari sisa running subtotal.
 
-def _layer_cut(type_val: str, percent: int, nominal: int, running: int) -> int:
+def _layer_cut(type_val: str, percent: float | Decimal, nominal: int, running: int) -> int:
     """Potongan untuk 1 layer. NOMINAL di-cap ke running; PERCENT dari running."""
     if type_val == "NOMINAL":
         return min(max(0, nominal), running)
@@ -129,9 +130,9 @@ def _layer_cut(type_val: str, percent: int, nominal: int, running: int) -> int:
 
 def _apply_3_layers(
     raw_subtotal: int,
-    layer1_type: str, layer1_percent: int, layer1_nominal: int,
-    layer2_type: str, layer2_percent: int, layer2_nominal: int,
-    layer3_type: str, layer3_percent: int, layer3_nominal: int,
+    layer1_type: str, layer1_percent: float | Decimal, layer1_nominal: int,
+    layer2_type: str, layer2_percent: float | Decimal, layer2_nominal: int,
+    layer3_type: str, layer3_percent: float | Decimal, layer3_nominal: int,
 ):
     """Chain 3 layers sequential. Return (final_subtotal, layer1_cut, layer2_cut, layer3_cut, total_cut)."""
     s = max(0, raw_subtotal)
@@ -144,7 +145,7 @@ def _apply_3_layers(
     return s, d1, d2, d3, d1 + d2 + d3
 
 
-def _normalize_layer(type_val: str | None, percent: int | None, nominal: int | None):
+def _normalize_layer(type_val: str | None, percent: float | Decimal | None, nominal: int | None):
     """Coerce nullable inputs from DB rows to a clean (type, percent, nominal) tuple."""
     t = (type_val or "PERCENT").upper()
     return t, percent or 0, nominal or 0
@@ -496,6 +497,7 @@ def create_order(
 @router.get("/my", response_model=List[OrderListWithItemsResponse])
 def get_my_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
+    search: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -509,6 +511,15 @@ def get_my_orders(
     )
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.join(Order.customer).filter(
+            or_(
+                Customer.nama_toko.ilike(search_term),
+                Customer.nama.ilike(search_term),
+            )
+        )
 
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return [_build_order_response(o) for o in orders]
@@ -941,7 +952,7 @@ def list_pending_orders(
     if search:
         term = f"%{search}%"
         query = query.outerjoin(User, Order.sales_id == User.id).filter(
-            db.or_(
+            or_(
                 Order.store_name.ilike(term),
                 User.nama.ilike(term),
                 User.username.ilike(term),
@@ -1017,7 +1028,7 @@ def list_all_orders(
     if search:
         term = f"%{search}%"
         query = query.outerjoin(User, Order.sales_id == User.id).filter(
-            db.or_(
+            or_(
                 Order.store_name.ilike(term),
                 User.nama.ilike(term),
                 User.username.ilike(term),
@@ -1025,7 +1036,7 @@ def list_all_orders(
             )
         )
         count_query = count_query.outerjoin(User, Order.sales_id == User.id).filter(
-            db.or_(
+            or_(
                 Order.store_name.ilike(term),
                 User.nama.ilike(term),
                 User.username.ilike(term),
@@ -1362,21 +1373,26 @@ def cancel_order_items(
     cancelled = (order.cancelled_items or []).copy()
 
     for entry in payload.items:
-        # Lock OrderItem row supaya delta qty atomic vs concurrent reads
+        # Lock OrderItem row by its UUID so delta qty is atomic vs concurrent reads.
         item = db.query(OrderItem).filter(
+            OrderItem.id == entry.item_id,
             OrderItem.order_id == order_id,
-            OrderItem.product_id == entry.product_id,
         ).with_for_update().first()
+        if item is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Item '{entry.item_id}' tidak ditemukan di pesanan ini",
+            )
         # Lookup produk sekali: dipakai untuk nama_barang + release stok_booking.
         product = db.query(Product).filter(
-            Product.id == entry.product_id
+            Product.id == item.product_id
         ).with_for_update().first()
         if product:
             old_booking = product.stok_booking or 0
             product.stok_booking = max(0, old_booking - entry.qty)
             log_stock_change(
                 db=db,
-                product_id=entry.product_id,
+                product_id=item.product_id,
                 sumber="ITEM_CANCEL",
                 field_terdampak="stok_booking",
                 delta=-entry.qty,
@@ -1388,14 +1404,13 @@ def cancel_order_items(
 
         # Hapus atau kurangi OrderItem supaya total_amount otomatis exclude
         # barang yang dibatalkan. Partial cancel → kurangi qty; full cancel → hapus row.
-        if item is not None:
-            if entry.qty >= item.qty:
-                db.delete(item)
-            else:
-                item.qty = item.qty - entry.qty
+        if entry.qty >= item.qty:
+            db.delete(item)
+        else:
+            item.qty = item.qty - entry.qty
 
         cancelled.append({
-            "product_id": entry.product_id,
+            "product_id": item.product_id,
             # Simpan nama_barang supaya UI tidak perlu lookup ulang. Kalau
             # produk sudah dihapus dari tabel products, nama_barang jadi null
             # dan UI fallback ke "Produk {product_id}".

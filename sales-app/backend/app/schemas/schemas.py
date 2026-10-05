@@ -151,15 +151,15 @@ class OrderItemCreate(BaseModel):
     qty: int = Field(..., gt=0)
     # --- Discount Layer 1 ---
     discount_type: str = Field(default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
-    discount_percent: int = Field(default=0, ge=0, le=100)
+    discount_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount_nominal: int = Field(default=0, ge=0)
     # --- Discount Layer 2 ---
     discount2_type: str = Field(default='PERCENT')
-    discount2_percent: int = Field(default=0, ge=0, le=100)
+    discount2_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount2_nominal: int = Field(default=0, ge=0)
     # --- Discount Layer 3 ---
     discount3_type: str = Field(default='PERCENT')
-    discount3_percent: int = Field(default=0, ge=0, le=100)
+    discount3_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount3_nominal: int = Field(default=0, ge=0)
 
 
@@ -182,15 +182,15 @@ class OrderItemResponse(BaseModel):
     harga_satuan: int = 0
     # --- Discount Layer 1 ---
     discount_type: str = 'PERCENT'
-    discount_percent: int = 0
+    discount_percent: float = 0.0
     discount_nominal: int = 0
     # --- Discount Layer 2 ---
     discount2_type: str = 'PERCENT'
-    discount2_percent: int = 0
+    discount2_percent: float = 0.0
     discount2_nominal: int = 0
     # --- Discount Layer 3 ---
     discount3_type: str = 'PERCENT'
-    discount3_percent: int = 0
+    discount3_percent: float = 0.0
     discount3_nominal: int = 0
     # --- Derived ---
     harga_setelah_diskon: int = 0
@@ -204,15 +204,15 @@ class OrderDiscountUpdateItem(BaseModel):
     item_id: UUID
     # --- Discount Layer 1 ---
     discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
-    discount_percent: int = Field(default=0, ge=0, le=100)
+    discount_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount_nominal: int = Field(default=0, ge=0)
     # --- Discount Layer 2 ---
     discount2_type: str = Field(default='PERCENT')
-    discount2_percent: int = Field(default=0, ge=0, le=100)
+    discount2_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount2_nominal: int = Field(default=0, ge=0)
     # --- Discount Layer 3 ---
     discount3_type: str = Field(default='PERCENT')
-    discount3_percent: int = Field(default=0, ge=0, le=100)
+    discount3_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount3_nominal: int = Field(default=0, ge=0)
 
 
@@ -222,7 +222,7 @@ class OrderDiscountUpdate(BaseModel):
 
 
 class CancelItemEntry(BaseModel):
-    product_id: str
+    item_id: UUID
     qty: int = Field(..., ge=1)
     reason: str = Field(..., min_length=3)
 

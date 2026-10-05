@@ -717,7 +717,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
     try {
       final provider = context.read<AdminProvider>();
-      final success = await provider.cancelOrderItem(orderId, result.qty, result.reason, item.productId);
+      final success = await provider.cancelOrderItem(orderId, result.qty, result.reason, item.id);
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -799,17 +799,17 @@ class _OrderCardState extends State<_OrderCard> {
         // Layer 1
         type1: item.discountType,
         value1: item.discountType == 'NOMINAL'
-            ? item.discountNominal
+            ? item.discountNominal.toDouble()
             : item.discountPercent,
         // Layer 2
         type2: item.discount2Type,
         value2: item.discount2Type == 'NOMINAL'
-            ? item.discount2Nominal
+            ? item.discount2Nominal.toDouble()
             : item.discount2Percent,
         // Layer 3
         type3: item.discount3Type,
         value3: item.discount3Type == 'NOMINAL'
-            ? item.discount3Nominal
+            ? item.discount3Nominal.toDouble()
             : item.discount3Percent,
       ),
     );
@@ -880,7 +880,7 @@ class _OrderCardState extends State<_OrderCard> {
           ),
           child: Icon(Icons.store, color: statusColor, size: 22),
         ),
-        title: Text(
+        title: SelectableText(
           _order.storeName ?? 'Toko Tidak Diketahui',
           style: AppTextStyles.labelLarge,
         ),
@@ -889,7 +889,7 @@ class _OrderCardState extends State<_OrderCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              SelectableText(
                 'Order #${_order.id.substring(0, 8)}',
                 style: AppTextStyles.mono,
               ),
@@ -1136,7 +1136,7 @@ class _OrderCardState extends State<_OrderCard> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  SelectableText(
                                     '${ci.displayLabel} × ${ci.qty}',
                                     style: const TextStyle(
                                       decoration: TextDecoration.lineThrough,
@@ -1166,7 +1166,7 @@ class _OrderCardState extends State<_OrderCard> {
                                 color: AppColors.errorBg,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text(
+                              child: SelectableText(
                                 ci.reason,
                                 style: const TextStyle(
                                   fontSize: 11,
@@ -1299,7 +1299,15 @@ class _OrderItemRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(namaBarang, style: AppTextStyles.bodyMedium),
+                SelectableText(namaBarang, style: AppTextStyles.bodyMedium),
+                SelectableText(
+                  item.productId,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                  ),
+                ),
                 Text(
                   '× ${item.qty}',
                   style: AppTextStyles.bodySmall.copyWith(
@@ -1390,7 +1398,7 @@ class _OrderItemRow extends StatelessWidget {
     final parts = <String>[];
     for (var i = 1; i <= 3; i++) {
       String type;
-      int percent;
+      double percent;
       int nominal;
       switch (i) {
         case 1:
@@ -1424,13 +1432,13 @@ class _OrderItemRow extends StatelessWidget {
 class _DiscountEditResult {
   // Layer 1
   final String type1;
-  final int value1;
+  final double value1;
   // Layer 2
   final String type2;
-  final int value2;
+  final double value2;
   // Layer 3
   final String type3;
-  final int value3;
+  final double value3;
 
   _DiscountEditResult({
     required this.type1,
@@ -1448,13 +1456,13 @@ class _DiscountEditDialog extends StatefulWidget {
 
   // Layer 1
   final String type1;
-  final int value1;
+  final double value1;
   // Layer 2
   final String type2;
-  final int value2;
+  final double value2;
   // Layer 3
   final String type3;
-  final int value3;
+  final double value3;
 
   const _DiscountEditDialog({
     required this.namaBarang,
@@ -1513,7 +1521,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
       final (t, v) = layers[i];
       if (v <= 0) continue;
       if (t == 'NOMINAL') {
-        s -= v > s ? s : v;
+        s -= v.toInt() > s ? s : v.toInt();
       } else if (t == 'PERCENT') {
         s -= (s * v / 100).round();
       }
@@ -1521,10 +1529,10 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
     return s < 0 ? 0 : s;
   }
 
-  int _parseOr0(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
+  double _parseOr0(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.')) ?? 0.0;
 
   bool _validateAndSave() {
-    final values = <int>[];
+    final values = <double>[];
     final types = [_type1, _type2, _type3];
     final ctrls = [_ctrl1, _ctrl2, _ctrl3];
 

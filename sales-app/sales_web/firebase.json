@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "site": "sales-order-web",
+    "public": "build/web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}
