@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../../core/api_exception.dart';
 import '../../core/api_service.dart';
-import '../../core/web_auth_storage.dart';
 import '../../data/repositories/auth_repository.dart';
 
 enum AuthState { initial, loading, authenticated, unauthenticated, error }
@@ -16,10 +15,9 @@ class AuthProvider with ChangeNotifier {
   String? _errorMessage;
 
   AuthProvider({
-    required AuthRepository authRepo,
-    required ApiService api,
-  })  : _authRepo = authRepo,
-        _api = api {
+    required this._authRepo,
+    required this._api,
+  }) {
     _api.onTokenExpired = _onTokenExpired;
   }
 
