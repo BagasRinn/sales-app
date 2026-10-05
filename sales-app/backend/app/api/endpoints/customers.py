@@ -137,16 +137,16 @@ def list_my_customers(
             .filter(
                 or_(
                     # Saya di-assign langsung ke customer
-                    Customer.id.in_(mine_subq.c.customer_id),
+                    Customer.id.in_(select(mine_subq.c.customer_id)),
                     # Customer di area yang saya cover
-                    Customer.kode_area.in_(my_areas_subq.c.kode_area),
+                    Customer.kode_area.in_(select(my_areas_subq.c.kode_area)),
                     # Unassigned: customer tanpa assignment apapun
                     # DAN customer.kode_area tanpa assignment apapun
                     and_(
-                        ~Customer.id.in_(all_customer_assigned.c.customer_id),
+                        ~Customer.id.in_(select(all_customer_assigned.c.customer_id)),
                         or_(
                             Customer.kode_area.is_(None),
-                            ~Customer.kode_area.in_(all_assigned_areas.c.kode_area),
+                            ~Customer.kode_area.in_(select(all_assigned_areas.c.kode_area)),
                         ),
                     ),
                 )
