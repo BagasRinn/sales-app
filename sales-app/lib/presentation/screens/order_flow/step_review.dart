@@ -709,7 +709,7 @@ class _LineRowState extends State<_LineRow> {
             const SizedBox(height: 12),
             TextField(
               controller: qtyController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Jumlah gratis (qty)',
@@ -892,7 +892,7 @@ class _LayerInputRow extends StatelessWidget {
           width: 90,
           child: TextField(
             controller: controller,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
@@ -1045,7 +1045,7 @@ class _AddLineSheetState extends State<_AddLineSheet> {
                 width: 100,
                 child: TextField(
                   controller: _layer1Controller,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: _layer1Type == 'PERCENT' ? '0%' : 'Rp 0',

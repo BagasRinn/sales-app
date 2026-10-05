@@ -121,7 +121,10 @@ class DraftOrderProvider extends ChangeNotifier {
     items = [
       for (int i = 0; i < items.length; i++)
         if (i == lineIndex)
-          line.copyWith(clearDiscount: newDiscount == null)
+          line.copyWith(
+            discount: newDiscount,
+            clearDiscount: newDiscount == null,
+          )
         else
           items[i],
     ];
@@ -284,6 +287,9 @@ class DraftOrderProvider extends ChangeNotifier {
     required String existingNotes,
     String? existingStatus,
     String existingOrderType = 'REGULER',
+    /// Harga per productId — supaya total di review step terhitung benar.
+    /// Kalau null, harga dari order items dipakai.
+    Map<String, int>? prices,
   }) {
     editingOrderId = orderId;
     editingOriginalStatus = existingStatus;
@@ -293,6 +299,9 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerAddress = customerAddress;
     items = List<OrderLine>.from(existingLines);
     notes = existingNotes;
+    if (prices != null && prices.isNotEmpty) {
+      _priceCache = Map.from(prices);
+    }
     notifyListeners();
   }
 

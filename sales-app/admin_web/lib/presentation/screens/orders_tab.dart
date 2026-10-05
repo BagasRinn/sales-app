@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
@@ -1521,7 +1522,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
       final (t, v) = layers[i];
       if (v <= 0) continue;
       if (t == 'NOMINAL') {
-        s -= v.toInt() > s ? s : v.toInt();
+        s -= v.round() > s ? s : v.round();
       } else if (t == 'PERCENT') {
         s -= (s * v / 100).round();
       }
@@ -1831,7 +1832,10 @@ class _LayerField extends StatelessWidget {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*')),
+          ],
           decoration: InputDecoration(
             isDense: true,
             hintText: '0',

@@ -513,6 +513,7 @@ class _OrderDetailContent extends StatelessWidget {
   void _enterEditFlow(BuildContext context, Order order) {
     // Convert OrderItem rows → List<OrderLine> for DraftOrderProvider.
     final lines = <OrderLine>[];
+    final prices = <String, int>{};
     int idx = 0;
     if (order.items != null) {
       for (final item in order.items!) {
@@ -522,6 +523,10 @@ class _OrderDetailContent extends StatelessWidget {
           qty: item.qty,
           discount: ItemDiscount.fromOrderItem(item),
         ));
+        // Simpan harga ke cache supaya total di review step terhitung.
+        if (item.hargaSatuan != null && item.hargaSatuan! > 0) {
+          prices[item.productId] = item.hargaSatuan!;
+        }
       }
     }
     context.read<DraftOrderProvider>().loadFromExisting(
@@ -533,6 +538,7 @@ class _OrderDetailContent extends StatelessWidget {
           existingNotes: order.notes ?? '',
           existingStatus: order.status,
           existingOrderType: order.orderType,
+          prices: prices,
         );
     Navigator.of(context).push(
       MaterialPageRoute(
