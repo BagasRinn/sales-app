@@ -1175,6 +1175,54 @@ def approve_order(
                 status_code=404,
                 detail=f"Produk '{item.product_id}' tidak ditemukan",
             )
+
+        current_booking = product.stok_booking or 0
+
+        # Legacy order: stok_booking mungkin 0 karena order dibuat sebelum sistem booking.
+        # Backfill dulu dari available stock, baru approve.
+        shortfall = max(0, item.qty - current_booking)
+
+        if shortfall > 0:
+            # Ambil dari available pool: stok_sistem - stok_booking - stok_diterima
+            backfill = db.execute(
+                text(
+                    "UPDATE products "
+                    "SET stok_booking = stok_booking + :shortfall "
+                    "WHERE id = :pid "
+                    "  AND (stok_sistem - stok_booking - stok_diterima) >= :shortfall "
+                    "RETURNING stok_booking"
+                ),
+                {"pid": item.product_id, "shortfall": shortfall},
+            ).first()
+            if backfill is None:
+                db.rollback()
+                available = max(
+                    0,
+                    (product.stok_sistem or 0)
+                    - (product.stok_booking or 0)
+                    - (product.stok_diterima or 0),
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Stok tidak mencukupi untuk backfill booking "
+                        f"produk '{product.nama_barang}' (tersedia: {available}, "
+                        f"kurang: {shortfall})."
+                    ),
+                )
+            # Log backfill
+            log_stock_change(
+                db=db,
+                product_id=item.product_id,
+                sumber="APPROVE_BACKFILL",
+                field_terdampak="stok_booking",
+                delta=shortfall,
+                nilai_sebelum=current_booking,
+                nilai_sesudah=current_booking + shortfall,
+                actor_id=actor_id,
+                order_id=order.id,
+            )
+
         # Approve: pindahkan qty dari stok_booking ke stok_diterima (atomic dual-field).
         # stok_tersedia = stok_sistem - stok_booking - stok_diterima tetap sama
         # (keduanya turun/naik seimbang), tapi pool-nya berpindah.
