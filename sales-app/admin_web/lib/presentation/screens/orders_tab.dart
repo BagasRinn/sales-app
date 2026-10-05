@@ -223,7 +223,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Menunggu Persetujuan'),
+                    const SelectableText('Menunggu Persetujuan'),
                     if (provider.pendingOrders.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -246,7 +246,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   ],
                 ),
               ),
-              const Tab(text: 'Semua Pesanan'),
+              const Tab(child: SelectableText('Semua Pesanan')),
             ],
           ),
             ],
@@ -338,14 +338,14 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String?>(
                         value: _filterStatus,
-                        hint: const Text('Semua'),
+                        hint: const SelectableText('Semua'),
                         isDense: true,
                         items: const [
-                          DropdownMenuItem(value: null, child: Text('Semua')),
-                          DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
-                          DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
-                          DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
-                          DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
+                          DropdownMenuItem(value: null, child: SelectableText('Semua')),
+                          DropdownMenuItem(value: 'PENDING', child: SelectableText('Menunggu')),
+                          DropdownMenuItem(value: 'APPROVED', child: SelectableText('Disetujui')),
+                          DropdownMenuItem(value: 'REJECTED', child: SelectableText('Ditolak')),
+                          DropdownMenuItem(value: 'CANCELLED', child: SelectableText('Dibatalkan')),
                         ],
                         onChanged: (v) {
                           setState(() => _filterStatus = v);
@@ -449,7 +449,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: SelectableText(
                     total == 0
                         ? '0 pesanan'
                         : 'Menampilkan $startItem-$endItem dari $total pesanan',
@@ -894,7 +894,7 @@ class _OrderCardState extends State<_OrderCard> {
                 style: AppTextStyles.mono,
               ),
               if (_order.invoiceNumber != null && _order.invoiceNumber!.isNotEmpty)
-                Text(
+                SelectableText(
                   'Invoice: ${_order.invoiceNumber}',
                   style: AppTextStyles.mono.copyWith(
                     color: AppColors.primaryLight,
@@ -902,12 +902,12 @@ class _OrderCardState extends State<_OrderCard> {
                   ),
                 ),
               if (_order.salesUsername != null || _order.salesNama != null)
-                Text(
+                SelectableText(
                   'Sales: ${_order.salesDisplayName}',
                   style: AppTextStyles.bodySmall,
                 ),
               const SizedBox(height: 2),
-              Text(
+              SelectableText(
                 '${_order.items.length} item • ${currencyFormat.format(_order.totalAmount)} • ${dateFormat.format(_order.createdAt)}',
                 style: AppTextStyles.bodySmall,
               ),
@@ -1042,7 +1042,7 @@ class _OrderCardState extends State<_OrderCard> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(
+                        SelectableText(
                           _order.notes!,
                           style: AppTextStyles.bodyMedium,
                         ),
@@ -1081,7 +1081,7 @@ class _OrderCardState extends State<_OrderCard> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text(
+                        SelectableText(
                           _order.rejectReason!,
                           style: AppTextStyles.bodyMedium,
                         ),
@@ -1149,7 +1149,7 @@ class _OrderCardState extends State<_OrderCard> {
                                   // field ini ada.
                                   if (ci.hargaSatuan != null && ci.subtotal != null) ...[
                                     const SizedBox(height: 2),
-                                    Text(
+                                    SelectableText(
                                       '${_fmt(ci.hargaSatuan!)} × ${ci.qty} = ${_fmt(ci.subtotal!)}',
                                       style: const TextStyle(
                                         color: AppColors.textMuted,
@@ -1203,7 +1203,7 @@ class _OrderCardState extends State<_OrderCard> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Subtotal', style: AppTextStyles.bodyMedium),
-            Text(_fmt(raw), style: AppTextStyles.bodyMedium),
+            SelectableText(_fmt(raw), style: AppTextStyles.bodyMedium),
           ],
         ),
         const SizedBox(height: 4),
@@ -1215,7 +1215,7 @@ class _OrderCardState extends State<_OrderCard> {
                 'Diskon',
                 style: AppTextStyles.bodySmall,
               ),
-              Text(
+              SelectableText(
                 '- ${_fmt(discount)}',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.success,
@@ -1230,7 +1230,7 @@ class _OrderCardState extends State<_OrderCard> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Total', style: AppTextStyles.headlineSmall),
-            Text(
+            SelectableText(
               _fmt(amount),
               style: AppTextStyles.headlineMedium.copyWith(
                 color: AppColors.primaryLight,
@@ -1257,7 +1257,7 @@ class _OrderCardState extends State<_OrderCard> {
                     .copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(
-            child: Text(value,
+            child: SelectableText(value,
                 style: AppTextStyles.bodyMedium.copyWith(
                     fontWeight: FontWeight.w500)),
           ),
