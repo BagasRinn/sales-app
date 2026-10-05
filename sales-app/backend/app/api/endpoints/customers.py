@@ -109,41 +109,44 @@ def list_my_customers(
         query = _exclude_deleted(db.query(Customer))
     else:
         me = UUID(current_user["user_id"])
+        # Pakai select() explicit (SQLAlchemy 2.x style) supaya tidak kena
+        # SAWarning "Coercing Subquery object into a select()".
+        from sqlalchemy import select
         # Subquery 1: customer yang punya assignment langsung ke saya
         mine_subq = (
-            db.query(CustomerAssignment.customer_id)
-            .filter(CustomerAssignment.sales_id == me)
+            select(CustomerAssignment.customer_id)
+            .where(CustomerAssignment.sales_id == me)
             .subquery()
         )
         # Subquery 2: kode_area yang saya cover
         my_areas_subq = (
-            db.query(AreaAssignment.kode_area)
-            .filter(AreaAssignment.sales_id == me)
+            select(AreaAssignment.kode_area)
+            .where(AreaAssignment.sales_id == me)
             .subquery()
         )
         # Subquery 3: semua customer yang punya assignment apapun (untuk NOT IN)
         all_customer_assigned = (
-            db.query(CustomerAssignment.customer_id).subquery()
+            select(CustomerAssignment.customer_id).subquery()
         )
         # Subquery 4: semua kode_area yang punya assignment
         all_assigned_areas = (
-            db.query(AreaAssignment.kode_area).subquery()
+            select(AreaAssignment.kode_area).subquery()
         )
         query = (
             _exclude_deleted(db.query(Customer))
             .filter(
                 or_(
                     # Saya di-assign langsung ke customer
-                    Customer.id.in_(mine_subq),
+                    Customer.id.in_(mine_subq.c.customer_id),
                     # Customer di area yang saya cover
-                    Customer.kode_area.in_(my_areas_subq),
+                    Customer.kode_area.in_(my_areas_subq.c.kode_area),
                     # Unassigned: customer tanpa assignment apapun
                     # DAN customer.kode_area tanpa assignment apapun
                     and_(
-                        ~Customer.id.in_(all_customer_assigned),
+                        ~Customer.id.in_(all_customer_assigned.c.customer_id),
                         or_(
                             Customer.kode_area.is_(None),
-                            ~Customer.kode_area.in_(all_assigned_areas),
+                            ~Customer.kode_area.in_(all_assigned_areas.c.kode_area),
                         ),
                     ),
                 )

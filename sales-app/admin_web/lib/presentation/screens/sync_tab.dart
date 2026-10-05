@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
+import '../../core/datetime_utils.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/sync_result.dart';
 
@@ -615,7 +616,7 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
 
     DateTime? ts;
     if (err.timestamp != null) {
-      ts = DateTime.tryParse(err.timestamp!)?.toLocal();
+      ts = DateTime.tryParse(err.timestamp!)?.toWita();
     }
     final tsText = ts != null ? dateFormat.format(ts) : '-';
 
@@ -928,7 +929,7 @@ class _ImportLogRow extends StatelessWidget {
           SizedBox(
             width: _kColWaktu,
             child: Text(
-              createdAt != null ? dateFormat.format(createdAt.toLocal()) : '-',
+              createdAt != null ? dateFormat.format(createdAt.toWita()) : '-',
               style: AppTextStyles.mono.copyWith(fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),

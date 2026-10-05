@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class Customer {
   final String id;
   final String? kode;
@@ -32,13 +34,13 @@ class Customer {
       // (camelCase, untuk serializer lain). Default null kalau tidak ada.
       kodeArea: (json['kode_area'] as String?) ?? (json['kodeArea'] as String?),
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)?.toLocal()
+          ? DateTime.tryParse(json['created_at'] as String)?.toWita()
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.tryParse(json['updated_at'] as String)?.toLocal()
+          ? DateTime.tryParse(json['updated_at'] as String)?.toWita()
           : null,
       deletedAt: json['deleted_at'] != null
-          ? DateTime.tryParse(json['deleted_at'] as String)?.toLocal()
+          ? DateTime.tryParse(json['deleted_at'] as String)?.toWita()
           : null,
     );
   }

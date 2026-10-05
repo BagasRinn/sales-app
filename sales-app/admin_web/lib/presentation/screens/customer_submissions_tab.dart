@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/datetime_utils.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/customer_submission.dart';
 
@@ -374,7 +375,7 @@ class _SubmissionCard extends StatelessWidget {
   }
 
   String _formatDate(DateTime dt) {
-    final d = dt.toLocal();
+    final d = dt.toWita();
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
@@ -796,7 +797,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
   }
 
   String _formatDate(DateTime dt) {
-    final d = dt.toLocal();
+    final d = dt.toWita();
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
+import '../../../core/datetime_utils.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
@@ -646,7 +647,7 @@ class _RecentOrderTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${currency.format(order.totalPrice)} · ${dateFmt.format(order.createdAt.toLocal())}',
+                    '${currency.format(order.totalPrice)} · ${dateFmt.format(order.createdAt.toWita())}',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: AppColors.textMuted,
                     ),
