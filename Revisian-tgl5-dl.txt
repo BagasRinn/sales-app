@@ -38,3 +38,4 @@ Redesign Keranjang Produk di halaman review agar lebih user friendly di pengguna
 pada saat ingin menghapus diskon pada barang dikeranjang itu tidak terhapus kalau sudah terinput angkanya
 halaman pesanan di web admin ada kode item tampil D
 
+https://practical-beauty-production-071a.up.railway.app,https://sales-admin-web.web.app

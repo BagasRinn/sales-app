@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -893,6 +894,9 @@ class _LayerInputRow extends StatelessWidget {
           child: TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+            ],
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
@@ -1046,6 +1050,9 @@ class _AddLineSheetState extends State<_AddLineSheet> {
                 child: TextField(
                   controller: _layer1Controller,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+                  ],
                   decoration: InputDecoration(
                     isDense: true,
                     hintText: _layer1Type == 'PERCENT' ? '0%' : 'Rp 0',
