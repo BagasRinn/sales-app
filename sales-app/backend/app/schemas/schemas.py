@@ -500,6 +500,15 @@ class CustomerSubmissionCreate(BaseSchema):
     hari_kunjungan: str = Field(..., min_length=1, max_length=50)
     # Flag: kalau True, customer langsung dibuat saat submit (untuk flow "bareng order").
     bareng_order: bool = Field(default=False)
+    # Order items for bareng_order flow
+    order_items: Optional[List["OrderItemCreate"]] = Field(
+        default=None,
+        description="Items for bareng_order. Required when bareng_order=True."
+    )
+    order_type: Optional[str] = Field(
+        default="REGULER",
+        description="'REGULER' or '4P'. Only used when bareng_order=True."
+    )
 
     @field_validator('tipe_pembayaran')
     @classmethod
@@ -526,6 +535,14 @@ class CustomerSubmissionCreate(BaseSchema):
                 )
         return self
 
+    @model_validator(mode='after')
+    def validate_bareng_order_items(self):
+        if self.bareng_order and not self.order_items:
+            raise ValueError("order_items wajib diisi jika bareng_order=True")
+        if self.bareng_order and len(self.order_items or []) == 0:
+            raise ValueError("order_items harus memiliki minimal 1 item")
+        return self
+
 
 class CustomerSubmissionApprove(BaseSchema):
     """Body untuk approve submission. kode wajib (diinput admin manual),
@@ -538,6 +555,17 @@ class CustomerSubmissionApprove(BaseSchema):
 class CustomerSubmissionReject(BaseSchema):
     """Body untuk reject submission. reject_reason opsional."""
     reject_reason: Optional[str] = None
+
+
+class CustomerSubmissionCancelRequest(BaseSchema):
+    """Body for POST /customer-submissions/{id}/cancel. Empty body."""
+    pass
+
+
+class CustomerSubmissionCancelResponse(BaseSchema):
+    message: str
+    submission_id: UUID
+    status: str = "CANCELLED"
 
 
 class CustomerSubmissionResponse(BaseSchema):
@@ -580,6 +608,7 @@ class CustomerSubmissionResponse(BaseSchema):
     nama_salesman: Optional[str] = None
     siklus_kunjungan: Optional[str] = None
     hari_kunjungan: Optional[str] = None
+    order: Optional["OrderResponse"] = Field(default=None)
 
     class Config:
         from_attributes = True
