@@ -433,14 +433,22 @@ class AdminProvider extends ChangeNotifier {
     String submissionId, {
     String? rejectReason,
   }) async {
+    // ignore: avoid_print
+    print('PROVIDER_REJECT_START: $submissionId reason=$rejectReason');
     try {
       final updated = await _repo.rejectCustomerSubmission(
         submissionId,
         rejectReason: rejectReason,
       );
+      // ignore: avoid_print
+      print('PROVIDER_REJECT_HTTP_OK: $submissionId');
       await loadCustomerSubmissions(status: _customerSubmissionsStatus);
+      // ignore: avoid_print
+      print('PROVIDER_REJECT_DONE: $submissionId');
       return updated;
-    } catch (e) {
+    } catch (e, st) {
+      // ignore: avoid_print
+      print('PROVIDER_REJECT_ERROR: $e\n$st');
       _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       rethrow;
