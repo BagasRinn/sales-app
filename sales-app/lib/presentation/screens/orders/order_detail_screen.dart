@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
-import '../../../core/datetime_utils.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/draft_order_provider.dart';
 import '../../../data/models/order.dart';
@@ -237,7 +236,7 @@ class _OrderDetailContent extends StatelessWidget {
           child: Row(
             children: [
               Text(
-                'Tanggal: ${dateFmt.format(order.createdAt.toWita())}',
+                'Tanggal: ${dateFmt.format(order.createdAt)}',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(width: 8),

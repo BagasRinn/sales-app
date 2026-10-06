@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/design_system.dart';
-import '../../../core/datetime_utils.dart';
 import '../../providers/bulletin_provider.dart';
 import '../../../data/models/bulletin.dart';
 
@@ -209,7 +208,7 @@ class _BulletinScreenState extends State<BulletinScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            dateFmt.format(bulletin.createdAt.toWita()),
+                            dateFmt.format(bulletin.createdAt),
                             style: AppTextStyles.bodySmall.copyWith(
                               color: AppColors.textMuted,
                             ),
@@ -242,7 +241,7 @@ class _BulletinScreenState extends State<BulletinScreen> {
                             size: 16, color: AppColors.warning),
                         const SizedBox(width: 6),
                         Text(
-                          'Berlaku hingga ${dateFmt.format(bulletin.expireAt!.toWita())}',
+                          'Berlaku hingga ${dateFmt.format(bulletin.expireAt!)}',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.warning,
                             fontWeight: FontWeight.w600,
@@ -395,7 +394,7 @@ class _BulletinCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          dateFmt.format(bulletin.createdAt.toWita()),
+                          dateFmt.format(bulletin.createdAt),
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.textMuted,
                           ),
@@ -411,7 +410,7 @@ class _BulletinCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            isExpired ? 'Berakhir' : 'Exp: ${dateFmt.format(bulletin.expireAt!.toWita())}',
+                            isExpired ? 'Berakhir' : 'Exp: ${dateFmt.format(bulletin.expireAt!)}',
                             style: AppTextStyles.bodySmall.copyWith(
                               color: isExpired
                                   ? AppColors.error

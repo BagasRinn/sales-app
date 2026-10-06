@@ -148,7 +148,7 @@ def _apply_3_layers(
 def _normalize_layer(type_val: str | None, percent: float | Decimal | None, nominal: int | None):
     """Coerce nullable inputs from DB rows to a clean (type, percent, nominal) tuple."""
     t = (type_val or "PERCENT").upper()
-    return t, percent or 0, nominal or 0
+    return t, float(percent or 0), nominal or 0
 
 
 def _layer_cut_sql(type_col, percent_col, nominal_col, base):

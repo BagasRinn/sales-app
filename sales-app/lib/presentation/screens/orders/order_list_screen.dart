@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
-import '../../../core/datetime_utils.dart';
 import '../../providers/order_provider.dart';
 import '../../../data/models/order.dart';
 import 'order_detail_screen.dart';
@@ -287,7 +286,7 @@ class _OrderTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${order.totalQty} item · ${currency.format(order.totalPrice)} · ${dateFmt.format(order.createdAt.toWita())}',
+                      '${order.totalQty} item · ${currency.format(order.totalPrice)} · ${dateFmt.format(order.createdAt)}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),

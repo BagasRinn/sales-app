@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/design_system.dart';
-import '../../../core/datetime_utils.dart';
 import '../../../data/models/customer_submission.dart';
 
 /// Read-only detail submission. Dipakai sales buat lihat status + alasan reject.
@@ -86,9 +85,8 @@ class CustomerSubmissionDetailScreen extends StatelessWidget {
   }
 
   String _formatDate(DateTime dt) {
-    final d = dt.toWita();
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
-        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }
 
