@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class OrderItem {
   final String id;
   final String productId;
@@ -132,7 +134,7 @@ class Order {
       customerName: json['customer_name'] as String?,
       status: json['status'] as String,
       notes: json['notes'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toWita(),
       items: json['items'] != null
           ? (json['items'] as List)
               .map((e) => OrderItem.fromJson(e as Map<String, dynamic>))

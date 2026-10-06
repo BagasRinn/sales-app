@@ -23,7 +23,7 @@ Halaman admin untuk menghapus beberapa produk orderan yang ternyata barang gudan
 Migration produk 4p berdasarkan supplier, aku ada data supplier mana yang 4p yang mana yang reguler. jadi nanti ketika mau nambah produk itu lempar ke halaman memilih tipe order dulu, bisa jadi mau nambah produk 4p atau sebaliknya. jadi yang reguler itu hanya tampil pada saat kita memilih tipe orderan reguler, dan yang tampil saat kita mengklik 4p adalah produk yang masuk ke 4p saja.D
 coba telusurin bagaimana selama ini cara kerja import toko, karena terasa lambat banget dibanding import produk D
 
-Fitur pencarian di halaman Pesanan di bagian web admin
+Fitur pencarian di halaman Pesanan di bagian web admin D
 outlet persales/pengelompokan jadi sales yang ditugaskan aja yang bisa akses, nanti ini ngatur penugasannya ada di dashboard manager D
 
 Penyesuaian Format Kolom Excel Stok baru D

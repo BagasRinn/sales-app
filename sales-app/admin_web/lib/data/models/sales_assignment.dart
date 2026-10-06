@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class SalesAssignment {
   final String salesId;
   final String? salesUsername;
@@ -16,7 +18,7 @@ class SalesAssignment {
       salesId: json['sales_id'] ?? '',
       salesUsername: json['sales_username'] as String?,
       salesNama: json['sales_nama'] as String?,
-      assignedAt: DateTime.tryParse(json['assigned_at'] ?? '') ??
+      assignedAt: DateTime.tryParse(json['assigned_at'] ?? '')?.toWita() ??
           DateTime.now(),
     );
   }

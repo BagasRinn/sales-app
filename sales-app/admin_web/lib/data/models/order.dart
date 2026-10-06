@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class Order {
   final String id;
   final String salesId;
@@ -49,7 +51,7 @@ class Order {
       id: json['id'] ?? '',
       salesId: json['sales_id'] ?? '',
       status: json['status'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toWita() ?? DateTime.now(),
       items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
       salesUsername: json['sales_username'],
       salesNama: json['sales_nama'],
