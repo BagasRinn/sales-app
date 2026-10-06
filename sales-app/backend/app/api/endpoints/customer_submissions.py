@@ -476,3 +476,92 @@ def reject_submission(
     db.commit()
     db.refresh(submission)
     return _serialize(submission, db)
+
+
+@router.post("/{submission_id}/cancel", response_model=CustomerSubmissionCancelResponse)
+def cancel_submission(
+    submission_id: UUID,
+    _body: CustomerSubmissionCancelRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Sales membatalkan submission mereka sendiri.
+    - Hanya SALES role yang boleh memanggil endpoint ini.
+    - Hanya owner (submission.sales_id == current_user.user_id) yang boleh.
+    - Submission harus berstatus PENDING.
+    """
+    if current_user["role"] != "SALES":
+        raise HTTPException(
+            status_code=403,
+            detail="Hanya sales yang dapat membatalkan pengajuan sendiri",
+        )
+
+    sales_id = UUID(current_user["user_id"])
+    submission = (
+        db.query(CustomerRegistrationSubmission)
+        .filter(CustomerRegistrationSubmission.id == submission_id)
+        .with_for_update()
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+    if submission.sales_id != sales_id:
+        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+    if submission.status != "PENDING":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pengajuan tidak bisa dibatalkan (status saat ini: {submission.status})",
+        )
+
+    submission.status = 'CANCELLED'
+    submission.updated_at = datetime.now(timezone.utc)
+
+    if submission.bareng_customer_id:
+        # Cancel linked order and release stock (same logic as reject).
+        linked_order = db.query(Order).filter(
+            Order.customer_id == submission.bareng_customer_id,
+            Order.sales_id == submission.sales_id,
+        ).first()
+        if linked_order:
+            linked_order.status = 'CANCELLED'
+            items = db.query(OrderItem).filter(OrderItem.order_id == linked_order.id).all()
+            for item in items:
+                result = db.execute(
+                    text(
+                        "UPDATE products "
+                        "SET stok_booking = stok_booking - :qty "
+                        "WHERE id = :pid "
+                        "RETURNING stok_booking"
+                    ),
+                    {"pid": item.product_id, "qty": item.qty},
+                ).first()
+                if result:
+                    new_booking = result[0]
+                    old_booking = new_booking + item.qty
+                    log_entry = StokLog(
+                        id=uuid4(),
+                        product_id=item.product_id,
+                        sumber="CANCEL",
+                        field_terdampak="stok_booking",
+                        delta=-item.qty,
+                        nilai_sebelum=old_booking,
+                        nilai_sesudah=new_booking,
+                        actor_id=sales_id,
+                        order_id=linked_order.id,
+                    )
+                    db.add(log_entry)
+
+        # Soft-delete placeholder.
+        placeholder = db.query(Customer).filter(
+            Customer.id == submission.bareng_customer_id
+        ).first()
+        if placeholder:
+            placeholder.deleted_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    return CustomerSubmissionCancelResponse(
+        message="Pengajuan berhasil dibatalkan",
+        submission_id=submission.id,
+        status="CANCELLED",
+    )
