@@ -324,38 +324,36 @@ def approve_submission(
 
     # Kalau customer sudah dibuat saat submission (via bareng_order),
     # cukup update kode-nya. Jangan bikin customer baru.
-    bareng_order_confirmed = None
     if submission.bareng_customer_id:
         existing_customer = db.query(Customer).filter(
             Customer.id == submission.bareng_customer_id
         ).first()
         if existing_customer:
             existing_customer.kode = kode
-            # Copy kode_area dari submission kalau ada. Guard: legacy submissions
-            # dengan kode_area=NULL tidak override existing customer value.
+            # Copy kode_area from submission if set (do NOT override NULL — legacy
+            # placeholder may already have a value from create).
             if submission.kode_area:
                 existing_customer.kode_area = submission.kode_area
+            # Apply optional overrides from admin payload.
+            if payload.nama_toko:
+                existing_customer.nama_toko = payload.nama_toko
+            if payload.alamat:
+                existing_customer.alamat = payload.alamat
         submission.approved_customer_id = submission.bareng_customer_id
 
-        # Auto-confirm order DRAFT milik sales yang linked ke customer ini.
-        # Verifikasi sales_id supaya tidak salah confirm order orang lain.
-        bareng_order = db.query(Order).filter(
+        # Transition order to PENDING so admin reviews items in Pesanan tab.
+        # NOT CONFIRMED — that bypasses admin review.
+        linked_order = db.query(Order).filter(
             Order.customer_id == submission.bareng_customer_id,
             Order.sales_id == submission.sales_id,
-            Order.status == 'DRAFT',
         ).first()
-        if bareng_order:
-            bareng_order.status = 'CONFIRMED'
-            bareng_order_confirmed = {
-                "id": str(bareng_order.id),
-                "status": bareng_order.status,
-            }
+        if linked_order:
+            linked_order.status = 'PENDING'
 
         db.commit()
         db.refresh(submission)
-        # Return shape yang sama dengan non-bareng branch supaya client tidak
-        # perlu handle dua response shape berbeda. `customer` block pakai data
-        # existing customer, `bareng_order` block tetap di-include kalau ada.
+        # Serialize nested order in response.
+        from app.api.endpoints.orders import _build_order_response
         result = {
             "submission": _serialize(submission, db),
             "customer": {
@@ -365,8 +363,10 @@ def approve_submission(
                 "alamat": existing_customer.alamat if existing_customer else None,
             },
         }
-        if bareng_order_confirmed:
-            result["bareng_order"] = bareng_order_confirmed
+        if linked_order:
+            result["order"] = _build_order_response(linked_order)
+        else:
+            result["order"] = None
         return result
 
     # Bikin Customer baru. Nama & alamat dari submission, override kalau admin isi.
