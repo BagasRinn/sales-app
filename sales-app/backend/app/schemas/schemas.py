@@ -1,8 +1,26 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from uuid import UUID
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+
+
+class BaseSchema(BaseModel):
+    """Base untuk semua response schema.
+
+    SQLAlchemy + DateTime(timezone=True) menyimpan nilai UTC tapi strip
+    tzinfo saat read, sehingga Pydantic serialize tanpa suffix "+00:00".
+    Akibatnya client (Flutter) tidak bisa bedakan UTC vs local dan
+    konversi WITA tidak terjadi. Fix: pastikan semua datetime field
+    di-attach dengan UTC tzinfo sebelum serialization.
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _ensure_utc_datetime(cls, v):
+        if isinstance(v, datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
 
 class UserRole(str, Enum):
@@ -23,14 +41,14 @@ class OrderStatus(str, Enum):
 
 # ==================== AUTH ====================
 
-class UserCreate(BaseModel):
+class UserCreate(BaseSchema):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=72)
     role: str = Field(..., description="ADMIN, MANAGER, atau SALES")
     nama: Optional[str] = Field(None, max_length=100)
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(BaseSchema):
     """Edit user — semua field opsional, hanya yang dikirim yang berubah."""
     nama: Optional[str] = None
     role: Optional[str] = None
@@ -38,13 +56,13 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ChangePasswordRequest(BaseModel):
+class ChangePasswordRequest(BaseSchema):
     """Body untuk POST /auth/change-password — ganti password user sendiri."""
     old_password: str = Field(..., min_length=1, max_length=72)
     new_password: str = Field(..., min_length=6, max_length=72)
 
 
-class UserResponse(BaseModel):
+class UserResponse(BaseSchema):
     id: UUID
     username: str
     nama: Optional[str] = None
@@ -56,12 +74,12 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class UserLogin(BaseModel):
+class UserLogin(BaseSchema):
     username: str
     password: str
 
 
-class Token(BaseModel):
+class Token(BaseSchema):
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
@@ -71,13 +89,13 @@ class Token(BaseModel):
     is_active: Optional[bool] = None
 
 
-class RefreshTokenRequest(BaseModel):
+class RefreshTokenRequest(BaseSchema):
     refresh_token: str
 
 
 # ==================== PRODUCTS ====================
 
-class ProductBase(BaseModel):
+class ProductBase(BaseSchema):
     id: str
     nama_barang: str
     harga: int
@@ -94,11 +112,11 @@ class ProductCreate(ProductBase):
     order_type: str = 'REGULER'
 
 
-class ProductUpdateStock(BaseModel):
+class ProductUpdateStock(BaseSchema):
     stok_sistem: int = Field(..., ge=0, description="Nilai stok_sistem baru")
 
 
-class ProductUpdate(BaseModel):
+class ProductUpdate(BaseSchema):
     """Partial update untuk produk — admin only.
     Semua field opsional, hanya yang dikirim yang berubah.
     Dipakai untuk set kategori/satuan/nama_supplier/order_type."""
@@ -108,7 +126,7 @@ class ProductUpdate(BaseModel):
     order_type: Optional[str] = None  # 'REGULER' atau '4P'
 
 
-class ProductResponse(BaseModel):
+class ProductResponse(BaseSchema):
     id: str
     nama_barang: str
     harga: int
@@ -128,13 +146,13 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
-class SyncErrorItem(BaseModel):
+class SyncErrorItem(BaseSchema):
     row: int
     sku: str
     reason: str
 
 
-class SyncResultResponse(BaseModel):
+class SyncResultResponse(BaseSchema):
     success: bool
     total_rows: int
     inserted: int
@@ -146,7 +164,7 @@ class SyncResultResponse(BaseModel):
 
 # ==================== ORDERS ====================
 
-class OrderItemCreate(BaseModel):
+class OrderItemCreate(BaseSchema):
     product_id: str
     qty: int = Field(..., gt=0)
     # --- Discount Layer 1 ---
@@ -163,7 +181,7 @@ class OrderItemCreate(BaseModel):
     discount3_nominal: int = Field(default=0, ge=0)
 
 
-class OrderCreate(BaseModel):
+class OrderCreate(BaseSchema):
     items: List[OrderItemCreate]
     customer_id: UUID
     notes: Optional[str] = None
@@ -174,7 +192,7 @@ class OrderCreate(BaseModel):
     invoice_number: Optional[str] = Field(None, max_length=50)
 
 
-class OrderItemResponse(BaseModel):
+class OrderItemResponse(BaseSchema):
     id: UUID
     product_id: str
     nama_barang: Optional[str] = None
@@ -200,7 +218,7 @@ class OrderItemResponse(BaseModel):
         from_attributes = True
 
 
-class OrderDiscountUpdateItem(BaseModel):
+class OrderDiscountUpdateItem(BaseSchema):
     item_id: UUID
     # --- Discount Layer 1 ---
     discount_type: str = Field(..., description="'PERCENT' atau 'NOMINAL'")
@@ -216,22 +234,22 @@ class OrderDiscountUpdateItem(BaseModel):
     discount3_nominal: int = Field(default=0, ge=0)
 
 
-class OrderDiscountUpdate(BaseModel):
+class OrderDiscountUpdate(BaseSchema):
     """Bulk update discount per item — admin only."""
     items: List[OrderDiscountUpdateItem]
 
 
-class CancelItemEntry(BaseModel):
+class CancelItemEntry(BaseSchema):
     item_id: UUID
     qty: int = Field(..., ge=1)
     reason: str = Field(..., min_length=3)
 
 
-class CancelItemsRequest(BaseModel):
+class CancelItemsRequest(BaseSchema):
     items: List[CancelItemEntry]
 
 
-class CancelledItemResponse(BaseModel):
+class CancelledItemResponse(BaseSchema):
     product_id: str
     # Snapshot nama barang saat cancel — supaya UI tidak harus lookup ulang ke
     # tabel products. Null kalau produk sudah dihapus setelah cancel.
@@ -244,7 +262,7 @@ class CancelledItemResponse(BaseModel):
     reason: str
 
 
-class OrderResponse(BaseModel):
+class OrderResponse(BaseSchema):
     id: UUID
     sales_id: UUID
     customer_id: Optional[UUID] = None
@@ -269,7 +287,7 @@ class OrderResponse(BaseModel):
         from_attributes = True
 
 
-class OrderListResponse(BaseModel):
+class OrderListResponse(BaseSchema):
     id: UUID
     sales_id: UUID
     customer_id: Optional[UUID] = None
@@ -287,7 +305,7 @@ class OrderListResponse(BaseModel):
         from_attributes = True
 
 
-class OrderListWithItemsResponse(BaseModel):
+class OrderListWithItemsResponse(BaseSchema):
     id: UUID
     sales_id: UUID
     sales_username: Optional[str] = None
@@ -310,18 +328,18 @@ class OrderListWithItemsResponse(BaseModel):
         from_attributes = True
 
 
-class OrderStatusUpdate(BaseModel):
+class OrderStatusUpdate(BaseSchema):
     status: str
 
 
-class OrderReject(BaseModel):
+class OrderReject(BaseSchema):
     """Body untuk POST /orders/{order_id}/reject — admin bisa kasih alasan penolakan."""
     reject_reason: Optional[str] = Field(None, max_length=500)
 
 
 # ==================== CUSTOMERS ====================
 
-class CustomerBase(BaseModel):
+class CustomerBase(BaseSchema):
     kode: Optional[str] = Field(None, max_length=50)
     nama_toko: str = Field(..., min_length=1, max_length=200)
     # alamat wajib: identitas toko = (nama_toko, alamat) — boleh ada dua toko
@@ -333,33 +351,33 @@ class CustomerCreate(CustomerBase):
     pass
 
 
-class CustomerUpdate(BaseModel):
+class CustomerUpdate(BaseSchema):
     nama_toko: Optional[str] = None
     alamat: Optional[str] = None
     kode_area: Optional[str] = None
 
 
-class CustomerAssignmentsPut(BaseModel):
+class CustomerAssignmentsPut(BaseSchema):
     """PUT body: replace the full set of sales assigned to a customer.
     Empty list = unassign everyone (backward-compat visible-to-all state)."""
     sales_ids: List[UUID] = Field(default_factory=list)
 
 
-class SalesAssignmentItem(BaseModel):
+class SalesAssignmentItem(BaseSchema):
     sales_id: UUID
     sales_username: Optional[str] = None
     sales_nama: Optional[str] = None
     assigned_at: datetime
 
 
-class AreaAssignmentsPut(BaseModel):
+class AreaAssignmentsPut(BaseSchema):
     """PUT body: replace full set of sales assigned to a kode_area.
     Empty list = unassign semua sales dari area ini (customer di area
     kembali visible-to-all)."""
     sales_ids: List[UUID] = Field(default_factory=list)
 
 
-class AreaAssignmentListItem(BaseModel):
+class AreaAssignmentListItem(BaseSchema):
     """Response untuk GET /area-assignments — list per-area dengan sales assigned."""
     kode_area: str
     sales: List[SalesAssignmentItem] = Field(default_factory=list)
@@ -377,7 +395,7 @@ class CustomerResponse(CustomerBase):
         from_attributes = True
 
 
-class SalesUserResponse(BaseModel):
+class SalesUserResponse(BaseSchema):
     id: UUID
     username: str
     nama: Optional[str] = None
@@ -389,7 +407,7 @@ class SalesUserResponse(BaseModel):
 
 # ==================== SALES STATS ====================
 
-class SalesStatsResponse(BaseModel):
+class SalesStatsResponse(BaseSchema):
     omset_hari_ini: int
     pending_count: int
     selesai_bulan_ini_count: int
@@ -398,7 +416,7 @@ class SalesStatsResponse(BaseModel):
 
 # ==================== STOCK LOG ====================
 
-class StokLogResponse(BaseModel):
+class StokLogResponse(BaseSchema):
     id: UUID
     product_id: str
     sumber: str
@@ -414,7 +432,7 @@ class StokLogResponse(BaseModel):
         from_attributes = True
 
 
-class ImportLogResponse(BaseModel):
+class ImportLogResponse(BaseSchema):
     id: UUID
     nama: Optional[str]
     import_type: str = "PRODUCT"
@@ -431,7 +449,7 @@ class ImportLogResponse(BaseModel):
 
 # ==================== CUSTOMER REGISTRATION SUBMISSIONS ====================
 
-class CustomerSubmissionCreate(BaseModel):
+class CustomerSubmissionCreate(BaseSchema):
     """Payload dari mobile saat sales submit pengajuan customer baru.
     sales_id otomatis dari token, tidak perlu di payload.
 
@@ -501,7 +519,7 @@ class CustomerSubmissionCreate(BaseModel):
         return self
 
 
-class CustomerSubmissionApprove(BaseModel):
+class CustomerSubmissionApprove(BaseSchema):
     """Body untuk approve submission. kode wajib (diinput admin manual),
     nama_toko & alamat opsional (default pakai value dari submission)."""
     kode: str = Field(..., min_length=1, max_length=50)
@@ -509,12 +527,12 @@ class CustomerSubmissionApprove(BaseModel):
     alamat: Optional[str] = Field(None, min_length=1, max_length=500)
 
 
-class CustomerSubmissionReject(BaseModel):
+class CustomerSubmissionReject(BaseSchema):
     """Body untuk reject submission. reject_reason opsional."""
     reject_reason: Optional[str] = None
 
 
-class CustomerSubmissionResponse(BaseModel):
+class CustomerSubmissionResponse(BaseSchema):
     id: UUID
     sales_id: UUID
     sales_nama: Optional[str] = None
@@ -560,7 +578,7 @@ class CustomerSubmissionResponse(BaseModel):
 
 # ==================== SALES TARGETS ====================
 
-class SalesTargetUpdate(BaseModel):
+class SalesTargetUpdate(BaseSchema):
     """Body untuk PUT /sales-targets/{user_id}."""
     period: str = Field(..., description="Periode dalam format YYYY-MM")
     target_type: str = Field(..., description="'ORDER_COUNT' atau 'REVENUE'")
@@ -568,7 +586,7 @@ class SalesTargetUpdate(BaseModel):
     incentive_amount: int = Field(default=0, ge=0, description="Bonus jika target tercapai")
 
 
-class SalesTargetResponse(BaseModel):
+class SalesTargetResponse(BaseSchema):
     id: UUID
     user_id: UUID
     period: str
@@ -584,7 +602,7 @@ class SalesTargetResponse(BaseModel):
 
 # ==================== SALES PERFORMANCE ====================
 
-class SalesPerformanceItem(BaseModel):
+class SalesPerformanceItem(BaseSchema):
     user_id: UUID
     username: str
     nama: Optional[str] = None
@@ -596,27 +614,27 @@ class SalesPerformanceItem(BaseModel):
         from_attributes = True
 
 
-class SalesPerformanceResponse(BaseModel):
+class SalesPerformanceResponse(BaseSchema):
     sales: List[SalesPerformanceItem]
 
 
 # ==================== BULLETINS ====================
 
-class BulletinCreate(BaseModel):
+class BulletinCreate(BaseSchema):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     pdf_url: Optional[str] = Field(None, max_length=500)
     expire_at: Optional[datetime] = None
 
 
-class BulletinUpdate(BaseModel):
+class BulletinUpdate(BaseSchema):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     pdf_url: Optional[str] = Field(None, max_length=500)
     expire_at: Optional[datetime] = None
 
 
-class BulletinResponse(BaseModel):
+class BulletinResponse(BaseSchema):
     id: UUID
     title: str
     description: Optional[str] = None
