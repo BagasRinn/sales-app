@@ -42,6 +42,9 @@ class CustomerSubmission {
   final String? siklusKunjungan;
   final String? hariKunjungan;
 
+  // Order created via bareng_order. Null if bareng_order=False.
+  final Order? order;
+
   CustomerSubmission({
     required this.id,
     required this.salesId,
@@ -80,6 +83,7 @@ class CustomerSubmission {
     this.namaSalesman,
     this.siklusKunjungan,
     this.hariKunjungan,
+    this.order,
   });
 
   factory CustomerSubmission.fromJson(Map<String, dynamic> json) {
@@ -123,6 +127,7 @@ class CustomerSubmission {
       namaSalesman: json['nama_salesman'] as String?,
       siklusKunjungan: json['siklus_kunjungan'] as String?,
       hariKunjungan: json['hari_kunjungan'] as String?,
+      order: json['order'] != null ? Order.fromJson(json['order']) : null,
     );
   }
 
@@ -137,5 +142,69 @@ class CustomerSubmission {
       default:
         return status;
     }
+  }
+}
+
+class OrderItem {
+  final String productId;
+  final String? namaBarang;
+  final int qty;
+  final int hargaSatuan;
+  final int subtotal;
+
+  const OrderItem({
+    required this.productId,
+    this.namaBarang,
+    required this.qty,
+    required this.hargaSatuan,
+    required this.subtotal,
+  });
+
+  factory OrderItem.fromJson(Map<String, dynamic> json) {
+    return OrderItem(
+      productId: json['product_id'] ?? '',
+      namaBarang: json['nama_barang'],
+      qty: json['qty'] ?? 0,
+      hargaSatuan: json['harga_satuan'] ?? 0,
+      subtotal: json['subtotal'] ?? 0,
+    );
+  }
+}
+
+class Order {
+  final String id;
+  final String status;
+  final String orderType;
+  final String? storeName;
+  final List<OrderItem> items;
+  final int? totalAmount;
+  final int? totalDiscount;
+  final DateTime createdAt;
+
+  const Order({
+    required this.id,
+    required this.status,
+    required this.orderType,
+    this.storeName,
+    required this.items,
+    this.totalAmount,
+    this.totalDiscount,
+    required this.createdAt,
+  });
+
+  factory Order.fromJson(Map<String, dynamic> json) {
+    return Order(
+      id: json['id'] ?? '',
+      status: json['status'] ?? 'DRAFT',
+      orderType: json['order_type'] ?? 'REGULER',
+      storeName: json['store_name'],
+      items: (json['items'] as List?)
+              ?.map((i) => OrderItem.fromJson(i))
+              .toList() ??
+          [],
+      totalAmount: json['total_amount'],
+      totalDiscount: json['total_discount'],
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+    );
   }
 }
