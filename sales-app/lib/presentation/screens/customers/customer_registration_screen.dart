@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/design_system.dart';
+import '../../../data/models/product.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/draft_order_provider.dart';
+import '../../providers/product_provider.dart';
 import '../order_flow/order_flow_screen.dart';
 
 /// Form pengajuan customer baru dari sales.
@@ -56,6 +59,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
   // Toggle bareng order
   bool _barengOrder = false;
+
+  /// Local cart items for bareng order.
+  final List<_BarengItem> _barengItems = [];
+  String _barengOrderType = 'REGULER';
+  String? _barengItemsError;
 
   bool _isSubmitting = false;
 
@@ -191,6 +199,18 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     return t.isEmpty ? null : t;
   }
 
+  Future<void> _addBarengItem(BuildContext context) async {
+    final picked = await showModalBottomSheet<_BarengItem>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProductSearchSheet(orderType: _barengOrderType),
+    );
+    if (picked != null) {
+      setState(() => _barengItems.add(picked));
+    }
+  }
+
   Future<void> _submit() async {
     // === Validasi ===
     if (_namaCtl.text.trim().isEmpty) {
@@ -253,6 +273,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       _snack('Batas kredit wajib diisi untuk pembayaran Kredit');
       return;
     }
+    if (_barengOrder && _barengItems.isEmpty) {
+      setState(() => _barengItemsError = 'Tambahkan minimal 1 item pesanan.');
+      _snack('Tambahkan minimal 1 item pesanan');
+      return;
+    }
     // === End validasi ===
 
     final repo = context.read<CustomerRepository>();
@@ -263,7 +288,12 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
     setState(() => _isSubmitting = true);
     try {
-      final result = await repo.submitCustomerRegistration(_buildPayload());
+      final payload = _buildPayload();
+      if (_barengOrder && _barengItems.isNotEmpty) {
+        payload['order_type'] = _barengOrderType;
+        payload['order_items'] = _barengItems.map((i) => i.toPayload()).toList();
+      }
+      final result = await repo.submitCustomerRegistration(payload);
       if (!mounted) return;
 
       scaffold.showSnackBar(
@@ -430,6 +460,20 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   Text(
                     'Setelah customer disubmit, akan langsung diarahkan ke langkah order.',
                     style: AppTextStyles.bodySmall.copyWith(color: AppColors.info),
+                  ),
+                  const SizedBox(height: 12),
+                  _BarengOrderPicker(
+                    items: _barengItems,
+                    orderType: _barengOrderType,
+                    error: _barengItemsError,
+                    onAddItem: () => setState(() {
+                      _barengItemsError = null;
+                      _addBarengItem(context);
+                    }),
+                    onRemoveItem: (i) => setState(() => _barengItems.removeAt(i)),
+                    onQtyChanged: (record) => setState(() =>
+                        _barengItems[record.index].qty = record.qty),
+                    onOrderTypeChanged: (v) => setState(() => _barengOrderType = v),
                   ),
                 ],
               ],
@@ -913,6 +957,546 @@ class _ChoiceWrap extends StatelessWidget {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bareng Order — local cart item model
+// ---------------------------------------------------------------------------
+
+class _BarengItem {
+  final String productId;
+  final String namaBarang;
+  final int hargaSatuan;
+  final int stokTersedia;
+  int qty;
+
+  _BarengItem({
+    required this.productId,
+    required this.namaBarang,
+    required this.hargaSatuan,
+    required this.stokTersedia,
+    this.qty = 1,
+  });
+
+  int get subtotal => hargaSatuan * qty;
+
+  /// Convert to payload map for submitCustomerRegistration.
+  Map<String, dynamic> toPayload() => {
+    'product_id': productId,
+    'qty': qty,
+    'discount_type': 'PERCENT',
+    'discount_percent': 0.0,
+    'discount_nominal': 0,
+    'discount2_type': 'PERCENT',
+    'discount2_percent': 0.0,
+    'discount2_nominal': 0,
+    'discount3_type': 'PERCENT',
+    'discount3_percent': 0.0,
+    'discount3_nominal': 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bareng Order Items Picker — section shown when barengOrder == true
+// ---------------------------------------------------------------------------
+
+class _BarengOrderPicker extends StatelessWidget {
+  final List<_BarengItem> items;
+  final String orderType;
+  final String? error;
+  final VoidCallback onAddItem;
+  final ValueChanged<int> onRemoveItem;
+  final ValueChanged<({int index, int qty})> onQtyChanged;
+  final ValueChanged<String> onOrderTypeChanged;
+
+  const _BarengOrderPicker({
+    required this.items,
+    required this.orderType,
+    required this.error,
+    required this.onAddItem,
+    required this.onRemoveItem,
+    required this.onQtyChanged,
+    required this.onOrderTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final total = items.fold<int>(0, (sum, item) => sum + item.subtotal);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.primaryLight),
+              const SizedBox(width: 8),
+              Text(
+                'Items Pesanan',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Order type selector
+          Text(
+            'Tipe Order',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            children: ['REGULER', '4P'].map((t) {
+              final sel = orderType == t;
+              return ChoiceChip(
+                label: Text(t),
+                selected: sel,
+                onSelected: (_) => onOrderTypeChanged(t),
+                selectedColor: AppColors.primaryLight,
+                labelStyle: TextStyle(
+                  color: sel ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+
+          // Search/add button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onAddItem,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Tambah Item'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryLight,
+                side: const BorderSide(color: AppColors.primaryLight),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Error message
+          if (error != null) ...[
+            Text(
+              error!,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // Item list
+          if (items.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'Belum ada item. Tekan "Tambah Item" di atas.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (int i = 0; i < items.length; i++)
+                  _BarengItemRow(
+                    item: items[i],
+                    currency: currency,
+                    onRemove: () => onRemoveItem(i),
+                    onQtyChanged: (qty) => onQtyChanged((index: i, qty: qty)),
+                  ),
+                const Divider(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Subtotal',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      currency.format(total),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarengItemRow extends StatelessWidget {
+  final _BarengItem item;
+  final NumberFormat currency;
+  final VoidCallback onRemove;
+  final ValueChanged<int> onQtyChanged;
+
+  const _BarengItemRow({
+    required this.item,
+    required this.currency,
+    required this.onRemove,
+    required this.onQtyChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.namaBarang,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 16),
+                onPressed: onRemove,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                color: AppColors.textMuted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                '${currency.format(item.hargaSatuan)} × ',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              // Qty stepper
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.borderLight),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MiniStepperBtn(
+                      icon: Icons.remove,
+                      onTap: item.qty > 1 ? () => onQtyChanged(item.qty - 1) : null,
+                    ),
+                    Container(
+                      width: 36,
+                      alignment: Alignment.center,
+                      child: Text(
+                        '${item.qty}',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    _MiniStepperBtn(
+                      icon: Icons.add,
+                      onTap: item.qty < item.stokTersedia
+                          ? () => onQtyChanged(item.qty + 1)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                currency.format(item.subtotal),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryLight,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Tersedia: ${item.stokTersedia}',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textMuted,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStepperBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  const _MiniStepperBtn({required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        child: Icon(
+          icon,
+          size: 14,
+          color: active ? AppColors.primaryLight : AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Product Search Bottom Sheet
+// ---------------------------------------------------------------------------
+
+class _ProductSearchSheet extends StatefulWidget {
+  final String orderType;
+  const _ProductSearchSheet({required this.orderType});
+
+  @override
+  State<_ProductSearchSheet> createState() => _ProductSearchSheetState();
+}
+
+class _ProductSearchSheetState extends State<_ProductSearchSheet> {
+  final _searchCtl = TextEditingController();
+  String _search = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Trigger load with current order type filter
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ProductProvider>().loadProducts(
+        orderType: widget.orderType,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
+  List<Product> _filtered(List<Product> products) {
+    if (_search.isEmpty) return products;
+    final q = _search.toLowerCase();
+    return products.where((p) {
+      return p.namaBarang.toLowerCase().contains(q) ||
+          p.id.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final productProvider = context.watch<ProductProvider>();
+    final products = _filtered(productProvider.products);
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.borderLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtl,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Cari produk...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        isDense: true,
+                      ),
+                      onChanged: (v) => setState(() => _search = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // List
+            Expanded(
+              child: productProvider.isLoading && products.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : products.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Produk tidak ditemukan',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: products.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (context, i) {
+                            final p = products[i];
+                            final isOutOfStock = p.stokTersedia == 0;
+                            return Material(
+                              color: AppColors.cardSurface,
+                              borderRadius: BorderRadius.circular(10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: isOutOfStock ? null : () => Navigator.pop(context, p),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isOutOfStock
+                                          ? AppColors.borderLight.withValues(alpha: 0.5)
+                                          : AppColors.borderLight,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              p.namaBarang,
+                                              style: AppTextStyles.bodyMedium.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                color: isOutOfStock
+                                                    ? AppColors.textMuted
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Stok: ${p.stokTersedia}',
+                                              style: AppTextStyles.bodySmall.copyWith(
+                                                color: isOutOfStock
+                                                    ? AppColors.error
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        currency.format(p.harga),
+                                        style: AppTextStyles.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: isOutOfStock
+                                              ? AppColors.textMuted
+                                              : AppColors.primaryLight,
+                                        ),
+                                      ),
+                                      if (isOutOfStock) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'Habis',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.red.shade700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

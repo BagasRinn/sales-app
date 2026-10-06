@@ -433,6 +433,204 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _OrderSection extends StatelessWidget {
+  final Order order;
+  const _OrderSection({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _orderStatusColor(order.status);
+    final isPending = order.status == 'PENDING';
+    final isDraft = order.status == 'DRAFT';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Order Items',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(
+                    order.status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Item list
+            ...order.items.map((item) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.namaBarang ?? item.productId,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Rp ${_fmtNumber(item.hargaSatuan)} x ${item.qty}',
+                          style: AppTextStyles.bodySmall.copyWith(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'Rp ${_fmtNumber(item.subtotal)}',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+
+            const Divider(height: 16),
+
+            // Total
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'TOTAL PESANAN',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  'Rp ${_fmtNumber(order.totalAmount ?? 0)}',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+
+            // Info banner
+            if (isDraft) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.infoBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.infoBorder),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: AppColors.info),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Order akan masuk tab Pesanan (status: PENDING) setelah Anda menyetujui pengajuan ini.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.info,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (isPending) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.successBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.successBorder),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 16, color: AppColors.success),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pengajuan disetujui. Order masuk tab Pesanan (PENDING). Review item di sana.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _orderStatusColor(String status) {
+    switch (status) {
+      case 'APPROVED':
+        return AppColors.success;
+      case 'REJECTED':
+      case 'CANCELLED':
+        return AppColors.error;
+      case 'PENDING':
+        return AppColors.warning;
+      default:
+        return AppColors.textMuted;
+    }
+  }
+
+  String _fmtNumber(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+}
+
 /// Detail screen — show all form fields + audit info + Approve/Reject buttons (kalau PENDING).
 class _SubmissionDetailScreen extends StatelessWidget {
   final CustomerSubmission submission;
@@ -505,13 +703,14 @@ class _SubmissionDetailScreen extends StatelessWidget {
               MapEntry('Area / Route', s.areaRoute),
               MapEntry('Kode Area', s.kodeArea),
             ]),
+            _kvGrid([
+              MapEntry('Nama Pasar', s.namaPasar),
+              MapEntry('', null), // keep 2-col grid, empty right cell
+            ]),
           ]),
 
           _section('Pembayaran', [
-            _kvGrid([
-              MapEntry('Tipe Pembayaran', s.tipePembayaran),
-              MapEntry('Nama Pasar', s.namaPasar),
-            ]),
+            _kvRow('Tipe Pembayaran', s.tipePembayaran),
             _kvGrid([
               MapEntry('Jangka Kredit', s.jangkaKreditHari != null ? '${s.jangkaKreditHari} hari' : null),
               MapEntry('Batas Kredit', s.batasKreditRupiah != null ? 'Rp ${_fmtNumber(s.batasKreditRupiah!)}' : null),
@@ -550,6 +749,10 @@ class _SubmissionDetailScreen extends StatelessWidget {
             if (s.status == 'REJECTED' && s.rejectReason != null)
               _kvRow('Alasan Ditolak', s.rejectReason),
           ]),
+
+          // After Audit section, before bottomNavigationBar:
+          if (s.order != null)
+            _OrderSection(order: s.order!),
         ],
       ),
       bottomNavigationBar: canApprove
@@ -793,6 +996,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
               style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w700,
+                fontSize: 13,
                 letterSpacing: 0.5,
               ),
             ),
@@ -816,7 +1020,6 @@ class _SubmissionDetailScreen extends StatelessWidget {
             label,
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.textMuted,
-              fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -824,6 +1027,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
           Text(
             v,
             style: AppTextStyles.bodyMedium.copyWith(
+              fontSize: 15,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
@@ -868,7 +1072,8 @@ class _SubmissionDetailScreen extends StatelessWidget {
   }
 
   Widget _kvCol(String label, String? value) {
-    final v = (value == null || value.isEmpty) ? '—' : value;
+    final v = (value == null || value.isEmpty || label.isEmpty) ? '—' : value;
+    if (label.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -876,7 +1081,6 @@ class _SubmissionDetailScreen extends StatelessWidget {
           label,
           style: AppTextStyles.bodySmall.copyWith(
             color: AppColors.textMuted,
-            fontSize: 11,
             fontWeight: FontWeight.w500,
           ),
           maxLines: 1,
@@ -886,6 +1090,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
         Text(
           v,
           style: AppTextStyles.bodyMedium.copyWith(
+            fontSize: 15,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
           ),
