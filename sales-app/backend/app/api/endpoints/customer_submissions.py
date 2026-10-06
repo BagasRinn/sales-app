@@ -269,12 +269,17 @@ def approve_submission(
 
         db.commit()
         db.refresh(submission)
+        # Return shape yang sama dengan non-bareng branch supaya client tidak
+        # perlu handle dua response shape berbeda. `customer` block pakai data
+        # existing customer, `bareng_order` block tetap di-include kalau ada.
         result = {
-            "message": "Submission disetujui (customer sudah dibuat saat pengajuan).",
-            "customer_id": str(submission.bareng_customer_id),
-            "customer_kode": kode,
-            "customer_nama_toko": existing_customer.nama_toko if existing_customer else submission.nama_langganan,
-            "customer_alamat": existing_customer.alamat if existing_customer else None,
+            "submission": _serialize(submission, db),
+            "customer": {
+                "id": str(submission.bareng_customer_id),
+                "kode": kode,
+                "nama_toko": existing_customer.nama_toko if existing_customer else submission.nama_langganan,
+                "alamat": existing_customer.alamat if existing_customer else None,
+            },
         }
         if bareng_order_confirmed:
             result["bareng_order"] = bareng_order_confirmed

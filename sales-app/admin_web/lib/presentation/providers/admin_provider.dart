@@ -406,9 +406,22 @@ class AdminProvider extends ChangeNotifier {
       );
       // Refresh list supaya status update kelihatan.
       await loadCustomerSubmissions(status: _customerSubmissionsStatus);
-      // Return updated submission dari response.
-      return CustomerSubmission.fromJson(
-          result['submission'] as Map<String, dynamic>);
+      // Backend return {submission, customer} untuk flow normal, dan
+      // {submission, customer, bareng_order} untuk bareng case. Fallback ke
+      // list reload kalau response tidak punya `submission` key.
+      final submissionJson = result['submission'];
+      if (submissionJson is Map<String, dynamic>) {
+        return CustomerSubmission.fromJson(submissionJson);
+      }
+      // Fallback: cari submission yang baru di-approve dari list yang baru di-load.
+      final updated = _customerSubmissions.firstWhere(
+        (s) => s.id == submissionId,
+        orElse: () => throw StateError(
+          'Approve response missing submission dan submission $submissionId '
+          'tidak ditemukan di list refresh',
+        ),
+      );
+      return updated;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
