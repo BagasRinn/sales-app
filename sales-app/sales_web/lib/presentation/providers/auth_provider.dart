@@ -87,4 +87,19 @@ class AuthProvider with ChangeNotifier {
     _state = AuthState.unauthenticated;
     notifyListeners();
   }
+
+  Future<bool> changePassword(String currentPassword, String newPassword) async {
+    try {
+      await _authRepo.changePassword(currentPassword, newPassword);
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Gagal mengubah password.';
+      notifyListeners();
+      return false;
+    }
+  }
 }

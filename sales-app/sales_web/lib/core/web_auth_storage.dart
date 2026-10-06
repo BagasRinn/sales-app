@@ -24,6 +24,16 @@ class WebAuthStorage {
 
   // ─── Session Storage (dies on tab close) ───────────────────────────────────
 
+  /// Save access token to sessionStorage (for persistence across hot-restarts).
+  Future<void> saveAccessToken(String token) async {
+    web.window.sessionStorage.setItem(AppConfig.accessTokenKey, token);
+  }
+
+  /// Get access token from sessionStorage.
+  String? getAccessToken() {
+    return web.window.sessionStorage.getItem(AppConfig.accessTokenKey);
+  }
+
   /// Save refresh token to sessionStorage.
   Future<void> saveRefreshToken(String token) async {
     web.window.sessionStorage.setItem(AppConfig.refreshTokenKey, token);
@@ -74,6 +84,7 @@ class WebAuthStorage {
 
   /// Clear all auth data from sessionStorage.
   Future<void> clearAll() async {
+    web.window.sessionStorage.removeItem(AppConfig.accessTokenKey);
     web.window.sessionStorage.removeItem(AppConfig.refreshTokenKey);
     web.window.sessionStorage.removeItem(AppConfig.userRoleKey);
     web.window.sessionStorage.removeItem(AppConfig.userIdKey);

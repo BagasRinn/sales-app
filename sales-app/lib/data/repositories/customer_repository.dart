@@ -53,4 +53,13 @@ class CustomerRepository {
     final data = await _api.get('/customer-submissions/check-duplicate$queryString');
     return data as Map<String, dynamic>;
   }
+
+  /// List distinct kode_area dari backend — sumber dropdown 'Kode Area'
+  /// di form pengajuan customer baru. Empty list artinya belum ada area
+  /// terdaftar; sales tetap bisa ketik manual via "Lainnya..." di form.
+  Future<List<String>> getKodeAreas() async {
+    final data = await _api.get('/customers/kode-areas');
+    final items = (data as Map<String, dynamic>)['items'] as List? ?? [];
+    return items.map((e) => e as String).toList();
+  }
 }

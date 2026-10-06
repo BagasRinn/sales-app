@@ -55,6 +55,7 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "kota": submission.kota,
         "kelurahan": submission.kelurahan,
         "area_route": submission.area_route,
+        "kode_area": submission.kode_area,
         "tipe_langganan": submission.tipe_langganan,
         "tipe_pembayaran": submission.tipe_pembayaran,
         "nama_pasar": submission.nama_pasar,
@@ -251,6 +252,10 @@ def approve_submission(
         ).first()
         if existing_customer:
             existing_customer.kode = kode
+            # Copy kode_area dari submission kalau ada. Guard: legacy submissions
+            # dengan kode_area=NULL tidak override existing customer value.
+            if submission.kode_area:
+                existing_customer.kode_area = submission.kode_area
         submission.approved_customer_id = submission.bareng_customer_id
 
         # Auto-confirm order DRAFT milik sales yang linked ke customer ini.
@@ -294,6 +299,7 @@ def approve_submission(
         kode=kode,
         nama_toko=nama_toko,
         alamat=alamat if alamat else None,
+        kode_area=submission.kode_area,
     )
     db.add(customer)
     db.flush()  # dapet customer.id

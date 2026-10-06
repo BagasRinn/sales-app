@@ -90,7 +90,7 @@ class _AppShellState extends State<AppShell> {
         icon: const Icon(Icons.add),
         label: const Text('Order Baru'),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

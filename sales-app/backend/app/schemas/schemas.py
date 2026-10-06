@@ -395,6 +395,13 @@ class CustomerResponse(CustomerBase):
         from_attributes = True
 
 
+class KodeAreaListResponse(BaseSchema):
+    """List distinct kode_area dari customers — sumber dropdown 'Kode Area'
+    di mobile submission form. Sales boleh membuat kode_area baru yang
+    belum ada di list (free-text fallback di form)."""
+    items: List[str] = Field(default_factory=list)
+
+
 class SalesUserResponse(BaseSchema):
     id: UUID
     username: str
@@ -468,6 +475,7 @@ class CustomerSubmissionCreate(BaseSchema):
     kota: str = Field(..., min_length=1, max_length=100)
     kelurahan: str = Field(..., min_length=1, max_length=100)
     area_route: Optional[str] = Field(None, max_length=100)
+    kode_area: Optional[str] = Field(None, max_length=50)
     tipe_langganan: str = Field(..., min_length=1, max_length=50)
     # Section 2: Tipe Pembayaran
     tipe_pembayaran: str = Field(..., min_length=1, max_length=20)
@@ -559,6 +567,7 @@ class CustomerSubmissionResponse(BaseSchema):
     kota: Optional[str] = None
     kelurahan: Optional[str] = None
     area_route: Optional[str] = None
+    kode_area: Optional[str] = None
     tipe_langganan: Optional[str] = None
     tipe_pembayaran: Optional[str] = None
     nama_pasar: Optional[str] = None

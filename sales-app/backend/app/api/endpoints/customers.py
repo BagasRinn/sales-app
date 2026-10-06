@@ -22,6 +22,7 @@ from app.schemas.schemas import (
     CustomerCreate,
     CustomerResponse,
     CustomerUpdate,
+    KodeAreaListResponse,
     SalesAssignmentItem,
     SyncResultResponse,
 )
@@ -164,6 +165,29 @@ def list_my_customers(
             )
         )
     return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
+
+
+@router.get("/kode-areas", response_model=KodeAreaListResponse)
+def list_kode_areas(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_auth),
+):
+    """Distinct kode_area dari customers — sumber dropdown di mobile
+    submission form. Sales boleh membuat kode_area baru yang tidak ada
+    di list (free-text fallback di form, tidak ada 409/422).
+
+    Auth: require_auth (bukan require_manager) karena sales butuh akses
+    untuk isi form pengajuan customer. Data yang dikembalikan (list of
+    strings) tidak sensitif — tidak ada info sales-roster.
+    """
+    rows = (
+        db.query(Customer.kode_area)
+        .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
+        .distinct()
+        .order_by(Customer.kode_area)
+        .all()
+    )
+    return KodeAreaListResponse(items=[r[0] for r in rows if r[0]])
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)

@@ -256,67 +256,54 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const circleSize = 32.0;
+    const totalSteps = 4;
+
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       child: Row(
-        children: List.generate(4, (index) {
-          final stepNum = index + 1;
-          final isActive = stepNum == currentStep;
-          final isDone = stepNum < currentStep;
-
-          return Expanded(
-            child: Row(
-              children: [
-                if (index > 0)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      color: isDone || isActive
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: isDone
-                        ? const Color(0xFF2563EB)
-                        : isActive
-                            ? const Color(0xFF2563EB)
-                            : const Color(0xFFE2E8F0),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: isDone
-                        ? const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 16,
-                          )
-                        : Text(
-                            '$stepNum',
-                            style: TextStyle(
-                              color: isActive ? Colors.white : const Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                  ),
-                ),
-                if (index < 3)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      color: isDone
-                          ? const Color(0xFF2563EB)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-              ],
-            ),
-          );
+        children: List.generate(totalSteps * 2 - 1, (index) {
+          if (index.isOdd) {
+            // Line between circles
+            final stepNum = (index ~/ 2) + 1;
+            final isDone = stepNum < currentStep;
+            return Expanded(
+              child: Container(
+                height: 2,
+                color: isDone ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+              ),
+            );
+          } else {
+            // Circle
+            final stepNum = (index ~/ 2) + 1;
+            final isActive = stepNum == currentStep;
+            final isDone = stepNum < currentStep;
+            return Container(
+              width: circleSize,
+              height: circleSize,
+              decoration: BoxDecoration(
+                color: isDone || isActive
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFFE2E8F0),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: isDone
+                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    : Text(
+                        '$stepNum',
+                        style: TextStyle(
+                          color: isActive
+                              ? Colors.white
+                              : const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+              ),
+            );
+          }
         }),
       ),
     );

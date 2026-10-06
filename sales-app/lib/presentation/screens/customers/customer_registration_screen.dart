@@ -31,6 +31,12 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   final _kotaCtl = TextEditingController();
   final _kelurahanCtl = TextEditingController();
   final _areaCtl = TextEditingController();
+  // Kode Area (grouping key untuk sales coverage) — dropdown dari distinct
+  // values di customers, plus "Lainnya..." fallback untuk area baru.
+  List<String> _kodeAreaOptions = [];
+  String? _kodeArea;
+  bool _kodeAreaIsCustom = false;
+  final _kodeAreaCtl = TextEditingController();
   String? _tipeLanggananKategori; // PASAR | NON PASAR
   final _namaPasarCtl = TextEditingController();
 
@@ -60,6 +66,14 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       final auth = context.read<AuthProvider>();
       if (auth.username != null) _kodeSalesmanCtl.text = auth.username!;
       if (auth.nama != null) _namaSalesmanCtl.text = auth.nama!;
+      // Load dropdown options. Silent on failure: empty list → form tetap
+      // usable via "Lainnya (ketik manual)...".
+      context.read<CustomerRepository>().getKodeAreas().then((areas) {
+        if (!mounted) return;
+        setState(() => _kodeAreaOptions = areas);
+      }).catchError((_) {
+        // sengaja di-swallow: dropdown kosong bukan error
+      });
     });
   }
 
@@ -109,6 +123,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     _kotaCtl.dispose();
     _kelurahanCtl.dispose();
     _areaCtl.dispose();
+    _kodeAreaCtl.dispose();
     _namaPasarCtl.dispose();
     _batasKreditCtl.dispose();
     _keyAccountCtl.dispose();
@@ -146,6 +161,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       'kota': _kotaCtl.text.trim(),
       'kelurahan': _kelurahanCtl.text.trim(),
       'area_route': _orNull(_areaCtl.text),
+      'kode_area': (_kodeArea == null || _kodeArea!.isEmpty) ? null : _kodeArea,
       'tipe_langganan': tipeLangganan,
       // Section 2
       'tipe_pembayaran': _tipePembayaran,
@@ -437,6 +453,69 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           _Field(label: 'Kota', controller: _kotaCtl),
           _Field(label: 'Kelurahan', controller: _kelurahanCtl),
           _Field(label: 'Area / Route', controller: _areaCtl),
+          // Kode Area — dropdown dari distinct values di customers.
+          // Free-text fallback "Lainnya..." untuk area baru (admin
+          // belum punya record-nya). Mirrors customers.kode_area.
+          const SizedBox(height: 4),
+          _FieldLabel(text: 'Kode Area'),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _kodeAreaIsCustom
+                        ? '__custom__'
+                        : (_kodeAreaOptions.contains(_kodeArea) ? _kodeArea : null),
+                    hint: const Text('Pilih kode area'),
+                    isExpanded: true,
+                    items: [
+                      ..._kodeAreaOptions.map(
+                        (a) => DropdownMenuItem<String>(
+                          value: a,
+                          child: Text(a),
+                        ),
+                      ),
+                      const DropdownMenuItem<String>(
+                        value: '__custom__',
+                        child: Text('Lainnya (ketik manual)…'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      setState(() {
+                        if (v == '__custom__') {
+                          _kodeAreaIsCustom = true;
+                          _kodeArea = _kodeAreaCtl.text.trim();
+                        } else {
+                          _kodeAreaIsCustom = false;
+                          _kodeArea = v;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                if (_kodeAreaIsCustom)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      controller: _kodeAreaCtl,
+                      onChanged: (v) => _kodeArea = v.trim(),
+                      decoration: const InputDecoration(
+                        labelText: 'Kode Area baru',
+                        hintText: 'Misal: MULIA2',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           _FieldLabel(text: 'Tipe Langganan'),
           _ChoiceRow(
             options: _tipeLanggananKategoriOptions,

@@ -253,6 +253,10 @@ class CustomerRegistrationSubmission(Base):
     kota = Column(String(100), nullable=True)
     kelurahan = Column(String(100), nullable=True)
     area_route = Column(String(100), nullable=True)
+    # Mirrors customers.kode_area — grouping key untuk sales coverage.
+    # Nullable: legacy rows stay NULL; approve flow copies this ke
+    # customers.kode_area saat submission di-approve.
+    kode_area = Column(String(50), nullable=True)
     tipe_langganan = Column(String(50), nullable=True)
 
     # Section 2: Tipe Pembayaran

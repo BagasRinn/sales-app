@@ -6,12 +6,14 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/order_repository.dart';
 import 'data/repositories/customer_repository.dart';
 import 'data/repositories/product_repository.dart';
+import 'data/repositories/bulletin_repository.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/order_provider.dart';
 import 'presentation/providers/home_stats_provider.dart';
 import 'presentation/providers/product_provider.dart';
 import 'presentation/providers/draft_order_provider.dart';
 import 'presentation/providers/customer_provider.dart';
+import 'presentation/providers/bulletin_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/app_shell.dart';
 
@@ -30,6 +32,7 @@ class SalesWebApp extends StatelessWidget {
     final orderRepo = OrderRepository(apiService);
     final customerRepo = CustomerRepository(apiService);
     final productRepo = ProductRepository(apiService);
+    final bulletinRepo = BulletinRepository(apiService);
 
     return MultiProvider(
       providers: [
@@ -50,6 +53,9 @@ class SalesWebApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => DraftOrderProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => BulletinProvider(bulletinRepo),
         ),
         Provider.value(value: apiService),
       ],

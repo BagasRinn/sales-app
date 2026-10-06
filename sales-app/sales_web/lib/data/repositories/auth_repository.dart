@@ -27,6 +27,8 @@ class AuthRepository {
     // Access token di memory
     _api.setAccessToken(token);
     _storage.setAccessToken(token);
+    // Simpan juga ke sessionStorage (bertahan saat hot-restart)
+    await _storage.saveAccessToken(token);
 
     // Refresh token di sessionStorage (die on tab close)
     await _storage.saveRefreshToken(refreshToken);
@@ -56,6 +58,13 @@ class AuthRepository {
     final refreshToken = _storage.getRefreshToken();
     if (refreshToken == null) return false;
 
+    // Restore access token from sessionStorage (survives hot-restart)
+    final storedAccessToken = _storage.getAccessToken();
+    if (storedAccessToken != null) {
+      _api.setAccessToken(storedAccessToken);
+      _storage.setAccessToken(storedAccessToken);
+    }
+
     try {
       // Try to refresh tokens
       final data = await refreshTokens(refreshToken);
@@ -78,9 +87,17 @@ class AuthRepository {
 
     _api.setAccessToken(newAccessToken);
     _storage.setAccessToken(newAccessToken);
+    await _storage.saveAccessToken(newAccessToken);
     await _storage.saveRefreshToken(newRefreshToken ?? refreshToken);
 
     return data;
+  }
+
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    await _api.post('/auth/change-password', body: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
   }
 
   String? get accessToken => _storage.accessToken;

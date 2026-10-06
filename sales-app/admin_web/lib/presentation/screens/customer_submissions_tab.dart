@@ -446,10 +446,10 @@ class _SubmissionDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Detail Pengajuan')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: _statusBg(s.status),
               borderRadius: BorderRadius.circular(12),
@@ -457,64 +457,98 @@ class _SubmissionDetailScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(_statusIcon(s.status), color: _statusFg(s.status)),
+                Icon(_statusIcon(s.status), color: _statusFg(s.status), size: 20),
                 const SizedBox(width: 8),
                 Text(
                   s.statusLabel,
-                  style: AppTextStyles.bodyLarge.copyWith(
+                  style: AppTextStyles.bodyMedium.copyWith(
                     color: _statusFg(s.status),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (s.reviewedByNama != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '• oleh ${s.reviewedByNama}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: _statusFg(s.status),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           _section('Identitas', [
-            _row('Nama Langganan', s.namaLangganan),
-            _row('Nomor ID / KTP', s.nomorIdKtp),
-            _row('Alamat KTP', s.alamatKtp),
-            _row('Nama Kontak', s.namaKontakPemilik),
-            _row('Telpon / HP', s.telponHp),
-            _row('Alamat Kirim', s.alamatKirim),
-            _row('Propinsi', s.propinsi),
-            _row('Kecamatan', s.kecamatan),
-            _row('Kota', s.kota),
-            _row('Kelurahan', s.kelurahan),
-            _row('Area / Route', s.areaRoute),
-            _row('Tipe Langganan', s.tipeLangganan),
+            // Full-width title-ish fields
+            _kvRow('Nama Langganan', s.namaLangganan),
+            _kvGrid([
+              MapEntry('Nomor ID / KTP', s.nomorIdKtp),
+              MapEntry('Nama Kontak', s.namaKontakPemilik),
+            ]),
+            _kvRow('Alamat KTP', s.alamatKtp),
+            _kvGrid([
+              MapEntry('Telpon / HP', s.telponHp),
+              MapEntry('Tipe Langganan', s.tipeLangganan),
+            ]),
+            _kvRow('Alamat Kirim', s.alamatKirim),
+            _kvGrid([
+              MapEntry('Propinsi', s.propinsi),
+              MapEntry('Kecamatan', s.kecamatan),
+            ]),
+            _kvGrid([
+              MapEntry('Kota', s.kota),
+              MapEntry('Kelurahan', s.kelurahan),
+            ]),
+            _kvGrid([
+              MapEntry('Area / Route', s.areaRoute),
+              MapEntry('Kode Area', s.kodeArea),
+            ]),
           ]),
 
           _section('Pembayaran', [
-            _row('Tipe Pembayaran', s.tipePembayaran),
-            _row('Nama Pasar', s.namaPasar),
-            _row('Jangka Kredit', s.jangkaKreditHari != null ? '${s.jangkaKreditHari} hari' : null),
-            _row('Batas Kredit', s.batasKreditRupiah != null ? 'Rp ${_fmtNumber(s.batasKreditRupiah!)}' : null),
+            _kvGrid([
+              MapEntry('Tipe Pembayaran', s.tipePembayaran),
+              MapEntry('Nama Pasar', s.namaPasar),
+            ]),
+            _kvGrid([
+              MapEntry('Jangka Kredit', s.jangkaKreditHari != null ? '${s.jangkaKreditHari} hari' : null),
+              MapEntry('Batas Kredit', s.batasKreditRupiah != null ? 'Rp ${_fmtNumber(s.batasKreditRupiah!)}' : null),
+            ]),
           ]),
 
           _section('Channel & Salesman', [
-            _row('Channel / Kategori', s.channelKategori),
-            _row('Key Account', s.keyAccountRefId),
-            _row('Cluster', s.clusterLangganan),
-            _row('Kode Salesman', s.kodeSalesman),
-            _row('Nama Salesman', s.namaSalesman),
-            _row('Siklus Kunjungan', s.siklusKunjungan),
-            _row('Hari Kunjungan', s.hariKunjungan),
+            _kvGrid([
+              MapEntry('Channel / Kategori', s.channelKategori),
+              MapEntry('Key Account', s.keyAccountRefId),
+            ]),
+            _kvGrid([
+              MapEntry('Cluster', s.clusterLangganan),
+              MapEntry('Kode Salesman', s.kodeSalesman),
+            ]),
+            _kvRow('Nama Salesman', s.namaSalesman),
+            _kvGrid([
+              MapEntry('Siklus Kunjungan', s.siklusKunjungan),
+              MapEntry('Hari Kunjungan', s.hariKunjungan),
+            ]),
           ]),
 
           _section('Audit', [
-            _row('Pengaju', s.salesNama ?? s.salesUsername),
-            _row('Tanggal Submit', _formatDate(s.createdAt)),
-            if (s.reviewedByNama != null) ...[
-              _row(
-                s.status == 'APPROVED' ? 'Disetujui oleh' : 'Ditolak oleh',
-                s.reviewedByNama,
-              ),
-              _row('Tanggal Review', _formatDate(s.reviewedAt!)),
-            ],
+            _kvGrid([
+              MapEntry('Pengaju', s.salesNama ?? s.salesUsername),
+              MapEntry('Tanggal Submit', _formatDate(s.createdAt)),
+            ]),
+            if (s.reviewedByNama != null)
+              _kvGrid([
+                MapEntry(
+                  s.status == 'APPROVED' ? 'Disetujui oleh' : 'Ditolak oleh',
+                  s.reviewedByNama,
+                ),
+                MapEntry('Tanggal Review', _formatDate(s.reviewedAt!)),
+              ]),
             if (s.status == 'REJECTED' && s.rejectReason != null)
-              _row('Alasan Ditolak', s.rejectReason),
+              _kvRow('Alasan Ditolak', s.rejectReason),
           ]),
         ],
       ),
@@ -743,9 +777,9 @@ class _SubmissionDetailScreen extends StatelessWidget {
 
   Widget _section(String title, List<Widget> children) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
@@ -756,9 +790,10 @@ class _SubmissionDetailScreen extends StatelessWidget {
           children: [
             Text(
               title,
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontWeight: FontWeight.w700,
+              style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
               ),
             ),
             const SizedBox(height: 8),
@@ -769,28 +804,95 @@ class _SubmissionDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String? value) {
-    final v = value == null || value.isEmpty ? '-' : value;
+  /// Full-width single field. Label kecil muted di atas, value bold di bawah.
+  Widget _kvRow(String label, String? value) {
+    final v = (value == null || value.isEmpty) ? '—' : value;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          Expanded(
-            child: Text(
-              v,
-              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+          const SizedBox(height: 2),
+          Text(
+            v,
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// 2-column grid. entries berisi MapEntry&lt;label, value&gt; — jumlah genap
+  /// disarankan; kalau ganjil, kolom terakhir sisi kanan kosong.
+  Widget _kvGrid(List<MapEntry<String, String?>> entries) {
+    return LayoutBuilder(builder: (context, c) {
+      final gap = 12.0;
+      final w = (c.maxWidth - gap) / 2;
+      final rows = <Widget>[];
+      for (var i = 0; i < entries.length; i += 2) {
+        final left = entries[i];
+        final right = i + 1 < entries.length ? entries[i + 1] : null;
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: w, child: _kvCol(left.key, left.value)),
+                SizedBox(width: gap),
+                if (right != null)
+                  SizedBox(width: w, child: _kvCol(right.key, right.value))
+                else
+                  SizedBox(width: w),
+              ],
+            ),
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: rows,
+      );
+    });
+  }
+
+  Widget _kvCol(String label, String? value) {
+    final v = (value == null || value.isEmpty) ? '—' : value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          v,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 

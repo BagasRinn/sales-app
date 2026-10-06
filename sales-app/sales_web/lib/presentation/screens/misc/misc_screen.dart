@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/bulletin_provider.dart';
+import '../bulletin/bulletin_screen.dart';
+import '../auth/change_password_dialog.dart';
 
 class MiscScreen extends StatelessWidget {
   const MiscScreen({super.key});
@@ -8,6 +11,7 @@ class MiscScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final bulletin = context.watch<BulletinProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -84,7 +88,57 @@ class MiscScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Menu Items
+          // Menu section
+          const Text(
+            'MENU',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF94A3B8),
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Promo & Diskon
+          _MenuCard(
+            icon: Icons.local_offer_outlined,
+            iconColor: const Color(0xFFD97706),
+            badge: bulletin.unreadCount > 0 ? bulletin.unreadCount : null,
+            title: 'Promo & Diskon',
+            subtitle: 'Lihat promo dari admin',
+            onTap: () {
+              bulletin.loadBulletins(includeRead: true);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const BulletinScreen(),
+                ),
+              );
+            },
+          ),
+
+          // Ganti Password
+          _MenuCard(
+            icon: Icons.lock_outline,
+            title: 'Ganti Password',
+            subtitle: 'Ubah password login Anda',
+            onTap: () => ChangePasswordDialog.show(context, auth),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Lainnya section
+          const Text(
+            'LAINNYA',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF94A3B8),
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+
           _MenuCard(
             icon: Icons.help_outline,
             title: 'Bantuan',
@@ -95,8 +149,12 @@ class MiscScreen extends StatelessWidget {
             icon: Icons.info_outline,
             title: 'Tentang Aplikasi',
             subtitle: 'Versi 1.0.0',
-            onTap: () {},
+            onTap: () => _showAboutDialog(context),
           ),
+
+          const SizedBox(height: 20),
+
+          // Logout
           _MenuCard(
             icon: Icons.logout,
             title: 'Keluar',
@@ -113,11 +171,73 @@ class MiscScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bantuan'),
-        content: const Text(
-          'Jika mengalami kendala, silakan hubungi administrator melalui:\n\n'
-          'Email: admin@example.com\n'
-          'Telepon: 0812-3456-7890',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.help_outline,
+                color: Color(0xFF2563EB),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Bantuan'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Untuk bantuan, hubungi admin di:'),
+            SizedBox(height: 12),
+            Text('Email: admin@practicalbeauty.com'),
+            SizedBox(height: 4),
+            Text('WhatsApp: -'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Color(0xFF2563EB)),
+            SizedBox(width: 8),
+            Text('Tentang Aplikasi'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Sales Web App',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            SizedBox(height: 4),
+            Text('Versi 1.0.0'),
+            SizedBox(height: 8),
+            Text(
+              'Aplikasi manajemen pesanan sales untuk platform web.',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -133,8 +253,27 @@ class MiscScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Keluar'),
-        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.logout,
+                color: Color(0xFFDC2626),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Konfirmasi Keluar'),
+          ],
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin keluar dari aplikasi?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -158,39 +297,67 @@ class MiscScreen extends StatelessWidget {
 
 class _MenuCard extends StatelessWidget {
   final IconData icon;
+  final Color? iconColor;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback onTap;
   final bool isDestructive;
+  final int? badge;
 
   const _MenuCard({
     required this.icon,
+    this.iconColor,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.onTap,
     this.isDestructive = false,
+    this.badge,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = isDestructive ? const Color(0xFFDC2626) : const Color(0xFF0F172A);
+    final bgColor = isDestructive ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: isDestructive
-                ? const Color(0xFFFEF2F2)
-                : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 22,
-          ),
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 22,
+              ),
+            ),
+            if (badge != null)
+              Positioned(
+                right: -6,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$badge',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
         title: Text(
           title,
@@ -199,16 +366,18 @@ class _MenuCard extends StatelessWidget {
             color: color,
           ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 12,
-            color: color.withValues(alpha: 0.6),
-          ),
-        ),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color.withValues(alpha: 0.6),
+                ),
+              )
+            : null,
         trailing: Icon(
           Icons.chevron_right,
-          color: color.withValues(alpha: 0.4),
+          color: color.withValues(alpha: 0.3),
         ),
         onTap: onTap,
       ),

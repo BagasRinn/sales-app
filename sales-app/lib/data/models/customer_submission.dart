@@ -28,6 +28,7 @@ class CustomerSubmission {
   final String? kota;
   final String? kelurahan;
   final String? areaRoute;
+  final String? kodeArea;
   final String? tipeLangganan;
   final String? tipePembayaran;
   final String? namaPasar;
@@ -66,6 +67,7 @@ class CustomerSubmission {
     this.kota,
     this.kelurahan,
     this.areaRoute,
+    this.kodeArea,
     this.tipeLangganan,
     this.tipePembayaran,
     this.namaPasar,
@@ -108,6 +110,7 @@ class CustomerSubmission {
       kota: json['kota'] as String?,
       kelurahan: json['kelurahan'] as String?,
       areaRoute: json['area_route'] as String?,
+      kodeArea: json['kode_area'] as String?,
       tipeLangganan: json['tipe_langganan'] as String?,
       tipePembayaran: json['tipe_pembayaran'] as String?,
       namaPasar: json['nama_pasar'] as String?,
