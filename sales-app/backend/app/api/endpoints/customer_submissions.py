@@ -156,7 +156,7 @@ def submit_customer_registration(
             if product_type != order_type:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Produk '{product.nama_barang}' bukan tipe {order_type} (tipe produk: {product_type})"
+                    detail=f"Produk '{product.nama_barang or str(product.id)}' bukan tipe {order_type} (tipe produk: {product_type})"
                 )
             db.add(OrderItem(
                 id=uuid4(),
