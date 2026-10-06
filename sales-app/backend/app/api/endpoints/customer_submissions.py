@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, func
+from sqlalchemy import text, or_, func
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerRegistrationSubmission, Order, OrderItem, Product, User, CustomerAssignment
+from app.models.models import Customer, CustomerRegistrationSubmission, Order, OrderItem, Product, User, CustomerAssignment, StokLog
 from app.schemas.schemas import (
     CustomerSubmissionCreate,
     CustomerSubmissionResponse,
@@ -428,6 +428,50 @@ def reject_submission(
     submission.reviewed_by = admin_id
     submission.reviewed_at = datetime.now(timezone.utc)
     submission.updated_at = datetime.now(timezone.utc)
+
+    if submission.bareng_customer_id:
+        # Cancel linked order and release stock.
+        linked_order = db.query(Order).filter(
+            Order.customer_id == submission.bareng_customer_id,
+            Order.sales_id == submission.sales_id,
+        ).first()
+        if linked_order:
+            linked_order.status = 'CANCELLED'
+            # Release stock bookings.
+            items = db.query(OrderItem).filter(OrderItem.order_id == linked_order.id).all()
+            for item in items:
+                result = db.execute(
+                    text(
+                        "UPDATE products "
+                        "SET stok_booking = stok_booking - :qty "
+                        "WHERE id = :pid "
+                        "RETURNING stok_booking"
+                    ),
+                    {"pid": item.product_id, "qty": item.qty},
+                ).first()
+                if result:
+                    new_booking = result[0]
+                    old_booking = new_booking + item.qty
+                    # Write StokLog entry.
+                    log_entry = StokLog(
+                        id=uuid4(),
+                        product_id=item.product_id,
+                        sumber="CANCEL",
+                        field_terdampak="stok_booking",
+                        delta=-item.qty,
+                        nilai_sebelum=old_booking,
+                        nilai_sesudah=new_booking,
+                        actor_id=admin_id,
+                        order_id=linked_order.id,
+                    )
+                    db.add(log_entry)
+
+        # Soft-delete placeholder customer.
+        placeholder = db.query(Customer).filter(
+            Customer.id == submission.bareng_customer_id
+        ).first()
+        if placeholder:
+            placeholder.deleted_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(submission)
