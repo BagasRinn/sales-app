@@ -10,13 +10,16 @@ from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerRegistrationSubmission, Order, User
+from app.models.models import Customer, CustomerRegistrationSubmission, Order, OrderItem, Product, User, CustomerAssignment
 from app.schemas.schemas import (
     CustomerSubmissionCreate,
     CustomerSubmissionResponse,
     CustomerSubmissionApprove,
     CustomerSubmissionReject,
+    CustomerSubmissionCancelRequest,
+    CustomerSubmissionCancelResponse,
 )
+from app.api.endpoints.orders import _book_items
 from app.core.security import require_auth, require_admin, require_manager, CurrentUser
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
@@ -99,15 +102,81 @@ def submit_customer_registration(
 
     bareng_customer_id = None
     if bareng_order:
-        # Auto-create customer sekarang juga agar sales bisa langsung order.
-        # Nama_toko diambil dari nama_langganan, alamat dari alamat_kirim.
+        # Auto-create customer placeholder so sales can order right away.
         customer_id = uuid4()
         customer = Customer(
             id=customer_id,
+            kode=None,  # admin assigns this on approve
             nama_toko=payload.nama_langganan,
             alamat=payload.alamat_kirim or payload.alamat_ktp or '',
+            kode_area=payload.kode_area,
         )
         db.add(customer)
+
+        # Scope visibility: only the submitting sales sees this placeholder.
+        assignment = CustomerAssignment(
+            customer_id=customer_id,
+            sales_id=sales_id,
+            assigned_at=datetime.now(timezone.utc),
+            assigned_by=sales_id,
+        )
+        db.add(assignment)
+
+        # Create the order in DRAFT status.
+        order_type = (payload.order_type or 'REGULER').upper()
+        if order_type not in ('REGULER', '4P'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"order_type tidak valid: {payload.order_type}. Harus 'REGULER' atau '4P'."
+            )
+        order = Order(
+            id=uuid4(),
+            sales_id=sales_id,
+            customer_id=customer_id,
+            status='DRAFT',
+            created_at=datetime.now(timezone.utc),
+            order_type=order_type,
+            store_name=payload.nama_langganan,
+            store_contact=None,
+            store_address=payload.alamat_kirim or payload.alamat_ktp or '',
+        )
+        db.add(order)
+        db.flush()  # get order.id for book_items
+
+        # Validate each product and create OrderItem rows.
+        order_items = payload.order_items or []
+        for item in order_items:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if not product:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Produk '{item.product_id}' tidak ditemukan"
+                )
+            product_type = (product.order_type or 'REGULER').upper()
+            if product_type != order_type:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Produk '{product.nama_barang}' bukan tipe {order_type} (tipe produk: {product_type})"
+                )
+            db.add(OrderItem(
+                id=uuid4(),
+                order_id=order.id,
+                product_id=item.product_id,
+                qty=item.qty,
+                discount_type=(item.discount_type or 'PERCENT').upper(),
+                discount_percent=item.discount_percent or 0,
+                discount_nominal=item.discount_nominal or 0,
+                discount2_type=(item.discount2_type or 'PERCENT').upper(),
+                discount2_percent=item.discount2_percent or 0,
+                discount2_nominal=item.discount2_nominal or 0,
+                discount3_type=(item.discount3_type or 'PERCENT').upper(),
+                discount3_percent=item.discount3_percent or 0,
+                discount3_nominal=item.discount3_nominal or 0,
+            ))
+
+        # Book stock for all items. Raises 409 if insufficient (db.rollback() inside helper).
+        _book_items(order_items, db, sales_id, order.id, sumber="DRAFT")
+
         submission.bareng_customer_id = customer_id
         bareng_customer_id = customer_id
 
@@ -116,6 +185,16 @@ def submit_customer_registration(
 
     result = _serialize(submission, db)
     result["bareng_customer_id"] = bareng_customer_id
+    # Serialize nested order if bareng_order=True
+    if bareng_order and bareng_customer_id:
+        order_obj = db.query(Order).filter(Order.id == order.id).first()
+        if order_obj:
+            from app.api.endpoints.orders import _build_order_response
+            result["order"] = _build_order_response(order_obj)
+        else:
+            result["order"] = None
+    else:
+        result["order"] = None
     return result
 
 
