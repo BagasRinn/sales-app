@@ -243,9 +243,19 @@ class _SubmissionCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
+          // Penting: route ini di-push di atas dashboard, BUKAN sebagai child
+          // dari dashboard. Tanpa Provider.value, _SubmissionDetailScreen
+          // (dan _showApproveDialog/_showRejectDialog di dalamnya) tidak bisa
+          // akses AdminProvider — Provider scope hanya mencakup subtree
+          // dashboard. Kita bungkus dengan ChangeNotifierProvider.value supaya
+          // provider yang sama dipakai di route baru ini.
+          final provider = context.read<AdminProvider>();
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => _SubmissionDetailScreen(submission: s),
+              builder: (_) => ChangeNotifierProvider<AdminProvider>.value(
+                value: provider,
+                child: _SubmissionDetailScreen(submission: s),
+              ),
             ),
           );
         },
@@ -546,16 +556,12 @@ class _SubmissionDetailScreen extends StatelessWidget {
   }
 
   Future<void> _showApproveDialog(BuildContext context, CustomerSubmission s) async {
-    // ignore: avoid_print
-    print('SHOW_APPROVE_DIALOG_START: ${s.id}');
     final kodeCtl = TextEditingController();
     final namaCtl = TextEditingController(text: s.namaLangganan);
     final alamatCtl = TextEditingController(text: s.alamatKirim ?? '');
 
     final provider = context.read<AdminProvider>();
     final scaffold = ScaffoldMessenger.of(context);
-    // ignore: avoid_print
-    print('SHOW_APPROVE_DIALOG_BEFORE_SHOW: ${s.id}');
 
     final ok = await showDialog<bool>(
       context: context,
@@ -625,13 +631,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
       ),
     );
 
-    if (ok != true) {
-      // ignore: avoid_print
-      print('APPROVE_DIALOG_CANCELED_OR_NULL');
-      return;
-    }
-    // ignore: avoid_print
-    print('APPROVE_DIALOG_OK_CALLING_PROVIDER: ${s.id}');
+    if (ok != true) return;
 
     try {
       await provider.approveCustomerSubmission(
@@ -648,12 +648,9 @@ class _SubmissionDetailScreen extends StatelessWidget {
         ),
       );
       Navigator.of(context).pop();
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('APPROVE_ERROR: $e\n$st');
+    } catch (e) {
       if (!context.mounted) return;
-      // Pakai messenger dari context (live) supaya tidak stale kalau state sudah dispose.
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffold.showSnackBar(
         SnackBar(
           content: Text('Gagal approve: $e'),
           backgroundColor: AppColors.error,
@@ -663,14 +660,10 @@ class _SubmissionDetailScreen extends StatelessWidget {
   }
 
   Future<void> _showRejectDialog(BuildContext context, CustomerSubmission s) async {
-    // ignore: avoid_print
-    print('SHOW_REJECT_DIALOG_START: ${s.id}');
     final reasonCtl = TextEditingController();
 
     final provider = context.read<AdminProvider>();
     final scaffold = ScaffoldMessenger.of(context);
-    // ignore: avoid_print
-    print('SHOW_REJECT_DIALOG_BEFORE_SHOW: ${s.id}');
 
     final ok = await showDialog<bool>(
       context: context,
@@ -720,13 +713,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
       ),
     );
 
-    if (ok != true) {
-      // ignore: avoid_print
-      print('REJECT_DIALOG_CANCELED_OR_NULL');
-      return;
-    }
-    // ignore: avoid_print
-    print('REJECT_DIALOG_OK_CALLING_PROVIDER: ${s.id}');
+    if (ok != true) return;
 
     try {
       await provider.rejectCustomerSubmission(
@@ -743,12 +730,9 @@ class _SubmissionDetailScreen extends StatelessWidget {
         ),
       );
       Navigator.of(context).pop();
-    } catch (e, st) {
-      // ignore: avoid_print
-      print('REJECT_ERROR: $e\n$st');
+    } catch (e) {
       if (!context.mounted) return;
-      // Pakai messenger dari context (live) supaya tidak stale kalau state sudah dispose.
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffold.showSnackBar(
         SnackBar(
           content: Text('Gagal reject: $e'),
           backgroundColor: AppColors.error,
