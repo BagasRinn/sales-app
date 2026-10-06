@@ -151,6 +151,7 @@ class OrderItem {
   final int qty;
   final int hargaSatuan;
   final int subtotal;
+  final int hargaSetelahDiskon;
 
   const OrderItem({
     required this.productId,
@@ -158,6 +159,7 @@ class OrderItem {
     required this.qty,
     required this.hargaSatuan,
     required this.subtotal,
+    this.hargaSetelahDiskon = 0,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -167,6 +169,7 @@ class OrderItem {
       qty: json['qty'] ?? 0,
       hargaSatuan: json['harga_satuan'] ?? 0,
       subtotal: json['subtotal'] ?? 0,
+      hargaSetelahDiskon: json['harga_setelah_diskon'] ?? 0,
     );
   }
 }
@@ -180,6 +183,7 @@ class Order {
   final int? totalAmount;
   final int? totalDiscount;
   final DateTime createdAt;
+  final int? hargaSaldoTersedia;
 
   const Order({
     required this.id,
@@ -190,6 +194,7 @@ class Order {
     this.totalAmount,
     this.totalDiscount,
     required this.createdAt,
+    this.hargaSaldoTersedia,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -205,6 +210,7 @@ class Order {
       totalAmount: json['total_amount'],
       totalDiscount: json['total_discount'],
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      hargaSaldoTersedia: json['harga_saldo_tersedio'],
     );
   }
 }

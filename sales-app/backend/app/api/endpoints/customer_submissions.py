@@ -205,16 +205,6 @@ def submit_customer_registration(
 
     result = _serialize(submission, db)
     result["bareng_customer_id"] = bareng_customer_id
-    # Serialize nested order if bareng_order=True
-    if bareng_order and bareng_customer_id:
-        order_obj = db.query(Order).filter(Order.id == order.id).first()
-        if order_obj:
-            from app.api.endpoints.orders import _build_order_response
-            result["order"] = _build_order_response(order_obj)
-        else:
-            result["order"] = None
-    else:
-        result["order"] = None
     return result
 
 

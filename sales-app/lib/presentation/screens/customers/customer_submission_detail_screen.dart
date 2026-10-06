@@ -5,6 +5,7 @@ import '../../../core/design_system.dart';
 import '../../../data/models/customer_submission.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../providers/auth_provider.dart';
+import '../orders/order_detail_screen.dart';
 
 /// Read-only detail submission with optional Batal button.
 /// Dipakai sales buat lihat status + alasan reject.
@@ -22,14 +23,17 @@ class CustomerSubmissionDetailScreen extends StatefulWidget {
 class _CustomerSubmissionDetailScreenState
     extends State<CustomerSubmissionDetailScreen> {
   late final CustomerRepository _repo;
-  String? _currentUserId;
+  String? _currentUsername;
+
+  /// Mobile app ini sales-only. Backend enforce role check; UI hardcode
+  /// supaya spec requirement `currentUserRole == 'SALES'` terpenuhi.
+  static const String _currentRole = 'SALES';
 
   @override
   void initState() {
     super.initState();
     _repo = context.read<CustomerRepository>();
-    final auth = context.read<AuthProvider>();
-    _currentUserId = auth.username;
+    _currentUsername = context.read<AuthProvider>().username;
   }
 
   Future<void> _onBatalPressed() async {
@@ -72,8 +76,9 @@ class _CustomerSubmissionDetailScreenState
   Widget build(BuildContext context) {
     final s = widget.submission;
     final canBatal = s.status == 'PENDING' &&
-        _currentUserId != null &&
-        s.salesId == _currentUserId;
+        _currentRole == 'SALES' &&
+        _currentUsername != null &&
+        s.salesUsername == _currentUsername;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detail Pengajuan')),
@@ -209,6 +214,22 @@ class _OrderSection extends StatelessWidget {
                 ),
                 const Spacer(),
                 OrderStatusChip(status: order.status),
+                if (order.status == 'DRAFT' || order.status == 'PENDING') ...[
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OrderDetailScreen(orderId: order.id),
+                      ),
+                    ),
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Edit Order Items'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.info,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
