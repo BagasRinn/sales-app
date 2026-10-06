@@ -26,14 +26,14 @@ router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"]
 
 
 def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
-    """Serialize submission + lookup sales_name & reviewed_by_name untuk response."""
+    """Serialize submission + lookup sales_name & reviewed_by_name + nested order."""
     sales = db.query(User).filter(User.id == submission.sales_id).first()
     reviewer = (
         db.query(User).filter(User.id == submission.reviewed_by).first()
         if submission.reviewed_by
         else None
     )
-    return {
+    result = {
         "id": submission.id,
         "sales_id": submission.sales_id,
         "sales_nama": (sales.nama or sales.username) if sales else None,
@@ -72,6 +72,26 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "siklus_kunjungan": submission.siklus_kunjungan,
         "hari_kunjungan": submission.hari_kunjungan,
     }
+
+    # Include nested order if bareng_order=True (identified by bareng_customer_id).
+    if submission.bareng_customer_id:
+        linked_order = (
+            db.query(Order)
+            .filter(
+                Order.customer_id == submission.bareng_customer_id,
+                Order.sales_id == submission.sales_id,
+            )
+            .first()
+        )
+        if linked_order:
+            from app.api.endpoints.orders import _build_order_response
+            result["order"] = _build_order_response(linked_order)
+        else:
+            result["order"] = None
+    else:
+        result["order"] = None
+
+    return result
 
 
 @router.post("", response_model=CustomerSubmissionResponse, status_code=201)
