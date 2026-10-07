@@ -1112,6 +1112,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   String? _statusFilter;
   DateTime? _dateFrom;
   DateTime? _dateTo;
+  bool _showStatusMenu = false;
+  bool _showDateFromPicker = false;
+  bool _showDateToPicker = false;
 
   void _applyFilters() {
     widget.provider.loadSalesDetailOrders(
@@ -1120,34 +1123,6 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       dateFrom: _dateFrom,
       dateTo: _dateTo,
     );
-  }
-
-  Future<void> _pickDateFrom() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: 'Tanggal mulai',
-    );
-    if (picked != null) {
-      setState(() => _dateFrom = picked);
-      _applyFilters();
-    }
-  }
-
-  Future<void> _pickDateTo() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dateTo ?? DateTime.now(),
-      firstDate: _dateFrom ?? DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: 'Tanggal akhir',
-    );
-    if (picked != null) {
-      setState(() => _dateTo = picked);
-      _applyFilters();
-    }
   }
 
   String _formatDate(DateTime d) =>
@@ -1175,6 +1150,35 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     }
   }
 
+  String _currentStatusLabel() {
+    if (_statusFilter == null) return 'Semua';
+    return _statusLabel(_statusFilter!);
+  }
+
+  void _selectStatus(String? v) {
+    setState(() {
+      _statusFilter = v;
+      _showStatusMenu = false;
+    });
+    _applyFilters();
+  }
+
+  void _selectDateFrom(DateTime d) {
+    setState(() {
+      _dateFrom = d;
+      _showDateFromPicker = false;
+    });
+    _applyFilters();
+  }
+
+  void _selectDateTo(DateTime d) {
+    setState(() {
+      _dateTo = d;
+      _showDateToPicker = false;
+    });
+    _applyFilters();
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = widget.provider;
@@ -1185,348 +1189,584 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
 
-    return SizedBox(
-      width: 800,
-      height: 520,
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                  child: Text(
-                    widget.sales.displayName.isNotEmpty
-                        ? widget.sales.displayName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+    return GestureDetector(
+      onTap: () {
+        // Close any open picker menus
+        setState(() {
+          _showStatusMenu = false;
+          _showDateFromPicker = false;
+          _showDateToPicker = false;
+        });
+      },
+      child: SizedBox(
+        width: 800,
+        height: 520,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    child: Text(
+                      widget.sales.displayName.isNotEmpty
+                          ? widget.sales.displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.sales.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                      Text(
-                        '@${widget.sales.username}',
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: widget.onClose,
-                ),
-              ],
-            ),
-          ),
-          // Body: horizontal split
-          Expanded(
-            child: Row(
-              children: [
-                // Left sidebar: summary + filters
-                Container(
-                  width: 220,
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: AppColors.surface,
-                    border: Border(right: BorderSide(color: AppColors.border)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Summary
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.15),
-                          ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.sales.displayName,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Total Order',
-                              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                            ),
-                            Text(
-                              '$totalOrders',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 22,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Total Revenue',
-                              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                            ),
-                            Text(
-                              'Rp ${_fmt(totalRevenue)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Filter',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      // Status filter
-                      SizedBox(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _statusFilter,
-                          decoration: const InputDecoration(
-                            labelText: 'Status',
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: null, child: Text('Semua', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'APPROVED', child: Text('Diterima', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'PENDING', child: Text('Pending', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak', style: TextStyle(fontSize: 12))),
-                            DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan', style: TextStyle(fontSize: 12))),
-                          ],
-                          onChanged: (v) {
-                            setState(() => _statusFilter = v);
-                            _applyFilters();
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      // Date from
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _pickDateFrom,
-                          icon: const Icon(Icons.calendar_today, size: 13),
-                          label: Text(
-                            _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // Date to
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _pickDateTo,
-                          icon: const Icon(Icons.calendar_today, size: 13),
-                          label: Text(
-                            _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          ),
-                        ),
-                      ),
-                      if (_dateFrom != null || _dateTo != null) ...[
-                        const SizedBox(height: 6),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _dateFrom = null;
-                              _dateTo = null;
-                            });
-                            _applyFilters();
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text(
-                            'Reset tanggal',
-                            style: TextStyle(fontSize: 11),
-                          ),
+                        Text(
+                          '@${widget.sales.username}',
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                // Right: order list
-                Expanded(
-                  child: loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : error != null
-                          ? Center(
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: widget.onClose,
+                  ),
+                ],
+              ),
+            ),
+            // Body: horizontal split
+            Expanded(
+              child: Row(
+                children: [
+                  // Left sidebar: summary + filters
+                  Container(
+                    width: 220,
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(right: BorderSide(color: AppColors.border)),
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Summary
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                ),
+                              ),
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+                                  const Text(
+                                    'Total Order',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                  ),
+                                  Text(
+                                    '$totalOrders',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 22,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
                                   const SizedBox(height: 8),
-                                  Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
-                                  const SizedBox(height: 12),
-                                  TextButton(
-                                    onPressed: _applyFilters,
-                                    child: const Text('Coba lagi'),
+                                  const Text(
+                                    'Total Revenue',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                  ),
+                                  Text(
+                                    'Rp ${_fmt(totalRevenue)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: AppColors.primary,
+                                    ),
                                   ),
                                 ],
                               ),
-                            )
-                          : orders.isEmpty
-                              ? const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'Tidak ada pesanan.',
-                                        style: TextStyle(color: AppColors.textMuted),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  itemCount: orders.length,
-                                  itemBuilder: (ctx, i) {
-                                    final order = orders[i];
-                                    final statusColor = _statusColor(order.status);
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: AppColors.border),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  order.storeName ?? 'Toko Tidak Diketahui',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      '#${order.id.substring(0, 8)}',
-                                                      style: const TextStyle(
-                                                        color: AppColors.textMuted,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    const Icon(
-                                                      Icons.inventory_2_outlined,
-                                                      size: 11,
-                                                      color: AppColors.textMuted,
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    Text(
-                                                      '${order.items.length} item',
-                                                      style: const TextStyle(
-                                                        color: AppColors.textMuted,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    const Icon(
-                                                      Icons.calendar_today_outlined,
-                                                      size: 11,
-                                                      color: AppColors.textMuted,
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    Text(
-                                                      _formatDate(order.createdAt),
-                                                      style: const TextStyle(
-                                                        color: AppColors.textMuted,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Rp ${_fmt(order.totalAmount)}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: statusColor.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: statusColor.withValues(alpha: 0.3),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              _statusLabel(order.status),
-                                              style: TextStyle(
-                                                color: statusColor,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Filter',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Status filter button
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _showStatusMenu = !_showStatusMenu;
+                                  _showDateFromPicker = false;
+                                  _showDateToPicker = false;
+                                });
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                ),
-              ],
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      _currentStatusLabel(),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    const Spacer(),
+                                    const Icon(Icons.arrow_drop_down, size: 18),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Date from button
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _showDateFromPicker = !_showDateFromPicker;
+                                  _showDateToPicker = false;
+                                  _showStatusMenu = false;
+                                });
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 13, color: AppColors.textMuted),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            // Date to button
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _showDateToPicker = !_showDateToPicker;
+                                  _showDateFromPicker = false;
+                                  _showStatusMenu = false;
+                                });
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 13, color: AppColors.textMuted),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (_dateFrom != null || _dateTo != null) ...[
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _dateFrom = null;
+                                    _dateTo = null;
+                                  });
+                                  _applyFilters();
+                                },
+                                child: const Text(
+                                  'Reset tanggal',
+                                  style: TextStyle(fontSize: 11, color: AppColors.info),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        // Status dropdown menu (inline, not overlay)
+                        if (_showStatusMenu)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(6),
+                              color: AppColors.surface,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _statusMenuItem(null, 'Semua'),
+                                    _statusMenuItem('APPROVED', 'Diterima'),
+                                    _statusMenuItem('PENDING', 'Pending'),
+                                    _statusMenuItem('REJECTED', 'Ditolak'),
+                                    _statusMenuItem('CANCELLED', 'Dibatalkan'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Date from picker
+                        if (_showDateFromPicker)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: _buildDatePicker(
+                              initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+                              onSelect: _selectDateFrom,
+                              onClose: () => setState(() => _showDateFromPicker = false),
+                            ),
+                          ),
+                        // Date to picker
+                        if (_showDateToPicker)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: _buildDatePicker(
+                              initial: _dateTo ?? DateTime.now(),
+                              onSelect: _selectDateTo,
+                              onClose: () => setState(() => _showDateToPicker = false),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Right: order list
+                  Expanded(
+                    child: loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : error != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+                                    const SizedBox(height: 8),
+                                    Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: _applyFilters,
+                                      child: const Text('Coba lagi'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : orders.isEmpty
+                                ? const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'Tidak ada pesanan.',
+                                          style: TextStyle(color: AppColors.textMuted),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(12),
+                                    itemCount: orders.length,
+                                    itemBuilder: (ctx, i) {
+                                      final order = orders[i];
+                                      final statusColor = _statusColor(order.status);
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surface,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.border),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    order.storeName ?? 'Toko Tidak Diketahui',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        '#${order.id.substring(0, 8)}',
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                        Icons.inventory_2_outlined,
+                                                        size: 11,
+                                                        color: AppColors.textMuted,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        '${order.items.length} item',
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                        Icons.calendar_today_outlined,
+                                                        size: 11,
+                                                        color: AppColors.textMuted,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        _formatDate(order.createdAt),
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Rp ${_fmt(order.totalAmount)}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(
+                                                  color: statusColor.withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _statusLabel(order.status),
+                                                style: TextStyle(
+                                                  color: statusColor,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _statusMenuItem(String? value, String label) {
+    final isSelected = _statusFilter == value;
+    return GestureDetector(
+      onTap: () => _selectStatus(value),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? AppColors.primary : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatePicker({
+    required DateTime initial,
+    required void Function(DateTime) onSelect,
+    required VoidCallback onClose,
+  }) {
+    DateTime focused = initial;
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(8),
+      color: AppColors.surface,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Month navigation
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        focused = DateTime(focused.year, focused.month - 1);
+                      });
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${_monthName(focused.month)} ${focused.year}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        focused = DateTime(focused.year, focused.month + 1);
+                      });
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  ),
+                ],
+              ),
+            ),
+            // Day headers
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: ['S', 'S', 'R', 'K', 'J', 'J', 'S']
+                    .map((d) => Expanded(
+                          child: Center(
+                            child: Text(d, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Days grid
+            Builder(builder: (ctx) {
+              final firstDay = DateTime(focused.year, focused.month, 1);
+              final lastDay = DateTime(focused.year, focused.month + 1, 0);
+              final startWeekday = firstDay.weekday % 7;
+              final days = <Widget>[];
+              for (int i = 0; i < startWeekday; i++) {
+                days.add(const SizedBox());
+              }
+              for (int d = 1; d <= lastDay.day; d++) {
+                final date = DateTime(focused.year, focused.month, d);
+                final isSelected = _dateFrom != null && date.year == _dateFrom!.year && date.month == _dateFrom!.month && date.day == _dateFrom!.day;
+                days.add(
+                  GestureDetector(
+                    onTap: () => onSelect(date),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$d',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isSelected ? Colors.white : null,
+                          fontWeight: isSelected ? FontWeight.w600 : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                child: GridView.count(
+                  crossAxisCount: 7,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 2,
+                  crossAxisSpacing: 2,
+                  children: days,
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _monthName(int month) {
+    const names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    return names[month - 1];
   }
 }
