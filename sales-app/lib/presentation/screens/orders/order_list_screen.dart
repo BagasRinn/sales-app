@@ -23,8 +23,8 @@ class _OrderListScreenState extends State<OrderListScreen>
   static const _statusFilters = [
     _StatusFilter(label: 'Semua', status: null),
     _StatusFilter(label: 'Draft', status: 'DRAFT'),
-    _StatusFilter(label: 'Dikirim', status: 'PENDING'),
-    _StatusFilter(label: 'Diterima', status: 'APPROVED'),
+    _StatusFilter(label: 'Menunggu', status: 'PENDING'),
+    _StatusFilter(label: 'Disetujui', status: 'APPROVED'),
     _StatusFilter(label: 'Ditolak', status: 'REJECTED'),
   ];
 

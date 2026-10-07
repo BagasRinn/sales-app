@@ -102,7 +102,7 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
                   Expanded(
                     child: _StatCard(
                       icon: Icons.schedule,
-                      label: 'Pending',
+                      label: 'Menunggu',
                       count: pending,
                       color: AppColors.warning,
                       active: _filter == 'PENDING',
@@ -666,7 +666,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
                 ),
                 if (s.reviewedByNama != null) ...[
                   const SizedBox(width: 8),
-                  Text(
+                  SelectableText(
                     '• oleh ${s.reviewedByNama}',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: _statusFg(s.status),
@@ -1024,7 +1024,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
+          SelectableText(
             v,
             style: AppTextStyles.bodyMedium.copyWith(
               fontSize: 15,
@@ -1087,7 +1087,7 @@ class _SubmissionDetailScreen extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
-        Text(
+        SelectableText(
           v,
           style: AppTextStyles.bodyMedium.copyWith(
             fontSize: 15,
@@ -1095,7 +1095,6 @@ class _SubmissionDetailScreen extends StatelessWidget {
             color: AppColors.textPrimary,
           ),
           maxLines: 2,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

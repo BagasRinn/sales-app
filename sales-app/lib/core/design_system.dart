@@ -431,6 +431,8 @@ Color orderStatusBgColor(OrderStatus s) {
 
 String orderStatusLabel(String status) {
   switch (status.toUpperCase()) {
+    case 'DRAFT':
+      return 'Draft';
     case 'PENDING':
       return 'Menunggu';
     case 'APPROVED':

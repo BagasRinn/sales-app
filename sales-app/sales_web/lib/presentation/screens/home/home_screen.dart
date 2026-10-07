@@ -175,7 +175,7 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: _StatCard(
-                title: 'Pending',
+                title: 'Menunggu',
                 value: s != null ? '${s.pendingCount}' : '-',
                 icon: Icons.hourglass_empty,
                 color: const Color(0xFF2563EB),

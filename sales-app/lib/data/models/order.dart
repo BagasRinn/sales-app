@@ -159,9 +159,9 @@ class Order {
       case 'DRAFT':
         return 'Draft';
       case 'PENDING':
-        return 'Dikirim';
+        return 'Menunggu';
       case 'APPROVED':
-        return 'Diterima';
+        return 'Disetujui';
       case 'REJECTED':
         return 'Ditolak';
       case 'CANCELLED':

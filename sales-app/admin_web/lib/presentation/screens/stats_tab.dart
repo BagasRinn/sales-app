@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/web_download.dart';
 import '../../data/models/sales_performance.dart';
+import '../../data/models/order.dart';
 import '../providers/admin_provider.dart';
 
 String _fmt(int amount) =>
@@ -954,7 +955,7 @@ class _SalesPerformanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _buildStatusSection(
-            label: 'Diterima',
+            label: 'Disetujui',
             mtdCount: s.approvedMtdCount,
             mtdRevenue: s.approvedMtdRevenue,
             todayCount: s.approvedTodayCount,
@@ -963,7 +964,7 @@ class _SalesPerformanceCard extends StatelessWidget {
           ),
           const Divider(height: 20),
           _buildStatusSection(
-            label: 'Pending',
+            label: 'Menunggu',
             mtdCount: s.pendingMtdCount,
             mtdRevenue: s.pendingMtdRevenue,
             todayCount: s.pendingTodayCount,
@@ -1114,6 +1115,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   bool _showStatusMenu = false;
   bool _showDateFromPicker = false;
   bool _showDateToPicker = false;
+  String? _expandedOrderId;
 
   @override
   void initState() {
@@ -1158,8 +1160,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
   String _statusLabel(String status) {
     switch (status.toUpperCase()) {
-      case 'APPROVED': return 'Diterima';
-      case 'PENDING': return 'Pending';
+      case 'APPROVED': return 'Disetujui';
+      case 'PENDING': return 'Menunggu';
       case 'REJECTED': return 'Ditolak';
       case 'CANCELLED': return 'Dibatalkan';
       default: return status;
@@ -1456,8 +1458,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _statusMenuItem(null, 'Semua'),
-                                    _statusMenuItem('APPROVED', 'Diterima'),
-                                    _statusMenuItem('PENDING', 'Pending'),
+                                    _statusMenuItem('APPROVED', 'Disetujui'),
+                                    _statusMenuItem('PENDING', 'Menunggu'),
                                     _statusMenuItem('REJECTED', 'Ditolak'),
                                     _statusMenuItem('CANCELLED', 'Dibatalkan'),
                                   ],
@@ -1532,103 +1534,298 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                     itemBuilder: (ctx, i) {
                                       final order = orders[i];
                                       final statusColor = _statusColor(order.status);
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surface,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: AppColors.border),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                      final isExpanded = _expandedOrderId == order.id;
+                                      return Column(
+                                        children: [
+                                          // Main order row — clickable to expand
+                                          GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                _expandedOrderId = isExpanded ? null : order.id;
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: isExpanded
+                                                    ? AppColors.primary.withValues(alpha: 0.04)
+                                                    : AppColors.surface,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: isExpanded
+                                                      ? AppColors.primary.withValues(alpha: 0.3)
+                                                      : AppColors.border,
+                                                ),
+                                              ),
+                                              child: Row(
                                                 children: [
-                                                  Text(
-                                                    order.storeName ?? 'Toko Tidak Diketahui',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.w600,
-                                                      fontSize: 13,
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          order.storeName ?? 'Toko Tidak Diketahui',
+                                                          style: const TextStyle(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 13,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 2),
+                                                        Row(
+                                                          children: [
+                                                            Text(
+                                                              '#${order.id.substring(0, 8)}',
+                                                              style: const TextStyle(
+                                                                color: AppColors.textMuted,
+                                                                fontSize: 11,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: 8),
+                                                            const Icon(
+                                                              Icons.inventory_2_outlined,
+                                                              size: 11,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                            const SizedBox(width: 2),
+                                                            Text(
+                                                              '${order.items.length} item',
+                                                              style: const TextStyle(
+                                                                color: AppColors.textMuted,
+                                                                fontSize: 11,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: 8),
+                                                            const Icon(
+                                                              Icons.calendar_today_outlined,
+                                                              size: 11,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                            const SizedBox(width: 2),
+                                                            Text(
+                                                              _formatDate(order.createdAt),
+                                                              style: const TextStyle(
+                                                                color: AppColors.textMuted,
+                                                                fontSize: 11,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 2),
-                                                  Row(
-                                                    children: [
-                                                      Text(
-                                                        '#${order.id.substring(0, 8)}',
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'Rp ${_fmt(order.totalAmount)}',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 13,
+                                                      color: AppColors.primary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 3,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor.withValues(alpha: 0.1),
+                                                      borderRadius: BorderRadius.circular(20),
+                                                      border: Border.all(
+                                                        color: statusColor.withValues(alpha: 0.3),
                                                       ),
-                                                      const SizedBox(width: 8),
-                                                      const Icon(
-                                                        Icons.inventory_2_outlined,
-                                                        size: 11,
-                                                        color: AppColors.textMuted,
+                                                    ),
+                                                    child: Text(
+                                                      _statusLabel(order.status),
+                                                      style: TextStyle(
+                                                        color: statusColor,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w700,
                                                       ),
-                                                      const SizedBox(width: 2),
-                                                      Text(
-                                                        '${order.items.length} item',
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      const Icon(
-                                                        Icons.calendar_today_outlined,
-                                                        size: 11,
-                                                        color: AppColors.textMuted,
-                                                      ),
-                                                      const SizedBox(width: 2),
-                                                      Text(
-                                                        _formatDate(order.createdAt),
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Icon(
+                                                    isExpanded
+                                                        ? Icons.keyboard_arrow_up
+                                                        : Icons.keyboard_arrow_down,
+                                                    size: 18,
+                                                    color: isExpanded
+                                                        ? AppColors.primary
+                                                        : AppColors.textMuted,
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Rp ${_fmt(order.totalAmount)}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 13,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
+                                          ),
+                                          // Expanded detail
+                                          if (isExpanded) ...[
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 3,
-                                              ),
+                                              width: double.infinity,
+                                              margin: const EdgeInsets.only(top: 4, bottom: 8),
+                                              padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
-                                                color: statusColor.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(
-                                                  color: statusColor.withValues(alpha: 0.3),
-                                                ),
+                                                color: AppColors.surface,
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(color: AppColors.border),
                                               ),
-                                              child: Text(
-                                                _statusLabel(order.status),
-                                                style: TextStyle(
-                                                  color: statusColor,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  // Customer info
+                                                  if (order.customerName != null) ...[
+                                                    _detailRow('Customer', order.customerName!),
+                                                  ],
+                                                  if (order.storeContact != null) ...[
+                                                    _detailRow('Kontak', order.storeContact!),
+                                                  ],
+                                                  if (order.storeAddress != null) ...[
+                                                    _detailRow('Alamat', order.storeAddress!),
+                                                  ],
+                                                  if (order.invoiceNumber != null) ...[
+                                                    _detailRow('Invoice', order.invoiceNumber!),
+                                                  ],
+                                                  if (order.notes != null && order.notes!.isNotEmpty) ...[
+                                                    _detailRow('Catatan', order.notes!),
+                                                  ],
+                                                  if (order.rejectReason != null && order.rejectReason!.isNotEmpty) ...[
+                                                    Container(
+                                                      margin: const EdgeInsets.only(top: 8),
+                                                      padding: const EdgeInsets.all(8),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.error.withValues(alpha: 0.06),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(
+                                                          color: AppColors.error.withValues(alpha: 0.2),
+                                                        ),
+                                                      ),
+                                                      child: Row(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.info_outline,
+                                                            size: 14,
+                                                            color: AppColors.error,
+                                                          ),
+                                                          const SizedBox(width: 6),
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                              children: [
+                                                                const Text(
+                                                                  'Alasan Penolakan',
+                                                                  style: TextStyle(
+                                                                    fontSize: 10,
+                                                                    fontWeight: FontWeight.w700,
+                                                                    color: AppColors.error,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(height: 2),
+                                                                Text(
+                                                                  order.rejectReason!,
+                                                                  style: const TextStyle(
+                                                                    fontSize: 12,
+                                                                    color: AppColors.error,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                  const SizedBox(height: 10),
+                                                  const Text(
+                                                    'Item Pesanan',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                      color: AppColors.textSecondary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  // Items table header
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 5,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.background,
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: const Row(
+                                                      children: [
+                                                        Expanded(
+                                                          flex: 3,
+                                                          child: Text(
+                                                            'Produk',
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 50,
+                                                          child: Text(
+                                                            'Qty',
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 80,
+                                                          child: Text(
+                                                            'Harga',
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 80,
+                                                          child: Text(
+                                                            'Subtotal',
+                                                            textAlign: TextAlign.right,
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  ...order.items.map((item) => _itemRow(item)),
+                                                  // Cancelled items
+                                                  if (order.cancelledItems.isNotEmpty) ...[
+                                                    const SizedBox(height: 8),
+                                                    const Text(
+                                                      'Item Dibatalkan',
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.w700,
+                                                        fontSize: 11,
+                                                        color: AppColors.error,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    ...order.cancelledItems.map((ci) => _cancelledItemRow(ci)),
+                                                  ],
+                                                ],
                                               ),
                                             ),
                                           ],
-                                        ),
+                                        ],
                                       );
                                     },
                                   ),
@@ -1784,5 +1981,127 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     const names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     return names[month - 1];
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _itemRow(OrderItem item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              item.namaBarang,
+              style: const TextStyle(fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(
+            width: 50,
+            child: Text(
+              '${item.qty}',
+              style: const TextStyle(fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Text(
+              'Rp ${_fmt(item.hargaSatuan)}',
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Text(
+              'Rp ${_fmt(item.subtotal)}',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cancelledItemRow(CancelledItem ci) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cancel_outlined, size: 12, color: AppColors.error),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 3,
+            child: Text(
+              ci.namaBarang ?? ci.productId,
+              style: const TextStyle(fontSize: 11, color: AppColors.error),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          SizedBox(
+            width: 50,
+            child: Text(
+              '${ci.qty}',
+              style: const TextStyle(fontSize: 11, color: AppColors.error),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Text(
+              'Rp ${_fmt(ci.hargaSatuan ?? 0)}',
+              style: const TextStyle(fontSize: 11, color: AppColors.error),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Text(
+              'Rp ${_fmt(ci.subtotal ?? 0)}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.error,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

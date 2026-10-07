@@ -237,7 +237,7 @@ class _StatsCards extends StatelessWidget {
               color: AppColors.success,
             ),
             _StatCard(
-              label: 'Pending',
+              label: 'Menunggu',
               value: '${stats?.pendingCount ?? 0}',
               subtitle: 'menunggu admin',
               icon: Icons.hourglass_top_outlined,
