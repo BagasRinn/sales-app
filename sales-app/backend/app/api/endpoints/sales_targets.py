@@ -82,16 +82,16 @@ def get_my_target(
     """Get target untuk user yang sedang login.
     Semua role (SALES/MANAGER/ADMIN) boleh.
     Return null jika belum ada target diset untuk periode tersebut."""
-    from datetime import datetime, timedelta, timezone as tz
+    from datetime import datetime, timedelta, timezone
 
-    wita = tz(timedelta(hours=8))
-    now_wita = datetime.now(tz)
+    wita = timezone(timedelta(hours=8))
+    now_wita = datetime.now(wita)
     if period is None:
         period = f"{now_wita.year}-{now_wita.month:02d}"
 
     target = (
         db.query(SalesTarget)
-        .filter(SalesTarget.user_id == current_user["id"], SalesTarget.period == period)
+        .filter(SalesTarget.user_id == current_user["user_id"], SalesTarget.period == period)
         .first()
     )
     return target
