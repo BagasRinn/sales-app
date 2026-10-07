@@ -1,13 +1,17 @@
-name: Deploy Admin Web to Firebase
+name: Deploy Web Apps to Firebase
 
 on:
   push:
     branches: [main]
     paths:
       - 'sales-app/admin_web/**'
+      - 'sales-app/sales_web/**'
 
 jobs:
-  deploy:
+  deploy-admin-web:
+    if: contains(github.event.head_commit.modified, 'sales-app/admin_web/') ||
+       contains(github.event.head_commit.added, 'sales-app/admin_web/') ||
+       contains(github.event.head_commit.removed, 'sales-app/admin_web/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,12 +28,54 @@ jobs:
           flutter pub get
         working-directory: sales-app/admin_web
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sales-app/admin_web/package.json
+
       - name: Build Flutter Web
         run: flutter build web --release
         working-directory: sales-app/admin_web
 
       - name: Deploy to Firebase
         run: |
-          npm install -g firebase-tools@13
-          firebase deploy --only hosting --token=${{ secrets.FIREBASE_TOKEN }}
+          npm install -g firebase-tools@15
+          firebase deploy --only hosting:sales-admin-web --token=${{ secrets.FIREBASE_TOKEN }}
         working-directory: sales-app/admin_web
+
+  deploy-sales-web:
+    if: contains(github.event.head_commit.modified, 'sales-app/sales_web/') ||
+       contains(github.event.head_commit.added, 'sales-app/sales_web/') ||
+       contains(github.event.head_commit.removed, 'sales-app/sales_web/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Flutter
+        run: |
+          flutter config --enable-web
+          flutter pub get
+        working-directory: sales-app/sales_web
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Flutter Web
+        run: flutter build web --release
+        working-directory: sales-app/sales_web
+
+      - name: Deploy to Firebase
+        run: |
+          npm install -g firebase-tools@15
+          firebase deploy --only hosting:sales-order-web --token=${{ secrets.FIREBASE_TOKEN }}
+        working-directory: sales-app/sales_web
