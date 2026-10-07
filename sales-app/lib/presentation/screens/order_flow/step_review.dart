@@ -112,12 +112,15 @@ class _StepReviewState extends State<StepReview> {
                 ),
                 child: Column(
                   children: [
-                    for (final line in draft.items)
-                      if (line.qty > 0)
+                    for (var i = 0; i < draft.items.length; i++)
+                      if (draft.items[i].qty > 0) ...[
                         _LineRow(
-                          line: line,
-                          product: productMap[line.productId],
+                          line: draft.items[i],
+                          product: productMap[draft.items[i].productId],
                         ),
+                        if (i < draft.items.length - 1)
+                          const Divider(height: 1, indent: 14, endIndent: 14),
+                      ],
                     const Divider(height: 1, indent: 14, endIndent: 14),
                     InkWell(
                       onTap: widget.onBack,
@@ -353,64 +356,176 @@ class _OrderTotalCard extends StatelessWidget {
   }
 }
 
-class _LineRow extends StatefulWidget {
-  final OrderLine line;
-  final Product? product;
-  const _LineRow({required this.line, required this.product});
+class SharedQtyStepper extends StatefulWidget {
+  final int qty;
+  final int max;
+  final ValueChanged<int> onChanged;
+
+  const SharedQtyStepper({
+    super.key,
+    required this.qty,
+    required this.max,
+    required this.onChanged,
+  });
 
   @override
-  State<_LineRow> createState() => _LineRowState();
+  State<SharedQtyStepper> createState() => SharedQtyStepperState();
 }
 
-class _LineRowState extends State<_LineRow> {
-  bool _showDiscount = false;
-  String _layer1Type = 'PERCENT';
-  String _layer2Type = 'PERCENT';
-  String _layer3Type = 'PERCENT';
-  final TextEditingController _layer1Controller = TextEditingController();
-  final TextEditingController _layer2Controller = TextEditingController();
-  final TextEditingController _layer3Controller = TextEditingController();
+class SharedQtyStepperState extends State<SharedQtyStepper> {
+  late TextEditingController _controller;
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.qty}');
+  }
+
+  @override
+  void didUpdateWidget(SharedQtyStepper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing && oldWidget.qty != widget.qty) {
+      _controller.text = '${widget.qty}';
+    }
+  }
 
   @override
   void dispose() {
-    _layer1Controller.dispose();
-    _layer2Controller.dispose();
-    _layer3Controller.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  /// Sinkronkan controller + type chip dengan state diskon saat panel dibuka.
-  void _syncFromState(ItemDiscount? disc) {
-    _syncOne(1, disc?.layer1, _layer1Controller, (t) => _layer1Type = t);
-    _syncOne(2, disc?.layer2, _layer2Controller, (t) => _layer2Type = t);
-    _syncOne(3, disc?.layer3, _layer3Controller, (t) => _layer3Type = t);
-  }
-
-  void _syncOne(int idx, DiscountLayer? layer, TextEditingController ctrl,
-      void Function(String) setType) {
-    if (layer == null) {
-      ctrl.text = '';
-    } else {
-      ctrl.text = '${layer.value}';
-      setType(layer.type);
+  void _commit(String text) {
+    final parsed = int.tryParse(text);
+    if (parsed != null && parsed >= 1 && parsed <= widget.max) {
+      widget.onChanged(parsed);
+    }
+    setState(() => _isEditing = false);
+    if (!_isEditing) {
+      _controller.text = '${widget.qty}';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _stepBtn(
+          icon: Icons.remove,
+          onTap: widget.qty > 1
+              ? () => widget.onChanged(widget.qty - 1)
+              : () => widget.onChanged(0), // 0 = hapus
+          isPrimary: false,
+        ),
+        SizedBox(
+          width: 46,
+          child: GestureDetector(
+            onTap: () => setState(() {
+              _isEditing = true;
+              _controller.text = '${widget.qty}';
+              _controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _controller.text.length,
+              );
+            }),
+            child: _isEditing
+                ? TextField(
+                    controller: _controller,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    autofocus: true,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                      border: InputBorder.none,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    onSubmitted: _commit,
+                    onTapOutside: (_) => _commit(_controller.text),
+                  )
+                : Text(
+                    '${widget.qty}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+          ),
+        ),
+        _stepBtn(
+          icon: Icons.add,
+          onTap: widget.qty < widget.max
+              ? () => widget.onChanged(widget.qty + 1)
+              : null,
+          isPrimary: true,
+        ),
+      ],
     );
+  }
+
+  Widget _stepBtn({
+    required IconData icon,
+    required VoidCallback? onTap,
+    required bool isPrimary,
+  }) {
+    return Material(
+      color: isPrimary
+          ? (onTap != null ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4))
+          : AppColors.cardSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: isPrimary
+            ? BorderSide.none
+            : BorderSide(color: onTap != null ? AppColors.border : AppColors.border.withValues(alpha: 0.4)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(
+            icon,
+            size: 16,
+            color: isPrimary
+                ? Colors.white
+                : (onTap != null ? AppColors.textPrimary : AppColors.textMuted),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ── _LineRow: layout baru 3-baris ──────────────────────────────────────────
+class _LineRow extends StatelessWidget {
+  final OrderLine line;
+  final Product? product;
+  const _LineRow({required this.line, required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
     final draft = context.watch<DraftOrderProvider>();
-    final name = widget.product?.namaBarang ?? widget.line.productId;
-    final price = widget.product?.harga ?? 0;
-    final rawSubtotal = price * widget.line.qty;
+    final name = product?.namaBarang ?? line.productId;
+    final price = product?.harga ?? 0;
+    final rawSubtotal = price * line.qty;
+    final disc = line.discount;
+    final isFree = line.isFree;
+    final available = product?.stokTersedia ?? 0;
 
-    final disc = widget.line.discount;
-
-    // Hitung chain 3 layers untuk display subtotal item.
+    // Chain discount calculation
     int running = rawSubtotal;
     int d1 = 0, d2 = 0, d3 = 0;
     if (disc?.layer1 != null) {
@@ -428,25 +543,32 @@ class _LineRowState extends State<_LineRow> {
     final subtotal = running;
     final totalCut = d1 + d2 + d3;
 
-    final isFree = widget.line.isFree;
-
     return Opacity(
       opacity: isFree ? 0.6 : 1.0,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Row 1: nama + harga ────────────────────────────────────────────
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Text(name, style: AppTextStyles.bodyMedium),
-                          if (widget.line.isFree) ...[
+                          Flexible(
+                            child: Text(
+                              name,
+                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isFree) ...[
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -457,206 +579,136 @@ class _LineRowState extends State<_LineRow> {
                               ),
                               child: const Text(
                                 'GRATIS',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.success,
-                                ),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 2),
-                          Text(
-                            '× ${widget.line.qty} · ${currency.format(price)}',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
                         ],
+                      ),
+                      if (product?.id != null)
+                        Text(
+                          product!.id,
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      currency.format(subtotal),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: totalCut > 0 ? AppColors.success : AppColors.textPrimary,
                       ),
                     ),
-                    if (totalCut > 0) ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            currency.format(rawSubtotal),
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textMuted,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                          Text(
-                            currency.format(subtotal),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ] else
+                    if (totalCut > 0)
                       Text(
-                        currency.format(subtotal),
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          fontWeight: FontWeight.w600,
+                        currency.format(rawSubtotal),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                          decoration: TextDecoration.lineThrough,
                         ),
                       ),
-                    const SizedBox(width: 4),
-                    if (!isFree) _LineQtyStepper(line: widget.line, available: widget.product?.stokTersedia ?? 0),
-                    IconButton(
-                      icon: Icon(
-                        disc != null
-                            ? Icons.edit_outlined
-                            : Icons.discount_outlined,
-                        size: 18,
-                        color: disc != null
-                            ? AppColors.success
-                            : AppColors.textSecondary,
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Row 2: qty meta + stepper + aksi ──────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '× ${line.qty} · ${currency.format(price)}',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                       ),
-                      tooltip: disc != null ? 'Edit diskon' : 'Tambah diskon',
-                      onPressed: () {
-                        setState(() {
-                          _showDiscount = !_showDiscount;
-                          if (_showDiscount) _syncFromState(disc);
-                        });
-                      },
-                    ),
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
-                      tooltip: 'Menu',
-                      onSelected: (value) {
-                        if (value == 'delete') {
-                          draft.removeLine(widget.line.id);
-                        } else if (value == 'promo_gratis') {
-                          _showPromoGratisDialog(context, widget.product?.namaBarang ?? widget.line.productId);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline, size: 16, color: AppColors.error),
-                              SizedBox(width: 8),
-                              Text('Hapus line', style: TextStyle(color: AppColors.error)),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'promo_gratis',
-                          child: Row(
-                            children: [
-                              Icon(Icons.card_giftcard, size: 16, color: AppColors.success),
-                              SizedBox(width: 8),
-                              Text('Promo Barang Gratis', style: TextStyle(color: AppColors.success)),
-                            ],
-                          ),
-                        ),
+                      if (disc != null && !disc.isEmpty) ...[
+                        const SizedBox(height: 2),
+                        _activeLayersSummary(disc, currency),
                       ],
+                    ],
+                  ),
+                ),
+                if (!isFree) ...[
+                  SharedQtyStepper(
+                    qty: line.qty,
+                    max: available,
+                    onChanged: (newQty) {
+                      if (newQty == 0) {
+                        draft.removeLine(line.id);
+                      } else {
+                        draft.setQty(line.productId, newQty);
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                // Tombol diskon
+                if (!isFree)
+                  _actionIconBtn(
+                    icon: Icons.discount_outlined,
+                    color: disc != null ? AppColors.success : AppColors.textSecondary,
+                    onTap: () => _showDiscountSheet(context, line, disc, currency),
+                  ),
+                const SizedBox(width: 4),
+                _PopupMenuBtn(
+                  items: [
+                    if (!isFree)
+                      _PopupItem(
+                        label: 'Barang Gratis',
+                        icon: Icons.card_giftcard,
+                        color: AppColors.success,
+                        onTap: () => _showPromoGratisDialog(
+                          context,
+                          product?.namaBarang ?? line.productId,
+                          draft,
+                        ),
+                      ),
+                    _PopupItem(
+                      label: 'Hapus',
+                      icon: Icons.delete_outline,
+                      color: AppColors.error,
+                      onTap: () => draft.removeLine(line.id),
                     ),
                   ],
                 ),
-                if (disc != null && !disc.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: _activeLayersSummary(disc, currency),
-                  ),
               ],
             ),
-          ),
-          if (_showDiscount) ...[
-            for (var entry in const [
-              _LayerSpec(1, 'Diskon 1'),
-              _LayerSpec(2, 'Diskon 2'),
-              _LayerSpec(3, 'Diskon 3'),
-            ])
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-                child: _LayerInputRow(
-                  spec: entry,
-                  type: _typeFor(entry.idx),
-                  controller: _ctrlFor(entry.idx),
-                  currency: currency,
-                  onTypeChanged: (newType) {
-                    setState(() => _setTypeFor(entry.idx, newType));
-                    _ctrlFor(entry.idx).clear();
-                  },
-                  onValueChanged: (parsed) {
-                    draft.setDiscountLayer(
-                      lineId: widget.line.id,
-                      layer: entry.idx,
-                      type: _typeFor(entry.idx),
-                      value: parsed,
-                    );
-                  },
-                  onClear: () {
-                    draft.setDiscountLayer(
-                      lineId: widget.line.id,
-                      layer: entry.idx,
-                      type: _typeFor(entry.idx),
-                      value: 0,
-                    );
-                    _ctrlFor(entry.idx).clear();
-                  },
-                  hasValue: _hasValueFor(entry.idx, disc),
-                ),
-              ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  String _typeFor(int idx) {
-    switch (idx) {
-      case 1:
-        return _layer1Type;
-      case 2:
-        return _layer2Type;
-      case 3:
-        return _layer3Type;
-    }
-    return 'PERCENT';
-  }
-
-  void _setTypeFor(int idx, String t) {
-    switch (idx) {
-      case 1:
-        _layer1Type = t;
-        break;
-      case 2:
-        _layer2Type = t;
-        break;
-      case 3:
-        _layer3Type = t;
-        break;
-    }
-  }
-
-  TextEditingController _ctrlFor(int idx) {
-    switch (idx) {
-      case 1:
-        return _layer1Controller;
-      case 2:
-        return _layer2Controller;
-      case 3:
-        return _layer3Controller;
-    }
-    return _layer1Controller;
-  }
-
-  bool _hasValueFor(int idx, ItemDiscount? disc) {
-    if (disc == null) return false;
-    switch (idx) {
-      case 1:
-        return disc.layer1 != null;
-      case 2:
-        return disc.layer2 != null;
-      case 3:
-        return disc.layer3 != null;
-    }
-    return false;
+  Widget _actionIconBtn({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: AppColors.cardSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: color == AppColors.success ? color : AppColors.border),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(icon, size: 16, color: color),
+        ),
+      ),
+    );
   }
 
   Widget _activeLayersSummary(ItemDiscount disc, NumberFormat currency) {
@@ -669,11 +721,10 @@ class _LineRowState extends State<_LineRow> {
           : entry.$1 == 2
               ? 'Diskon 2'
               : 'Diskon 3';
-      if (l.type == 'NOMINAL') {
-        parts.add('$label: Rp ${currency.format(l.value)}');
-      } else {
-        parts.add('$label: ${l.value}%');
-      }
+      final cut = l.type == 'NOMINAL'
+          ? currency.format(l.value)
+          : '${l.value}%';
+      parts.add('$label: $cut');
     }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
@@ -685,23 +736,40 @@ class _LineRowState extends State<_LineRow> {
     );
   }
 
-  void _showPromoGratisDialog(BuildContext context, String productName) {
-    final draft = context.read<DraftOrderProvider>();
-    final qtyController = TextEditingController(text: '1');
+  void _showDiscountSheet(
+    BuildContext context,
+    OrderLine line,
+    ItemDiscount? disc,
+    NumberFormat currency,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _DiscountSheet(
+        line: line,
+        disc: disc,
+        currency: currency,
+      ),
+    );
+  }
 
+  void _showPromoGratisDialog(
+    BuildContext context,
+    String productName,
+    DraftOrderProvider draft,
+  ) {
+    final qtyController = TextEditingController(text: '1');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Promo Barang Gratis'),
+        title: const Text('Barang Gratis'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Produk: $productName',
-              style: AppTextStyles.bodyMedium,
-            ),
+            Text('Produk: $productName', style: AppTextStyles.bodyMedium),
             const SizedBox(height: 4),
             Text(
               'Item duplikat akan mendapat diskon 100% (GRATIS).',
@@ -710,7 +778,7 @@ class _LineRowState extends State<_LineRow> {
             const SizedBox(height: 12),
             TextField(
               controller: qtyController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: TextInputType.number,
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Jumlah gratis (qty)',
@@ -720,21 +788,13 @@ class _LineRowState extends State<_LineRow> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           FilledButton(
             onPressed: () {
               final qty = int.tryParse(qtyController.text) ?? 0;
               if (qty <= 0) return;
-              final newLine = draft.addLine(widget.line.productId, qty: qty);
-              draft.setDiscountLayer(
-                lineId: newLine.id,
-                layer: 1,
-                type: 'PERCENT',
-                value: 100,
-              );
+              final newLine = draft.addLine(line.productId, qty: qty);
+              draft.setDiscountLayer(lineId: newLine.id, layer: 1, type: 'PERCENT', value: 100);
               Navigator.pop(ctx);
             },
             child: const Text('Tambah'),
@@ -745,186 +805,455 @@ class _LineRowState extends State<_LineRow> {
   }
 }
 
-class _LineQtyStepper extends StatelessWidget {
+/// ── Bottom sheet diskon 3 layer ────────────────────────────────────────────
+class _DiscountSheet extends StatefulWidget {
   final OrderLine line;
-  final int available;
-  const _LineQtyStepper({required this.line, required this.available});
+  final ItemDiscount? disc;
+  final NumberFormat currency;
+
+  const _DiscountSheet({
+    required this.line,
+    required this.disc,
+    required this.currency,
+  });
+
+  @override
+  State<_DiscountSheet> createState() => _DiscountSheetState();
+}
+
+class _DiscountSheetState extends State<_DiscountSheet> {
+  late String _type1, _type2, _type3;
+  late TextEditingController _ctrl1, _ctrl2, _ctrl3;
+  Product? _product;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLayer(1, widget.disc?.layer1);
+    _initLayer(2, widget.disc?.layer2);
+    _initLayer(3, widget.disc?.layer3);
+  }
+
+  void _initLayer(int idx, DiscountLayer? layer) {
+    switch (idx) {
+      case 1:
+        _type1 = layer?.type ?? 'PERCENT';
+        _ctrl1 = TextEditingController(text: layer != null ? '${layer.value}' : '');
+        break;
+      case 2:
+        _type2 = layer?.type ?? 'PERCENT';
+        _ctrl2 = TextEditingController(text: layer != null ? '${layer.value}' : '');
+        break;
+      case 3:
+        _type3 = layer?.type ?? 'PERCENT';
+        _ctrl3 = TextEditingController(text: layer != null ? '${layer.value}' : '');
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl1.dispose();
+    _ctrl2.dispose();
+    _ctrl3.dispose();
+    super.dispose();
+  }
+
+  String _typeFor(int idx) {
+    switch (idx) {
+      case 1: return _type1;
+      case 2: return _type2;
+      case 3: return _type3;
+    }
+    return 'PERCENT';
+  }
+
+  TextEditingController _ctrlFor(int idx) {
+    switch (idx) {
+      case 1: return _ctrl1;
+      case 2: return _ctrl2;
+      case 3: return _ctrl3;
+    }
+    return _ctrl1;
+  }
+
+  void _setType(int idx, String t) {
+    setState(() {
+      switch (idx) {
+        case 1: _type1 = t; break;
+        case 2: _type2 = t; break;
+        case 3: _type3 = t; break;
+      }
+    });
+    _ctrlFor(idx).clear();
+  }
+
+  void _onSave() {
+    final draft = context.read<DraftOrderProvider>();
+    for (var idx = 1; idx <= 3; idx++) {
+      final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+      draft.setDiscountLayer(
+        lineId: widget.line.id,
+        layer: idx,
+        type: _typeFor(idx),
+        value: v,
+      );
+    }
+    Navigator.pop(context);
+  }
+
+  int _calcPreview(int idx) {
+    final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+    if (v <= 0) return 0;
+    final raw = ((_product?.harga ?? 0) * widget.line.qty).toInt();
+    if (idx == 1) {
+      return _typeFor(idx) == 'PERCENT'
+          ? (raw * v / 100).round()
+          : v.round();
+    }
+    // Layers 2 & 3 dihitung dari sisa setelah layer sebelumnya
+    int running = raw;
+    for (var i = 1; i < idx; i++) {
+      final prevV = double.tryParse(_ctrlFor(i).text.replaceAll(',', '.')) ?? 0.0;
+      if (prevV <= 0) continue;
+      final cut = _typeFor(i) == 'PERCENT'
+          ? (running * prevV / 100).round()
+          : prevV.round();
+      running -= cut;
+    }
+    return _typeFor(idx) == 'PERCENT'
+        ? (running * v / 100).round()
+        : v.round();
+  }
+
+  int get _subtotal {
+    final raw = ((_product?.harga ?? 0) * widget.line.qty).toInt();
+    int running = raw;
+    for (var i = 1; i <= 3; i++) {
+      running -= _calcPreview(i);
+    }
+    return running < 0 ? 0 : running;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _MiniStepperBtn(
-          icon: Icons.remove,
-          onTap: line.qty > 1
-              ? () => context.read<DraftOrderProvider>().setQty(line.productId, line.qty - 1)
-              : line.qty == 1
-                  ? () => context.read<DraftOrderProvider>().removeLine(line.id)
-                  : null,
-        ),
-        SizedBox(
-          width: 36,
-          child: Text(
-            '${line.qty}',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+    final products = context.read<ProductProvider>().products;
+    final productMap = {for (final p in products) p.id: p};
+    final product = productMap[widget.line.productId];
+    final name = product?.namaBarang ?? widget.line.productId;
+
+    // Simpan product untuk dipakai di _calcPreview / _subtotal
+    if (product != _product) {
+      _product = product;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          // Handle
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.borderLight,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        _MiniStepperBtn(
-          icon: Icons.add,
-          onTap: line.qty < available
-              ? () => context.read<DraftOrderProvider>().setQty(line.productId, line.qty + 1)
-              : null,
-          primary: true,
-        ),
-      ],
+          const SizedBox(height: 14),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Edit Diskon', style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                )),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 20),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: AppColors.border),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+            child: Text(
+              name,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Layer cards
+          for (var idx = 1; idx <= 3; idx++)
+            _LayerCard(
+              idx: idx,
+              type: _typeFor(idx),
+              controller: _ctrlFor(idx),
+              preview: _calcPreview(idx),
+              onTypeChanged: (t) => _setType(idx, t),
+              onChanged: (_) => setState(() {}),
+            ),
+          const Divider(height: 1, indent: 20, endIndent: 20),
+          // Subtotal
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Subtotal', style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                )),
+                Text(
+                  widget.currency.format(_subtotal),
+                  style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700,
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Tombol simpan
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _onSave,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Simpan'),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _MiniStepperBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  final bool primary;
-  const _MiniStepperBtn({required this.icon, this.onTap, this.primary = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: primary
-          ? (onTap != null ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4))
-          : AppColors.cardSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: primary
-            ? BorderSide.none
-            : BorderSide(color: onTap != null ? AppColors.border : AppColors.border.withValues(alpha: 0.4)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: Icon(
-            icon,
-            size: 14,
-            color: primary
-                ? Colors.white
-                : (onTap != null ? AppColors.textPrimary : AppColors.textMuted),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LayerSpec {
+class _LayerCard extends StatelessWidget {
   final int idx;
-  final String label;
-  const _LayerSpec(this.idx, this.label);
-}
-
-class _LayerInputRow extends StatelessWidget {
-  final _LayerSpec spec;
   final String type;
   final TextEditingController controller;
-  final NumberFormat currency;
+  final int preview;
   final ValueChanged<String> onTypeChanged;
-  final ValueChanged<double> onValueChanged;
-  final VoidCallback onClear;
-  final bool hasValue;
+  final ValueChanged<String> onChanged;
 
-  const _LayerInputRow({
-    required this.spec,
+  const _LayerCard({
+    required this.idx,
     required this.type,
     required this.controller,
-    required this.currency,
+    required this.preview,
     required this.onTypeChanged,
-    required this.onValueChanged,
-    required this.onClear,
-    required this.hasValue,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 72,
-          child: Text(
-            spec.label,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+    final isEmpty = controller.text.isEmpty;
+    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isEmpty ? AppColors.border : (AppColors.border),
+          style: isEmpty ? BorderStyle.solid : BorderStyle.solid,
         ),
-        ChoiceChip(
-          label: const Text('%'),
-          selected: type == 'PERCENT',
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: type == 'PERCENT' ? Colors.white : AppColors.textSecondary,
-            fontSize: 12,
-          ),
-          onSelected: (sel) {
-            if (!sel) return;
-            onTypeChanged('PERCENT');
-          },
-        ),
-        const SizedBox(width: 4),
-        ChoiceChip(
-          label: const Text('Rp'),
-          selected: type == 'NOMINAL',
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: type == 'NOMINAL' ? Colors.white : AppColors.textSecondary,
-            fontSize: 12,
-          ),
-          onSelected: (sel) {
-            if (!sel) return;
-            onTypeChanged('NOMINAL');
-          },
-        ),
-        const SizedBox(width: 6),
-        SizedBox(
-          width: 90,
-          child: TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'DISKON $idx',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.05,
+                ),
+              ),
+              if (!isEmpty)
+                GestureDetector(
+                  onTap: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                  child: Text(
+                    'Hapus',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
             ],
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              prefixText: type == 'NOMINAL' ? 'Rp ' : null,
-              suffixText: type == 'PERCENT' ? '%' : null,
-              hintText: '0',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onChanged: (v) => onValueChanged(double.tryParse(v.replaceAll(',', '.')) ?? 0.0),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Type chips
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _chip('%', type == 'PERCENT', () => onTypeChanged('PERCENT')),
+                    _chip('Rp', type == 'NOMINAL', () => onTypeChanged('NOMINAL')),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Input
+              SizedBox(
+                width: 80,
+                child: TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    prefixText: type == 'NOMINAL' ? 'Rp ' : null,
+                    suffixText: type == 'PERCENT' ? '%' : null,
+                    hintText: '0',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+                  ],
+                  onChanged: onChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Preview
+              Expanded(
+                child: Text(
+                  preview > 0 ? '−${currency.format(preview)}' : '',
+                  textAlign: TextAlign.right,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primaryLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : AppColors.textSecondary,
           ),
         ),
-        const SizedBox(width: 4),
-        if (hasValue)
-          TextButton(
-            onPressed: onClear,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.error,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text('Hapus', style: TextStyle(fontSize: 11)),
-          ),
-      ],
+      ),
+    );
+  }
+}
+
+/// ── Popup menu button ──────────────────────────────────────────────────────
+class _PopupItem {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _PopupItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _PopupMenuBtn extends StatelessWidget {
+  final List<_PopupItem> items;
+  const _PopupMenuBtn({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.cardSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: AppColors.border),
+      ),
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert, size: 16, color: AppColors.textSecondary),
+        tooltip: 'Menu',
+        onSelected: (value) {
+          final item = items[int.parse(value)];
+          item.onTap();
+        },
+        itemBuilder: (context) => [
+          for (var i = 0; i < items.length; i++)
+            if (i > 0)
+              PopupMenuItem(
+                value: '$i',
+                child: Row(
+                  children: [
+                    Icon(items[i].icon, size: 16, color: items[i].color),
+                    const SizedBox(width: 8),
+                    Text(items[i].label, style: TextStyle(color: items[i].color)),
+                  ],
+                ),
+              )
+            else
+              PopupMenuItem(
+                value: '$i',
+                child: Row(
+                  children: [
+                    Icon(items[i].icon, size: 16, color: items[i].color),
+                    const SizedBox(width: 8),
+                    Text(items[i].label, style: TextStyle(color: items[i].color)),
+                  ],
+                ),
+              ),
+        ],
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
@@ -168,7 +169,12 @@ class _BerandaTabState extends State<_BerandaTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Halo, Sales'),
+        title: Consumer<AuthProvider>(
+          builder: (_, auth, __) {
+            final name = auth.nama;
+            return Text(name != null && name.isNotEmpty ? 'Halo, $name' : 'Halo, Sales');
+          },
+        ),
         elevation: 0,
       ),
       body: RefreshIndicator(
