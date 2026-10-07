@@ -233,7 +233,6 @@ class _StatsTabState extends State<StatsTab> {
   }
 
   void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
-    provider.loadSalesDetailOrders(salesId: s.userId);
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1119,9 +1118,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _applyFilters();
-    });
+    _applyFilters();
   }
 
   void _applyFilters() {
@@ -1189,7 +1186,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = widget.provider;
+    final provider = context.watch<AdminProvider>();
     final orders = provider.salesDetailOrders;
     final loading = provider.salesDetailLoading;
     final error = provider.salesDetailError;
