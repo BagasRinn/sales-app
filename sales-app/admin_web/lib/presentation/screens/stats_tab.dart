@@ -233,16 +233,15 @@ class _StatsTabState extends State<StatsTab> {
   }
 
   void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
-    // Panggil provider langsung dari StatsTab — context sudah pasti di dalam
-    // ChangeNotifierProvider, tidak ada ambiguity karena dialog overlay di-handle
-    // oleh Navigator sendiri.
     provider.loadSalesDetailOrders(salesId: s.userId);
-    showDialog(
+    showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(24),
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (dialogContext, _, __) => Material(
+        color: Colors.transparent,
         child: _SalesDetailDialog(sales: s),
       ),
     );
