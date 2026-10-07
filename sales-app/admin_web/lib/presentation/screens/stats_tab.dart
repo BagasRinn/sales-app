@@ -1116,6 +1116,14 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   bool _showDateFromPicker = false;
   bool _showDateToPicker = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyFilters();
+    });
+  }
+
   void _applyFilters() {
     widget.provider.loadSalesDetailOrders(
       salesId: widget.sales.userId,
