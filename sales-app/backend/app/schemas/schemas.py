@@ -500,11 +500,7 @@ class CustomerSubmissionCreate(BaseSchema):
     hari_kunjungan: str = Field(..., min_length=1, max_length=50)
     # Flag: kalau True, customer langsung dibuat saat submit (untuk flow "bareng order").
     bareng_order: bool = Field(default=False)
-    # Order items for bareng_order flow
-    order_items: Optional[List["OrderItemCreate"]] = Field(
-        default=None,
-        description="Items for bareng_order. Required when bareng_order=True."
-    )
+    # Order type untuk bareng_order flow. Items dipilih di OrderFlowScreen setelah submit.
     order_type: Optional[str] = Field(
         default="REGULER",
         description="'REGULER' or '4P'. Only used when bareng_order=True."
@@ -537,10 +533,9 @@ class CustomerSubmissionCreate(BaseSchema):
 
     @model_validator(mode='after')
     def validate_bareng_order_items(self):
-        if self.bareng_order and not self.order_items:
-            raise ValueError("order_items wajib diisi jika bareng_order=True")
-        if self.bareng_order and len(self.order_items or []) == 0:
-            raise ValueError("order_items harus memiliki minimal 1 item")
+        # Sejak UI dipisah (Oct 2026), sales pilih barang di OrderFlowScreen
+        # setelah submit, bukan di form customer. order_items tidak dikirim
+        # dari Flutter lagi — backend yang handle order kosong.
         return self
 
 

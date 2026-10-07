@@ -20,7 +20,6 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelRequest,
     CustomerSubmissionCancelResponse,
 )
-from app.api.endpoints.orders import _book_items
 from app.core.security import require_auth, require_admin, require_manager, CurrentUser
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
@@ -102,9 +101,6 @@ def submit_customer_registration(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    logger.info(f"[submit_customer] bareng_order={payload.bareng_order}")
-    logger.info(f"[submit_customer] payload keys: {list(payload.model_dump().keys())}")
-    logger.info(f"[submit_customer] siklus_kunjungan={payload.siklus_kunjungan!r}, hari_kunjungan={payload.hari_kunjungan!r}")
     """Submit pengajuan customer baru.
     - Jika bareng_order=True, customer langsung dibuat agar sales bisa langsung order.
     - Status submission tetap PENDING — admin perlu approve untuk mengesahkan.
@@ -115,9 +111,7 @@ def submit_customer_registration(
     # Buat dict payload, pisahkan field non-database (flag & order-related).
     payload_dict = payload.model_dump()
     bareng_order = payload_dict.pop("bareng_order", False)
-    # order_items & order_type hanya untuk flow bareng_order, bukan field submission.
-    # Sejak UI dipisah, Flutter tidak kirim ini lagi — order dibuat kosong di OrderFlowScreen.
-    payload_dict.pop("order_items", None)
+    # order_type hanya untuk flow bareng_order, bukan field submission.
     payload_dict.pop("order_type", None)
 
     # Auto-fill salesman info dari auth token — submission melacak siapa yang mengajukan.
@@ -174,56 +168,19 @@ def submit_customer_registration(
             store_address=payload.alamat_kirim or payload.alamat_ktp or '',
         )
         db.add(order)
-        db.flush()  # get order.id for book_items
+        db.flush()  # get order.id
 
-        # Validate each product and create OrderItem rows.
-        order_items = payload.order_items or []
-        for item in order_items:
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            if not product:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Produk '{item.product_id}' tidak ditemukan"
-                )
-            product_type = (product.order_type or 'REGULER').upper()
-            if product_type != order_type:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Produk '{product.nama_barang or str(product.id)}' bukan tipe {order_type} (tipe produk: {product_type})"
-                )
-            db.add(OrderItem(
-                id=uuid4(),
-                order_id=order.id,
-                product_id=item.product_id,
-                qty=item.qty,
-                discount_type=(item.discount_type or 'PERCENT').upper(),
-                discount_percent=item.discount_percent or 0,
-                discount_nominal=item.discount_nominal or 0,
-                discount2_type=(item.discount2_type or 'PERCENT').upper(),
-                discount2_percent=item.discount2_percent or 0,
-                discount2_nominal=item.discount2_nominal or 0,
-                discount3_type=(item.discount3_type or 'PERCENT').upper(),
-                discount3_percent=item.discount3_percent or 0,
-                discount3_nominal=item.discount3_nominal or 0,
-            ))
-
-        # Book stock for all items. Raises 409 if insufficient (db.rollback() inside helper).
-        _book_items(order_items, db, sales_id, order.id, sumber="DRAFT")
-
+        # Order dibuat kosong di sini. Items dipilih sales di OrderFlowScreen
+        # setelah submit — endpoint order flow yang handle items + booking.
         submission.bareng_customer_id = customer_id
         bareng_customer_id = customer_id
 
     db.commit()
     db.refresh(submission)
 
-    try:
-        result = _serialize(submission, db)
-        result["bareng_customer_id"] = bareng_customer_id
-        logger.info(f"[submit_customer] SUCCESS bareng_order={bareng_order}, bareng_customer_id={bareng_customer_id}")
-        return result
-    except Exception as e:
-        logger.exception(f"[submit_customer] _serialize failed: {e}")
-        raise
+    result = _serialize(submission, db)
+    result["bareng_customer_id"] = bareng_customer_id
+    return result
 
 
 @router.get("/my", response_model=List[CustomerSubmissionResponse])

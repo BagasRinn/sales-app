@@ -434,9 +434,11 @@ def create_order(
         status="DRAFT",
         created_at=datetime.now(timezone.utc),
         notes=order_req.notes,
-        store_name=customer.nama_toko,
-        store_contact=None,
-        store_address=customer.alamat,
+        # Frontend-supplied store_name wins (untuk override nama customer).
+        # Fallback ke customer.nama_toko kalau tidak diisi.
+        store_name=order_req.store_name if order_req.store_name else customer.nama_toko,
+        store_contact=order_req.store_contact,
+        store_address=order_req.store_address or customer.alamat,
         order_type=order_type,
     )
     db.add(order)
