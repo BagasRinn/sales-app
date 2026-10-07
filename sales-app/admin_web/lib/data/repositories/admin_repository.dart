@@ -70,6 +70,39 @@ class AdminRepository {
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
+  /// Ambil semua order untuk sales tertentu (untuk popup detail di dashboard).
+  Future<List<Order>> getOrdersBySales({
+    required String salesId,
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int skip = 0,
+    int limit = 100,
+    CancelToken? cancelToken,
+  }) async {
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+      'sales_id': salesId,
+    };
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (dateFrom != null) {
+      params['date_from'] =
+          '${dateFrom.year.toString().padLeft(4, '0')}-'
+          '${dateFrom.month.toString().padLeft(2, '0')}-'
+          '${dateFrom.day.toString().padLeft(2, '0')}';
+    }
+    if (dateTo != null) {
+      params['date_to'] =
+          '${dateTo.year.toString().padLeft(4, '0')}-'
+          '${dateTo.month.toString().padLeft(2, '0')}-'
+          '${dateTo.day.toString().padLeft(2, '0')}';
+    }
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/orders$qs', cancelToken: cancelToken);
+    return (data as List).map((e) => Order.fromJson(e)).toList();
+  }
+
   /// Sama dengan [getAllOrders] tapi juga baca header X-Total-Count —
   /// untuk pagination di client. Pakai Dio langsung agar bisa akses
   /// response.headers.

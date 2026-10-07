@@ -18,8 +18,8 @@ Pendaftaran customer / NOO itu bisa langsung dibarengin dengan orderan / Tidak i
 Hilangkan auto expire di orderan D
 
 Stok mengambil kolom GOOD pada saat import produk D
-halaman order flow : pada step pick produk itu jangan langsung ada tombol tambah line diskon, itu taruh nya di halaman review saja. untuk tombol tambah line di bawah tombol tambah produk itu hilangkan saja, jadi kalau mau ngasih line diskon itu di titik 3 aja, buang duplikat lane. terus tambahkan tombol + dan - jika sales mau mengurangi atau menambah jumlah barang yang di order
-Halaman admin untuk menghapus beberapa produk orderan yang ternyata barang gudang nya rusak. coba buat plan agar pihak sales juga bisa tau kenapa barang di hapus atau coret.
+halaman order flow : pada step pick produk itu jangan langsung ada tombol tambah line diskon, itu taruh nya di halaman review saja. untuk tombol tambah line di bawah tombol tambah produk itu hilangkan saja, jadi kalau mau ngasih line diskon itu di titik 3 aja, buang duplikat lane. terus tambahkan tombol + dan - jika sales mau mengurangi atau menambah jumlah barang yang di order D
+Halaman admin untuk menghapus beberapa produk orderan yang ternyata barang gudang nya rusak. coba buat plan agar pihak sales juga bisa tau kenapa barang di hapus atau coret. D
 Migration produk 4p berdasarkan supplier, aku ada data supplier mana yang 4p yang mana yang reguler. jadi nanti ketika mau nambah produk itu lempar ke halaman memilih tipe order dulu, bisa jadi mau nambah produk 4p atau sebaliknya. jadi yang reguler itu hanya tampil pada saat kita memilih tipe orderan reguler, dan yang tampil saat kita mengklik 4p adalah produk yang masuk ke 4p saja.D
 coba telusurin bagaimana selama ini cara kerja import toko, karena terasa lambat banget dibanding import produk D
 
@@ -31,11 +31,11 @@ Penyesuaian Format Kolom Excel Stok baru D
 taruh di railway env
 CORS_ORIGINS = https://sales-order-web.web.app,https://sales-admin-web.web.app
 
-Diskon Bisa pakai koma misal 5,9%
-Halaman tidak bisa di block untuk di copy di halaman admin
-Redesign Keranjang Produk di halaman review agar lebih user friendly di pengguna mobile
+Diskon Bisa pakai koma misal 5,9% D
+Halaman tidak bisa di block untuk di copy di halaman admin D
+Redesign Keranjang Produk di halaman review agar lebih user friendly di pengguna mobile Paused
 
-pada saat ingin menghapus diskon pada barang dikeranjang itu tidak terhapus kalau sudah terinput angkanya
+pada saat ingin menghapus diskon pada barang dikeranjang itu tidak terhapus kalau sudah terinput angkanya D
 halaman pesanan di web admin ada kode item tampil D
 
 https://practical-beauty-production-071a.up.railway.app,https://sales-admin-web.web.app

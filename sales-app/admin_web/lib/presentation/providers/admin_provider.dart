@@ -959,6 +959,57 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
+  // ===== Popup detail order untuk dashboard sales =====
+  List<Order> _salesDetailOrders = [];
+  bool _salesDetailLoading = false;
+  String? _salesDetailError;
+  String? _salesDetailStatus;
+  DateTime? _salesDetailDateFrom;
+  DateTime? _salesDetailDateTo;
+
+  List<Order> get salesDetailOrders => _salesDetailOrders;
+  bool get salesDetailLoading => _salesDetailLoading;
+  String? get salesDetailError => _salesDetailError;
+  String? get salesDetailStatus => _salesDetailStatus;
+  DateTime? get salesDetailDateFrom => _salesDetailDateFrom;
+  DateTime? get salesDetailDateTo => _salesDetailDateTo;
+
+  Future<void> loadSalesDetailOrders({
+    required String salesId,
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
+    _salesDetailLoading = true;
+    _salesDetailError = null;
+    _salesDetailStatus = status;
+    _salesDetailDateFrom = dateFrom;
+    _salesDetailDateTo = dateTo;
+    notifyListeners();
+    try {
+      _salesDetailOrders = await _repo.getOrdersBySales(
+        salesId: salesId,
+        status: status,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+    } catch (e) {
+      _salesDetailError = e is ApiException ? e.message : e.toString();
+    } finally {
+      _salesDetailLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void clearSalesDetailOrders() {
+    _salesDetailOrders = [];
+    _salesDetailError = null;
+    _salesDetailStatus = null;
+    _salesDetailDateFrom = null;
+    _salesDetailDateTo = null;
+    notifyListeners();
+  }
+
   void setPerformanceSort(String sort) {
     _performanceSort = sort;
     notifyListeners();

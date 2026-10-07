@@ -225,7 +225,19 @@ class _StatsTabState extends State<StatsTab> {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
-      children: sales.map((s) => _SalesPerformanceCard(s: s)).toList(),
+      children: sales.map((s) => _SalesPerformanceCard(
+        s: s,
+        onTap: () => _showSalesDetailDialog(context, s),
+      )).toList(),
+    );
+  }
+
+  void _showSalesDetailDialog(BuildContext context, SalesPerformanceDashboardItem s) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SalesDetailBottomSheet(sales: s),
     );
   }
 
@@ -884,12 +896,17 @@ class _ReportDownloadCard extends StatelessWidget {
 
 class _SalesPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem s;
+  final VoidCallback onTap;
 
-  const _SalesPerformanceCard({required this.s});
+  const _SalesPerformanceCard({required this.s, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
       width: 300,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -953,6 +970,8 @@ class _SalesPerformanceCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -1025,5 +1044,477 @@ class _SalesPerformanceCard extends StatelessWidget {
       ],
     );
   }
+}
 
+// ===== Popup detail order untuk sales performance card =====
+class _SalesDetailBottomSheet extends StatefulWidget {
+  final SalesPerformanceDashboardItem sales;
+
+  const _SalesDetailBottomSheet({required this.sales});
+
+  @override
+  State<_SalesDetailBottomSheet> createState() => _SalesDetailBottomSheetState();
+}
+
+class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
+  String? _statusFilter; // null = semua
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminProvider>().loadSalesDetailOrders(
+        salesId: widget.sales.userId,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    // Bersihkan state saat dialog ditutup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AdminProvider>().clearSalesDetailOrders();
+    });
+    super.dispose();
+  }
+
+  void _applyFilters() {
+    context.read<AdminProvider>().loadSalesDetailOrders(
+      salesId: widget.sales.userId,
+      status: _statusFilter,
+      dateFrom: _dateFrom,
+      dateTo: _dateTo,
+    );
+  }
+
+  Future<void> _pickDateFrom() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Tanggal mulai',
+    );
+    if (picked != null) {
+      setState(() => _dateFrom = picked);
+      _applyFilters();
+    }
+  }
+
+  Future<void> _pickDateTo() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateTo ?? DateTime.now(),
+      firstDate: _dateFrom ?? DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: 'Tanggal akhir',
+    );
+    if (picked != null) {
+      setState(() => _dateTo = picked);
+      _applyFilters();
+    }
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/'
+      '${d.year}';
+
+  Color _statusColor(String status) {
+    switch (status.toUpperCase()) {
+      case 'APPROVED':
+        return AppColors.success;
+      case 'PENDING':
+        return AppColors.warning;
+      case 'REJECTED':
+        return AppColors.error;
+      case 'CANCELLED':
+        return AppColors.textMuted;
+      default:
+        return AppColors.info;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status.toUpperCase()) {
+      case 'APPROVED':
+        return 'Diterima';
+      case 'PENDING':
+        return 'Pending';
+      case 'REJECTED':
+        return 'Ditolak';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      default:
+        return status;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AdminProvider>();
+    final orders = provider.salesDetailOrders;
+    final loading = provider.salesDetailLoading;
+    final error = provider.salesDetailError;
+
+    // Calculate totals from filtered orders
+    final totalOrders = orders.length;
+    final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        widget.sales.displayName.isNotEmpty
+                            ? widget.sales.displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.sales.displayName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '@${widget.sales.username}',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Filters
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Summary
+                    if (orders.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Total Pesanan',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                  ),
+                                  Text(
+                                    '$totalOrders order',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 36,
+                              color: AppColors.border,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Total Revenue',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                  ),
+                                  Text(
+                                    'Rp ${_fmt(totalRevenue)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    // Filter row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          // Status filter
+                          SizedBox(
+                            width: 140,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _statusFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'Status',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: null, child: Text('Semua')),
+                                DropdownMenuItem(value: 'APPROVED', child: Text('Diterima')),
+                                DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
+                                DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
+                                DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
+                              ],
+                              onChanged: (v) {
+                                setState(() => _statusFilter = v);
+                                _applyFilters();
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Date from
+                          OutlinedButton.icon(
+                            onPressed: _pickDateFrom,
+                            icon: const Icon(Icons.calendar_today, size: 14),
+                            label: Text(
+                              _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text('—', style: TextStyle(color: AppColors.textMuted)),
+                          const SizedBox(width: 4),
+                          // Date to
+                          OutlinedButton.icon(
+                            onPressed: _pickDateTo,
+                            icon: const Icon(Icons.calendar_today, size: 14),
+                            label: Text(
+                              _dateTo != null ? _formatDate(_dateTo!) : 'Sampai',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                          if (_dateFrom != null || _dateTo != null) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              tooltip: 'Reset tanggal',
+                              onPressed: () {
+                                setState(() {
+                                  _dateFrom = null;
+                                  _dateTo = null;
+                                });
+                                _applyFilters();
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Content
+              Expanded(
+                child: loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : error != null
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+                                const SizedBox(height: 8),
+                                Text(error, style: const TextStyle(color: AppColors.error)),
+                                const SizedBox(height: 12),
+                                TextButton(
+                                  onPressed: _applyFilters,
+                                  child: const Text('Coba lagi'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : orders.isEmpty
+                            ? const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 40),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Tidak ada pesanan.',
+                                      style: TextStyle(color: AppColors.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                controller: scrollController,
+                                padding: const EdgeInsets.all(16),
+                                itemCount: orders.length,
+                                itemBuilder: (ctx, i) {
+                                  final order = orders[i];
+                                  final statusColor = _statusColor(order.status);
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    order.storeName ?? 'Toko Tidak Diketahui',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '#${order.id.substring(0, 8)} • ${order.items.length} item',
+                                                    style: const TextStyle(
+                                                      color: AppColors.textMuted,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(
+                                                  color: statusColor.withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _statusLabel(order.status),
+                                                style: TextStyle(
+                                                  color: statusColor,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.calendar_today_outlined,
+                                              size: 12,
+                                              color: AppColors.textMuted,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _formatDate(order.createdAt),
+                                              style: const TextStyle(
+                                                color: AppColors.textMuted,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              'Rp ${_fmt(order.totalAmount)}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

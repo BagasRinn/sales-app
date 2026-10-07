@@ -976,6 +976,10 @@ def list_all_orders(
         description="Tanggal akhir inklusif (YYYY-MM-DD, WITA). Filter created_at < (date_to+1) 00:00 WITA.",
     ),
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
+    sales_id: Optional[str] = Query(
+        None,
+        description="Filter pesanan oleh sales tertentu (UUID). Dipakai oleh dashboard popup.",
+    ),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -994,6 +998,14 @@ def list_all_orders(
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
         count_query = count_query.filter(Order.status == status_filter.upper())
+
+    if sales_id:
+        try:
+            sales_uuid = UUID(sales_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="sales_id harus UUID valid")
+        query = query.filter(Order.sales_id == sales_uuid)
+        count_query = count_query.filter(Order.sales_id == sales_uuid)
 
     if date_from or date_to:
         # WITA timezone biar konsisten dengan sales app
