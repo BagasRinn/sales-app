@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text, or_, func
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
+import logging
 
 from app.models.database import get_db
 from app.models.models import Customer, CustomerRegistrationSubmission, Order, OrderItem, Product, User, CustomerAssignment, StokLog
@@ -23,6 +24,7 @@ from app.api.endpoints.orders import _book_items
 from app.core.security import require_auth, require_admin, require_manager, CurrentUser
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
+logger = logging.getLogger(__name__)
 
 
 def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
@@ -211,9 +213,14 @@ def submit_customer_registration(
     db.commit()
     db.refresh(submission)
 
-    result = _serialize(submission, db)
-    result["bareng_customer_id"] = bareng_customer_id
-    return result
+    try:
+        result = _serialize(submission, db)
+        result["bareng_customer_id"] = bareng_customer_id
+        logger.info(f"[submit_customer] SUCCESS bareng_order={bareng_order}, bareng_customer_id={bareng_customer_id}")
+        return result
+    except Exception as e:
+        logger.exception(f"[submit_customer] _serialize failed: {e}")
+        raise
 
 
 @router.get("/my", response_model=List[CustomerSubmissionResponse])
