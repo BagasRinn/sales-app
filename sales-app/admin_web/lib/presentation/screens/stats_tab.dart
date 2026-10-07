@@ -227,12 +227,16 @@ class _StatsTabState extends State<StatsTab> {
       runSpacing: 12,
       children: sales.map((s) => _SalesPerformanceCard(
         s: s,
-        onTap: () => _showSalesDetailDialog(context, s),
+        onTap: () => _openSalesDetail(provider, s),
       )).toList(),
     );
   }
 
-  void _showSalesDetailDialog(BuildContext context, SalesPerformanceDashboardItem s) {
+  void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
+    // Panggil provider langsung dari StatsTab — context sudah pasti di dalam
+    // ChangeNotifierProvider, tidak ada ambiguity karena dialog overlay di-handle
+    // oleh Navigator sendiri.
+    provider.loadSalesDetailOrders(salesId: s.userId);
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1067,11 +1071,8 @@ class _SalesDetailDialogState extends State<_SalesDetailDialog> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AdminProvider>().loadSalesDetailOrders(
-        salesId: widget.sales.userId,
-      );
-    });
+    // Data sudah di-load oleh _openSalesDetail sebelum showDialog dipanggil.
+    // Tidak perlu load ulang di sini — hanya watch state untuk reaktif update.
   }
 
   void _applyFilters() {
