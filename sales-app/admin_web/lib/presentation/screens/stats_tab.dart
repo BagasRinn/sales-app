@@ -934,17 +934,21 @@ class _SalesPerformanceCard extends StatelessWidget {
             color: AppColors.success,
           ),
           const Divider(height: 20),
-          _buildStatusRow(
+          _buildStatusSection(
             label: 'Pending',
             mtdCount: s.pendingMtdCount,
+            mtdRevenue: s.pendingMtdRevenue,
             todayCount: s.pendingTodayCount,
+            todayRevenue: s.pendingTodayRevenue,
             color: AppColors.warning,
           ),
-          const SizedBox(height: 4),
-          _buildStatusRow(
+          const Divider(height: 20),
+          _buildStatusSection(
             label: 'Ditolak',
             mtdCount: s.rejectedMtdCount,
+            mtdRevenue: s.rejectedMtdRevenue,
             todayCount: s.rejectedTodayCount,
+            todayRevenue: s.rejectedTodayRevenue,
             color: AppColors.error,
           ),
         ],
@@ -1010,35 +1014,4 @@ class _SalesPerformanceCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusRow({
-    required String label,
-    required int mtdCount,
-    required int todayCount,
-    required Color color,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          'MTD $mtdCount',
-          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '| Today $todayCount',
-          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-        ),
-      ],
-    );
-  }
 }
