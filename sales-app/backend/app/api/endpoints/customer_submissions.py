@@ -107,9 +107,13 @@ def submit_customer_registration(
     """
     sales_id = UUID(current_user["user_id"])
 
-    # Buat dict payload, pisahkan bareng_order (flag, bukan field database).
+    # Buat dict payload, pisahkan field non-database (flag & order-related).
     payload_dict = payload.model_dump()
     bareng_order = payload_dict.pop("bareng_order", False)
+    # order_items & order_type hanya untuk flow bareng_order, bukan field submission.
+    # Sejak UI dipisah, Flutter tidak kirim ini lagi — order dibuat kosong di OrderFlowScreen.
+    payload_dict.pop("order_items", None)
+    payload_dict.pop("order_type", None)
 
     # Auto-fill salesman info dari auth token — submission melacak siapa yang mengajukan.
     payload_dict["kode_salesman"] = current_user.get("username")

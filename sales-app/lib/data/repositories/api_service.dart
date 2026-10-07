@@ -56,7 +56,19 @@ class ApiService {
     String message = 'Terjadi kesalahan';
     try {
       final body = jsonDecode(response.body);
-      message = body['detail'] ?? body['message'] ?? message;
+      // FastAPI validation errors return detail as a list of errors.
+      final detail = body['detail'];
+      if (detail is List && detail.isNotEmpty) {
+        // Pick the first error's message for brevity.
+        final first = detail.first;
+        if (first is Map) {
+          message = first['msg'] ?? first['loc']?.join(' → ') ?? message;
+        } else {
+          message = detail.toString();
+        }
+      } else {
+        message = body['detail'] ?? body['message'] ?? message;
+      }
     } catch (_) {}
 
     throw ApiException(
