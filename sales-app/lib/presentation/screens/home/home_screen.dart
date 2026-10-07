@@ -170,7 +170,7 @@ class _BerandaTabState extends State<_BerandaTab> {
     return Scaffold(
       appBar: AppBar(
         title: Consumer<AuthProvider>(
-          builder: (_, auth, __) {
+          builder: (_, auth, _) {
             final name = auth.nama;
             return Text(name != null && name.isNotEmpty ? 'Halo, $name' : 'Halo, Sales');
           },

@@ -80,7 +80,13 @@ class OrderItem {
   int get nominalDiskon => (hargaSatuan ?? 0) * qty - subtotal;
 
   /// True kalau ada diskon aktif (any layer punya value > 0).
-  bool get hasDiscount => nominalDiskon > 0;
+  bool get hasDiscount {
+    if (discountPercent > 0) return true;
+    if (discountNominal > 0) return true;
+    if (discount2Percent > 0 || discount2Nominal > 0) return true;
+    if (discount3Percent > 0 || discount3Nominal > 0) return true;
+    return false;
+  }
 }
 
 class Order {

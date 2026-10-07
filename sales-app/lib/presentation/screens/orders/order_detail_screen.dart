@@ -171,7 +171,10 @@ class _OrderDetailContent extends StatelessWidget {
       if (type == 'NOMINAL' && nominal > 0) {
         parts.add('Diskon $i: Rp $nominal');
       } else if (type == 'PERCENT' && percent > 0) {
-        parts.add('Diskon $i: $percent%');
+        final label = (percent == percent.roundToDouble())
+            ? '${percent.round()}%'
+            : '$percent%';
+        parts.add('Diskon $i: $label');
       }
     }
     return parts.join(' · ');
@@ -331,7 +334,7 @@ class _OrderDetailContent extends StatelessWidget {
                       Text('× ${order.items![i].qty}',
                           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
                       const SizedBox(width: 12),
-                      if (order.items![i].discountPercent > 0)
+                      if (order.items![i].hasDiscount)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
