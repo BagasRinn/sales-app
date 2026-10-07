@@ -233,11 +233,14 @@ class _StatsTabState extends State<StatsTab> {
   }
 
   void _showSalesDetailDialog(BuildContext context, SalesPerformanceDashboardItem s) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _SalesDetailBottomSheet(sales: s),
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: _SalesDetailDialog(sales: s),
+      ),
     );
   }
 
@@ -1047,16 +1050,16 @@ class _SalesPerformanceCard extends StatelessWidget {
 }
 
 // ===== Popup detail order untuk sales performance card =====
-class _SalesDetailBottomSheet extends StatefulWidget {
+class _SalesDetailDialog extends StatefulWidget {
   final SalesPerformanceDashboardItem sales;
 
-  const _SalesDetailBottomSheet({required this.sales});
+  const _SalesDetailDialog({required this.sales});
 
   @override
-  State<_SalesDetailBottomSheet> createState() => _SalesDetailBottomSheetState();
+  State<_SalesDetailDialog> createState() => _SalesDetailDialogState();
 }
 
-class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
+class _SalesDetailDialogState extends State<_SalesDetailDialog> {
   String? _statusFilter; // null = semua
   DateTime? _dateFrom;
   DateTime? _dateTo;
@@ -1069,15 +1072,6 @@ class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
         salesId: widget.sales.userId,
       );
     });
-  }
-
-  @override
-  void dispose() {
-    // Bersihkan state saat dialog ditutup
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<AdminProvider>().clearSalesDetailOrders();
-    });
-    super.dispose();
   }
 
   void _applyFilters() {
@@ -1124,31 +1118,21 @@ class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
 
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
-      case 'APPROVED':
-        return AppColors.success;
-      case 'PENDING':
-        return AppColors.warning;
-      case 'REJECTED':
-        return AppColors.error;
-      case 'CANCELLED':
-        return AppColors.textMuted;
-      default:
-        return AppColors.info;
+      case 'APPROVED': return AppColors.success;
+      case 'PENDING': return AppColors.warning;
+      case 'REJECTED': return AppColors.error;
+      case 'CANCELLED': return AppColors.textMuted;
+      default: return AppColors.info;
     }
   }
 
   String _statusLabel(String status) {
     switch (status.toUpperCase()) {
-      case 'APPROVED':
-        return 'Diterima';
-      case 'PENDING':
-        return 'Pending';
-      case 'REJECTED':
-        return 'Ditolak';
-      case 'CANCELLED':
-        return 'Dibatalkan';
-      default:
-        return status;
+      case 'APPROVED': return 'Diterima';
+      case 'PENDING': return 'Pending';
+      case 'REJECTED': return 'Ditolak';
+      case 'CANCELLED': return 'Dibatalkan';
+      default: return status;
     }
   }
 
@@ -1159,279 +1143,263 @@ class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
     final loading = provider.salesDetailLoading;
     final error = provider.salesDetailError;
 
-    // Calculate totals from filtered orders
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (_, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(2),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 800,
+        height: 520,
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    child: Text(
+                      widget.sales.displayName.isNotEmpty
+                          ? widget.sales.displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                      child: Text(
-                        widget.sales.displayName.isNotEmpty
-                            ? widget.sales.displayName[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.sales.displayName,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.sales.displayName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '@${widget.sales.username}',
-                            style: const TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              // Filters
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Summary
-                    if (orders.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        Text(
+                          '@${widget.sales.username}',
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Total Pesanan',
-                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                  ),
-                                  Text(
-                                    '$totalOrders order',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 18,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 36,
-                              color: AppColors.border,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Total Revenue',
-                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                  ),
-                                  Text(
-                                    'Rp ${_fmt(totalRevenue)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 18,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    // Filter row
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          // Status filter
-                          SizedBox(
-                            width: 140,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _statusFilter,
-                              decoration: const InputDecoration(
-                                labelText: 'Status',
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                border: OutlineInputBorder(),
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: null, child: Text('Semua')),
-                                DropdownMenuItem(value: 'APPROVED', child: Text('Diterima')),
-                                DropdownMenuItem(value: 'PENDING', child: Text('Pending')),
-                                DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
-                                DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan')),
-                              ],
-                              onChanged: (v) {
-                                setState(() => _statusFilter = v);
-                                _applyFilters();
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Date from
-                          OutlinedButton.icon(
-                            onPressed: _pickDateFrom,
-                            icon: const Icon(Icons.calendar_today, size: 14),
-                            label: Text(
-                              _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Text('—', style: TextStyle(color: AppColors.textMuted)),
-                          const SizedBox(width: 4),
-                          // Date to
-                          OutlinedButton.icon(
-                            onPressed: _pickDateTo,
-                            icon: const Icon(Icons.calendar_today, size: 14),
-                            label: Text(
-                              _dateTo != null ? _formatDate(_dateTo!) : 'Sampai',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            ),
-                          ),
-                          if (_dateFrom != null || _dateTo != null) ...[
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              tooltip: 'Reset tanggal',
-                              onPressed: () {
-                                setState(() {
-                                  _dateFrom = null;
-                                  _dateTo = null;
-                                });
-                                _applyFilters();
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      context.read<AdminProvider>().clearSalesDetailOrders();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
               ),
-              const Divider(height: 1),
-              // Content
-              Expanded(
-                child: loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : error != null
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.error_outline, color: AppColors.error, size: 40),
-                                const SizedBox(height: 8),
-                                Text(error, style: const TextStyle(color: AppColors.error)),
-                                const SizedBox(height: 12),
-                                TextButton(
-                                  onPressed: _applyFilters,
-                                  child: const Text('Coba lagi'),
+            ),
+            // Body: horizontal split
+            Expanded(
+              child: Row(
+                children: [
+                  // Left sidebar: summary + filters
+                  Container(
+                    width: 220,
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(right: BorderSide(color: AppColors.border)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Summary
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Total Order',
+                                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                              ),
+                              Text(
+                                '$totalOrders',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
+                                  color: AppColors.primary,
                                 ),
-                              ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Total Revenue',
+                                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                              ),
+                              Text(
+                                'Rp ${_fmt(totalRevenue)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Filter',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Status filter
+                        SizedBox(
+                          width: double.infinity,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _statusFilter,
+                            decoration: const InputDecoration(
+                              labelText: 'Status',
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(),
                             ),
-                          )
-                        : orders.isEmpty
-                            ? const Center(
+                            items: const [
+                              DropdownMenuItem(value: null, child: Text('Semua', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: 'APPROVED', child: Text('Diterima', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: 'PENDING', child: Text('Pending', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak', style: TextStyle(fontSize: 12))),
+                              DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan', style: TextStyle(fontSize: 12))),
+                            ],
+                            onChanged: (v) {
+                              setState(() => _statusFilter = v);
+                              _applyFilters();
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Date from
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _pickDateFrom,
+                            icon: const Icon(Icons.calendar_today, size: 13),
+                            label: Text(
+                              _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Date to
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _pickDateTo,
+                            icon: const Icon(Icons.calendar_today, size: 13),
+                            label: Text(
+                              _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                          ),
+                        ),
+                        if (_dateFrom != null || _dateTo != null) ...[
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _dateFrom = null;
+                                _dateTo = null;
+                              });
+                              _applyFilters();
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Reset tanggal',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Right: order list
+                  Expanded(
+                    child: loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : error != null
+                            ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 40),
-                                    SizedBox(height: 8),
-                                    Text(
-                                      'Tidak ada pesanan.',
-                                      style: TextStyle(color: AppColors.textMuted),
+                                    const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+                                    const SizedBox(height: 8),
+                                    Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: _applyFilters,
+                                      child: const Text('Coba lagi'),
                                     ),
                                   ],
                                 ),
                               )
-                            : ListView.builder(
-                                controller: scrollController,
-                                padding: const EdgeInsets.all(16),
-                                itemCount: orders.length,
-                                itemBuilder: (ctx, i) {
-                                  final order = orders[i];
-                                  final statusColor = _statusColor(order.status);
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 10),
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: AppColors.border),
-                                    ),
+                            : orders.isEmpty
+                                ? const Center(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Row(
+                                        Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'Tidak ada pesanan.',
+                                          style: TextStyle(color: AppColors.textMuted),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(12),
+                                    itemCount: orders.length,
+                                    itemBuilder: (ctx, i) {
+                                      final order = orders[i];
+                                      final statusColor = _statusColor(order.status);
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surface,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.border),
+                                        ),
+                                        child: Row(
                                           children: [
                                             Expanded(
                                               child: Column(
@@ -1441,24 +1409,66 @@ class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
                                                     order.storeName ?? 'Toko Tidak Diketahui',
                                                     style: const TextStyle(
                                                       fontWeight: FontWeight.w600,
-                                                      fontSize: 14,
+                                                      fontSize: 13,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 2),
-                                                  Text(
-                                                    '#${order.id.substring(0, 8)} • ${order.items.length} item',
-                                                    style: const TextStyle(
-                                                      color: AppColors.textMuted,
-                                                      fontSize: 12,
-                                                    ),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        '#${order.id.substring(0, 8)}',
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                        Icons.inventory_2_outlined,
+                                                        size: 11,
+                                                        color: AppColors.textMuted,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        '${order.items.length} item',
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                        Icons.calendar_today_outlined,
+                                                        size: 11,
+                                                        color: AppColors.textMuted,
+                                                      ),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        _formatDate(order.createdAt),
+                                                        style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
                                               ),
                                             ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Rp ${_fmt(order.totalAmount)}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
                                             Container(
                                               padding: const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 4,
+                                                horizontal: 8,
+                                                vertical: 3,
                                               ),
                                               decoration: BoxDecoration(
                                                 color: statusColor.withValues(alpha: 0.1),
@@ -1471,50 +1481,23 @@ class _SalesDetailBottomSheetState extends State<_SalesDetailBottomSheet> {
                                                 _statusLabel(order.status),
                                                 style: TextStyle(
                                                   color: statusColor,
-                                                  fontSize: 11,
+                                                  fontSize: 10,
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.calendar_today_outlined,
-                                              size: 12,
-                                              color: AppColors.textMuted,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _formatDate(order.createdAt),
-                                              style: const TextStyle(
-                                                color: AppColors.textMuted,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              'Rp ${_fmt(order.totalAmount)}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                                      );
+                                    },
+                                  ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
