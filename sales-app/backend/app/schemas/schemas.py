@@ -494,8 +494,8 @@ class CustomerSubmissionCreate(BaseSchema):
     # Section 5: Salesman
     key_account_ref_id: Optional[str] = Field(None, max_length=50)  # satu-satunya field opsional
     cluster_langganan: Optional[str] = Field(None, max_length=100)
-    kode_salesman: str = Field(..., min_length=1, max_length=50)
-    nama_salesman: str = Field(..., min_length=1, max_length=200)
+    kode_salesman: Optional[str] = Field(None, max_length=50)
+    nama_salesman: Optional[str] = Field(None, max_length=200)
     siklus_kunjungan: str = Field(..., min_length=1, max_length=100)
     hari_kunjungan: str = Field(..., min_length=1, max_length=50)
     # Flag: kalau True, customer langsung dibuat saat submit (untuk flow "bareng order").

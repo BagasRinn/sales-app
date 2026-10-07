@@ -977,8 +977,7 @@ class _BarengItem {
     required this.namaBarang,
     required this.hargaSatuan,
     required this.stokTersedia,
-    this.qty = 1,
-  });
+  }) : qty = 1;
 
   int get subtotal => hargaSatuan * qty;
 
@@ -1409,7 +1408,7 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
                           controller: scrollController,
                           padding: const EdgeInsets.all(16),
                           itemCount: products.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final p = products[i];
                             final isOutOfStock = p.stokTersedia == 0;

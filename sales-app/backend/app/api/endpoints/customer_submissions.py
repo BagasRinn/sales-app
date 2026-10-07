@@ -111,6 +111,10 @@ def submit_customer_registration(
     payload_dict = payload.model_dump()
     bareng_order = payload_dict.pop("bareng_order", False)
 
+    # Auto-fill salesman info dari auth token — submission melacak siapa yang mengajukan.
+    payload_dict["kode_salesman"] = current_user.get("username")
+    payload_dict["nama_salesman"] = current_user.get("nama")
+
     submission = CustomerRegistrationSubmission(
         id=uuid4(),
         sales_id=sales_id,
