@@ -234,19 +234,23 @@ class _StatsTabState extends State<StatsTab> {
 
   void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
     provider.loadSalesDetailOrders(salesId: s.userId);
-    final overlay = Overlay.of(context);
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (ctx) => _SalesOverlayDialog(
-        provider: provider,
-        sales: s,
-        onClose: () {
-          provider.clearSalesDetailOrders();
-          entry.remove();
-        },
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(32),
+        child: _SalesOverlayDialog(
+          provider: provider,
+          sales: s,
+          onClose: () {
+            provider.clearSalesDetailOrders();
+            Navigator.of(ctx).pop();
+          },
+        ),
       ),
     );
-    overlay.insert(entry);
   }
 
   @override
@@ -1068,33 +1072,23 @@ class _SalesOverlayDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Barrier (klik untuk tutup)
-        GestureDetector(
-          onTap: onClose,
-          child: Container(color: Colors.black54),
-        ),
-        // Dialog — diposisikan di tengah
-        Center(
-          child: Material(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(16),
-            elevation: 8,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800, maxHeight: 520),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _SalesDetailDialogBody(
-                  provider: provider,
-                  sales: sales,
-                  onClose: onClose,
-                ),
-              ),
-            ),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: Material(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 8,
+        child: SizedBox(
+          width: 800,
+          height: 520,
+          child: _SalesDetailDialogBody(
+            provider: provider,
+            sales: sales,
+            onClose: onClose,
           ),
         ),
-      ],
+      ),
     );
   }
 }
