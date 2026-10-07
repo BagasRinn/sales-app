@@ -234,17 +234,15 @@ class _StatsTabState extends State<StatsTab> {
 
   void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
     provider.loadSalesDetailOrders(salesId: s.userId);
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Dismiss',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (dialogContext, _, __) => Material(
-        color: Colors.transparent,
-        child: _SalesDetailDialog(sales: s),
+    final overlay = Overlay.of(context);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) => _SalesOverlayDialog(
+        sales: s,
+        onClose: () => entry.remove(),
       ),
     );
+    overlay.insert(entry);
   }
 
   @override
@@ -1053,26 +1051,55 @@ class _SalesPerformanceCard extends StatelessWidget {
 }
 
 // ===== Popup detail order untuk sales performance card =====
-class _SalesDetailDialog extends StatefulWidget {
+class _SalesOverlayDialog extends StatelessWidget {
   final SalesPerformanceDashboardItem sales;
+  final VoidCallback onClose;
 
-  const _SalesDetailDialog({required this.sales});
+  const _SalesOverlayDialog({required this.sales, required this.onClose});
 
   @override
-  State<_SalesDetailDialog> createState() => _SalesDetailDialogState();
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Barrier (klik untuk tutup)
+        GestureDetector(
+          onTap: onClose,
+          child: Container(color: Colors.black54),
+        ),
+        // Dialog — diposisikan di tengah
+        Center(
+          child: Material(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            elevation: 8,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800, maxHeight: 520),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: _SalesDetailDialogBody(sales: sales, onClose: onClose),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _SalesDetailDialogState extends State<_SalesDetailDialog> {
-  String? _statusFilter; // null = semua
-  DateTime? _dateFrom;
-  DateTime? _dateTo;
+class _SalesDetailDialogBody extends StatefulWidget {
+  final SalesPerformanceDashboardItem sales;
+  final VoidCallback onClose;
+
+  const _SalesDetailDialogBody({required this.sales, required this.onClose});
 
   @override
-  void initState() {
-    super.initState();
-    // Data sudah di-load oleh _openSalesDetail sebelum showDialog dipanggil.
-    // Tidak perlu load ulang di sini — hanya watch state untuk reaktif update.
-  }
+  State<_SalesDetailDialogBody> createState() => _SalesDetailDialogBodyState();
+}
+
+class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
+  String? _statusFilter;
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
 
   void _applyFilters() {
     context.read<AdminProvider>().loadSalesDetailOrders(
@@ -1146,357 +1173,347 @@ class _SalesDetailDialogState extends State<_SalesDetailDialog> {
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: 800,
-        height: 520,
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.border)),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                    child: Text(
-                      widget.sales.displayName.isNotEmpty
-                          ? widget.sales.displayName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+    return SizedBox(
+      width: 800,
+      height: 520,
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  child: Text(
+                    widget.sales.displayName.isNotEmpty
+                        ? widget.sales.displayName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.sales.displayName,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                       ),
-                    ),
+                      Text(
+                        '@${widget.sales.username}',
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.sales.displayName,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                        ),
-                        Text(
-                          '@${widget.sales.username}',
-                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      context.read<AdminProvider>().clearSalesDetailOrders();
-                      Navigator.pop(context);
-                    },
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: widget.onClose,
+                ),
+              ],
             ),
-            // Body: horizontal split
-            Expanded(
-              child: Row(
-                children: [
-                  // Left sidebar: summary + filters
-                  Container(
-                    width: 220,
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      color: AppColors.surface,
-                      border: Border(right: BorderSide(color: AppColors.border)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Summary
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.15),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Total Order',
-                                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                              ),
-                              Text(
-                                '$totalOrders',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 22,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Total Revenue',
-                                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                              ),
-                              Text(
-                                'Rp ${_fmt(totalRevenue)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ],
+          ),
+          // Body: horizontal split
+          Expanded(
+            child: Row(
+              children: [
+                // Left sidebar: summary + filters
+                Container(
+                  width: 220,
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border(right: BorderSide(color: AppColors.border)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Summary
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.15),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Filter',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total Order',
+                              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                            ),
+                            Text(
+                              '$totalOrders',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 22,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Total Revenue',
+                              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                            ),
+                            Text(
+                              'Rp ${_fmt(totalRevenue)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Filter',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Status filter
+                      SizedBox(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _statusFilter,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: null, child: Text('Semua', style: TextStyle(fontSize: 12))),
+                            DropdownMenuItem(value: 'APPROVED', child: Text('Diterima', style: TextStyle(fontSize: 12))),
+                            DropdownMenuItem(value: 'PENDING', child: Text('Pending', style: TextStyle(fontSize: 12))),
+                            DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak', style: TextStyle(fontSize: 12))),
+                            DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan', style: TextStyle(fontSize: 12))),
+                          ],
+                          onChanged: (v) {
+                            setState(() => _statusFilter = v);
+                            _applyFilters();
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Date from
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _pickDateFrom,
+                          icon: const Icon(Icons.calendar_today, size: 13),
+                          label: Text(
+                            _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        // Status filter
-                        SizedBox(
-                          width: double.infinity,
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _statusFilter,
-                            decoration: const InputDecoration(
-                              labelText: 'Status',
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              border: OutlineInputBorder(),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: null, child: Text('Semua', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'APPROVED', child: Text('Diterima', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'PENDING', child: Text('Pending', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak', style: TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: 'CANCELLED', child: Text('Dibatalkan', style: TextStyle(fontSize: 12))),
-                            ],
-                            onChanged: (v) {
-                              setState(() => _statusFilter = v);
-                              _applyFilters();
-                            },
+                      ),
+                      const SizedBox(height: 6),
+                      // Date to
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _pickDateTo,
+                          icon: const Icon(Icons.calendar_today, size: 13),
+                          label: Text(
+                            _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        // Date from
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _pickDateFrom,
-                            icon: const Icon(Icons.calendar_today, size: 13),
-                            label: Text(
-                              _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            ),
-                          ),
-                        ),
+                      ),
+                      if (_dateFrom != null || _dateTo != null) ...[
                         const SizedBox(height: 6),
-                        // Date to
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _pickDateTo,
-                            icon: const Icon(Icons.calendar_today, size: 13),
-                            label: Text(
-                              _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _dateFrom = null;
+                              _dateTo = null;
+                            });
+                            _applyFilters();
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Reset tanggal',
+                            style: TextStyle(fontSize: 11),
                           ),
                         ),
-                        if (_dateFrom != null || _dateTo != null) ...[
-                          const SizedBox(height: 6),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _dateFrom = null;
-                                _dateTo = null;
-                              });
-                              _applyFilters();
-                            },
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Reset tanggal',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
-                  // Right: order list
-                  Expanded(
-                    child: loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : error != null
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.error_outline, color: AppColors.error, size: 36),
-                                    const SizedBox(height: 8),
-                                    Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
-                                    const SizedBox(height: 12),
-                                    TextButton(
-                                      onPressed: _applyFilters,
-                                      child: const Text('Coba lagi'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : orders.isEmpty
-                                ? const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          'Tidak ada pesanan.',
-                                          style: TextStyle(color: AppColors.textMuted),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(12),
-                                    itemCount: orders.length,
-                                    itemBuilder: (ctx, i) {
-                                      final order = orders[i];
-                                      final statusColor = _statusColor(order.status);
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surface,
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: AppColors.border),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    order.storeName ?? 'Toko Tidak Diketahui',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.w600,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Row(
-                                                    children: [
-                                                      Text(
-                                                        '#${order.id.substring(0, 8)}',
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      const Icon(
-                                                        Icons.inventory_2_outlined,
-                                                        size: 11,
-                                                        color: AppColors.textMuted,
-                                                      ),
-                                                      const SizedBox(width: 2),
-                                                      Text(
-                                                        '${order.items.length} item',
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      const Icon(
-                                                        Icons.calendar_today_outlined,
-                                                        size: 11,
-                                                        color: AppColors.textMuted,
-                                                      ),
-                                                      const SizedBox(width: 2),
-                                                      Text(
-                                                        _formatDate(order.createdAt),
-                                                        style: const TextStyle(
-                                                          color: AppColors.textMuted,
-                                                          fontSize: 11,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Rp ${_fmt(order.totalAmount)}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 13,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 3,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: statusColor.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(
-                                                  color: statusColor.withValues(alpha: 0.3),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                _statusLabel(order.status),
-                                                style: TextStyle(
-                                                  color: statusColor,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
+                ),
+                // Right: order list
+                Expanded(
+                  child: loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : error != null
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+                                  const SizedBox(height: 8),
+                                  Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: _applyFilters,
+                                    child: const Text('Coba lagi'),
                                   ),
-                  ),
-                ],
-              ),
+                                ],
+                              ),
+                            )
+                          : orders.isEmpty
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Tidak ada pesanan.',
+                                        style: TextStyle(color: AppColors.textMuted),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(12),
+                                  itemCount: orders.length,
+                                  itemBuilder: (ctx, i) {
+                                    final order = orders[i];
+                                    final statusColor = _statusColor(order.status);
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  order.storeName ?? 'Toko Tidak Diketahui',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      '#${order.id.substring(0, 8)}',
+                                                      style: const TextStyle(
+                                                        color: AppColors.textMuted,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    const Icon(
+                                                      Icons.inventory_2_outlined,
+                                                      size: 11,
+                                                      color: AppColors.textMuted,
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    Text(
+                                                      '${order.items.length} item',
+                                                      style: const TextStyle(
+                                                        color: AppColors.textMuted,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    const Icon(
+                                                      Icons.calendar_today_outlined,
+                                                      size: 11,
+                                                      color: AppColors.textMuted,
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    Text(
+                                                      _formatDate(order.createdAt),
+                                                      style: const TextStyle(
+                                                        color: AppColors.textMuted,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Rp ${_fmt(order.totalAmount)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: statusColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: statusColor.withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              _statusLabel(order.status),
+                                              style: TextStyle(
+                                                color: statusColor,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
