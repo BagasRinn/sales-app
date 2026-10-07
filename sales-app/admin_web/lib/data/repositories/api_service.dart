@@ -47,9 +47,12 @@ class ApiService {
   String? get accessToken => _dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '');
   String? get refreshToken => _refreshToken;
 
-  Future<dynamic> get(String endpoint, {CancelToken? cancelToken}) async {
+  Future<dynamic> get(String endpoint, {CancelToken? cancelToken, Duration? receiveTimeout}) async {
     try {
-      final resp = await _dio.get(endpoint, cancelToken: cancelToken);
+      final opts = receiveTimeout != null
+          ? Options(receiveTimeout: receiveTimeout)
+          : null;
+      final resp = await _dio.get(endpoint, cancelToken: cancelToken, options: opts);
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);

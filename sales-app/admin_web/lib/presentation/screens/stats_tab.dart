@@ -890,7 +890,7 @@ class _SalesPerformanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240,
+      width: 300,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -981,29 +981,41 @@ class _SalesPerformanceCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('MTD', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  const SizedBox(height: 2),
                   Text(
-                    '$mtdCount order • Rp ${_fmt(mtdRevenue)}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                    '$mtdCount order',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    'Rp ${_fmt(mtdRevenue)}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Hari ini', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  const SizedBox(height: 2),
                   Text(
-                    '$todayCount order • Rp ${_fmt(todayRevenue)}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                    '$todayCount order',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    'Rp ${_fmt(todayRevenue)}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),

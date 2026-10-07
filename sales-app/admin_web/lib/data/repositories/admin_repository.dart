@@ -500,7 +500,7 @@ class AdminRepository {
               '${date.month.toString().padLeft(2, '0')}-'
               '${date.day.toString().padLeft(2, '0')}'
         : '';
-    final data = await _api.get('/products/stats$qs', cancelToken: cancelToken);
+    final data = await _api.get('/products/stats$qs', cancelToken: cancelToken, receiveTimeout: const Duration(seconds: 30));
     return {
       'total_orders': data['total_orders'] ?? 0,
       'pending_orders': data['pending_orders'] ?? 0,
