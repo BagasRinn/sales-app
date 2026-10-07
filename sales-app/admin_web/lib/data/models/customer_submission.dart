@@ -41,7 +41,7 @@ class CustomerSubmission {
   final String? hariKunjungan;
 
   // Order created via bareng_order. Null if bareng_order=False.
-  final Order? order;
+  final SubmissionOrder? order;
 
   CustomerSubmission({
     required this.id,
@@ -131,7 +131,7 @@ class CustomerSubmission {
       namaSalesman: json['nama_salesman'] as String?,
       siklusKunjungan: json['siklus_kunjungan'] as String?,
       hariKunjungan: json['hari_kunjungan'] as String?,
-      order: json['order'] != null ? Order.fromJson(json['order']) : null,
+      order: json['order'] != null ? SubmissionOrder.fromJson(json['order']) : null,
     );
   }
 
@@ -149,7 +149,7 @@ class CustomerSubmission {
   }
 }
 
-class OrderItem {
+class SubmissionOrderItem {
   final String productId;
   final String? namaBarang;
   final int qty;
@@ -157,7 +157,7 @@ class OrderItem {
   final int subtotal;
   final int hargaSetelahDiskon;
 
-  const OrderItem({
+  const SubmissionOrderItem({
     required this.productId,
     this.namaBarang,
     required this.qty,
@@ -166,8 +166,8 @@ class OrderItem {
     this.hargaSetelahDiskon = 0,
   });
 
-  factory OrderItem.fromJson(Map<String, dynamic> json) {
-    return OrderItem(
+  factory SubmissionOrderItem.fromJson(Map<String, dynamic> json) {
+    return SubmissionOrderItem(
       productId: json['product_id'] ?? '',
       namaBarang: json['nama_barang'],
       qty: json['qty'] ?? 0,
@@ -178,18 +178,18 @@ class OrderItem {
   }
 }
 
-class Order {
+class SubmissionOrder {
   final String id;
   final String status;
   final String orderType;
   final String? storeName;
-  final List<OrderItem> items;
+  final List<SubmissionOrderItem> items;
   final int? totalAmount;
   final int? totalDiscount;
   final DateTime createdAt;
   final int? hargaSaldoTersedia;
 
-  const Order({
+  const SubmissionOrder({
     required this.id,
     required this.status,
     required this.orderType,
@@ -201,14 +201,14 @@ class Order {
     this.hargaSaldoTersedia,
   });
 
-  factory Order.fromJson(Map<String, dynamic> json) {
-    return Order(
+  factory SubmissionOrder.fromJson(Map<String, dynamic> json) {
+    return SubmissionOrder(
       id: json['id'] ?? '',
       status: json['status'] ?? 'DRAFT',
       orderType: json['order_type'] ?? 'REGULER',
       storeName: json['store_name'],
       items: (json['items'] as List?)
-              ?.map((i) => OrderItem.fromJson(i))
+              ?.map((i) => SubmissionOrderItem.fromJson(i))
               .toList() ??
           [],
       totalAmount: json['total_amount'],

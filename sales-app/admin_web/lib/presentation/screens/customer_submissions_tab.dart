@@ -434,7 +434,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _OrderSection extends StatelessWidget {
-  final Order order;
+  final SubmissionOrder order;
   const _OrderSection({required this.order});
 
   @override
