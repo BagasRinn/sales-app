@@ -1118,7 +1118,18 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   @override
   void initState() {
     super.initState();
+    widget.provider.addListener(_onProviderUpdate);
     _applyFilters();
+  }
+
+  @override
+  void dispose() {
+    widget.provider.removeListener(_onProviderUpdate);
+    super.dispose();
+  }
+
+  void _onProviderUpdate() {
+    if (mounted) setState(() {});
   }
 
   void _applyFilters() {
@@ -1186,7 +1197,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AdminProvider>();
+    final provider = widget.provider;
     final orders = provider.salesDetailOrders;
     final loading = provider.salesDetailLoading;
     final error = provider.salesDetailError;
