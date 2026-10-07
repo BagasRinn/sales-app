@@ -238,8 +238,12 @@ class _StatsTabState extends State<StatsTab> {
     late final OverlayEntry entry;
     entry = OverlayEntry(
       builder: (ctx) => _SalesOverlayDialog(
+        provider: provider,
         sales: s,
-        onClose: () => entry.remove(),
+        onClose: () {
+          provider.clearSalesDetailOrders();
+          entry.remove();
+        },
       ),
     );
     overlay.insert(entry);
@@ -1052,10 +1056,15 @@ class _SalesPerformanceCard extends StatelessWidget {
 
 // ===== Popup detail order untuk sales performance card =====
 class _SalesOverlayDialog extends StatelessWidget {
+  final AdminProvider provider;
   final SalesPerformanceDashboardItem sales;
   final VoidCallback onClose;
 
-  const _SalesOverlayDialog({required this.sales, required this.onClose});
+  const _SalesOverlayDialog({
+    required this.provider,
+    required this.sales,
+    required this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1076,7 +1085,11 @@ class _SalesOverlayDialog extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 800, maxHeight: 520),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: _SalesDetailDialogBody(sales: sales, onClose: onClose),
+                child: _SalesDetailDialogBody(
+                  provider: provider,
+                  sales: sales,
+                  onClose: onClose,
+                ),
               ),
             ),
           ),
@@ -1087,10 +1100,15 @@ class _SalesOverlayDialog extends StatelessWidget {
 }
 
 class _SalesDetailDialogBody extends StatefulWidget {
+  final AdminProvider provider;
   final SalesPerformanceDashboardItem sales;
   final VoidCallback onClose;
 
-  const _SalesDetailDialogBody({required this.sales, required this.onClose});
+  const _SalesDetailDialogBody({
+    required this.provider,
+    required this.sales,
+    required this.onClose,
+  });
 
   @override
   State<_SalesDetailDialogBody> createState() => _SalesDetailDialogBodyState();
@@ -1102,7 +1120,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   DateTime? _dateTo;
 
   void _applyFilters() {
-    context.read<AdminProvider>().loadSalesDetailOrders(
+    widget.provider.loadSalesDetailOrders(
       salesId: widget.sales.userId,
       status: _statusFilter,
       dateFrom: _dateFrom,
@@ -1165,7 +1183,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AdminProvider>();
+    final provider = widget.provider;
     final orders = provider.salesDetailOrders;
     final loading = provider.salesDetailLoading;
     final error = provider.salesDetailError;
