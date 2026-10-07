@@ -102,6 +102,9 @@ def submit_customer_registration(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
+    logger.info(f"[submit_customer] bareng_order={payload.bareng_order}")
+    logger.info(f"[submit_customer] payload keys: {list(payload.model_dump().keys())}")
+    logger.info(f"[submit_customer] siklus_kunjungan={payload.siklus_kunjungan!r}, hari_kunjungan={payload.hari_kunjungan!r}")
     """Submit pengajuan customer baru.
     - Jika bareng_order=True, customer langsung dibuat agar sales bisa langsung order.
     - Status submission tetap PENDING — admin perlu approve untuk mengesahkan.
