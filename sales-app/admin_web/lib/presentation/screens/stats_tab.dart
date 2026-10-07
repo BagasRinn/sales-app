@@ -6,13 +6,16 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/web_download.dart';
+import '../../data/models/sales_performance.dart';
 import '../providers/admin_provider.dart';
 
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
 
 class StatsTab extends StatefulWidget {
-  const StatsTab({super.key});
+  final String role;
+
+  const StatsTab({super.key, required this.role});
 
   @override
   State<StatsTab> createState() => _StatsTabState();
@@ -189,6 +192,43 @@ class _StatsTabState extends State<StatsTab> {
     }
   }
 
+  Widget _buildSalesPerformanceSection(AdminProvider provider) {
+    final loading = provider.dashboardPerformanceLoading;
+    final sales = provider.dashboardPerformance;
+
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (sales.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Text(
+            'Belum ada data performa sales.',
+            style: TextStyle(color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: sales.map((s) => _SalesPerformanceCard(s: s)).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AdminProvider>();
@@ -335,6 +375,17 @@ class _StatsTabState extends State<StatsTab> {
                 ),
               ],
             ),
+
+            // MANAGER only: Performa Sales quick summary
+            if (widget.role == 'MANAGER') ...[
+              const SizedBox(height: 24),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12, left: 4),
+                child: Text('Performa Sales', style: AppTextStyles.labelLarge),
+              ),
+              _buildSalesPerformanceSection(provider),
+            ],
+
             const SizedBox(height: 32),
             // Laporan
             const Text('Ambil Laporan', style: AppTextStyles.headlineLarge),
@@ -827,6 +878,167 @@ class _ReportDownloadCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SalesPerformanceCard extends StatelessWidget {
+  final SalesPerformanceDashboardItem s;
+
+  const _SalesPerformanceCard({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                child: Text(
+                  s.displayName.isNotEmpty ? s.displayName[0].toUpperCase() : '?',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  s.displayName,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildStatusSection(
+            label: 'Diterima',
+            mtdCount: s.approvedMtdCount,
+            mtdRevenue: s.approvedMtdRevenue,
+            todayCount: s.approvedTodayCount,
+            todayRevenue: s.approvedTodayRevenue,
+            color: AppColors.success,
+          ),
+          const Divider(height: 20),
+          _buildStatusRow(
+            label: 'Pending',
+            mtdCount: s.pendingMtdCount,
+            todayCount: s.pendingTodayCount,
+            color: AppColors.warning,
+          ),
+          const SizedBox(height: 4),
+          _buildStatusRow(
+            label: 'Ditolak',
+            mtdCount: s.rejectedMtdCount,
+            todayCount: s.rejectedTodayCount,
+            color: AppColors.error,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusSection({
+    required String label,
+    required int mtdCount,
+    required int mtdRevenue,
+    required int todayCount,
+    required int todayRevenue,
+    required Color color,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('MTD', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  Text(
+                    '$mtdCount order • Rp ${_fmt(mtdRevenue)}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Hari ini', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  Text(
+                    '$todayCount order • Rp ${_fmt(todayRevenue)}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusRow({
+    required String label,
+    required int mtdCount,
+    required int todayCount,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'MTD $mtdCount',
+          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '| Today $todayCount',
+          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+        ),
+      ],
     );
   }
 }

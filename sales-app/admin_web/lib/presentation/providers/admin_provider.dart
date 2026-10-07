@@ -90,6 +90,10 @@ class AdminProvider extends ChangeNotifier {
   List<SalesTarget> _salesTargets = [];
   bool _targetsLoading = false;
 
+  // ===== Dashboard Performance =====
+  List<SalesPerformanceDashboardItem> _dashboardPerformance = [];
+  bool _dashboardPerformanceLoading = false;
+
   // ===== Bulletins =====
   List<Bulletin> _bulletins = [];
   bool _bulletinsLoading = false;
@@ -145,6 +149,8 @@ class AdminProvider extends ChangeNotifier {
   bool get performanceLoading => _performanceLoading;
   List<SalesTarget> get salesTargets => _salesTargets;
   bool get targetsLoading => _targetsLoading;
+  List<SalesPerformanceDashboardItem> get dashboardPerformance => _dashboardPerformance;
+  bool get dashboardPerformanceLoading => _dashboardPerformanceLoading;
 
   // ===== Bulletins =====
   List<Bulletin> get bulletins => _bulletins;
@@ -935,6 +941,20 @@ class AdminProvider extends ChangeNotifier {
       _errorMessage = e is ApiException ? e.message : e.toString();
     } finally {
       _performanceLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadSalesPerformanceDashboard() async {
+    _dashboardPerformanceLoading = true;
+    notifyListeners();
+    try {
+      _dashboardPerformance = await _repo.getSalesPerformanceDashboard();
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _dashboardPerformanceLoading = false;
       notifyListeners();
     }
   }

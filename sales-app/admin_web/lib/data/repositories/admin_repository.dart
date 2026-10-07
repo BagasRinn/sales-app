@@ -531,6 +531,15 @@ class AdminRepository {
     return list.map((e) => SalesPerformance.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Dashboard breakdown: MTD + Today for APPROVED / PENDING / REJECTED per sales.
+  Future<List<SalesPerformanceDashboardItem>> getSalesPerformanceDashboard() async {
+    final data = await _api.get('/reports/sales-performance/dashboard');
+    final list = data['sales'] as List? ?? [];
+    return list
+        .map((e) => SalesPerformanceDashboardItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ===== Sales Targets =====
   Future<List<SalesTarget>> getSalesTargets({String? period}) async {
     final qs = period != null ? '?period=${Uri.encodeComponent(period)}' : '';

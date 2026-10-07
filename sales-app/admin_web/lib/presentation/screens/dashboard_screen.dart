@@ -183,6 +183,10 @@ class _DashboardContentState extends State<_DashboardContent>
       if (!mounted) return;
       _adminProvider.loadAll();
       _adminProvider.startAutoRefresh();
+      // Load dashboard performance breakdown for MANAGER
+      if (widget.role == 'MANAGER') {
+        _adminProvider.loadSalesPerformanceDashboard();
+      }
       // Idle timer baru mulai setelah load pertama selesai — supaya
       // activity "load" dari internal tidak dihitung interaksi user.
       _lastActivity = DateTime.now();
@@ -267,7 +271,7 @@ class _DashboardContentState extends State<_DashboardContent>
     // MANAGER punya index 6=User, 7=Performa Sales.
     switch (i) {
       case 0:
-        return const StatsTab();
+        return StatsTab(role: widget.role);
       case 1:
         return OrdersTab(readOnly: readOnly);
       case 2:
@@ -291,7 +295,7 @@ class _DashboardContentState extends State<_DashboardContent>
         if (_isManager) return const BulletinsTab();
         break;
     }
-    return const StatsTab();
+    return StatsTab(role: widget.role);
   }
 
   @override

@@ -1,7 +1,7 @@
 """Daily and period order reports — Excel export untuk admin & manager."""
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission
 from app.core.security import require_manager
-from app.schemas.schemas import SalesPerformanceResponse, SalesPerformanceItem
+from app.schemas.schemas import (
+    SalesPerformanceResponse,
+    SalesPerformanceItem,
+    SalesPerformanceDashboardItem,
+    SalesPerformanceDashboardResponse,
+)
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -254,6 +259,11 @@ def period_report(
 def sales_performance_report(
     from_date: str = Query(..., description="Tanggal mulai, YYYY-MM-DD (WITA)"),
     to_date: str = Query(..., description="Tanggal akhir, YYYY-MM-DD (WITA)"),
+    status: Optional[str] = Query(
+        None,
+        description="Filter order by status: PENDING, APPROVED, REJECTED. "
+                   "Defaults to APPROVED for backward compatibility.",
+    ),
     db: Session = Depends(get_db),
     _current_user: dict = Depends(require_manager),
 ):
@@ -271,6 +281,14 @@ def sales_performance_report(
 
     if end < start:
         raise HTTPException(status_code=400, detail="Tanggal akhir tidak boleh sebelum tanggal mulai")
+
+    # Default to APPROVED for backward compat
+    order_status = status.upper() if status else "APPROVED"
+    if order_status not in ("PENDING", "APPROVED", "REJECTED"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"status tidak valid: {status}. Gunakan PENDING, APPROVED, atau REJECTED.",
+        )
 
     wita = timezone(timedelta(hours=8))
     start_dt = datetime.combine(start, datetime.min.time()).replace(tzinfo=wita).astimezone(timezone.utc)
@@ -293,7 +311,7 @@ def sales_performance_report(
         )
         .filter(
             Order.sales_id.isnot(None),
-            Order.status == "APPROVED",
+            Order.status == order_status,
             Order.created_at >= start_dt,
             Order.created_at < end_dt,
         )
@@ -311,7 +329,7 @@ def sales_performance_report(
         .options(joinedload(Order.items).joinedload(OrderItem.product))
         .filter(
             Order.sales_id.isnot(None),
-            Order.status == "APPROVED",
+            Order.status == order_status,
             Order.created_at >= start_dt,
             Order.created_at < end_dt,
         )
@@ -355,3 +373,96 @@ def sales_performance_report(
         ))
 
     return SalesPerformanceResponse(sales=items)
+
+
+@router.get("/sales-performance/dashboard", response_model=SalesPerformanceDashboardResponse)
+def sales_performance_dashboard(
+    db: Session = Depends(get_db),
+    _current_user: dict = Depends(require_manager),
+):
+    """Per-sales breakdown by status (APPROVED / PENDING / REJECTED) for MTD and Today.
+    Manager only. Single call — no date params needed."""
+    wita = timezone(timedelta(hours=8))
+    now_wita = datetime.now(wita)
+    today = now_wita.date()
+    month_start = today.replace(day=1)
+
+    def to_utc(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=wita).astimezone(timezone.utc)
+
+    today_start = to_utc(datetime.combine(today, datetime.min.time()))
+    today_end = to_utc(datetime.combine(today + timedelta(days=1), datetime.min.time()))
+    month_start_dt = to_utc(datetime.combine(month_start, datetime.min.time()))
+
+    # Get all active sales users
+    sales_users = (
+        db.query(User)
+        .filter(User.role == "SALES", User.is_active.is_(True), User.deleted_at.is_(None))
+        .all()
+    )
+
+    def _revenue_for_order(order: Order) -> int:
+        total = 0
+        for item in order.items:
+            _, _, _, _, after = _three_layer_breakdown(item)
+            total += after
+        return max(0, total)
+
+    def _stats_for_status(status: str, start_dt: datetime, end_dt: datetime) -> tuple:
+        orders = (
+            db.query(Order)
+            .options(joinedload(Order.items))
+            .filter(
+                Order.sales_id.isnot(None),
+                Order.status == status,
+                Order.created_at >= start_dt,
+                Order.created_at < end_dt,
+            )
+            .all()
+        )
+        count_map: dict = {}
+        revenue_map: dict = {}
+        for o in orders:
+            sid = o.sales_id
+            count_map[sid] = count_map.get(sid, 0) + 1
+            revenue_map[sid] = revenue_map.get(sid, 0) + _revenue_for_order(o)
+        return count_map, revenue_map
+
+    # APPROVED
+    approved_mtd_count, approved_mtd_rev = _stats_for_status(
+        "APPROVED", month_start_dt, today_end)
+    approved_today_count, approved_today_rev = _stats_for_status(
+        "APPROVED", today_start, today_end)
+    # PENDING
+    pending_mtd_count, pending_mtd_rev = _stats_for_status(
+        "PENDING", month_start_dt, today_end)
+    pending_today_count, pending_today_rev = _stats_for_status(
+        "PENDING", today_start, today_end)
+    # REJECTED
+    rejected_mtd_count, rejected_mtd_rev = _stats_for_status(
+        "REJECTED", month_start_dt, today_end)
+    rejected_today_count, rejected_today_rev = _stats_for_status(
+        "REJECTED", today_start, today_end)
+
+    items = []
+    for u in sales_users:
+        uid = u.id
+        items.append(SalesPerformanceDashboardItem(
+            user_id=uid,
+            username=u.username or "",
+            nama=u.nama,
+            approved_mtd_count=approved_mtd_count.get(uid, 0),
+            approved_mtd_revenue=approved_mtd_rev.get(uid, 0),
+            approved_today_count=approved_today_count.get(uid, 0),
+            approved_today_revenue=approved_today_rev.get(uid, 0),
+            pending_mtd_count=pending_mtd_count.get(uid, 0),
+            pending_mtd_revenue=pending_mtd_rev.get(uid, 0),
+            pending_today_count=pending_today_count.get(uid, 0),
+            pending_today_revenue=pending_today_rev.get(uid, 0),
+            rejected_mtd_count=rejected_mtd_count.get(uid, 0),
+            rejected_mtd_revenue=rejected_mtd_rev.get(uid, 0),
+            rejected_today_count=rejected_today_count.get(uid, 0),
+            rejected_today_revenue=rejected_today_rev.get(uid, 0),
+        ))
+
+    return SalesPerformanceDashboardResponse(sales=items)

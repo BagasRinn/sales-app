@@ -656,6 +656,36 @@ class SalesPerformanceResponse(BaseSchema):
     sales: List[SalesPerformanceItem]
 
 
+class SalesPerformanceDashboardItem(BaseSchema):
+    """Per-sales breakdown for manager dashboard card."""
+    user_id: UUID
+    username: str
+    nama: Optional[str] = None
+    # APPROVED — MTD (month-to-date) + Today
+    approved_mtd_count: int = 0
+    approved_mtd_revenue: int = 0
+    approved_today_count: int = 0
+    approved_today_revenue: int = 0
+    # PENDING — MTD + Today
+    pending_mtd_count: int = 0
+    pending_mtd_revenue: int = 0
+    pending_today_count: int = 0
+    pending_today_revenue: int = 0
+    # REJECTED — MTD + Today
+    rejected_mtd_count: int = 0
+    rejected_mtd_revenue: int = 0
+    rejected_today_count: int = 0
+    rejected_today_revenue: int = 0
+
+    @property
+    def display_name(self) -> str:
+        return self.nama if (self.nama and self.nama.strip()) else self.username
+
+
+class SalesPerformanceDashboardResponse(BaseSchema):
+    sales: List[SalesPerformanceDashboardItem]
+
+
 # ==================== BULLETINS ====================
 
 class BulletinCreate(BaseSchema):
