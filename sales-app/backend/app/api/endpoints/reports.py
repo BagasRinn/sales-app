@@ -394,13 +394,6 @@ def sales_performance_dashboard(
     today_end = to_utc(datetime.combine(today + timedelta(days=1), datetime.min.time()))
     month_start_dt = to_utc(datetime.combine(month_start, datetime.min.time()))
 
-    # Get all active sales users
-    sales_users = (
-        db.query(User)
-        .filter(User.role == "SALES", User.is_active.is_(True), User.deleted_at.is_(None))
-        .all()
-    )
-
     def _revenue_for_order(order: Order) -> int:
         total = 0
         for item in order.items:
@@ -408,41 +401,66 @@ def sales_performance_dashboard(
             total += after
         return max(0, total)
 
-    def _stats_for_status(status: str, start_dt: datetime, end_dt: datetime) -> tuple:
-        orders = (
-            db.query(Order)
-            .options(joinedload(Order.items))
-            .filter(
-                Order.sales_id.isnot(None),
-                Order.status == status,
-                Order.created_at >= start_dt,
-                Order.created_at < end_dt,
-            )
-            .all()
-        )
+    def _aggregate(orders: list[Order]) -> tuple[dict, dict]:
+        """Return (count_map, revenue_map) keyed by sales_id."""
         count_map: dict = {}
         revenue_map: dict = {}
         for o in orders:
             sid = o.sales_id
+            if sid is None:
+                continue
             count_map[sid] = count_map.get(sid, 0) + 1
             revenue_map[sid] = revenue_map.get(sid, 0) + _revenue_for_order(o)
         return count_map, revenue_map
 
-    # APPROVED
-    approved_mtd_count, approved_mtd_rev = _stats_for_status(
-        "APPROVED", month_start_dt, today_end)
-    approved_today_count, approved_today_rev = _stats_for_status(
-        "APPROVED", today_start, today_end)
-    # PENDING
-    pending_mtd_count, pending_mtd_rev = _stats_for_status(
-        "PENDING", month_start_dt, today_end)
-    pending_today_count, pending_today_rev = _stats_for_status(
-        "PENDING", today_start, today_end)
-    # REJECTED
-    rejected_mtd_count, rejected_mtd_rev = _stats_for_status(
-        "REJECTED", month_start_dt, today_end)
-    rejected_today_count, rejected_today_rev = _stats_for_status(
-        "REJECTED", today_start, today_end)
+    # Load ALL orders (all statuses) for MTD and Today — single query each.
+    # Date filter di SQL, bukan Python. joinedload(items.product) menghindari N+1.
+    mtd_orders = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(
+            Order.sales_id.isnot(None),
+            Order.created_at >= month_start_dt,
+            Order.created_at < today_end,
+        )
+        .all()
+    )
+    today_orders = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(
+            Order.sales_id.isnot(None),
+            Order.created_at >= today_start,
+            Order.created_at < today_end,
+        )
+        .all()
+    )
+
+    # Get all active sales users (for building response list)
+    sales_users = (
+        db.query(User)
+        .filter(User.role == "SALES", User.is_active.is_(True), User.deleted_at.is_(None))
+        .all()
+    )
+
+    # Split by status in Python — fast since data already loaded.
+    def _split_by_status(orders: list[Order], status: str) -> list[Order]:
+        return [o for o in orders if o.status == status]
+
+    # MTD aggregates
+    approved_mtd_count, approved_mtd_rev = _aggregate(
+        _split_by_status(mtd_orders, "APPROVED"))
+    pending_mtd_count, pending_mtd_rev = _aggregate(
+        _split_by_status(mtd_orders, "PENDING"))
+    rejected_mtd_count, rejected_mtd_rev = _aggregate(
+        _split_by_status(mtd_orders, "REJECTED"))
+    # Today aggregates
+    approved_today_count, approved_today_rev = _aggregate(
+        _split_by_status(today_orders, "APPROVED"))
+    pending_today_count, pending_today_rev = _aggregate(
+        _split_by_status(today_orders, "PENDING"))
+    rejected_today_count, rejected_today_rev = _aggregate(
+        _split_by_status(today_orders, "REJECTED"))
 
     items = []
     for u in sales_users:
