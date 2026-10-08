@@ -5,6 +5,7 @@ import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../../data/models/order.dart';
 import '../orders/order_list_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -168,10 +169,17 @@ class HomeScreen extends StatelessWidget {
               child: _StatCard(
                 title: 'Target Bulanan',
                 value: s?.targetValue != null
-                    ? idr.format(s!.targetValue)
+                    ? _formatTargetValue(s!, idr)
                     : '-',
-                subtitle: s?.targetType == 'REVENUE' ? 'Omset' : 'Order',
-                icon: Icons.flag_outlined,
+                subtitle: s?.targetValue != null
+                    ? (s!.targetType == 'ORDER_COUNT'
+                        ? '${s.selesaiBulanIniCount} / ${idr.format(s.targetValue)} order'
+                        : '${idr.format(s.selesaiBulanIniTotal)} / ${idr.format(s.targetValue)}')
+                    : null,
+                extra: s?.incentiveAmount != null && s!.incentiveAmount! > 0
+                    ? '+ ${idr.format(s.incentiveAmount)}'
+                    : null,
+                icon: Icons.track_changes_outlined,
                 color: AppColors.warning,
                 bgColor: AppColors.warningBg,
               ),
@@ -253,12 +261,16 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+  String _formatTargetValue(SalesStats s, NumberFormat idr) {
+    return idr.format(s.targetValue);
+  }
 }
 
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
   final String? subtitle;
+  final String? extra;
   final IconData icon;
   final Color color;
   final Color bgColor;
@@ -267,6 +279,7 @@ class _StatCard extends StatelessWidget {
     required this.title,
     required this.value,
     this.subtitle,
+    this.extra,
     required this.icon,
     required this.color,
     required this.bgColor,
@@ -306,6 +319,16 @@ class _StatCard extends StatelessWidget {
           if (subtitle != null) ...[
             const SizedBox(height: 2),
             Text(subtitle!, style: AppTextStyles.bodySmall),
+          ],
+          if (extra != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              extra!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ],
       ),
