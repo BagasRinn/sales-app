@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../data/models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/draft_order_provider.dart';
 import '../order_flow/order_flow_screen.dart';
@@ -181,7 +182,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
 }
 
 class _OrderCard extends StatelessWidget {
-  final dynamic order;
+  final Order order;
 
   const _OrderCard({required this.order});
 
@@ -249,26 +250,23 @@ class _OrderCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (order.orderType != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.borderLight,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      order.orderType,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
                       ),
-                      decoration: BoxDecoration(
-                        color: AppColors.borderLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        order.orderType,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    )
-                  else
-                    const SizedBox(),
+                    ),
+                  ),
                   Text(
                     'Rp ${idr.format(order.totalPrice)}',
                     style: AppTextStyles.headlineMedium.copyWith(
@@ -293,213 +291,477 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
-// Order Detail Screen
+// ─── Order Detail Screen ──────────────────────────────────────────────────────
+
 class OrderDetailScreen extends StatelessWidget {
-  final dynamic order;
+  final Order order;
 
   const OrderDetailScreen({super.key, required this.order});
 
+  String _formatDiscounts(OrderItem item) {
+    final parts = <String>[];
+    for (var i = 0; i < 3; i++) {
+      final layer = i == 0
+          ? item.discount.layer1
+          : i == 1
+              ? item.discount.layer2
+              : item.discount.layer3;
+      if (layer == null) continue;
+      if (layer.type.name.toUpperCase() == 'NOMINAL') {
+        parts.add('Diskon ${i + 1}: Rp ${layer.value}');
+      } else {
+        parts.add('Diskon ${i + 1}: ${layer.value}%');
+      }
+    }
+    return parts.join(' · ');
+  }
+
+  Color _statusColor(String s) {
+    switch (s.toUpperCase()) {
+      case 'PENDING':
+        return AppColors.info;
+      case 'APPROVED':
+        return AppColors.success;
+      case 'CANCELLED':
+      case 'REJECTED':
+        return AppColors.error;
+      case 'DRAFT':
+        return AppColors.warning;
+      default:
+        return AppColors.textMuted;
+    }
+  }
+
+  Color _statusBg(String s) {
+    switch (s.toUpperCase()) {
+      case 'PENDING':
+        return AppColors.infoBg;
+      case 'APPROVED':
+        return AppColors.successBg;
+      case 'CANCELLED':
+      case 'REJECTED':
+        return AppColors.errorBg;
+      case 'DRAFT':
+        return AppColors.warningBg;
+      default:
+        return AppColors.borderLight;
+    }
+  }
+
+  IconData _statusIcon(String s) {
+    switch (s.toUpperCase()) {
+      case 'PENDING':
+        return Icons.hourglass_top;
+      case 'APPROVED':
+        return Icons.check_circle;
+      case 'CANCELLED':
+      case 'REJECTED':
+        return Icons.cancel;
+      case 'DRAFT':
+        return Icons.edit_note;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  String _statusLabel(String s) {
+    switch (s.toUpperCase()) {
+      case 'PENDING':
+        return 'Menunggu';
+      case 'APPROVED':
+        return 'Disetujui';
+      case 'REJECTED':
+        return 'Ditolak';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      case 'DRAFT':
+        return 'Draft';
+      default:
+        return s;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final idr = NumberFormat('#,###', 'id');
+    final idr = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final dateFmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Detail Pesanan'),
+        title: const Text('Detail Order'),
       ),
-      body: SingleChildScrollView(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Status Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          order.storeName,
-                          style: AppTextStyles.headlineMedium,
-                        ),
-                        const Spacer(),
-                        OrderStatusChip(status: order.status),
-                      ],
-                    ),
-                    if (order.storeAddress != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        order.storeAddress,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ],
+        children: [
+          // Status banner
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _statusBg(order.status),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(_statusIcon(order.status), color: _statusColor(order.status)),
+                const SizedBox(width: 8),
+                Text(
+                  'Status: ${_statusLabel(order.status)}',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: _statusColor(order.status),
+                  ),
                 ),
+              ],
+            ),
+          ),
+
+          // Reject reason
+          if (order.rejectReason != null && order.rejectReason!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.errorBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Alasan penolakan: ${order.rejectReason}',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+          ],
 
-            // Items
-            Text(
-              'Item Pesanan',
-              style: AppTextStyles.headlineSmall,
+          const SizedBox(height: 8),
+
+          // Date + order type
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                Text(
+                  'Tanggal: ${dateFmt.format(order.createdAt)}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.infoBg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    order.orderType,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            ...order.items.map<Widget>((item) {
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.namaBarang ?? 'Produk',
-                              style: AppTextStyles.labelLarge,
-                            ),
-                            Text(
-                              '${item.qty}x Rp ${idr.format(item.hargaSatuan)}',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
+          ),
+          const SizedBox(height: 20),
+
+          // Toko section
+          _sectionTitle('Toko'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.store_outlined, size: 18, color: AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        order.customerName.isNotEmpty ? order.customerName : order.storeName,
+                        style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
                       ),
-                      Text(
-                        'Rp ${idr.format(item.subtotal)}',
-                        style: AppTextStyles.labelLarge,
+                    ),
+                  ],
+                ),
+                if (order.storeAddress != null && order.storeAddress!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          order.storeAddress!,
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              );
-            }),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
-            // Notes
-            if (order.notes != null && order.notes.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Catatan',
-                style: AppTextStyles.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(order.notes, style: AppTextStyles.bodyMedium),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-            // Total
-            Card(
-              color: AppColors.borderLight,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
+          // Produk section
+          _sectionTitle('Produk (${order.totalQty})'),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < order.items.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${order.totalQty} item',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                order.items[i].namaBarang ?? order.items[i].productId,
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                              if (order.items[i].hasDiscount) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  _formatDiscounts(order.items[i]),
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        if (order.totalDiscount > 0)
+                        Text(
+                          '× ${order.items[i].qty}',
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(width: 12),
+                        if (order.items[i].hasDiscount)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                idr.format(order.items[i].hargaSatuan * order.items[i].qty),
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textMuted,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              Text(
+                                idr.format(order.items[i].subtotal),
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
                           Text(
-                            '- Rp ${idr.format(order.totalDiscount)}',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.success,
-                            ),
+                            idr.format(order.items[i].subtotal),
+                            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
                           ),
                       ],
                     ),
-                    Text(
-                      'Rp ${idr.format(order.totalPrice)}',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: AppColors.textPrimary,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Item dibatalkan
+          if (order.cancelledItems.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _sectionTitle('Item Dibatalkan (${order.cancelledItems.length})'),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.errorBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < order.cancelledItems.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.cancel, size: 16, color: AppColors.error),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  order.cancelledItems[i].displayLabel,
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    decoration: TextDecoration.lineThrough,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                                if (order.cancelledItems[i].reason.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.error.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      order.cancelledItems[i].reason,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.error,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '× ${order.cancelledItems[i].qty}',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Action buttons
-            _buildActionButtons(context),
           ],
+
+          const SizedBox(height: 16),
+
+          // Total bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${order.totalQty} item',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                    if (order.totalDiscount > 0)
+                      Text(
+                        '- ${idr.format(order.totalDiscount)}',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success),
+                      ),
+                  ],
+                ),
+                Text(
+                  idr.format(order.totalPrice),
+                  style: AppTextStyles.headlineSmall.copyWith(color: AppColors.primaryLight),
+                ),
+              ],
+            ),
+          ),
+
+          // Catatan
+          if ((order.notes ?? '').isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _sectionTitle('Catatan'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.cardSurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Text(order.notes!, style: AppTextStyles.bodyMedium),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Action buttons
+          _buildActionButtons(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        label,
+        style: AppTextStyles.bodyMedium.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
         ),
       ),
     );
   }
 
   Widget _buildActionButtons(BuildContext context) {
-    final status = order.status.toUpperCase();
-    final isPending = status == 'PENDING';
-    final isDraft = status == 'DRAFT';
-
-    if (!isPending && !isDraft) {
-      return const SizedBox();
-    }
+    if (!order.canEdit && !order.canDelete) return const SizedBox();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isPending) ...[
+        if (order.canEdit)
           OutlinedButton.icon(
-            onPressed: () => _confirmCancel(context),
-            icon: const Icon(Icons.cancel_outlined),
-            label: const Text('Batalkan Pesanan'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              side: const BorderSide(color: AppColors.error),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
             onPressed: () => _editOrder(context),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit Pesanan'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+            icon: Icon(
+              order.isPending ? Icons.edit_outlined : Icons.edit_note,
+              size: 18,
             ),
+            label: Text(order.isPending ? 'Edit Order' : 'Edit Draft'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
           ),
-        ],
-        if (isDraft) ...[
+        if (order.canDelete) ...[
+          if (order.canEdit) const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => _confirmDelete(context),
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Hapus Draft'),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: Text(order.isPending ? 'Batalkan Order' : 'Hapus Order'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.error,
+              minimumSize: const Size.fromHeight(44),
               side: const BorderSide(color: AppColors.error),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: () => _editOrder(context),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit Draft'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
         ],
@@ -517,24 +779,26 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  void _confirmCancel(BuildContext context) {
+  void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Batalkan Pesanan?'),
-        content: const Text('Pesanan ini akan dibatalkan dan tidak bisa dikembalikan.'),
+        title: Text(order.isPending ? 'Batalkan Order?' : 'Hapus Draft?'),
+        content: Text(order.isPending
+            ? 'Order ini akan dibatalkan dan stok booking akan dilepas. Order yang dibatalkan tidak bisa di-edit lagi.'
+            : 'Draft ini akan dihapus permanen.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tidak'),
+            child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _cancelOrder(context);
+              order.isPending ? _cancelOrder(context) : _deleteOrder(context);
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Batalkan'),
+            child: Text(order.isPending ? 'Batalkan' : 'Hapus'),
           ),
         ],
       ),
@@ -545,69 +809,27 @@ class OrderDetailScreen extends StatelessWidget {
     final provider = context.read<OrderProvider>();
     final success = await provider.cancelOrder(order.id);
     if (context.mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Pesanan dibatalkan'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Gagal membatalkan pesanan'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Order dibatalkan' : 'Gagal membatalkan'),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) Navigator.pop(context);
     }
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Draft?'),
-        content: const Text('Draft ini akan dihapus permanen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteOrder(context);
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _deleteOrder(BuildContext context) async {
     final provider = context.read<OrderProvider>();
     final success = await provider.deleteOrder(order.id);
     if (context.mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Draft dihapus'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Gagal menghapus draft'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Draft dihapus' : 'Gagal menghapus'),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) Navigator.pop(context);
     }
   }
 }
