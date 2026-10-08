@@ -165,64 +165,71 @@ class _ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.namaBarang,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'SKU: ${product.id}',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'STOK $available $satuan',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.business, size: 12, color: AppColors.textMuted),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              product.namaSupplier,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.namaBarang ?? '',
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'SKU: ${product.id}',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'STOK $available $satuan',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        if (product.namaSupplier != null &&
+                            (product.namaSupplier as String).isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.business,
+                                  size: 12, color: AppColors.textMuted),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  product.namaSupplier,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Rp ${idr.format(product.harga)}',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryLight,
-                ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Rp ${idr.format(product.harga)}',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryLight,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -247,7 +254,7 @@ class _ProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              product.namaBarang,
+              product.namaBarang ?? '',
               style: AppTextStyles.headlineMedium,
             ),
             const SizedBox(height: 2),
@@ -311,7 +318,7 @@ class _ProductCard extends StatelessWidget {
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('${product.namaBarang} ditambahkan'),
+                            content: Text('${product.namaBarang ?? ''} ditambahkan'),
                             duration: const Duration(seconds: 1),
                           ),
                         );
