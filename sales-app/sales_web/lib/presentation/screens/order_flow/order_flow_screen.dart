@@ -24,6 +24,7 @@ class OrderFlowScreen extends StatefulWidget {
 
 class _OrderFlowScreenState extends State<OrderFlowScreen> {
   int _step = 1;
+  bool _isSubmitting = false;
 
   final _notesController = TextEditingController();
 
@@ -108,6 +109,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         onBack: _prevStep,
         onSubmit: () => _submitOrder(),
         onSaveDraft: () => _saveDraft(),
+        isSubmitting: _isSubmitting,
       );
       default: return const SizedBox();
     }
@@ -202,29 +204,37 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   }
 
   Future<void> _submitOrder() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
     final draft = context.read<DraftOrderProvider>();
     final apiService = context.read<ApiService>();
 
     try {
       final orderRepo = OrderRepository(apiService);
       final items = draft.buildItemsPayload();
+      String orderId;
 
       if (draft.editingOrderId != null) {
-        await orderRepo.updateOrder(
+        final result = await orderRepo.updateOrder(
           orderId: draft.editingOrderId!,
           customerId: draft.customerId!,
           items: items,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           orderType: draft.orderType,
         );
+        orderId = result.id;
       } else {
-        await orderRepo.createOrder(
+        final result = await orderRepo.createOrder(
           customerId: draft.customerId!,
           items: items,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           orderType: draft.orderType,
         );
+        orderId = result.id;
       }
+
+      // Submit order (change status from DRAFT to PENDING)
+      await orderRepo.submitOrder(orderId);
 
       // Refresh orders
       if (mounted) {
@@ -233,7 +243,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Order berhasil dibuat!'),
+            content: Text('Order berhasil dikirim!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -241,6 +251,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal: ${e.toString()}'),
@@ -252,6 +263,8 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   }
 
   Future<void> _saveDraft() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
     final draft = context.read<DraftOrderProvider>();
     final apiService = context.read<ApiService>();
 
@@ -281,6 +294,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal: ${e.toString()}'),
@@ -1201,12 +1215,14 @@ class _StepReview extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onSubmit;
   final VoidCallback onSaveDraft;
+  final bool isSubmitting;
 
   const _StepReview({
     required this.notesController,
     required this.onBack,
     required this.onSubmit,
     required this.onSaveDraft,
+    this.isSubmitting = false,
   });
 
   @override
@@ -1267,7 +1283,7 @@ class _StepReviewState extends State<_StepReview> {
                       ),
                     ),
                     TextButton(
-                      onPressed: widget.onBack,
+                      onPressed: widget.isSubmitting ? null : widget.onBack,
                       child: const Text('Ganti'),
                     ),
                   ],
@@ -1297,7 +1313,7 @@ class _StepReviewState extends State<_StepReview> {
                     ],
                     Container(height: 1, color: AppColors.border),
                     InkWell(
-                      onTap: widget.onBack,
+                      onTap: widget.isSubmitting ? null : widget.onBack,
                       child: Padding(
                         padding: const EdgeInsets.all(14),
                         child: Row(
@@ -1367,17 +1383,21 @@ class _StepReviewState extends State<_StepReview> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: widget.onSaveDraft,
+                    onPressed: widget.isSubmitting ? null : widget.onSaveDraft,
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    child: const Text('Simpan Draft'),
+                    child: widget.isSubmitting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Simpan Draft'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: widget.onSubmit,
+                    onPressed: widget.isSubmitting ? null : widget.onSubmit,
                     style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    child: const Text('Kirim Order'),
+                    child: widget.isSubmitting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Kirim Order'),
                   ),
                 ),
               ],
