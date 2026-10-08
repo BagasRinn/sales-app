@@ -197,7 +197,7 @@ class _ProductCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'SKU: ${product.productId}',
+                      'SKU: ${product.id}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textMuted,
                         fontFamily: 'monospace',
@@ -296,7 +296,7 @@ class _ProductCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'SKU: ${product.productId}',
+                        'SKU: ${product.id}',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.textMuted,
                           fontFamily: 'monospace',
@@ -309,7 +309,7 @@ class _ProductCard extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             // SKU
-            _detailRow(Icons.qr_code, 'SKU', product.productId),
+            _detailRow(Icons.qr_code, 'SKU', product.id),
             if (product.satuan != null)
               _detailRow(Icons.scale_outlined, 'Satuan', product.satuan),
             if (product.kategori != null)
