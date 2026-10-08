@@ -28,8 +28,19 @@ class OrderRepository {
       params['search'] = search;
     }
     final data = await _api.get('/orders/my', queryParams: params);
-    final list = data['orders'] as List<dynamic>? ?? data as List<dynamic>;
-    return list.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    // /orders/my returns a bare JSON array per FastAPI's response_model.
+    // The previous `data['orders'] ?? data as List` form threw on a List
+    // response because `data['orders']` raises before the `??` fallback is
+    // considered — list indices must be int, not String. Match the mobile
+    // app's pattern: type-check first, then unwrap.
+    final list = data is List
+        ? data
+        : data is Map
+            ? (data['orders'] as List<dynamic>? ?? const <dynamic>[])
+            : const <dynamic>[];
+    return list
+        .map((e) => Order.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Order> getOrderDetail(String orderId) async {
