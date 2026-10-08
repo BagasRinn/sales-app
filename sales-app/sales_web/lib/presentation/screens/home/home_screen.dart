@@ -5,7 +5,6 @@ import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
-import '../../../data/models/order.dart';
 import '../orders/order_list_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -169,19 +168,17 @@ class HomeScreen extends StatelessWidget {
               child: _StatCard(
                 title: 'Target Bulanan',
                 value: s?.targetValue != null
-                    ? _formatTargetValue(s!, idr)
+                    ? '${idr.format(s!.selesaiBulanIniTotal)} / ${idr.format(s.targetValue)}'
                     : '-',
                 subtitle: s?.targetValue != null
-                    ? (s!.targetType == 'ORDER_COUNT'
-                        ? '${s.selesaiBulanIniCount} / ${idr.format(s.targetValue)} order'
-                        : '${idr.format(s.selesaiBulanIniTotal)} / ${idr.format(s.targetValue)}')
+                    ? (s!.targetType == 'ORDER_COUNT' ? 'order' : 'revenue')
                     : null,
                 extra: s?.incentiveAmount != null && s!.incentiveAmount! > 0
-                    ? '+ ${idr.format(s.incentiveAmount)}'
+                    ? '+ Rp ${idr.format(s.incentiveAmount)}'
                     : null,
                 icon: Icons.track_changes_outlined,
-                color: AppColors.warning,
-                bgColor: AppColors.warningBg,
+                color: AppColors.info,
+                bgColor: AppColors.infoBg,
               ),
             ),
             const SizedBox(width: 12),
@@ -193,7 +190,7 @@ class HomeScreen extends StatelessWidget {
                     ? 'Rp ${idr.format(s.selesaiBulanIniTotal)}'
                     : null,
                 icon: Icons.check_circle_outline,
-                color: AppColors.success,
+                color: AppColors.primary,
                 bgColor: AppColors.successBg,
               ),
             ),
@@ -260,9 +257,6 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-  String _formatTargetValue(SalesStats s, NumberFormat idr) {
-    return idr.format(s.targetValue);
   }
 }
 
