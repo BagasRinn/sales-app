@@ -56,13 +56,6 @@ class HomeScreen extends StatelessWidget {
                                 color: Color(0xFF0F172A),
                               ),
                             ),
-                            const Text(
-                              'Semangat selling hari ini!',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
                           ],
                         ),
                       ),

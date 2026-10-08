@@ -204,8 +204,8 @@ class Order {
     return Order(
       id: json['id'] as String,
       salesId: json['sales_id'] as String,
-      customerId: json['customer_id'] as String,
-      customerName: json['customer_name'] as String,
+      customerId: json['customer_id'] as String? ?? '',
+      customerName: json['customer_name'] as String? ?? '',
       status: json['status'] as String,
       notes: json['notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
