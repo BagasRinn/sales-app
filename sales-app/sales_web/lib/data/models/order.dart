@@ -97,11 +97,29 @@ class OrderItem {
     // Match the mobile app's OrderItem.fromJson (lib/data/models/order.dart):
     // every numeric field has a default, every string is nullable, so a single
     // sparse item never crashes the whole list parse.
+    //
+    // NOTE: the backend sends FLAT discount fields (discount_type, discount_percent,
+    // discount2_percent, etc.) — NOT a nested `discount: {layer1: {...}}` object.
+    // We read those flat fields directly and construct DiscountLayer objects.
     final hargaSatuan = json['harga_satuan'] as int? ?? 0;
     final qty = json['qty'] as int? ?? 1;
     final hargaSetelahDiskon =
         json['harga_setelah_diskon'] as int? ?? hargaSatuan;
     final subtotal = json['subtotal'] as int? ?? (hargaSetelahDiskon * qty);
+
+    DiscountLayer? makeLayer(String typeKey, String percentKey, String nominalKey) {
+      final typeVal = json[typeKey] as String?;
+      if (typeVal == null) return null;
+      if (typeVal.toUpperCase() == 'NOMINAL') {
+        final nominal = json[nominalKey] as int? ?? 0;
+        if (nominal <= 0) return null;
+        return DiscountLayer(type: DiscountType.nominal, value: nominal);
+      } else {
+        final percent = (json[percentKey] as num?)?.toDouble() ?? 0;
+        if (percent <= 0) return null;
+        return DiscountLayer(type: DiscountType.percent, value: percent.toInt());
+      }
+    }
 
     return OrderItem(
       id: json['id'] as String,
@@ -109,7 +127,11 @@ class OrderItem {
       namaBarang: json['nama_barang'] as String?,
       qty: qty,
       hargaSatuan: hargaSatuan,
-      discount: ItemDiscount.fromJson(json['discount'] as Map<String, dynamic>?),
+      discount: ItemDiscount(
+        layer1: makeLayer('discount_type', 'discount_percent', 'discount_nominal'),
+        layer2: makeLayer('discount2_type', 'discount2_percent', 'discount2_nominal'),
+        layer3: makeLayer('discount3_type', 'discount3_percent', 'discount3_nominal'),
+      ),
       hargaSetelahDiskon: hargaSetelahDiskon,
       subtotal: subtotal,
     );

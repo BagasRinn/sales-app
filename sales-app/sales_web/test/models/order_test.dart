@@ -181,4 +181,71 @@ void main() {
       expect(order.items.first.subtotal, 0);
     });
   });
+
+  // Regression: the backend sends FLAT discount fields (discount_type, discount_percent,
+  // discount2_percent, ...) — NOT a nested `discount: {layer1: {...}}` object.
+  // OrderItem.fromJson must read the flat fields directly.
+  group('OrderItem.fromJson discount layers (backend flat-field regression)', () {
+    test('hasDiscount is true when layer1 is PERCENT > 0', () {
+      final json = Map<String, dynamic>.from(baseItemJson);
+      final item = OrderItem.fromJson(json);
+      expect(item.hasDiscount, isTrue);
+      expect(item.discount.layer1, isNotNull);
+      expect(item.discount.layer1!.type, DiscountType.percent);
+      expect(item.discount.layer1!.value, 2);
+    });
+
+    test('hasDiscount is true when layer1 is NOMINAL > 0', () {
+      final json = Map<String, dynamic>.from(baseItemJson)
+        ..['discount_type'] = 'NOMINAL'
+        ..['discount_percent'] = 0
+        ..['discount_nominal'] = 500;
+      final item = OrderItem.fromJson(json);
+      expect(item.hasDiscount, isTrue);
+      expect(item.discount.layer1!.type, DiscountType.nominal);
+      expect(item.discount.layer1!.value, 500);
+    });
+
+    test('hasDiscount is false when all layers are zero/empty', () {
+      final json = Map<String, dynamic>.from(baseItemJson)
+        ..['discount_type'] = 'PERCENT'
+        ..['discount_percent'] = 0.0
+        ..['discount_nominal'] = 0
+        ..['discount2_type'] = 'PERCENT'
+        ..['discount2_percent'] = 0.0
+        ..['discount2_nominal'] = 0
+        ..['discount3_type'] = 'PERCENT'
+        ..['discount3_percent'] = 0.0
+        ..['discount3_nominal'] = 0;
+      final item = OrderItem.fromJson(json);
+      expect(item.hasDiscount, isFalse);
+    });
+
+    test('reads all three discount layers', () {
+      final json = {
+        'id': 'i1',
+        'product_id': 'p1',
+        'qty': 2,
+        'harga_satuan': 10000,
+        'discount_type': 'PERCENT',
+        'discount_percent': 5.0,
+        'discount_nominal': 0,
+        'discount2_type': 'NOMINAL',
+        'discount2_percent': 0,
+        'discount2_nominal': 200,
+        'discount3_type': 'PERCENT',
+        'discount3_percent': 0.0,
+        'discount3_nominal': 0,
+        'harga_setelah_diskon': 9500,
+        'subtotal': 19000,
+      };
+      final item = OrderItem.fromJson(json);
+      expect(item.discount.layer1!.type, DiscountType.percent);
+      expect(item.discount.layer1!.value, 5);
+      expect(item.discount.layer2!.type, DiscountType.nominal);
+      expect(item.discount.layer2!.value, 200);
+      expect(item.discount.layer3, isNull);
+      expect(item.hasDiscount, isTrue);
+    });
+  });
 }
