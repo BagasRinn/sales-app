@@ -435,7 +435,7 @@ class OrderDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item.namaBarang,
+                              item.namaBarang ?? 'Produk',
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             Text(

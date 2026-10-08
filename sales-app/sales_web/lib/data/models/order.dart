@@ -72,7 +72,7 @@ class ItemDiscount {
 class OrderItem {
   final String id;
   final String productId;
-  final String namaBarang;
+  final String? namaBarang;
   final int hargaSatuan;
   final int qty;
   final ItemDiscount discount;
@@ -82,7 +82,7 @@ class OrderItem {
   OrderItem({
     required this.id,
     required this.productId,
-    required this.namaBarang,
+    this.namaBarang,
     required this.hargaSatuan,
     required this.qty,
     required this.discount,
@@ -94,15 +94,24 @@ class OrderItem {
   bool get hasDiscount => !discount.isEmpty;
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
+    // Match the mobile app's OrderItem.fromJson (lib/data/models/order.dart):
+    // every numeric field has a default, every string is nullable, so a single
+    // sparse item never crashes the whole list parse.
+    final hargaSatuan = json['harga_satuan'] as int? ?? 0;
+    final qty = json['qty'] as int? ?? 1;
+    final hargaSetelahDiskon =
+        json['harga_setelah_diskon'] as int? ?? hargaSatuan;
+    final subtotal = json['subtotal'] as int? ?? (hargaSetelahDiskon * qty);
+
     return OrderItem(
       id: json['id'] as String,
       productId: json['product_id'] as String,
-      namaBarang: json['nama_barang'] as String,
-      hargaSatuan: json['harga_satuan'] as int,
-      qty: json['qty'] as int,
+      namaBarang: json['nama_barang'] as String?,
+      qty: qty,
+      hargaSatuan: hargaSatuan,
       discount: ItemDiscount.fromJson(json['discount'] as Map<String, dynamic>?),
-      hargaSetelahDiskon: json['harga_setelah_diskon'] as int,
-      subtotal: json['subtotal'] as int,
+      hargaSetelahDiskon: hargaSetelahDiskon,
+      subtotal: subtotal,
     );
   }
 }

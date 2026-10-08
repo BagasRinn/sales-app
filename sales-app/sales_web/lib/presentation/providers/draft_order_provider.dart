@@ -161,7 +161,7 @@ class DraftOrderProvider with ChangeNotifier {
       final line = OrderLine(
         id: '${item.productId}_${DateTime.now().millisecondsSinceEpoch}',
         productId: item.productId,
-        namaBarang: item.namaBarang,
+        namaBarang: item.namaBarang ?? '',
         hargaSatuan: item.hargaSatuan,
         qty: item.qty,
       );
