@@ -190,7 +190,7 @@ class HomeScreen extends StatelessWidget {
                     ? 'Rp ${idr.format(s.selesaiBulanIniTotal)}'
                     : null,
                 icon: Icons.check_circle_outline,
-                color: AppColors.primary,
+                color: AppColors.success,
                 bgColor: AppColors.successBg,
               ),
             ),

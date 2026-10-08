@@ -155,6 +155,9 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final available = product.stokTersedia as int;
+    final satuan = product.satuan as String? ?? 'unit';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -163,74 +166,86 @@ class _ProductCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Product image placeholder
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  size: 22,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            product.namaBarang,
-                            style: AppTextStyles.labelLarge,
-                          ),
-                        ),
-                        if (product.orderType == '4P')
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.warningBg,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: AppColors.warning.withValues(alpha: 0.4),
-                              ),
-                            ),
-                            child: Text(
-                              '4P',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.warning,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
                     Text(
-                      'Rp ${idr.format(product.harga)} / ${product.satuan ?? 'pcs'}',
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.textPrimary,
+                      product.namaBarang,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'SKU: ${product.productId}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontFamily: 'monospace',
                       ),
                     ),
                     const SizedBox(height: 6),
-                    StockChip(available: product.stokTersedia),
+                    Row(
+                      children: [
+                        StockChip(available: available),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'STOK $available $satuan',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.business, size: 12, color: AppColors.textMuted),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              product.namaSupplier,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              IconButton(
-                onPressed: product.stokTersedia > 0
-                    ? () {
-                        context.read<DraftOrderProvider>().addItem(product);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${product.namaBarang} ditambahkan'),
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
-                      }
-                    : null,
-                icon: Icon(
-                  Icons.add_circle,
-                  color: product.stokTersedia > 0
-                      ? AppColors.primaryLight
-                      : AppColors.textMuted,
-                  size: 32,
+              const SizedBox(width: 8),
+              Text(
+                'Rp ${idr.format(product.harga)}',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryLight,
                 ),
               ),
             ],
@@ -242,6 +257,8 @@ class _ProductCard extends StatelessWidget {
 
   void _showProductDetail(BuildContext context) {
     final idr = NumberFormat('#,###', 'id');
+    final available = product.stokTersedia as int;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -253,56 +270,92 @@ class _ProductCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              product.namaBarang,
-              style: AppTextStyles.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            if (product.kategori != null)
-              Text(
-                'Kategori: ${product.kategori}',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            if (product.namaSupplier != null)
-              Text(
-                'Supplier: ${product.namaSupplier}',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            const SizedBox(height: 16),
+            // Header
             Row(
               children: [
-                _InfoTile(
-                  label: 'Harga',
-                  value: 'Rp ${idr.format(product.harga)}',
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.inventory_2_outlined,
+                    size: 28,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-                const SizedBox(width: 16),
-                _InfoTile(
-                  label: 'Satuan',
-                  value: product.satuan ?? '-',
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.namaBarang,
+                        style: AppTextStyles.headlineSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'SKU: ${product.productId}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
+            // SKU
+            _detailRow(Icons.qr_code, 'SKU', product.productId),
+            if (product.satuan != null)
+              _detailRow(Icons.scale_outlined, 'Satuan', product.satuan),
+            if (product.kategori != null)
+              _detailRow(Icons.category_outlined, 'Kategori', product.kategori),
+            if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty)
+              _detailRow(Icons.business, 'Supplier', product.namaSupplier),
+            const Divider(height: 24),
+            // Harga + Stok row
             Row(
               children: [
-                _InfoTile(
-                  label: 'Stok Sistem',
-                  value: '${product.stokSistem}',
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Harga', style: AppTextStyles.bodySmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rp ${idr.format(product.harga)}',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 16),
-                _InfoTile(
-                  label: 'Stok Booking',
-                  value: '${product.stokBooking}',
-                ),
-                const SizedBox(width: 16),
-                _InfoTile(
-                  label: 'Stok Tersedia',
-                  value: '${product.stokTersedia}',
-                  highlight: true,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Stok', style: AppTextStyles.bodySmall),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        StockChip(available: available),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$available',
+                          style: AppTextStyles.headlineMedium.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: available == 0 ? AppColors.error : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -310,7 +363,7 @@ class _ProductCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: product.stokTersedia > 0
+                onPressed: available > 0
                     ? () {
                         context.read<DraftOrderProvider>().addItem(product);
                         Navigator.pop(context);
@@ -331,45 +384,27 @@ class _ProductCard extends StatelessWidget {
       ),
     );
   }
-}
 
-class _InfoTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
-
-  const _InfoTile({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: highlight ? AppColors.infoBg : AppColors.borderLight,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: AppTextStyles.bodySmall,
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
             ),
-            const SizedBox(height: 2),
-            Text(
+          ),
+          Expanded(
+            child: Text(
               value,
-              style: AppTextStyles.labelMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: highlight ? AppColors.primaryLight : AppColors.textPrimary,
-              ),
+              style: AppTextStyles.bodyMedium,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
