@@ -1,5 +1,5 @@
 Plan Implementasi Cabang Lain
 
 Penambahan Kolom Cabang untuk menjadi pembeda di semua datanya, agar tidak tercampur dan bisa di filter baik itu dari user, produk dan toko.
-Penyesuaian user baru yaitu berarti ada 4. sales, admin, supervisor cabang(manager sekarang) dan manager(yang mengelola semua cabang).
-adanya filter tambahan pada saat sales memilih toko, yaitu hari jadi kalau misal hari senin minggu ganjk 
+Penyesuaian user baru yaitu berarti ada 4. sales, admin, supervisor cabang(manager sekarang, jadi perlu rename) dan manager(yang mengelola semua cabang).
+adanya filter tambahan pada saat sales memilih toko, yaitu hari jadi kalau misal hari senin minggu ganjil list A senin minggu genap list B dst setiap hari beda2

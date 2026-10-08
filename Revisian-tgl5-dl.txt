@@ -39,3 +39,5 @@ pada saat ingin menghapus diskon pada barang dikeranjang itu tidak terhapus kala
 halaman pesanan di web admin ada kode item tampil D
 
 https://practical-beauty-production-071a.up.railway.app,https://sales-admin-web.web.app
+
+tambahkan tabel penjualan berdasarkan supplier dan filter persales di halaman performa di bagian supervisor

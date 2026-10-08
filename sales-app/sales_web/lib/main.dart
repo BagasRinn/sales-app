@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/api_service.dart';
 import 'core/web_auth_storage.dart';
 import 'data/repositories/auth_repository.dart';
@@ -17,7 +18,12 @@ import 'presentation/providers/bulletin_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/app_shell.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Locale data harus diinisialisasi sebelum DateFormat dengan locale kustom
+  // dipanggil — kalau tidak, DateFormat('dd MMM ...', 'id') melempar
+  // LocaleDataException dan order tidak bisa di-render.
+  await initializeDateFormatting('id', null);
   runApp(const SalesWebApp());
 }
 
