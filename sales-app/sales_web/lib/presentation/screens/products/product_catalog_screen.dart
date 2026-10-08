@@ -168,68 +168,68 @@ class _ProductCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.namaBarang ?? '',
-                          style: AppTextStyles.bodyLarge.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'SKU: ${product.id}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textMuted,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'STOK $available $satuan',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        if (product.namaSupplier != null &&
-                            (product.namaSupplier as String).isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.business,
-                                  size: 12, color: AppColors.textMuted),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  product.namaSupplier,
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+              // Atas: Nama barang
+              Text(
+                product.namaBarang ?? '',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Container(height: 1, color: AppColors.border),
+              const SizedBox(height: 10),
+              // Bawah: Kiri = SKU/Stok/Supplier, Kanan = Harga
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'SKU  ',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Rp ${idr.format(product.harga)}',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryLight,
+                    TextSpan(
+                      text: '${product.id}\n',
+                      style:
+                          AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
                     ),
+                    TextSpan(
+                      text: 'Stok  ',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textMuted),
+                    ),
+                    TextSpan(
+                      text: '$available $satuan',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                    if (product.namaSupplier != null &&
+                        (product.namaSupplier as String).isNotEmpty) ...[
+                      TextSpan(text: '\n'),
+                      TextSpan(
+                        text: 'Supplier  ',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textMuted),
+                      ),
+                      TextSpan(
+                        text: '${product.namaSupplier}',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Rp ${idr.format(product.harga)}',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryLight,
                   ),
-                ],
+                ),
               ),
             ],
           ),
