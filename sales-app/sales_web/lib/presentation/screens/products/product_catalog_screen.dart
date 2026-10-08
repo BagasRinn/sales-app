@@ -85,7 +85,7 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
                       onSelected: (_) {
                         setState(() => _stockFilter = filter);
                       },
-                      selectedColor: AppColors.infoBg,
+                      selectedColor: AppColors.primaryLight,
                       checkmarkColor: AppColors.primaryLight,
                     ),
                   );

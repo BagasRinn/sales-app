@@ -100,6 +100,13 @@ class DraftOrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void setCustomerDirect({required String id, required String namaToko}) {
+    _customerId = id;
+    _customerName = namaToko;
+    _customerAddress = null;
+    notifyListeners();
+  }
+
   void setOrderType(String type) {
     _orderType = type;
     notifyListeners();

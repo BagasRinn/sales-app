@@ -5,6 +5,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
 import '../bulletin/bulletin_screen.dart';
 import '../auth/change_password_dialog.dart';
+import '../customers/customer_registration_screen.dart';
+import '../customers/my_submissions_screen.dart';
 
 class MiscScreen extends StatelessWidget {
   const MiscScreen({super.key});
@@ -94,7 +96,7 @@ class MiscScreen extends StatelessWidget {
           // Promo & Diskon
           _MenuCard(
             icon: Icons.local_offer_outlined,
-            iconColor: AppColors.warning,
+            iconColor: AppColors.primaryLight,
             badge: bulletin.unreadCount > 0 ? bulletin.unreadCount : null,
             title: 'Promo & Diskon',
             subtitle: 'Lihat promo dari admin',
@@ -103,6 +105,36 @@ class MiscScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const BulletinScreen(),
+                ),
+              );
+            },
+          ),
+
+          // Pengajuan Customer Baru
+          _MenuCard(
+            icon: Icons.person_add_outlined,
+            iconColor: AppColors.info,
+            title: 'Pengajuan Customer Baru',
+            subtitle: 'Ajukan toko/outlet baru untuk direview admin',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CustomerRegistrationScreen(),
+                ),
+              );
+            },
+          ),
+
+          // Status Pengajuan Saya
+          _MenuCard(
+            icon: Icons.assignment_outlined,
+            iconColor: AppColors.success,
+            title: 'Status Pengajuan Saya',
+            subtitle: 'Lihat history pengajuan customer & statusnya',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const MySubmissionsScreen(),
                 ),
               );
             },
@@ -133,12 +165,6 @@ class MiscScreen extends StatelessWidget {
             title: 'Bantuan',
             subtitle: 'Hubungi admin untuk bantuan',
             onTap: () => _showHelpDialog(context),
-          ),
-          _MenuCard(
-            icon: Icons.info_outline,
-            title: 'Tentang Aplikasi',
-            subtitle: 'Versi 1.0.0',
-            onTap: () => _showAboutDialog(context),
           ),
 
           const SizedBox(height: 20),
@@ -187,47 +213,6 @@ class MiscScreen extends StatelessWidget {
             const Text('Email: admin@practicalbeauty.com'),
             const SizedBox(height: 4),
             const Text('WhatsApp: -'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tutup'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, color: AppColors.primaryLight),
-            const SizedBox(width: 8),
-            Text('Tentang Aplikasi', style: AppTextStyles.headlineSmall),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Sales Web App',
-              style: AppTextStyles.headlineSmall,
-            ),
-            const SizedBox(height: 4),
-            Text('Versi 1.0.0', style: AppTextStyles.bodyMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Aplikasi manajemen pesanan sales untuk platform web.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
           ],
         ),
         actions: [
