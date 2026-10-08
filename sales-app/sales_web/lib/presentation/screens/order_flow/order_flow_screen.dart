@@ -131,11 +131,6 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         child: SafeArea(
           child: Row(
             children: [
-              OutlinedButton(
-                onPressed: _prevStep,
-                child: const Text('Kembali'),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,52 +851,6 @@ class _StepPickProductsState extends State<_StepPickProducts> {
           ),
         ),
 
-        // ── Selected item chips ───────────────────────────────────────────────
-        if (draft.items.isNotEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: draft.items.map((item) {
-                  return Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${item.namaBarang} x${item.qty}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textOnPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () {
-                            context.read<DraftOrderProvider>().removeItem(item.id);
-                            setState(() {});
-                          },
-                          child: Icon(
-                            Icons.close,
-                            size: 14,
-                            color: AppColors.textOnPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-
         // ── Product list ──────────────────────────────────────────────────────
         Expanded(
           child: provider.isLoading
@@ -1171,83 +1120,76 @@ class _QtyStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.borderLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Minus
-          GestureDetector(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Minus
+        Material(
+          color: AppColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: enabled && currentQty > 0 ? AppColors.border : AppColors.border.withValues(alpha: 0.4),
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
             onTap: enabled && currentQty > 0
-                ? () {
-                    final newQty = currentQty - 1;
-                    onChanged('$newQty');
-                  }
+                ? () => onChanged('${currentQty - 1}')
                 : null,
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
+            child: SizedBox(
+              width: 32,
+              height: 32,
               child: Icon(
                 Icons.remove,
-                size: 18,
+                size: 16,
                 color: enabled && currentQty > 0
-                    ? AppColors.primaryLight
+                    ? AppColors.textPrimary
                     : AppColors.textMuted,
               ),
             ),
           ),
-          // Qty input
-          Container(
-            width: 44,
-            height: 36,
-            alignment: Alignment.center,
-            child: TextField(
-              controller: controller,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              style: AppTextStyles.labelLarge,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: onChanged,
+        ),
+        // Qty input
+        SizedBox(
+          width: 46,
+          child: TextField(
+            controller: controller,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
             ),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 6),
+              border: InputBorder.none,
+            ),
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: onChanged,
           ),
-          // Plus
-          GestureDetector(
-            onTap: enabled
-                ? () {
-                    final newQty = currentQty + 1;
-                    onChanged('$newQty');
-                  }
-                : null,
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: enabled ? AppColors.primaryLight : AppColors.borderLight,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(10),
-                  bottomRight: Radius.circular(10),
-                ),
-              ),
+        ),
+        // Plus
+        Material(
+          color: enabled ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: enabled ? () => onChanged('${currentQty + 1}') : null,
+            child: SizedBox(
+              width: 32,
+              height: 32,
               child: Icon(
                 Icons.add,
-                size: 18,
-                color: enabled ? AppColors.textOnPrimary : AppColors.textMuted,
+                size: 16,
+                color: Colors.white,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1649,9 +1591,11 @@ class _LineRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            // Row 2: qty meta + stepper + actions
+            // Row 2: qty meta + diskon summary (wrapping) | stepper + aksi
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Kiri: qty + diskon summary (natural width, wrap if needed)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1679,34 +1623,31 @@ class _LineRow extends StatelessWidget {
                       }
                     },
                   ),
-                  const SizedBox(width: 6),
-                ],
-                // Diskon button
-                if (!isFree)
+                  const SizedBox(width: 4),
                   _iconBtn(
                     icon: Icons.discount_outlined,
                     color: !disc.isEmpty ? AppColors.success : AppColors.textSecondary,
                     onTap: () => _showDiscountSheet(context, line, product),
                   ),
-                const SizedBox(width: 4),
-                // More menu
-                _PopupMenuBtn(
-                  items: [
-                    if (!isFree)
+                  const SizedBox(width: 2),
+                  _PopupMenuBtn(
+                    items: [
+                      if (!isFree)
+                        _PopupMenuItem(
+                          label: 'Barang Gratis',
+                          icon: Icons.card_giftcard,
+                          color: AppColors.success,
+                          onTap: () => _showGratisDialog(context, name, draft),
+                        ),
                       _PopupMenuItem(
-                        label: 'Barang Gratis',
-                        icon: Icons.card_giftcard,
-                        color: AppColors.success,
-                        onTap: () => _showGratisDialog(context, name, draft),
+                        label: 'Hapus',
+                        icon: Icons.delete_outline,
+                        color: AppColors.error,
+                        onTap: () => draft.removeItem(line.id),
                       ),
-                    _PopupMenuItem(
-                      label: 'Hapus',
-                      icon: Icons.delete_outline,
-                      color: AppColors.error,
-                      onTap: () => draft.removeItem(line.id),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ],
@@ -1778,7 +1719,7 @@ class _LineRow extends StatelessWidget {
               final qty = int.tryParse(qtyCtl.text) ?? 0;
               if (qty <= 0) return;
               final newLine = draft.addLine(line.productId, qty: qty);
-              draft.setDiscountLayer(lineId: newLine.id, layer: 1, type: 'PERCENT', value: 100);
+              draft.setDiscountLayer(lineId: newLine.id, layer: 1, type: 'PERCENT', value: 100.0);
               Navigator.pop(ctx);
             },
             child: const Text('Tambah'),
@@ -1990,7 +1931,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     for (var idx = 1; idx <= 3; idx++) {
       final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
       final capped = _typeFor(idx) == 'PERCENT' && v > 100 ? 100.0 : v;
-      draft.setDiscountLayer(lineId: widget.line.id, layer: idx, type: _typeFor(idx), value: capped.round());
+      draft.setDiscountLayer(lineId: widget.line.id, layer: idx, type: _typeFor(idx), value: capped);
     }
     Navigator.pop(context);
   }

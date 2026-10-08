@@ -34,14 +34,14 @@ class OrderLine {
 
 class DiscountLayer {
   final String type; // 'PERCENT' or 'NOMINAL'
-  final int value;
+  final double value;
 
   DiscountLayer({required this.type, required this.value});
 
   int cutFrom(int price) {
     if (value <= 0) return 0;
     if (type == 'PERCENT') return (price * value / 100).round();
-    return value > price ? price : value;
+    return value.toInt() > price ? price : value.toInt();
   }
 
   Map<String, dynamic> toJson() => {'type': type, 'value': value};
@@ -56,7 +56,7 @@ class ItemDiscount {
 
   bool get isEmpty => layer1 == null && layer2 == null && layer3 == null;
 
-  ItemDiscount withLayer(int layer, String type, int value) {
+  ItemDiscount withLayer(int layer, String type, double value) {
     final dl = DiscountLayer(type: type, value: value);
     final copy = ItemDiscount(layer1: layer1, layer2: layer2, layer3: layer3);
     if (layer == 1) copy.layer1 = dl;
@@ -189,7 +189,7 @@ class DraftOrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setDiscount(String lineId, int layer, String type, int value) {
+  void setDiscount(String lineId, int layer, String type, double value) {
     final item = _items.where((i) => i.id == lineId).toList();
     if (item.isNotEmpty) {
       item.first.discount = item.first.discount.withLayer(layer, type, value);
@@ -197,19 +197,13 @@ class DraftOrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setDiscountLayer({required String lineId, required int layer, required String type, required int value}) {
+  void setDiscountLayer({required String lineId, required int layer, required String type, required double value}) {
     setDiscount(lineId, layer, type, value);
   }
 
   void removeLine(String lineId) => removeItem(lineId);
 
   OrderLine addLine(String productId, {int qty = 1}) {
-    final existing = _items.where((i) => i.productId == productId).toList();
-    if (existing.isNotEmpty) {
-      existing.first.qty += qty;
-      notifyListeners();
-      return existing.first;
-    }
     final line = OrderLine(
       id: '${productId}_${DateTime.now().millisecondsSinceEpoch}',
       productId: productId,
@@ -242,19 +236,19 @@ class DraftOrderProvider with ChangeNotifier {
         layer1: item.discount.layer1 != null
             ? DiscountLayer(
                 type: item.discount.layer1!.type.name.toUpperCase(),
-                value: item.discount.layer1!.value,
+                value: item.discount.layer1!.value.toDouble(),
               )
             : null,
         layer2: item.discount.layer2 != null
             ? DiscountLayer(
                 type: item.discount.layer2!.type.name.toUpperCase(),
-                value: item.discount.layer2!.value,
+                value: item.discount.layer2!.value.toDouble(),
               )
             : null,
         layer3: item.discount.layer3 != null
             ? DiscountLayer(
                 type: item.discount.layer3!.type.name.toUpperCase(),
-                value: item.discount.layer3!.value,
+                value: item.discount.layer3!.value.toDouble(),
               )
             : null,
       );
