@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/draft_order_provider.dart';
 import '../order_flow/order_flow_screen.dart';
@@ -49,11 +50,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final orders = context.watch<OrderProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Pesanan Saya'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -67,7 +66,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         children: [
           // Search bar
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _searchController,
@@ -86,7 +85,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFFF4F7FB),
+                fillColor: AppColors.background,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -105,7 +104,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
           // Filter chips
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -123,14 +122,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           status: _getFilterStatus(filter),
                         );
                       },
-                      selectedColor: const Color(0xFFEFF6FF),
-                      checkmarkColor: const Color(0xFF2563EB),
+                      selectedColor: AppColors.infoBg,
+                      checkmarkColor: AppColors.primaryLight,
                       labelStyle: TextStyle(
                         color: isSelected
-                            ? const Color(0xFF2563EB)
-                            : const Color(0xFF64748B),
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                            ? AppColors.primaryLight
+                            : AppColors.textSecondary,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                   );
@@ -144,10 +142,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
             child: orders.isLoading && orders.orders.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : orders.orders.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'Belum ada pesanan',
-                          style: TextStyle(color: Color(0xFF94A3B8)),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       )
                     : RefreshIndicator(
@@ -208,47 +208,39 @@ class _OrderCard extends StatelessWidget {
                       children: [
                         Text(
                           order.storeName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
+                          style: AppTextStyles.labelLarge,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           order.customerName,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  _buildStatusChip(order.status),
+                  OrderStatusChip(status: order.status),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.access_time,
                     size: 14,
-                    color: Color(0xFF94A3B8),
+                    color: AppColors.textMuted,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     dateFormat.format(order.createdAt.toLocal()),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF94A3B8),
-                    ),
+                    style: AppTextStyles.bodySmall,
                   ),
                   const Spacer(),
                   Text(
                     '${order.totalQty} item',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -264,15 +256,14 @@ class _OrderCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                        color: AppColors.borderLight,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         order.orderType,
-                        style: const TextStyle(
-                          fontSize: 11,
+                        style: AppTextStyles.bodySmall.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF64748B),
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     )
@@ -280,10 +271,8 @@ class _OrderCard extends StatelessWidget {
                     const SizedBox(),
                   Text(
                     'Rp ${idr.format(order.totalPrice)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      color: Color(0xFF0F172A),
+                    style: AppTextStyles.headlineMedium.copyWith(
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -302,63 +291,9 @@ class _OrderCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildStatusChip(String status) {
-    Color color;
-    Color bg;
-    String label;
-
-    switch (status.toUpperCase()) {
-      case 'PENDING':
-        color = const Color(0xFF2563EB);
-        bg = const Color(0xFFEFF6FF);
-        label = 'Menunggu';
-        break;
-      case 'APPROVED':
-        color = const Color(0xFF059669);
-        bg = const Color(0xFFECFDF5);
-        label = 'Disetujui';
-        break;
-      case 'REJECTED':
-        color = const Color(0xFFDC2626);
-        bg = const Color(0xFFFEF2F2);
-        label = 'Ditolak';
-        break;
-      case 'CANCELLED':
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = 'Dibatalkan';
-        break;
-      case 'DRAFT':
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = 'Draft';
-        break;
-      default:
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
 }
 
-// Order Detail Screen (simple version)
+// Order Detail Screen
 class OrderDetailScreen extends StatelessWidget {
   final dynamic order;
 
@@ -369,10 +304,9 @@ class OrderDetailScreen extends StatelessWidget {
     final idr = NumberFormat('#,###', 'id');
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Detail Pesanan'),
-        backgroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -390,24 +324,21 @@ class OrderDetailScreen extends StatelessWidget {
                       children: [
                         Text(
                           order.storeName,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: AppTextStyles.headlineMedium,
                         ),
                         const Spacer(),
-                        _buildStatusChip(order.status),
+                        OrderStatusChip(status: order.status),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    if (order.storeAddress != null)
+                    if (order.storeAddress != null) ...[
+                      const SizedBox(height: 8),
                       Text(
                         order.storeAddress,
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 13,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -415,12 +346,9 @@ class OrderDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Items
-            const Text(
+            Text(
               'Item Pesanan',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTextStyles.headlineSmall,
             ),
             const SizedBox(height: 12),
             ...order.items.map<Widget>((item) {
@@ -436,13 +364,12 @@ class OrderDetailScreen extends StatelessWidget {
                           children: [
                             Text(
                               item.namaBarang ?? 'Produk',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: AppTextStyles.labelLarge,
                             ),
                             Text(
                               '${item.qty}x Rp ${idr.format(item.hargaSatuan)}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ],
@@ -450,7 +377,7 @@ class OrderDetailScreen extends StatelessWidget {
                       ),
                       Text(
                         'Rp ${idr.format(item.subtotal)}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: AppTextStyles.labelLarge,
                       ),
                     ],
                   ),
@@ -461,18 +388,15 @@ class OrderDetailScreen extends StatelessWidget {
             // Notes
             if (order.notes != null && order.notes.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Catatan',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTextStyles.headlineSmall,
               ),
               const SizedBox(height: 8),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(order.notes),
+                  child: Text(order.notes, style: AppTextStyles.bodyMedium),
                 ),
               ),
             ],
@@ -480,7 +404,7 @@ class OrderDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             // Total
             Card(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.borderLight,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -491,24 +415,23 @@ class OrderDetailScreen extends StatelessWidget {
                       children: [
                         Text(
                           '${order.totalQty} item',
-                          style: const TextStyle(color: Color(0xFF64748B)),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         if (order.totalDiscount > 0)
                           Text(
                             '- Rp ${idr.format(order.totalDiscount)}',
-                            style: const TextStyle(
-                              color: Color(0xFF059669),
-                              fontSize: 13,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.success,
                             ),
                           ),
                       ],
                     ),
                     Text(
                       'Rp ${idr.format(order.totalPrice)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -544,8 +467,8 @@ class OrderDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.cancel_outlined),
             label: const Text('Batalkan Pesanan'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFDC2626),
-              side: const BorderSide(color: Color(0xFFDC2626)),
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -555,8 +478,6 @@ class OrderDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit Pesanan'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -567,8 +488,8 @@ class OrderDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.delete_outline),
             label: const Text('Hapus Draft'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFDC2626),
-              side: const BorderSide(color: Color(0xFFDC2626)),
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -578,8 +499,6 @@ class OrderDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit Draft'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
@@ -614,7 +533,7 @@ class OrderDetailScreen extends StatelessWidget {
               Navigator.pop(ctx);
               _cancelOrder(context);
             },
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Batalkan'),
           ),
         ],
@@ -628,17 +547,17 @@ class OrderDetailScreen extends StatelessWidget {
     if (context.mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pesanan dibatalkan'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Pesanan dibatalkan'),
+            backgroundColor: AppColors.success,
           ),
         );
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal membatalkan pesanan'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: const Text('Gagal membatalkan pesanan'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -661,7 +580,7 @@ class OrderDetailScreen extends StatelessWidget {
               Navigator.pop(ctx);
               _deleteOrder(context);
             },
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Hapus'),
           ),
         ],
@@ -675,74 +594,20 @@ class OrderDetailScreen extends StatelessWidget {
     if (context.mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Draft dihapus'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Draft dihapus'),
+            backgroundColor: AppColors.success,
           ),
         );
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal menghapus draft'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: const Text('Gagal menghapus draft'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
     }
-  }
-
-  Widget _buildStatusChip(String status) {
-    Color color;
-    Color bg;
-    String label;
-
-    switch (status.toUpperCase()) {
-      case 'PENDING':
-        color = const Color(0xFF2563EB);
-        bg = const Color(0xFFEFF6FF);
-        label = 'Menunggu';
-        break;
-      case 'APPROVED':
-        color = const Color(0xFF059669);
-        bg = const Color(0xFFECFDF5);
-        label = 'Disetujui';
-        break;
-      case 'REJECTED':
-        color = const Color(0xFFDC2626);
-        bg = const Color(0xFFFEF2F2);
-        label = 'Ditolak';
-        break;
-      case 'CANCELLED':
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = 'Dibatalkan';
-        break;
-      case 'DRAFT':
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = 'Draft';
-        break;
-      default:
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
   }
 }

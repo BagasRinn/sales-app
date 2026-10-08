@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
@@ -16,7 +17,7 @@ class HomeScreen extends StatelessWidget {
     final orders = context.watch<OrderProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
@@ -33,30 +34,20 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: AppColors.primaryLight,
                         child: Text(
                           (auth.nama ?? auth.username ?? 'S')[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.textOnPrimary,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Halo, ${auth.nama ?? auth.username ?? 'Sales'}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Halo, ${auth.nama ?? auth.username ?? 'Sales'}',
+                          style: AppTextStyles.headlineMedium,
                         ),
                       ),
                     ],
@@ -81,18 +72,9 @@ class HomeScreen extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Order Terbaru',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
+                      Text('Order Terbaru', style: AppTextStyles.headlineSmall),
                       TextButton(
-                        onPressed: () {
-                          // Navigate to orders tab - handled by parent
-                        },
+                        onPressed: () {},
                         child: const Text('Lihat Semua'),
                       ),
                     ],
@@ -111,13 +93,15 @@ class HomeScreen extends StatelessWidget {
                   ),
                 )
               else if (orders.recentOrders.isEmpty)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40),
                       child: Text(
                         'Belum ada order',
-                        style: TextStyle(color: Color(0xFF94A3B8)),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ),
                   ),
@@ -161,8 +145,8 @@ class HomeScreen extends StatelessWidget {
                 title: 'Omset Hari Ini',
                 value: s != null ? 'Rp ${idr.format(s.omsetHariIni)}' : '-',
                 icon: Icons.payments_outlined,
-                color: const Color(0xFF059669),
-                bgColor: const Color(0xFFECFDF5),
+                color: AppColors.success,
+                bgColor: AppColors.successBg,
               ),
             ),
             const SizedBox(width: 12),
@@ -171,8 +155,8 @@ class HomeScreen extends StatelessWidget {
                 title: 'Menunggu',
                 value: s != null ? '${s.pendingCount}' : '-',
                 icon: Icons.hourglass_empty,
-                color: const Color(0xFF2563EB),
-                bgColor: const Color(0xFFEFF6FF),
+                color: AppColors.info,
+                bgColor: AppColors.infoBg,
               ),
             ),
           ],
@@ -188,8 +172,8 @@ class HomeScreen extends StatelessWidget {
                     : '-',
                 subtitle: s?.targetType == 'REVENUE' ? 'Omset' : 'Order',
                 icon: Icons.flag_outlined,
-                color: const Color(0xFFD97706),
-                bgColor: const Color(0xFFFFFBEB),
+                color: AppColors.warning,
+                bgColor: AppColors.warningBg,
               ),
             ),
             const SizedBox(width: 12),
@@ -201,8 +185,8 @@ class HomeScreen extends StatelessWidget {
                     ? 'Rp ${idr.format(s.selesaiBulanIniTotal)}'
                     : null,
                 icon: Icons.check_circle_outline,
-                color: const Color(0xFF059669),
-                bgColor: const Color(0xFFECFDF5),
+                color: AppColors.success,
+                bgColor: AppColors.successBg,
               ),
             ),
           ],
@@ -234,95 +218,37 @@ class HomeScreen extends StatelessWidget {
                   Expanded(
                     child: Text(
                       order.storeName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
+                      style: AppTextStyles.labelLarge,
                     ),
                   ),
-                  _buildStatusChip(order.status),
+                  OrderStatusChip(status: order.status),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
                 dateFormat.format(order.createdAt.toLocal()),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF94A3B8),
-                ),
+                style: AppTextStyles.bodySmall,
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
                   Text(
                     '${order.totalQty} item',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const Spacer(),
                   Text(
                     'Rp ${NumberFormat('#,###', 'id').format(order.totalPrice)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: Color(0xFF0F172A),
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status) {
-    Color color;
-    Color bg;
-    String label;
-
-    switch (status.toUpperCase()) {
-      case 'PENDING':
-        color = const Color(0xFF2563EB);
-        bg = const Color(0xFFEFF6FF);
-        label = 'Menunggu';
-        break;
-      case 'APPROVED':
-        color = const Color(0xFF059669);
-        bg = const Color(0xFFECFDF5);
-        label = 'Disetujui';
-        break;
-      case 'REJECTED':
-        color = const Color(0xFFDC2626);
-        bg = const Color(0xFFFEF2F2);
-        label = 'Ditolak';
-        break;
-      case 'CANCELLED':
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = 'Dibatalkan';
-        break;
-      default:
-        color = const Color(0xFF94A3B8);
-        bg = const Color(0xFFF1F5F9);
-        label = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -351,9 +277,9 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,30 +297,16 @@ class _StatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
-          ),
+          Text(title, style: AppTextStyles.bodySmall),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+            style: AppTextStyles.headlineSmall.copyWith(color: color),
           ),
-          if (subtitle != null)
-            Text(
-              subtitle!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF94A3B8),
-              ),
-            ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(subtitle!, style: AppTextStyles.bodySmall),
+          ],
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/draft_order_provider.dart';
 
@@ -38,17 +39,15 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
     final idr = NumberFormat('#,###', 'id');
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Katalog Produk'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
       ),
       body: Column(
         children: [
           // Search
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               controller: _searchController,
@@ -71,7 +70,7 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
 
           // Stock filter
           Container(
-            color: Colors.white,
+            color: AppColors.surface,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -86,8 +85,8 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
                       onSelected: (_) {
                         setState(() => _stockFilter = filter);
                       },
-                      selectedColor: const Color(0xFFEFF6FF),
-                      checkmarkColor: const Color(0xFF2563EB),
+                      selectedColor: AppColors.infoBg,
+                      checkmarkColor: AppColors.primaryLight,
                     ),
                   );
                 }).toList(),
@@ -102,10 +101,12 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
             child: provider.isLoading && provider.allProducts.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : provider.allProducts.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'Produk tidak ditemukan',
-                          style: TextStyle(color: Color(0xFF94A3B8)),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       )
                     : _buildProductList(provider, idr),
@@ -154,28 +155,6 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stock = product.stokTersedia;
-    final stockStatus = stock > 5
-        ? 'available'
-        : stock > 0
-            ? 'low'
-            : 'outOfStock';
-    final stockColor = stockStatus == 'available'
-        ? const Color(0xFF059669)
-        : stockStatus == 'low'
-            ? const Color(0xFFD97706)
-            : const Color(0xFFDC2626);
-    final stockBg = stockStatus == 'available'
-        ? const Color(0xFFECFDF5)
-        : stockStatus == 'low'
-            ? const Color(0xFFFFFBEB)
-            : const Color(0xFFFEF2F2);
-    final stockLabel = stockStatus == 'available'
-        ? 'Tersedia'
-        : stockStatus == 'low'
-            ? 'Stok Rendah'
-            : 'Stok Habis';
-
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -194,10 +173,7 @@ class _ProductCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             product.namaBarang,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
+                            style: AppTextStyles.labelLarge,
                           ),
                         ),
                         if (product.orderType == '4P')
@@ -208,18 +184,17 @@ class _ProductCard extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFFBEB),
+                              color: AppColors.warningBg,
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                color: const Color(0xFFFCD34D),
+                                color: AppColors.warning.withValues(alpha: 0.4),
                               ),
                             ),
-                            child: const Text(
+                            child: Text(
                               '4P',
-                              style: TextStyle(
-                                fontSize: 10,
+                              style: AppTextStyles.labelMedium.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFFD97706),
+                                color: AppColors.warning,
                               ),
                             ),
                           ),
@@ -228,37 +203,18 @@ class _ProductCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       'Rp ${idr.format(product.harga)} / ${product.satuan ?? 'pcs'}',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: stockBg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$stockLabel ($stock)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: stockColor,
-                        ),
-                      ),
-                    ),
+                    StockChip(available: product.stokTersedia),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
               IconButton(
-                onPressed: stock > 0
+                onPressed: product.stokTersedia > 0
                     ? () {
                         context.read<DraftOrderProvider>().addItem(product);
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -271,9 +227,9 @@ class _ProductCard extends StatelessWidget {
                     : null,
                 icon: Icon(
                   Icons.add_circle,
-                  color: stock > 0
-                      ? const Color(0xFF2563EB)
-                      : const Color(0xFF94A3B8),
+                  color: product.stokTersedia > 0
+                      ? AppColors.primaryLight
+                      : AppColors.textMuted,
                   size: 32,
                 ),
               ),
@@ -299,21 +255,22 @@ class _ProductCard extends StatelessWidget {
           children: [
             Text(
               product.namaBarang,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTextStyles.headlineMedium,
             ),
             const SizedBox(height: 8),
             if (product.kategori != null)
               Text(
                 'Kategori: ${product.kategori}',
-                style: const TextStyle(color: Color(0xFF64748B)),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             if (product.namaSupplier != null)
               Text(
                 'Supplier: ${product.namaSupplier}',
-                style: const TextStyle(color: Color(0xFF64748B)),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             const SizedBox(height: 16),
             Row(
@@ -393,7 +350,7 @@ class _InfoTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: highlight ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+          color: highlight ? AppColors.infoBg : AppColors.borderLight,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -401,18 +358,14 @@ class _InfoTile extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF94A3B8),
-              ),
+              style: AppTextStyles.bodySmall,
             ),
             const SizedBox(height: 2),
             Text(
               value,
-              style: TextStyle(
-                fontSize: 13,
+              style: AppTextStyles.labelMedium.copyWith(
                 fontWeight: FontWeight.w600,
-                color: highlight ? const Color(0xFF2563EB) : const Color(0xFF0F172A),
+                color: highlight ? AppColors.primaryLight : AppColors.textPrimary,
               ),
             ),
           ],

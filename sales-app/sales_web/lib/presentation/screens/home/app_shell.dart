@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/draft_order_provider.dart';
@@ -85,8 +86,8 @@ class _AppShellState extends State<AppShell> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openOrderFlow,
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.textOnPrimary,
         icon: const Icon(Icons.add),
         label: const Text('Order Baru'),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bulletin_provider.dart';
 import '../bulletin/bulletin_screen.dart';
@@ -14,11 +15,9 @@ class MiscScreen extends StatelessWidget {
     final bulletin = context.watch<BulletinProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Lainnya'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -31,13 +30,11 @@ class MiscScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 30,
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: AppColors.primaryLight,
                     child: Text(
                       (auth.nama ?? auth.username ?? 'S')[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 24,
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        color: AppColors.textOnPrimary,
                       ),
                     ),
                   ),
@@ -48,16 +45,13 @@ class MiscScreen extends StatelessWidget {
                       children: [
                         Text(
                           auth.nama ?? '-',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: AppTextStyles.headlineMedium,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '@${auth.username ?? '-'}',
-                          style: const TextStyle(
-                            color: Color(0xFF64748B),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -67,15 +61,14 @@ class MiscScreen extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: AppColors.infoBg,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text(
+                          child: Text(
                             'SALES',
-                            style: TextStyle(
-                              fontSize: 11,
+                            style: AppTextStyles.labelMedium.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF2563EB),
+                              color: AppColors.primaryLight,
                             ),
                           ),
                         ),
@@ -89,13 +82,11 @@ class MiscScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Menu section
-          const Text(
+          Text(
             'MENU',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF94A3B8),
+            style: AppTextStyles.labelMedium.copyWith(
               letterSpacing: 1,
+              color: AppColors.textMuted,
             ),
           ),
           const SizedBox(height: 8),
@@ -103,7 +94,7 @@ class MiscScreen extends StatelessWidget {
           // Promo & Diskon
           _MenuCard(
             icon: Icons.local_offer_outlined,
-            iconColor: const Color(0xFFD97706),
+            iconColor: AppColors.warning,
             badge: bulletin.unreadCount > 0 ? bulletin.unreadCount : null,
             title: 'Promo & Diskon',
             subtitle: 'Lihat promo dari admin',
@@ -128,13 +119,11 @@ class MiscScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Lainnya section
-          const Text(
+          Text(
             'LAINNYA',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF94A3B8),
+            style: AppTextStyles.labelMedium.copyWith(
               letterSpacing: 1,
+              color: AppColors.textMuted,
             ),
           ),
           const SizedBox(height: 8),
@@ -177,27 +166,27 @@ class MiscScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: AppColors.infoBg,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.help_outline,
-                color: Color(0xFF2563EB),
+                color: AppColors.primaryLight,
               ),
             ),
             const SizedBox(width: 12),
-            const Text('Bantuan'),
+            Text('Bantuan', style: AppTextStyles.headlineSmall),
           ],
         ),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Untuk bantuan, hubungi admin di:'),
-            SizedBox(height: 12),
-            Text('Email: admin@practicalbeauty.com'),
-            SizedBox(height: 4),
-            Text('WhatsApp: -'),
+            const Text('Untuk bantuan, hubungi admin di:'),
+            const SizedBox(height: 12),
+            const Text('Email: admin@practicalbeauty.com'),
+            const SizedBox(height: 4),
+            const Text('WhatsApp: -'),
           ],
         ),
         actions: [
@@ -215,27 +204,29 @@ class MiscScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.info_outline, color: Color(0xFF2563EB)),
-            SizedBox(width: 8),
-            Text('Tentang Aplikasi'),
+            Icon(Icons.info_outline, color: AppColors.primaryLight),
+            const SizedBox(width: 8),
+            Text('Tentang Aplikasi', style: AppTextStyles.headlineSmall),
           ],
         ),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Sales Web App',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              style: AppTextStyles.headlineSmall,
             ),
-            SizedBox(height: 4),
-            Text('Versi 1.0.0'),
-            SizedBox(height: 8),
+            const SizedBox(height: 4),
+            Text('Versi 1.0.0', style: AppTextStyles.bodyMedium),
+            const SizedBox(height: 8),
             Text(
               'Aplikasi manajemen pesanan sales untuk platform web.',
-              style: TextStyle(color: Color(0xFF64748B)),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -259,16 +250,16 @@ class MiscScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
+                color: AppColors.errorBg,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.logout,
-                color: Color(0xFFDC2626),
+                color: AppColors.error,
               ),
             ),
             const SizedBox(width: 12),
-            const Text('Konfirmasi Keluar'),
+            Text('Konfirmasi Keluar', style: AppTextStyles.headlineSmall),
           ],
         ),
         content: const Text(
@@ -281,7 +272,7 @@ class MiscScreen extends StatelessWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
+              backgroundColor: AppColors.error,
             ),
             onPressed: () {
               Navigator.pop(context);
@@ -316,8 +307,8 @@ class _MenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? const Color(0xFFDC2626) : const Color(0xFF0F172A);
-    final bgColor = isDestructive ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9);
+    final color = isDestructive ? AppColors.error : AppColors.textPrimary;
+    final bgColor = isDestructive ? AppColors.errorBg : AppColors.borderLight;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -344,14 +335,13 @@ class _MenuCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626),
+                    color: AppColors.error,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '$badge',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.textOnPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -361,16 +351,12 @@ class _MenuCard extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
+          style: AppTextStyles.labelLarge.copyWith(color: color),
         ),
         subtitle: subtitle != null
             ? Text(
                 subtitle!,
-                style: TextStyle(
-                  fontSize: 12,
+                style: AppTextStyles.bodySmall.copyWith(
                   color: color.withValues(alpha: 0.6),
                 ),
               )
