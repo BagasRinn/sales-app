@@ -166,23 +166,8 @@ class _ProductCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product image placeholder
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.inventory_2_outlined,
-                  size: 22,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,7 +177,7 @@ class _ProductCard extends StatelessWidget {
                       style: AppTextStyles.bodyLarge.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
@@ -204,20 +189,11 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        StockChip(available: available),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'STOK $available $satuan',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'STOK $available $satuan',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -270,45 +246,19 @@ class _ProductCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.inventory_2_outlined,
-                    size: 28,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.namaBarang,
-                        style: AppTextStyles.headlineSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'SKU: ${product.id}',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Text(
+              product.namaBarang,
+              style: AppTextStyles.headlineMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'SKU: ${product.id}',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+                fontFamily: 'monospace',
+              ),
             ),
             const SizedBox(height: 20),
-            // SKU
             _detailRow(Icons.qr_code, 'SKU', product.id),
             if (product.satuan != null)
               _detailRow(Icons.scale_outlined, 'Satuan', product.satuan),
@@ -317,7 +267,6 @@ class _ProductCard extends StatelessWidget {
             if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty)
               _detailRow(Icons.business, 'Supplier', product.namaSupplier),
             const Divider(height: 24),
-            // Harga + Stok row
             Row(
               children: [
                 Expanded(
@@ -341,19 +290,12 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     Text('Stok', style: AppTextStyles.bodySmall),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        StockChip(available: available),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$available',
-                          style: AppTextStyles.headlineMedium.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: available == 0 ? AppColors.error : AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '$available',
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: available == 0 ? AppColors.error : AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
