@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
 import '../../providers/product_provider.dart';
-import '../../providers/draft_order_provider.dart';
 
 class ProductCatalogScreen extends StatefulWidget {
   const ProductCatalogScreen({super.key});
@@ -311,21 +310,14 @@ class _ProductCard extends StatelessWidget {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: available > 0
-                    ? () {
-                        context.read<DraftOrderProvider>().addItem(product);
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${product.namaBarang ?? ''} ditambahkan'),
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
-                      }
-                    : null,
-                icon: const Icon(Icons.add),
-                label: const Text('Tambah ke Order'),
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.textSecondary,
+                  foregroundColor: AppColors.textOnPrimary,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Tutup'),
               ),
             ),
           ],

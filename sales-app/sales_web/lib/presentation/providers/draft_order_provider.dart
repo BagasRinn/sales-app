@@ -29,6 +29,7 @@ class OrderLine {
   }
 
   int get subtotal => hargaSetelahDiskon * qty;
+  bool get isFree => discount.layer1?.type == 'PERCENT' && discount.layer1?.value == 100;
 }
 
 class DiscountLayer {
@@ -92,6 +93,45 @@ class DraftOrderProvider with ChangeNotifier {
   int get totalPrice => _items.fold(0, (sum, item) => sum + item.subtotal);
   int get totalDiscount => totalRaw - totalPrice;
   int get totalQty => _items.fold(0, (sum, item) => sum + item.qty);
+  int get totalItems => _items.fold(0, (sum, item) => sum + item.qty);
+
+  int get discountLayer1Total {
+    int total = 0;
+    for (final item in _items) {
+      int raw = item.hargaSatuan * item.qty;
+      if (item.discount.layer1 != null) {
+        total += item.discount.layer1!.cutFrom(raw);
+      }
+    }
+    return total;
+  }
+
+  int get discountLayer2Total {
+    int total = 0;
+    for (final item in _items) {
+      int raw = item.hargaSatuan * item.qty;
+      if (item.discount.layer1 != null) raw -= item.discount.layer1!.cutFrom(raw);
+      if (item.discount.layer2 != null) {
+        total += item.discount.layer2!.cutFrom(raw);
+      }
+    }
+    return total;
+  }
+
+  int get discountLayer3Total {
+    int total = 0;
+    for (final item in _items) {
+      int raw = item.hargaSatuan * item.qty;
+      if (item.discount.layer1 != null) raw -= item.discount.layer1!.cutFrom(raw);
+      if (item.discount.layer2 != null) raw -= item.discount.layer2!.cutFrom(raw);
+      if (item.discount.layer3 != null) {
+        total += item.discount.layer3!.cutFrom(raw);
+      }
+    }
+    return total;
+  }
+
+  int get freeItemsCount => _items.where((i) => i.isFree).fold(0, (sum, i) => sum + i.qty);
 
   void setCustomer(Customer customer) {
     _customerId = customer.id;
@@ -155,6 +195,31 @@ class DraftOrderProvider with ChangeNotifier {
       item.first.discount = item.first.discount.withLayer(layer, type, value);
     }
     notifyListeners();
+  }
+
+  void setDiscountLayer({required String lineId, required int layer, required String type, required int value}) {
+    setDiscount(lineId, layer, type, value);
+  }
+
+  void removeLine(String lineId) => removeItem(lineId);
+
+  OrderLine addLine(String productId, {int qty = 1}) {
+    final existing = _items.where((i) => i.productId == productId).toList();
+    if (existing.isNotEmpty) {
+      existing.first.qty += qty;
+      notifyListeners();
+      return existing.first;
+    }
+    final line = OrderLine(
+      id: '${productId}_${DateTime.now().millisecondsSinceEpoch}',
+      productId: productId,
+      namaBarang: productId,
+      hargaSatuan: 0,
+      qty: qty,
+    );
+    _items.add(line);
+    notifyListeners();
+    return line;
   }
 
   void loadFromExisting(Order order) {

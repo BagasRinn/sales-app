@@ -33,6 +33,29 @@
   </style>
 </head>
 <body>
+  <script>
+    // Cache bust: ubah angka ini setiap kali deploy, atau otomatis dengan build timestamp
+    var _cb = Date.now();
+  </script>
+  <script>
+    // Inject cache-bust query param ke flutter_bootstrap.js DAN main.dart.js
+    window.addEventListener('load', function() {
+      [].forEach.call(document.querySelectorAll('script[src]'), function(s) {
+        var src = s.getAttribute('src');
+        if (src && !src.includes('?v=')) {
+          s.setAttribute('src', src + (src.includes('?') ? '&' : '?') + 'v=' + window._cb);
+        }
+      });
+      // Also bust for flutter assets link
+      var links = document.querySelectorAll('link[rel="preload"][as="script"]');
+      links.forEach(function(l) {
+        var href = l.getAttribute('href');
+        if (href && !href.includes('?v=')) {
+          l.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'v=' + window._cb);
+        }
+      });
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

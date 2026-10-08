@@ -63,6 +63,26 @@ class OrderRepository {
     return Order.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<Order> saveDraft({
+    required String customerId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+    required String orderType,
+    String? existingOrderId,
+  }) async {
+    final body = {
+      'customer_id': customerId,
+      'items': items,
+      'notes': notes,
+      'order_type': orderType,
+      'status': 'DRAFT',
+    };
+    final data = existingOrderId != null
+        ? await _api.put('/orders/$existingOrderId', body: body)
+        : await _api.post('/orders', body: body);
+    return Order.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<Order> updateOrder({
     required String orderId,
     required String customerId,
