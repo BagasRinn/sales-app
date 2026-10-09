@@ -207,7 +207,7 @@ def sync_products_from_excel(
 
     inserted = updated = 0
     if validated_rows:
-        inserted, updated = _bulk_upsert(db, validated_rows)
+        inserted, updated = _bulk_upsert(db, validated_rows, current_user.get("branch"))
 
     for err in validation_errors:
         db.add(SyncValidationError(
@@ -239,7 +239,7 @@ def sync_products_from_excel(
     }
 
 
-def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
+def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = None) -> Tuple[int, int]:
     """
     Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE.
     Returns (inserted_count, updated_count).
@@ -261,7 +261,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
              "stok_booking": 0, "stok_diterima": 0,
              "kategori": r.get("kategori"),
              "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
-             "order_type": r.get("order_type", "REGULER")}
+             "order_type": r.get("order_type", "REGULER"),
+             "branch": branch}
             for r in to_insert
         ])
         db.execute(stmt)
@@ -280,7 +281,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                  "stok_booking": 0, "stok_diterima": 0,  # reset saat sync Excel baru
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
-                 "order_type": r.get("order_type", "REGULER")}
+                 "order_type": r.get("order_type", "REGULER"),
+                 "branch": branch}
                 for r in changed
             ])
             stmt = stmt.on_conflict_do_update(
@@ -303,6 +305,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]]) -> Tuple[int, int]:
                     delta=r["stok"] - existing[r["sku"]],
                     nilai_sebelum=existing[r["sku"]], nilai_sesudah=r["stok"],
                     actor_id=None, order_id=None,
+                    branch=branch,
                 )
         if unchanged:
             stmt = insert(Product).values([

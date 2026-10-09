@@ -524,6 +524,7 @@ def update_product_stock(
         nilai_sesudah=stock_update.stok_sistem,
         actor_id=UUID(current_user["user_id"]),
         order_id=None,
+        branch=product.branch,
     )
 
     db.commit()

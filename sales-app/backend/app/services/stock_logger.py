@@ -13,10 +13,12 @@ def log_stock_change(
     nilai_sesudah: int,
     actor_id: UUID | None = None,
     order_id: UUID | None = None,
+    branch: str | None = None,
 ) -> StokLog:
     log_entry = StokLog(
         id=uuid4(),
         product_id=product_id,
+        branch=branch,
         sumber=sumber,
         field_terdampak=field_terdampak,
         delta=delta,

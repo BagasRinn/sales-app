@@ -235,7 +235,7 @@ def _sync_order_to_sheets(order_id: str):
     logger.info(f"[SHEETS SYNC] Order {order_id} submitted (sheets sync disabled)")
 
 
-def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str = "EDIT"):
+def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str = "EDIT", branch: str | None = None):
     """Adjust stok_booking untuk DRAFT/PENDING order setelah edit items.
     Hitung delta qty per produk antara old_items dan new_items (sum by product_id).
     Delta > 0: atomic add (perlu stock tersedia, raise 409 kalau tidak cukup).
@@ -301,6 +301,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
                 nilai_sesudah=new_booking,
                 actor_id=sales_id,
                 order_id=order_id,
+                branch=branch,
             )
         else:
             # Kurangi booking (delta < 0). Tidak ada CHECK constraint di DB,
@@ -328,10 +329,11 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
                 nilai_sesudah=new_booking,
                 actor_id=sales_id,
                 order_id=order_id,
+                branch=branch,
             )
 
 
-def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT"):
+def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT", branch: str | None = None):
     """Apply stok_booking for given items. Raises 409 if insufficient.
     `sumber` adalah label StokLog — beda per caller (DRAFT, CHECKOUT, BACKFILL).
     """
@@ -377,6 +379,7 @@ def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT")
                 nilai_sesudah=product.stok_booking,
                 actor_id=sales_id,
                 order_id=order_id_for_log,
+                branch=branch,
             )
 
 
@@ -501,7 +504,7 @@ def create_order(
     # DRAFT sekarang langsung booking stok (sebelumnya: validation only, booking
     # di submit). Kalau stok tidak cukup, _book_items panggil db.rollback()
     # yang discard Order+OrderItems di session ini, lalu raise 409.
-    _book_items(order_req.items, db, sales_id, order.id, sumber="DRAFT")
+    _book_items(order_req.items, db, sales_id, order.id, sumber="DRAFT", branch=user_branch)
 
     db.commit()
     db.refresh(order)
@@ -776,6 +779,7 @@ def update_draft_order(
             old_items=old_items,
             new_items=order_update.items,
             sumber="EDIT",
+            branch=order.branch,
         )
 
     db.commit()
@@ -879,6 +883,7 @@ def delete_draft_order(
             nilai_sesudah=new_booking,
             actor_id=sales_id,
             order_id=order.id,
+            branch=order.branch,
         )
 
     db.delete(order)
@@ -938,6 +943,7 @@ def cancel_order(
                     nilai_sesudah=product.stok_booking,
                     actor_id=UUID(current_user["user_id"]),
                     order_id=order.id,
+                    branch=order.branch,
                 )
 
         order.status = "CANCELLED"
@@ -1279,6 +1285,7 @@ def approve_order(
                 nilai_sesudah=current_booking + shortfall,
                 actor_id=actor_id,
                 order_id=order.id,
+                branch=product.branch,
             )
 
         # Approve: pindahkan qty dari stok_booking ke stok_diterima (atomic dual-field).
@@ -1318,6 +1325,7 @@ def approve_order(
             nilai_sesudah=new_booking,
             actor_id=actor_id,
             order_id=order.id,
+            branch=order.branch,
         )
         log_stock_change(
             db=db,
@@ -1329,6 +1337,7 @@ def approve_order(
             nilai_sesudah=new_diterima,
             actor_id=actor_id,
             order_id=order.id,
+            branch=order.branch,
         )
 
     order.status = "APPROVED"
@@ -1387,6 +1396,7 @@ def reject_order(
                 nilai_sesudah=product.stok_booking,
                 actor_id=UUID(current_user["user_id"]),
                 order_id=order.id,
+                branch=order.branch,
             )
 
     order.status = "REJECTED"
@@ -1453,6 +1463,7 @@ def cancel_order_items(
                 nilai_sesudah=product.stok_booking,
                 actor_id=UUID(current_user["user_id"]),
                 order_id=order.id,
+                branch=order.branch,
             )
 
         # Hapus atau kurangi OrderItem supaya total_amount otomatis exclude
