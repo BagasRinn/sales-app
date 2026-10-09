@@ -433,123 +433,126 @@ class _StatsTabState extends State<StatsTab> {
               onChangeStatus: (s) => setState(() => _statusFilter = s),
               onDownload: _downloadPeriodReport,
             ),
-            const SizedBox(height: 36),
-            Row(
-              children: [
-                const Text('Pesanan Perlu Tindakan', style: AppTextStyles.headlineLarge),
-                const SizedBox(width: 12),
-                if (pending.isNotEmpty)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.warningBg,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.warningBorder),
-                    ),
-                    child: Text(
-                      '${pending.length}',
-                      style: const TextStyle(
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
+            // Hide "Pesanan Perlu Tindakan" for SUPERVISOR — they focus on monitoring, not order actions
+            if (widget.role != 'SUPERVISOR') ...[
+              const SizedBox(height: 36),
+              Row(
+                children: [
+                  const Text('Pesanan Perlu Tindakan', style: AppTextStyles.headlineLarge),
+                  const SizedBox(width: 12),
+                  if (pending.isNotEmpty)
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.warningBorder),
+                      ),
+                      child: Text(
+                        '${pending.length}',
+                        style: const TextStyle(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (pending.isNotEmpty)
-              ...pending.take(5).map((order) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: AppColors.warningBg,
-                                borderRadius: BorderRadius.circular(10),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (pending.isNotEmpty)
+                ...pending.take(5).map((order) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.warningBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.store,
+                                    color: AppColors.warning, size: 22),
                               ),
-                              child: const Icon(Icons.store,
-                                  color: AppColors.warning, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    order.storeName ?? 'Toko Tidak Diketahui',
-                                    style: AppTextStyles.labelLarge,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Order #${order.id.substring(0, 8)} • ${order.items.length} item • Rp ${_fmt(order.totalAmount)}',
-                                    style: AppTextStyles.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: AppColors.warningBg,
-                                borderRadius: BorderRadius.circular(20),
-                                border:
-                                    Border.all(color: AppColors.warningBorder),
-                              ),
-                              child: const Text(
-                                'Menunggu',
-                                style: TextStyle(
-                                  color: AppColors.warning,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      order.storeName ?? 'Toko Tidak Diketahui',
+                                      style: AppTextStyles.labelLarge,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Order #${order.id.substring(0, 8)} • ${order.items.length} item • Rp ${_fmt(order.totalAmount)}',
+                                      style: AppTextStyles.bodySmall,
+                                    ),
+                                  ],
                                 ),
                               ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warningBg,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border:
+                                      Border.all(color: AppColors.warningBorder),
+                                ),
+                                child: const Text(
+                                  'Menunggu',
+                                  style: TextStyle(
+                                    color: AppColors.warning,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ))
+              else
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.successBg,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.check_circle,
+                              color: AppColors.success, size: 32),
+                        ),
+                        const SizedBox(width: 20),
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Semua pesanan sudah diproses',
+                                style: AppTextStyles.headlineSmall),
+                            SizedBox(height: 4),
+                            Text(
+                              'Tidak ada pesanan yang menunggu persetujuan',
+                              style: AppTextStyles.bodyMedium,
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
-                  ))
-            else
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(40),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.successBg,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_circle,
-                            color: AppColors.success, size: 32),
-                      ),
-                      const SizedBox(width: 20),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Semua pesanan sudah diproses',
-                              style: AppTextStyles.headlineSmall),
-                          SizedBox(height: 4),
-                          Text(
-                            'Tidak ada pesanan yang menunggu persetujuan',
-                            style: AppTextStyles.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
                 ),
-              ),
+            ],
           ],
         ],
       ),
