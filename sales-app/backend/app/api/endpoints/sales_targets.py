@@ -1,4 +1,4 @@
-"""Sales target & incentive management endpoints — manager only."""
+"""Sales target & incentive management endpoints - manager only."""
 from datetime import datetime, timezone
 from typing import List, Optional
 

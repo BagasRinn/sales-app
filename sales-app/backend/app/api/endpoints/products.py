@@ -288,7 +288,7 @@ def get_admin_stats(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Server-side dashboard stats — admin/supervisor access. Branch-scoped. Jika `date`
+    """Server-side dashboard stats - admin/supervisor access. Branch-scoped. Jika `date`
     Branch-scoped. Jika `date` diberikan (format YYYY-MM-DD), stats difilter untuk order
     yang dibuat pada tanggal tersebut saja. Tanpa `date`, mengembalikan semua order."""
     from sqlalchemy import func, Integer, cast
@@ -345,7 +345,7 @@ def get_product_count(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Return total product count for pagination — applies same filters as list_products."""
+    """Return total product count for pagination - applies same filters as list_products."""
     query = db.query(func.count(Product.id))
     query = apply_branch_filter(query, Product, current_user)
     if search:
@@ -422,7 +422,7 @@ def update_product(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Partial update untuk produk — admin/supervisor. Field yang None di-skip.
+    """Partial update untuk produk - admin/supervisor. Field yang None di-skip.
     order_type hanya menerima 'REGULER' atau '4P'."""
     product = (
         db.query(Product)

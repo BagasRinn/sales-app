@@ -1,4 +1,4 @@
-"""Sales-centric endpoints — list customer assigned to a sales user, plus area assignments."""
+"""Sales-centric endpoints - list customer assigned to a sales user, plus area assignments."""
 from typing import List
 from uuid import UUID
 
@@ -31,7 +31,7 @@ def list_sales_customers(
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Semua customer yang visible untuk sales ini (hybrid: area + direct override).
-    Admin + supervisor only — untuk tab 'Per Sales' di admin web."""
+    Admin + supervisor only - untuk tab 'Per Sales' di admin web."""
     user = db.query(User).filter(
         User.id == sales_id,
         User.deleted_at.is_(None),
@@ -59,7 +59,7 @@ def list_sales_customers(
         )
         .filter(
             # Direct override ATAU area coverage. Exclude 'unassigned fallback'
-            # (kode_area null AND no direct) — itu bukan assignment spesifik.
+            # (kode_area null AND no direct) - itu bukan assignment spesifik.
             (Customer.id.in_(my_direct_subq)) |
             (Customer.kode_area.in_(my_areas_subq))
         )
@@ -124,7 +124,7 @@ def list_area_assignments(
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
-    Admin + supervisor only — untuk tab 'Penugasan Sales' sub-view 'Per Area'."""
+    Admin + supervisor only - untuk tab 'Penugasan Sales' sub-view 'Per Area'."""
     return _list_area_assignments(db, current_user)
 
 

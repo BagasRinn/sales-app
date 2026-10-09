@@ -47,7 +47,7 @@ def _get_customer(customer_id, db):
 def _validate_customer_for_sales(customer_id, sales_id, db):
     """Validate customer accessibility untuk sales (hybrid: area + customer override).
 
-    LOGIC HARUS SAMA DENGAN /customers/my — kalau sales bisa lihat customer
+    LOGIC HARUS SAMA DENGAN /customers/my - kalau sales bisa lihat customer
     di list, dia juga harus bisa order. Kalau tidak match, sales akan bingung
     kenapa customer ada di list tapi tidak bisa dipilih.
 
@@ -55,7 +55,7 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
     - customer di-assign langsung ke sales ini (direct)
     - customer.kode_area di-assign ke sales ini (area coverage)
     - customer tanpa direct assignment DAN (kode_area null OR area
-      unassigned ke siapapun) — unassigned = visible to all, backward-compat
+      unassigned ke siapapun) - unassigned = visible to all, backward-compat
     """
     from app.models.models import AreaAssignment
     customer = _get_customer(customer_id, db)
@@ -77,13 +77,13 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
         ) is not None
         if mine:
             return customer
-        # Direct assigned to other sales — bukan saya, bukan visible di list
+        # Direct assigned to other sales - bukan saya, bukan visible di list
         raise HTTPException(
             status_code=403,
             detail="Customer tidak di-assign ke sales ini",
         )
 
-    # 2. No direct assignment — check area coverage
+    # 2. No direct assignment - check area coverage
     if customer.kode_area:
         # Apakah kode_area ini di-assign ke siapapun (saya atau sales lain)?
         area_assigned_to_anyone = (
@@ -105,7 +105,7 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
         ) is not None
         if my_area:
             return customer
-        # Area di-assign ke sales lain, bukan saya — bukan visible di list
+        # Area di-assign ke sales lain, bukan saya - bukan visible di list
         raise HTTPException(
             status_code=403,
             detail="Customer tidak di-assign ke sales ini",
@@ -258,7 +258,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
         if delta == 0:
             continue
         if delta > 0:
-            # Tambah booking — perlu stock tersedia
+            # Tambah booking - perlu stock tersedia
             result = db.execute(
                 text(
                     "UPDATE products "
@@ -335,7 +335,7 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
 
 def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT", branch: str | None = None):
     """Apply stok_booking for given items. Raises 409 if insufficient.
-    `sumber` adalah label StokLog — beda per caller (DRAFT, CHECKOUT, BACKFILL).
+    `sumber` adalah label StokLog - beda per caller (DRAFT, CHECKOUT, BACKFILL).
     """
     for item in items:
         result = db.execute(
@@ -394,7 +394,7 @@ def create_order(
     if not order_req.items:
         raise HTTPException(status_code=400, detail="Pesanan harus memiliki minimal 1 item")
 
-    # Validasi order_type dulu sebelum loop items — gagal cepat kalau invalid.
+    # Validasi order_type dulu sebelum loop items - gagal cepat kalau invalid.
     order_type = (order_req.order_type or 'REGULER').upper()
     if order_type not in ('REGULER', '4P'):
         raise HTTPException(
@@ -569,7 +569,7 @@ def get_my_stats(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Sales dashboard stats — computed in WITA (UTC+8) timezone."""
+    """Sales dashboard stats - computed in WITA (UTC+8) timezone."""
     sales_id = UUID(current_user["user_id"])
     WITA = timezone(timedelta(hours=8))
     now_wita = datetime.now(WITA)
@@ -687,7 +687,7 @@ def update_draft_order(
 
     sales_id = UUID(current_user["user_id"])
 
-    # Lock OrderItem rows sebelum delete — defense against concurrent reads
+    # Lock OrderItem rows sebelum delete - defense against concurrent reads
     # yang tidak nge-lock Order. Order row sudah di-lock via with_for_update() di atas,
     # jadi approve/cancel/update_discounts dari concurrent caller akan blocking.
     old_items = (
@@ -767,7 +767,7 @@ def update_draft_order(
     order.store_address = customer.alamat
     order.order_type = new_order_type
 
-    # DRAFT dan PENDING keduanya sekarang punya stok_booking terisi — rebalance
+    # DRAFT dan PENDING keduanya sekarang punya stok_booking terisi - rebalance
     # setelah items berubah. Kalau rebalance raise 409, db.rollback() di helper
     # akan membatalkan semua perubahan (delete + insert + customer update) supaya
     # konsisten.
@@ -849,7 +849,7 @@ def delete_draft_order(
     # sebelum delete supaya stok kembali ke tersedia.
     # Catatan: StokLog rows yang reference order ini (BACKFILL, EDIT, DRAFT_DELETE)
     # akan kena ON DELETE SET NULL (lihat migration
-    # migrate_2026_10_03_stok_log_order_id_set_null.py) — order_id jadi NULL,
+    # migrate_2026_10_03_stok_log_order_id_set_null.py) - order_id jadi NULL,
     # tapi audit trail (product_id, sumber, delta) tetap tersimpan.
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     sales_id = UUID(current_user["user_id"])
@@ -1016,7 +1016,7 @@ def list_all_orders(
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
-    date_from/date_to opsional — kalau dua-duanya kosong, semua pesanan.
+    date_from/date_to opsional - kalau dua-duanya kosong, semua pesanan.
     Set header X-Total-Count untuk pagination di client.
     """
     query = db.query(Order).options(
@@ -1131,7 +1131,7 @@ def update_discounts(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ):
-    """Update diskon per item — admin only, hanya untuk pesanan PENDING."""
+    """Update diskon per item - admin only, hanya untuk pesanan PENDING."""
     order = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
@@ -1186,7 +1186,7 @@ def update_discounts(
                 applied.append((dt, 0, nom))
                 running -= nom
 
-        # Setelah loop, `running` tidak dipakai lagi — yang penting applied list.
+        # Setelah loop, `running` tidak dipakai lagi - yang penting applied list.
         # PERCENT percent column selalu berisi nilai percent (walau nominal yg aktif),
         # sesuai konvensi kolom.
         (t1, p1, n1), (t2, p2, n2), (t3, p3, n3) = applied
@@ -1418,7 +1418,7 @@ def cancel_order_items(
     current_user: CurrentUser = Depends(require_admin),
 ):
     """Batalkan 1 atau lebih item dari order PENDING.
-    Admin input reason untuk setiap item — sales bisa lihat di app."""
+    Admin input reason untuk setiap item - sales bisa lihat di app."""
     order = db.query(Order).filter(Order.id == order_id).with_for_update(of=[Order]).first()
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
@@ -1480,7 +1480,7 @@ def cancel_order_items(
             # dan UI fallback ke "Produk {product_id}".
             "nama_barang": product.nama_barang if product else None,
             "qty": entry.qty,
-            # Simpan harga_satuan + subtotal saat cancel — admin perlu lihat
+            # Simpan harga_satuan + subtotal saat cancel - admin perlu lihat
             # impact finansial dari item yang dibatalkan (mis. "barang rusak
             # Rp 12.000"). Kalau product sudah dihapus, harga jadi 0 dan
             # subtotal jadi 0.

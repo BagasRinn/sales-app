@@ -1,4 +1,4 @@
-"""Daily and period order reports — Excel export untuk admin & manager."""
+"""Daily and period order reports - Excel export untuk admin & manager."""
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import List, Optional
@@ -383,7 +383,7 @@ def sales_performance_dashboard(
     current_user: dict = Depends(require_admin_or_supervisor),
 ):
     """Per-sales breakdown by status (APPROVED / PENDING / REJECTED) for MTD and Today.
-    Admin/Supervisor access. Single call — no date params needed."""
+    Admin/Supervisor access. Single call - no date params needed."""
     wita = timezone(timedelta(hours=8))
     now_wita = datetime.now(wita)
     today = now_wita.date()
@@ -415,7 +415,7 @@ def sales_performance_dashboard(
             revenue_map[sid] = revenue_map.get(sid, 0) + _revenue_for_order(o)
         return count_map, revenue_map
 
-    # Load ALL orders (all statuses) for MTD and Today — single query each.
+    # Load ALL orders (all statuses) for MTD and Today - single query each.
     # Date filter di SQL, bukan Python. joinedload(items.product) menghindari N+1.
     mtd_orders_q = (
         db.query(Order)
@@ -446,7 +446,7 @@ def sales_performance_dashboard(
     sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
     sales_users = sales_users_q.all()
 
-    # Split by status in Python — fast since data already loaded.
+    # Split by status in Python - fast since data already loaded.
     def _split_by_status(orders: list[Order], status: str) -> list[Order]:
         return [o for o in orders if o.status == status]
 

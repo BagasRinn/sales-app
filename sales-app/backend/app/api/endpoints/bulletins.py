@@ -1,4 +1,4 @@
-"""Bulletin API endpoints — CRUD + dismiss + PDF upload."""
+﻿"""Bulletin API endpoints â€” CRUD + dismiss + PDF upload."""
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, exists
@@ -89,7 +89,7 @@ def create_bulletin(
         description=body.description,
         pdf_url=body.pdf_url,
         expire_at=body.expire_at,
-        branch=current_user.get("branch"),  # ADMIN/SUPERVISOR → their branch; MANAGER → NULL (global)
+        branch=current_user.get("branch"),  # ADMIN/SUPERVISOR â†’ their branch; MANAGER â†’ NULL (global)
         created_at=datetime.now(timezone.utc),
     )
     db.add(bulletin)
@@ -149,7 +149,7 @@ def update_bulletin(
     db.refresh(bulletin)
 
     # is_read untuk current user (walaupun ini endpoint manager,
-    # is_read di-response adalah field utilitarian — not critical)
+    # is_read di-response adalah field utilitarian â€” not critical)
     sales_id = UUID(_current_user["user_id"])
     dismiss = (
         db.query(BulletinDismiss)
@@ -181,7 +181,7 @@ def delete_bulletin(
         try:
             delete_file(pdf_url)
         except Exception:
-            pass  # Non-critical — file orphan boleh
+            pass  # Non-critical â€” file orphan boleh
 
     return None
 
@@ -192,8 +192,8 @@ def dismiss_bulletin(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Mark bulletin sebagai di-dismiss (popup sudah ditutup) oleh current user.
-    Idempotent — memanggil ulang tidak error."""
+    “””Mark bulletin sebagai di-dismiss (popup sudah ditutup) oleh current user.
+    Idempotent - memanggil ulang tidak error.”””
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")

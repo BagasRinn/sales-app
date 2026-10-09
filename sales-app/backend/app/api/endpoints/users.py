@@ -1,4 +1,4 @@
-"""User listing & management endpoints — untuk manager/admin operations."""
+"""User listing & management endpoints - untuk manager/admin operations."""
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -51,7 +51,7 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """List semua user (kecuali soft-deleted) — admin + supervisor only.
+    """List semua user (kecuali soft-deleted) - admin + supervisor only.
     Branch-scoped for ADMIN/SUPERVISOR; global MANAGER sees all."""
     query = _exclude_deleted(db.query(User))
     # Branch filter applied first
@@ -72,7 +72,7 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Buat user baru — admin + supervisor only.
+    """Buat user baru - admin + supervisor only.
 
     Strict rule: ADMIN/SUPERVISOR cannot create users in another branch.
     If they attempt to do so → 400.
@@ -140,7 +140,7 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Edit user — admin + supervisor only. Branch-scoped: ADMIN/SUPERVISOR
+    """Edit user - admin + supervisor only. Branch-scoped: ADMIN/SUPERVISOR
     can only edit users in their own branch. Global MANAGER can edit anyone."""
     target_user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
     if not target_user:
@@ -185,12 +185,12 @@ def update_user(
         if role_to_set == "MANAGER" and new_branch is not None:
             raise HTTPException(status_code=400, detail="Manager global harus tanpa branch")
 
-    # Tangkap sebelum pop — deteksi request yang punya field password.
+    # Tangkap sebelum pop - deteksi request yang punya field password.
     had_password_change = "password" in data
     if "password" in data and data["password"]:
         data["password_hash"] = get_password_hash(data.pop("password"))
 
-    # Increment token_version setiap kali password diubah — invalidate semua
+    # Increment token_version setiap kali password diubah - invalidate semua
     # sesi user target, baik dari self-service maupun reset oleh manager.
     if had_password_change:
         target_user.token_version = (target_user.token_version or 0) + 1
@@ -210,7 +210,7 @@ def delete_user(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Soft-delete user — DIHAPUS.
+    """Soft-delete user - DIHAPUS.
 
     Fitur nonaktifkan user (toggle is_active di dialog edit) sudah cukup untuk
     memblokir akses login. Tidak ada dua fitur dengan tujuan yang sama.
@@ -230,7 +230,7 @@ def delete_user(
 #     db: Session = Depends(get_db),
 #     _current_user: CurrentUser = Depends(require_manager),
 # ):
-#     """Soft-delete user — manager + admin only."""
+#     """Soft-delete user - manager + admin only."""
 #     user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
 #     if not user:
 #         raise HTTPException(status_code=404, detail="User tidak ditemukan")

@@ -1,4 +1,4 @@
-"""Customer API endpoints — CRUD, Excel import, sales assignment."""
+"""Customer API endpoints - CRUD, Excel import, sales assignment."""
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -78,7 +78,7 @@ def get_customer_count(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Total customers matching current filter — for pagination UI."""
+    """Total customers matching current filter - for pagination UI."""
     query = _exclude_deleted(db.query(func.count(Customer.id)))
     query = apply_branch_filter(query, Customer, current_user)
     if search:
@@ -137,7 +137,7 @@ def list_kode_areas(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Distinct kode_area dari customers — sumber dropdown di mobile
+    """Distinct kode_area dari customers - sumber dropdown di mobile
     submission form. Sales boleh membuat kode_area baru yang tidak ada
     di list (free-text fallback di form, tidak ada 409/422).
     Branch-scoped: ADMIN/SUPERVISOR sees only their branch's kode_areas.
@@ -146,7 +146,7 @@ def list_kode_areas(
 
     Auth: require_auth (bukan require_manager) karena sales butuh akses
     untuk isi form pengajuan customer. Data yang dikembalikan (list of
-    strings) tidak sensitif — tidak ada info sales-roster.
+    strings) tidak sensitif - tidak ada info sales-roster.
     """
     if current_user["role"] in ("ADMIN", "SUPERVISOR", "MANAGER"):
         rows = (
@@ -175,7 +175,7 @@ def create_customer(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Identity toko = (nama_toko, alamat) — kedua kolom wajib dan dicocokkan
+    """Identity toko = (nama_toko, alamat) - kedua kolom wajib dan dicocokkan
     case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda.
     Branch is set to the admin's branch (enforced via apply_branch_filter on list)."""
     nama_norm = customer.nama_toko.strip().lower()

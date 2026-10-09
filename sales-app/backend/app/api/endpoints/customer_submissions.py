@@ -104,7 +104,7 @@ def submit_customer_registration(
 ):
     """Submit pengajuan customer baru.
     - Jika bareng_order=True, customer langsung dibuat agar sales bisa langsung order.
-    - Status submission tetap PENDING — admin perlu approve untuk mengesahkan.
+    - Status submission tetap PENDING - admin perlu approve untuk mengesahkan.
     sales_id otomatis dari token (siapa yang login).
     """
     sales_id = UUID(current_user["user_id"])
@@ -115,7 +115,7 @@ def submit_customer_registration(
     # order_type hanya untuk flow bareng_order, bukan field submission.
     payload_dict.pop("order_type", None)
 
-    # Auto-fill salesman info dari auth token — submission melacak siapa yang mengajukan.
+    # Auto-fill salesman info dari auth token - submission melacak siapa yang mengajukan.
     payload_dict["kode_salesman"] = current_user.get("username")
     payload_dict["nama_salesman"] = current_user.get("nama")
 
@@ -175,7 +175,7 @@ def submit_customer_registration(
         db.flush()  # get order.id
 
         # Order dibuat kosong di sini. Items dipilih sales di OrderFlowScreen
-        # setelah submit — endpoint order flow yang handle items + booking.
+        # setelah submit - endpoint order flow yang handle items + booking.
         submission.bareng_customer_id = customer_id
         bareng_customer_id = customer_id
 
@@ -211,7 +211,7 @@ def check_duplicate_customer(
     current_user: CurrentUser = Depends(require_auth),
 ):
     """Cek apakah ada customer existing dengan nama+alamat mirip (LIKE).
-    Return list match — frontend show warning tapi tetap boleh submit."""
+    Return list match - frontend show warning tapi tetap boleh submit."""
     name_pattern = f"%{name.lower()}%"
     query = db.query(Customer).filter(
         Customer.deleted_at.is_(None),
@@ -326,7 +326,7 @@ def approve_submission(
         ).first()
         if existing_customer:
             existing_customer.kode = kode
-            # Copy kode_area from submission if set (do NOT override NULL — legacy
+            # Copy kode_area from submission if set (do NOT override NULL - legacy
             # placeholder may already have a value from create).
             if submission.kode_area:
                 existing_customer.kode_area = submission.kode_area
@@ -338,7 +338,7 @@ def approve_submission(
         submission.approved_customer_id = submission.bareng_customer_id
 
         # Transition order to PENDING so admin reviews items in Pesanan tab.
-        # NOT CONFIRMED — that bypasses admin review.
+        # NOT CONFIRMED - that bypasses admin review.
         linked_order = db.query(Order).filter(
             Order.customer_id == submission.bareng_customer_id,
             Order.sales_id == submission.sales_id,
