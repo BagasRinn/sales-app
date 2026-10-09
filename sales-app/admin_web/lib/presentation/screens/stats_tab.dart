@@ -400,8 +400,8 @@ class _StatsTabState extends State<StatsTab> {
               ],
             ),
 
-            // MANAGER only: Performa Sales quick summary
-            if (widget.role == 'MANAGER') ...[
+            // MANAGER & SUPERVISOR: Performa Sales quick summary
+            if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') ...[
               const SizedBox(height: 24),
               const Padding(
                 padding: EdgeInsets.only(bottom: 12, left: 4),
