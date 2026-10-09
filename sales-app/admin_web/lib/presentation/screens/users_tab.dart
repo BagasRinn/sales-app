@@ -37,9 +37,17 @@ class _UsersTabState extends State<UsersTab> {
 
   @override
   Widget build(BuildContext context) {
-    final users = context.select<AdminProvider, List<UserItem>>((p) => p.users);
+    final allUsers = context.select<AdminProvider, List<UserItem>>((p) => p.users);
     final isLoading = context.select<AdminProvider, bool>((p) => p.isLoading);
     final provider = context.read<AdminProvider>();
+
+    // Sort: by role first, then by name
+    final users = List<UserItem>.from(allUsers)
+      ..sort((a, b) {
+        final roleCompare = a.role.compareTo(b.role);
+        if (roleCompare != 0) return roleCompare;
+        return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+      });
 
     return Center(
       child: ConstrainedBox(
@@ -176,34 +184,15 @@ class _TableHeader extends StatelessWidget {
     return Container(
       height: 48,
       color: AppColors.surface,
-      child: const Row(
+      child: Row(
         children: [
-          _HeaderCell(label: 'NAMA', width: 180),
-          _HeaderCell(label: 'USERNAME', width: 140),
-          _HeaderCell(label: 'ROLE', width: 110),
-          _HeaderCell(label: 'CABANG', width: 150),
-          _HeaderCell(label: 'STATUS', width: 100),
-          _HeaderCell(label: 'AKSI', width: 100),
+          Expanded(child: Center(child: Text('NAMA', style: AppTextStyles.labelMedium))),
+          SizedBox(width: 140, child: Center(child: Text('USERNAME', style: AppTextStyles.labelMedium))),
+          SizedBox(width: 110, child: Center(child: Text('ROLE', style: AppTextStyles.labelMedium))),
+          SizedBox(width: 150, child: Center(child: Text('CABANG', style: AppTextStyles.labelMedium))),
+          SizedBox(width: 100, child: Center(child: Text('STATUS', style: AppTextStyles.labelMedium))),
+          SizedBox(width: 100, child: Center(child: Text('AKSI', style: AppTextStyles.labelMedium))),
         ],
-      ),
-    );
-  }
-}
-
-class _HeaderCell extends StatelessWidget {
-  final String label;
-  final double width;
-  const _HeaderCell({required this.label, required this.width});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Center(
-          child: Text(label, style: AppTextStyles.labelMedium),
-        ),
       ),
     );
   }
@@ -224,41 +213,54 @@ class _UserRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Cell(
-            width: 180,
-            child: Text(
-              user.displayName,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(fontWeight: FontWeight.w500),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                user.displayName,
+                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ),
-          _Cell(
+          SizedBox(
             width: 140,
-            child: Text(
-              user.username,
-              style: AppTextStyles.bodySmall,
-              overflow: TextOverflow.ellipsis,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                user.username,
+                style: AppTextStyles.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-          _Cell(
+          SizedBox(
             width: 110,
-            child: _RoleBadge(role: user.role),
-          ),
-          _Cell(
-            width: 150,
-            child: Text(
-              user.branchNama ?? user.branch ?? '-',
-              style: AppTextStyles.bodySmall,
-              overflow: TextOverflow.ellipsis,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _RoleBadge(role: user.role),
             ),
           ),
-          _Cell(
-            width: 100,
-            child: _StatusBadge(active: user.isActive),
+          SizedBox(
+            width: 150,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                user.branchNama ?? user.branch ?? '-',
+                style: AppTextStyles.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
-          _Cell(
+          SizedBox(
+            width: 100,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _StatusBadge(active: user.isActive),
+            ),
+          ),
+          SizedBox(
             width: 100,
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -272,9 +274,6 @@ class _UserRow extends StatelessWidget {
                       const BoxConstraints(minWidth: 36, minHeight: 36),
                   padding: EdgeInsets.zero,
                 ),
-                // Tombol hapus dihapus — fitur nonaktifkan (toggle is_active di
-                // dialog edit) sudah cukup untuk memblokir akses. Tidak ada 2
-                // jalur berbeda untuk tujuan yang sama.
               ],
             ),
           ),
@@ -293,23 +292,6 @@ class _UserRow extends StatelessWidget {
 
   // _confirmDelete dihapus — nonaktifkan user cukup lewat toggle is_active
   // di dialog edit. Tidak ada 2 fitur dengan tujuan yang sama.
-}
-
-class _Cell extends StatelessWidget {
-  final double width;
-  final Widget child;
-  const _Cell({required this.width, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Center(child: child),
-      ),
-    );
-  }
 }
 
 class _RoleBadge extends StatelessWidget {
