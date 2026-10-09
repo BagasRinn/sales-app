@@ -309,7 +309,7 @@ class _DashboardContentState extends State<_DashboardContent>
         return const UsersTab();
       case 7:
         if (_isGlobalManager) return const PerformanceTab();
-        break;
+        return const BulletinsTab(); // SUPERVISOR: Bulletin at index 7
       case 8:
         if (_isGlobalManager) return const PenugasanSalesTab();
         break;
