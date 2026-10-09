@@ -110,6 +110,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         onSubmit: () => _submitOrder(),
         onSaveDraft: () => _saveDraft(),
         isSubmitting: _isSubmitting,
+        existingOrder: widget.existingOrder,
       );
       default: return const SizedBox();
     }
@@ -233,8 +234,12 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         orderId = result.id;
       }
 
-      // Submit order (change status from DRAFT to PENDING)
-      await orderRepo.submitOrder(orderId);
+      // Submit order (change status from DRAFT to PENDING).
+      // Only call submitOrder for new orders or edits to DRAFT orders.
+      // Editing a PENDING order uses updateOrder only (already submitted).
+      if (widget.existingOrder == null || widget.existingOrder!.isDraft) {
+        await orderRepo.submitOrder(orderId);
+      }
 
       // Refresh orders
       if (mounted) {
@@ -242,8 +247,12 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         context.read<OrderProvider>().loadRecentOrders();
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order berhasil dikirim!'),
+          SnackBar(
+            content: Text(
+              widget.existingOrder?.isPending == true
+                  ? 'Perubahan order disimpan!'
+                  : 'Order berhasil dikirim!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -1216,6 +1225,7 @@ class _StepReview extends StatefulWidget {
   final VoidCallback onSubmit;
   final VoidCallback onSaveDraft;
   final bool isSubmitting;
+  final Order? existingOrder;
 
   const _StepReview({
     required this.notesController,
@@ -1223,6 +1233,7 @@ class _StepReview extends StatefulWidget {
     required this.onSubmit,
     required this.onSaveDraft,
     this.isSubmitting = false,
+    this.existingOrder,
   });
 
   @override
@@ -1381,23 +1392,25 @@ class _StepReviewState extends State<_StepReview> {
             top: false,
             child: Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.isSubmitting ? null : widget.onSaveDraft,
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    child: widget.isSubmitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Simpan Draft'),
+                if (widget.existingOrder == null || widget.existingOrder!.isDraft) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.isSubmitting ? null : widget.onSaveDraft,
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      child: widget.isSubmitting
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Simpan Draft'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: ElevatedButton(
                     onPressed: widget.isSubmitting ? null : widget.onSubmit,
                     style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                     child: widget.isSubmitting
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Kirim Order'),
+                        : Text(widget.existingOrder?.isPending == true ? 'Simpan Perubahan' : 'Kirim Order'),
                   ),
                 ),
               ],
