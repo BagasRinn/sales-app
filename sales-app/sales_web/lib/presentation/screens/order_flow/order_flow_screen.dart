@@ -1650,24 +1650,25 @@ class _LineRow extends StatelessWidget {
                     onTap: () => _showDiscountSheet(context, line, product),
                   ),
                   const SizedBox(width: 2),
-                  _PopupMenuBtn(
-                    items: [
-                      if (!isFree)
-                        _PopupMenuItem(
-                          label: 'Barang Gratis',
-                          icon: Icons.card_giftcard,
-                          color: AppColors.success,
-                          onTap: () => _showGratisDialog(context, name, draft),
-                        ),
-                      _PopupMenuItem(
-                        label: 'Hapus',
-                        icon: Icons.delete_outline,
-                        color: AppColors.error,
-                        onTap: () => draft.removeItem(line.id),
-                      ),
-                    ],
-                  ),
                 ],
+                // Menu "Hapus" selalu visible, juga untuk barang gratis
+                _PopupMenuBtn(
+                  items: [
+                    if (!isFree)
+                      _PopupMenuItem(
+                        label: 'Barang Gratis',
+                        icon: Icons.card_giftcard,
+                        color: AppColors.success,
+                        onTap: () => _showGratisDialog(context, name, draft),
+                      ),
+                    _PopupMenuItem(
+                      label: 'Hapus',
+                      icon: Icons.delete_outline,
+                      color: AppColors.error,
+                      onTap: () => draft.removeItem(line.id),
+                    ),
+                  ],
+                ),
               ],
             ),
           ],

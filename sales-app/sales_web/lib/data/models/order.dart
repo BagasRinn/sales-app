@@ -216,7 +216,7 @@ class Order {
   }
 
   bool get canEdit => status == 'DRAFT' || status == 'PENDING';
-  bool get canDelete => status == 'DRAFT';
+  bool get canDelete => status == 'DRAFT' || status == 'PENDING';
   bool get isPending => status == 'PENDING';
   bool get isDraft => status == 'DRAFT';
 
