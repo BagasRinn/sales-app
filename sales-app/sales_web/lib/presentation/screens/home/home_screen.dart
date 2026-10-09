@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/branch.dart';
 import '../../../core/design_system.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
@@ -45,9 +46,21 @@ class HomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          'Halo, ${auth.nama ?? auth.username ?? 'Sales'}',
-                          style: AppTextStyles.headlineMedium,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Halo, ${auth.nama ?? auth.username ?? 'Sales'}',
+                              style: AppTextStyles.headlineMedium,
+                            ),
+                            if (auth.branchNama != null || auth.branch != null)
+                              Text(
+                                auth.branchNama ?? BranchLabel.display(auth.branch) ?? '',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.primaryLight,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],

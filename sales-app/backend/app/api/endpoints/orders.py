@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     CancelItemsRequest,
     OrderReject,
 )
-from app.core.security import require_admin, require_manager, require_auth, CurrentUser
+from app.core.security import require_admin, require_manager, require_auth, apply_branch_filter, CurrentUser
 from app.services.stock_logger import log_stock_change
 
 logger = logging.getLogger(__name__)
@@ -209,6 +209,7 @@ def _build_order_response(order: Order) -> dict:
 
     return {
         "id": order.id,
+        "branch": order.branch,
         "sales_id": order.sales_id,
         "sales_username": order.sales.username if order.sales else None,
         "sales_nama": order.sales.nama if order.sales else None,
@@ -399,10 +400,16 @@ def create_order(
         )
 
     sales_id = UUID(current_user["user_id"])
+    # Resolve branch from fresh DB lookup (not JWT payload)
+    sales_user = db.query(User).filter(User.id == sales_id).first()
+    user_branch = sales_user.branch if sales_user else current_user.get("branch")
     # Validasi customer: SALES harus di-assign (atau customer unassigned);
     # admin/manager bypass via _get_customer biasa.
     if current_user["role"] == "SALES":
         customer = _validate_customer_for_sales(order_req.customer_id, sales_id, db)
+        # Branch access check
+        if user_branch is not None and customer.branch != user_branch:
+            raise HTTPException(status_code=403, detail="Customer tidak ditemukan")
     else:
         customer = _get_customer(order_req.customer_id, db)
 
@@ -426,11 +433,18 @@ def create_order(
                     f"(tipe produk: {product_type})"
                 ),
             )
+        # Produk harus dari branch yang sama
+        if user_branch is not None and product.branch != user_branch:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Produk '{product.nama_barang}' tidak tersedia di branch ini",
+            )
 
     order = Order(
         id=uuid4(),
         sales_id=sales_id,
         customer_id=customer.id,
+        branch=user_branch,
         status="DRAFT",
         created_at=datetime.now(timezone.utc),
         notes=order_req.notes,
@@ -511,6 +525,8 @@ def get_my_orders(
     ).filter(
         Order.sales_id == UUID(current_user["user_id"])
     )
+    # Branch filter for SALES users (orders inherit branch from sales_user.branch)
+    query = apply_branch_filter(query, Order, current_user)
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
 
@@ -563,7 +579,7 @@ def get_my_stats(
 
     final_subtotal_expr, _ = _three_layer_subtotal_expr()
 
-    omset_today = (
+    omset_today_q = (
         db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
@@ -573,21 +589,26 @@ def get_my_stats(
             Order.created_at >= start_of_day_utc,
             Order.created_at < end_of_day_utc,
         )
-        .scalar()
     )
+    omset_today_q = apply_branch_filter(omset_today_q, Order, current_user)
+    omset_today_val = omset_today_q.scalar() or 0
 
-    pending_count = db.query(func.count(Order.id)).filter(
+    pending_count_q = db.query(func.count(Order.id)).filter(
         Order.sales_id == sales_id,
         Order.status == "PENDING",
-    ).scalar() or 0
+    )
+    pending_count_q = apply_branch_filter(pending_count_q, Order, current_user)
+    pending_count = pending_count_q.scalar() or 0
 
-    selesai_count = db.query(func.count(Order.id)).filter(
+    selesai_count_q = db.query(func.count(Order.id)).filter(
         Order.sales_id == sales_id,
         Order.status == "APPROVED",
         Order.created_at >= start_of_month_utc,
-    ).scalar() or 0
+    )
+    selesai_count_q = apply_branch_filter(selesai_count_q, Order, current_user)
+    selesai_count = selesai_count_q.scalar() or 0
 
-    selesai_total = (
+    selesai_total_q = (
         db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
@@ -596,10 +617,17 @@ def get_my_stats(
             Order.status == "APPROVED",
             Order.created_at >= start_of_month_utc,
         )
-        .scalar()
     )
+    selesai_total_q = apply_branch_filter(selesai_total_q, Order, current_user)
+    selesai_total = selesai_total_q.scalar() or 0
 
-    # Target untuk bulan ini
+    result = {
+        "omset_hari_ini": int(omset_today_val),
+        "pending_count": int(pending_count),
+        "selesai_bulan_ini_count": int(selesai_count),
+        "selesai_bulan_ini_total": int(selesai_total),
+    }
+
     current_period = f"{now_wita.year}-{now_wita.month:02d}"
     from app.models.models import SalesTarget
     target = (
@@ -607,13 +635,6 @@ def get_my_stats(
         .filter(SalesTarget.user_id == sales_id, SalesTarget.period == current_period)
         .first()
     )
-
-    result = {
-        "omset_hari_ini": int(omset_today or 0),
-        "pending_count": int(pending_count),
-        "selesai_bulan_ini_count": int(selesai_count),
-        "selesai_bulan_ini_total": int(selesai_total or 0),
-    }
     if target:
         result["target_type"] = target.target_type
         result["target_value"] = target.target_value
@@ -940,7 +961,7 @@ def list_pending_orders(
     limit: int = 50,
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     query = (
         db.query(Order)
@@ -951,6 +972,7 @@ def list_pending_orders(
         )
         .filter(Order.status == "PENDING")
     )
+    query = apply_branch_filter(query, Order, current_user)
     if search:
         term = f"%{search}%"
         query = query.outerjoin(User, Order.sales_id == User.id).filter(
@@ -985,7 +1007,7 @@ def list_all_orders(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
     date_from/date_to opsional — kalau dua-duanya kosong, semua pesanan.
@@ -997,6 +1019,8 @@ def list_all_orders(
         joinedload(Order.customer),
     )
     count_query = db.query(Order)
+    query = apply_branch_filter(query, Order, current_user)
+    count_query = apply_branch_filter(count_query, Order, current_user)
     if status_filter:
         query = query.filter(Order.status == status_filter.upper())
         count_query = count_query.filter(Order.status == status_filter.upper())
@@ -1086,6 +1110,10 @@ def get_order_detail(
     if current_user["role"] not in ("ADMIN", "MANAGER"):
         if str(order.sales_id) != current_user["user_id"]:
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    elif current_user.get("role") == "ADMIN" and current_user.get("branch") is not None:
+        # ADMIN: must be same branch
+        if order.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
 
     return _build_order_response(order)
 
@@ -1095,7 +1123,7 @@ def update_discounts(
     order_id: UUID,
     body: OrderDiscountUpdate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Update diskon per item — admin only, hanya untuk pesanan PENDING."""
     order = (
@@ -1107,6 +1135,8 @@ def update_discounts(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
     if order.status != "PENDING":
         raise HTTPException(
             status_code=400,
@@ -1178,6 +1208,9 @@ def approve_order(
     order = db.query(Order).filter(Order.id == order_id).with_for_update(of=[Order]).first()
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+
+    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
 
     if order.status != "PENDING":
         raise HTTPException(
@@ -1319,6 +1352,9 @@ def reject_order(
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
+    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+
     if order.status != "PENDING":
         raise HTTPException(
             status_code=400,
@@ -1376,6 +1412,9 @@ def cancel_order_items(
     order = db.query(Order).filter(Order.id == order_id).with_for_update(of=[Order]).first()
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+
+    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
 
     if order.status != "PENDING":
         raise HTTPException(

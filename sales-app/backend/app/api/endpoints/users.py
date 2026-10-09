@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -19,8 +19,10 @@ from app.core.security import (
     require_manager,
     require_auth,
     get_password_hash,
+    apply_branch_filter,
     CurrentUser,
 )
+from app.core import branch as branch_constants
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -34,14 +36,12 @@ def list_sales_users(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """List SALES user. Semua role login boleh."""
-    users = (
-        _exclude_deleted(db.query(User))
-        .filter(User.role == "SALES", User.is_active.is_(True))
-        .order_by(User.username)
-        .all()
+    """List SALES user. Semua role login boleh. Branch-scoped for non-MANAGER."""
+    query = _exclude_deleted(db.query(User)).filter(
+        User.role == "SALES", User.is_active.is_(True)
     )
-    return users
+    query = apply_branch_filter(query, User, current_user)
+    return query.order_by(User.username).all()
 
 
 @router.get("", response_model=List[UserResponse])
@@ -49,10 +49,13 @@ def list_users(
     role: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
-    """List semua user (kecuali soft-deleted) — manager + admin only."""
+    """List semua user (kecuali soft-deleted) — manager + admin only.
+    Branch-scoped for ADMIN/SUPERVISOR; global MANAGER sees all."""
     query = _exclude_deleted(db.query(User))
+    # Branch filter applied first
+    query = apply_branch_filter(query, User, current_user)
     if role:
         query = query.filter(User.role == role.upper())
     if search:
@@ -67,10 +70,45 @@ def list_users(
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
-    """Buat user baru — manager + admin only."""
-    if user.role.upper() not in ("ADMIN", "MANAGER", "SALES"):
+    """Buat user baru — manager + admin only.
+
+    Strict rule: ADMIN/SUPERVISOR cannot create users in another branch.
+    If they attempt to do so → 400.
+    Only global MANAGER can pick any branch.
+    """
+    creator_role = current_user.get("role")
+    creator_branch = current_user.get("branch")
+    target_branch = user.branch
+
+    if creator_role in ("ADMIN", "SUPERVISOR"):
+        # Branch-scoped creator: must create user in their own branch
+        effective_branch = creator_branch
+        if target_branch is not None and target_branch != creator_branch:
+            raise HTTPException(
+                status_code=400,
+                detail="Admin tidak dapat membuat user di branch lain",
+            )
+    elif creator_role == "MANAGER":
+        # Global manager: can create anywhere
+        effective_branch = target_branch
+        # Validate target branch
+        if effective_branch and not branch_constants.is_valid_branch(effective_branch):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Branch tidak valid: {effective_branch}",
+            )
+        # MANAGER creating MANAGER → branch must be None (global)
+        if user.role.upper() == "MANAGER" and effective_branch is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Manager global harus tanpa branch",
+            )
+    else:
+        raise HTTPException(status_code=403, detail="Akses ditolak")
+
+    if user.role.upper() not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
         raise HTTPException(status_code=400, detail="Role tidak valid")
 
     existing = (
@@ -85,6 +123,7 @@ def create_user(
         username=user.username,
         password_hash=get_password_hash(user.password),
         role=user.role.upper(),
+        branch=effective_branch,
         nama=user.nama,
         is_active=True,
     )
@@ -99,21 +138,29 @@ def update_user(
     user_id: UUID,
     update: UserUpdate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
-    """Edit user — manager + admin only. Hanya field yang dikirim yang berubah."""
-    user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
-    if not user:
+    """Edit user — manager + admin only. Branch-scoped: ADMIN/SUPERVISOR
+    can only edit users in their own branch. Global MANAGER can edit anyone."""
+    target_user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
+    if not target_user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+    # Branch-scoped creator: can only edit users in their own branch
+    creator_role = current_user.get("role")
+    creator_branch = current_user.get("branch")
+    if creator_role in ("ADMIN", "SUPERVISOR"):
+        if target_user.branch != creator_branch:
+            raise HTTPException(status_code=403, detail="Tidak bisa mengedit user di branch lain")
 
     data = update.model_dump(exclude_unset=True)
 
     if "role" in data:
         new_role = data["role"].upper()
-        if new_role not in ("ADMIN", "MANAGER", "SALES"):
+        if new_role not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
             raise HTTPException(status_code=400, detail="Role tidak valid")
         # Cegah admin terakhir di-nonaktifkan (safety)
-        if user.role == "ADMIN" and new_role != "ADMIN":
+        if target_user.role == "ADMIN" and new_role != "ADMIN":
             other_admins = (
                 _exclude_deleted(db.query(User))
                 .filter(User.role == "ADMIN", User.id != user_id, User.is_active.is_(True))
@@ -126,6 +173,18 @@ def update_user(
                 )
         data["role"] = new_role
 
+    # Handle branch update: global MANAGER can change branch; others cannot
+    if "branch" in data:
+        if creator_role != "MANAGER":
+            raise HTTPException(status_code=403, detail="Hanya manager global yang dapat mengubah branch")
+        new_branch = data["branch"]
+        if new_branch and not branch_constants.is_valid_branch(new_branch):
+            raise HTTPException(status_code=400, detail=f"Branch tidak valid: {new_branch}")
+        # MANAGER role must always have branch=None
+        role_to_set = data.get("role", target_user.role)
+        if role_to_set == "MANAGER" and new_branch is not None:
+            raise HTTPException(status_code=400, detail="Manager global harus tanpa branch")
+
     # Tangkap sebelum pop — deteksi request yang punya field password.
     had_password_change = "password" in data
     if "password" in data and data["password"]:
@@ -134,15 +193,15 @@ def update_user(
     # Increment token_version setiap kali password diubah — invalidate semua
     # sesi user target, baik dari self-service maupun reset oleh manager.
     if had_password_change:
-        user.token_version = (user.token_version or 0) + 1
+        target_user.token_version = (target_user.token_version or 0) + 1
 
     for field, value in data.items():
-        setattr(user, field, value)
+        setattr(target_user, field, value)
 
-    user.updated_at = datetime.now(timezone.utc)
+    target_user.updated_at = datetime.now(timezone.utc)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(target_user)
+    return target_user
 
 
 @router.delete("/{user_id}", status_code=204)

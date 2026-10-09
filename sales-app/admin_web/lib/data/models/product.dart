@@ -12,6 +12,8 @@ class Product {
   final String? satuan;
   final String? namaSupplier;
   final String orderType;
+  final String? branch;
+  final String? branchNama;
 
   Product({
     required this.id,
@@ -25,6 +27,8 @@ class Product {
     this.satuan,
     this.namaSupplier,
     this.orderType = 'REGULER',
+    this.branch,
+    this.branchNama,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -40,6 +44,8 @@ class Product {
       satuan: json['satuan'] as String?,
       namaSupplier: json['nama_supplier'] as String?,
       orderType: (json['order_type'] as String?) ?? 'REGULER',
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 }

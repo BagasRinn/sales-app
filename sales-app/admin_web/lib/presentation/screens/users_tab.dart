@@ -97,6 +97,7 @@ class _UsersTabState extends State<UsersTab> {
                       items: const [
                         DropdownMenuItem(value: null, child: Text('Semua Role')),
                         DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
+                        DropdownMenuItem(value: 'SUPERVISOR', child: Text('Supervisor')),
                         DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
                         DropdownMenuItem(value: 'SALES', child: Text('Sales')),
                       ],
@@ -177,11 +178,12 @@ class _TableHeader extends StatelessWidget {
       color: AppColors.surface,
       child: const Row(
         children: [
-          _HeaderCell(label: 'NAMA', width: 200),
-          _HeaderCell(label: 'USERNAME', width: 160),
-          _HeaderCell(label: 'ROLE', width: 120),
-          _HeaderCell(label: 'STATUS', width: 120),
-          _HeaderCell(label: 'AKSI', width: 120),
+          _HeaderCell(label: 'NAMA', width: 180),
+          _HeaderCell(label: 'USERNAME', width: 140),
+          _HeaderCell(label: 'ROLE', width: 110),
+          _HeaderCell(label: 'CABANG', width: 150),
+          _HeaderCell(label: 'STATUS', width: 100),
+          _HeaderCell(label: 'AKSI', width: 100),
         ],
       ),
     );
@@ -223,7 +225,7 @@ class _UserRow extends StatelessWidget {
       child: Row(
         children: [
           _Cell(
-            width: 200,
+            width: 180,
             child: Text(
               user.displayName,
               style: AppTextStyles.bodyMedium
@@ -233,7 +235,7 @@ class _UserRow extends StatelessWidget {
             ),
           ),
           _Cell(
-            width: 160,
+            width: 140,
             child: Text(
               user.username,
               style: AppTextStyles.bodySmall,
@@ -241,15 +243,23 @@ class _UserRow extends StatelessWidget {
             ),
           ),
           _Cell(
-            width: 120,
+            width: 110,
             child: _RoleBadge(role: user.role),
           ),
           _Cell(
-            width: 120,
+            width: 150,
+            child: Text(
+              user.branchNama ?? user.branch ?? '-',
+              style: AppTextStyles.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _Cell(
+            width: 100,
             child: _StatusBadge(active: user.isActive),
           ),
           _Cell(
-            width: 120,
+            width: 100,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -310,6 +320,7 @@ class _RoleBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (role) {
       'ADMIN' => AppColors.error,
+      'SUPERVISOR' => AppColors.warning,
       'MANAGER' => AppColors.info,
       _ => AppColors.success,
     };
@@ -585,6 +596,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                 ),
                 items: const [
                   DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
+                  DropdownMenuItem(value: 'SUPERVISOR', child: Text('Supervisor')),
                   DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
                   DropdownMenuItem(value: 'SALES', child: Text('Sales')),
                 ],

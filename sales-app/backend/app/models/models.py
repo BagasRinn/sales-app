@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger, JSON, Numeric
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, Boolean, Text, BigInteger, JSON, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -15,6 +15,9 @@ class User(Base):
     password_hash = Column(String)
     role = Column(String(10))
     nama = Column(String(100), nullable=True)
+    # Branch scoping: ADMIN/SUPERVISOR/SALES = branch-scoped; MANAGER = NULL (global).
+    # Nullable because global MANAGER has no branch.
+    branch = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     token_version = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -36,8 +39,13 @@ class User(Base):
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint("branch", "id", name="uq_products_branch_id"),
+    )
 
     id = Column(String, primary_key=True, index=True)
+    # Branch scoping: same SKU can exist in different branches with different prices/stock.
+    branch = Column(String(20), nullable=False, index=True)
     nama_barang = Column(String, index=True)
     harga = Column(Integer)
     stok_sistem = Column(Integer, default=0)
@@ -58,8 +66,13 @@ class Product(Base):
 
 class Customer(Base):
     __tablename__ = "customers"
+    __table_args__ = (
+        UniqueConstraint("branch", "kode", "kode_area", name="uq_customers_branch_kode_kode_area"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Branch scoping: kode can repeat across branches but unique within a branch.
+    branch = Column(String(20), nullable=False, index=True)
     kode = Column(String(50), nullable=True, index=True)
     nama_toko = Column(String(200), nullable=False, index=True)
     alamat = Column(String(500), nullable=True)
@@ -150,8 +163,13 @@ class AreaAssignment(Base):
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        Index("ix_orders_branch_status_created_at", "branch", "status", "created_at"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Branch scoping: set to sales user's branch at order creation time.
+    branch = Column(String(20), nullable=False, index=True)
     sales_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     status = Column(String(20), default="DRAFT")
@@ -214,6 +232,8 @@ class StokLog(Base):
     __tablename__ = "stok_log"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Branch denormalized from product for branch-scoped audit trail.
+    branch = Column(String(20), nullable=False, index=True)
     product_id = Column(String, ForeignKey("products.id"), index=True)
     sumber = Column(String(20))
     field_terdampak = Column(String(20))
@@ -230,6 +250,8 @@ class CustomerRegistrationSubmission(Base):
     __tablename__ = "customer_registration_submissions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Branch scoping: set to sales user's branch at submission time.
+    branch = Column(String(20), nullable=False, index=True)
     sales_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     status = Column(String(20), nullable=False, default='PENDING')
     reject_reason = Column(Text, nullable=True)
@@ -339,6 +361,8 @@ class Bulletin(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Branch scoping: NULL = global bulletin (visible to all branches).
+    branch = Column(String(20), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)  # teks promo/deskripsi
     pdf_url = Column(String(500), nullable=True)  # URL ke file PDF

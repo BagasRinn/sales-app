@@ -14,7 +14,7 @@ from app.schemas.schemas import (
     SyncResultResponse,
     ImportLogResponse,
 )
-from app.core.security import require_admin, require_manager, require_auth, CurrentUser
+from app.core.security import require_admin, require_manager, require_auth, apply_branch_filter, CurrentUser
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
@@ -57,6 +57,8 @@ def list_products(
         needs_review = None
 
     query = db.query(Product)
+    # Branch filter applied first
+    query = apply_branch_filter(query, Product, current_user)
 
     if search:
         query = query.filter(
@@ -104,6 +106,7 @@ def list_products(
         result.append(
             ProductResponse(
                 id=p.id,
+                branch=p.branch,
                 nama_barang=p.nama_barang,
                 harga=p.harga,
                 stok_sistem=p.stok_sistem or 0,
@@ -132,43 +135,43 @@ def list_products(
 @router.get("/kategori", response_model=List[str])
 def get_kategori_list(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
-    """Return distinct kategori values for the filter dropdown (admin + manager)."""
-    rows = (
-        db.query(Product.kategori)
-        .filter(Product.kategori.isnot(None), Product.kategori != "")
-        .distinct()
-        .order_by(Product.kategori)
-        .all()
+    """Return distinct kategori values for the filter dropdown (admin + manager).
+    Branch-scoped."""
+    query = db.query(Product.kategori).filter(
+        Product.kategori.isnot(None), Product.kategori != ""
     )
+    query = apply_branch_filter(query, Product, current_user)
+    rows = query.distinct().order_by(Product.kategori).all()
     return [r[0] for r in rows]
 
 
 @router.get("/supplier", response_model=List[str])
 def get_supplier_list(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Return distinct supplier values for the filter dropdown (admin + manager).
-    Dipakai untuk filter produk berdasarkan supplier — lebih sering dipakai daripada
-    kategori per supervisor."""
-    rows = (
-        db.query(Product.nama_supplier)
-        .filter(Product.nama_supplier.isnot(None), Product.nama_supplier != "")
-        .distinct()
-        .order_by(Product.nama_supplier)
-        .all()
+    Branch-scoped."""
+    query = db.query(Product.nama_supplier).filter(
+        Product.nama_supplier.isnot(None), Product.nama_supplier != ""
     )
+    query = apply_branch_filter(query, Product, current_user)
+    rows = query.distinct().order_by(Product.nama_supplier).all()
     return [r[0] for r in rows]
 
 
 @router.post("/sync", response_model=SyncResultResponse)
 def sync_products(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
-    sync_result = sync_products_from_excel(None, db)
+    sync_result = sync_products_from_excel(None, db, current_user={
+        "user_id": current_user["user_id"],
+        "nama": current_user.get("nama"),
+        "branch": current_user.get("branch"),
+    })
     needs_review = db.query(Product).filter(
         Product.stok_sistem < (Product.stok_booking + Product.stok_diterima)
     ).count() > 0
@@ -208,6 +211,7 @@ def import_excel(
         current_user={
             "user_id": current_user["user_id"],
             "nama": current_user.get("nama"),
+            "branch": current_user.get("branch"),
         },
         file_name=file.filename,
     )
@@ -282,23 +286,18 @@ def get_sync_errors(
 def get_admin_stats(
     date: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Server-side dashboard stats — MANAGER boleh akses untuk Dashboard ringkasan (read-only).
-
-    Jika `date` diberikan (format YYYY-MM-DD), stats difilter untuk order yang dibuat
-    pada tanggal tersebut saja. Tanpa `date`, mengembalikan semua order.
-    """
+    Branch-scoped. Jika `date` diberikan (format YYYY-MM-DD), stats difilter untuk order
+    yang dibuat pada tanggal tersebut saja. Tanpa `date`, mengembalikan semua order."""
     from sqlalchemy import func, Integer, cast
     from app.models.models import Order, Product, Customer
 
     query = db.query(Order.status, func.count(Order.id))
+    query = apply_branch_filter(query, Order, current_user)
 
     if date:
-        # Filter: order.created_at tanggal = date (YYYY-MM-DD).
-        # Di Postgres, `func.date(<timestamp>)` mengembalikan DATE. Parameter `date`
-        # di sini adalah VARCHAR — supaya Postgres mau membandingkan, cast ke DATE
-        # lewat `CAST(:date AS DATE)`.
         query = query.filter(
             func.date(Order.created_at) == cast(date, Date)
         )
@@ -306,23 +305,23 @@ def get_admin_stats(
     status_counts = dict(query.group_by(Order.status).all())
     total_orders = sum(status_counts.values())
 
-    # Combine both product COUNT queries into a single round-trip
-    product_result = db.query(
+    # Product stats: filtered by branch
+    product_query = db.query(
         func.count(Product.id),
         func.sum(cast(
             Product.stok_sistem < (Product.stok_booking + Product.stok_diterima),
             Integer,
         )),
-    ).first()
+    )
+    product_query = apply_branch_filter(product_query, Product, current_user)
+    product_result = product_query.first()
     total_products = product_result[0] or 0
     needs_review = product_result[1] or 0
 
     # Total customer (exclude soft-deleted)
-    total_customers = (
-        db.query(func.count(Customer.id))
-        .filter(Customer.deleted_at.is_(None))
-        .scalar()
-    ) or 0
+    customer_query = db.query(func.count(Customer.id)).filter(Customer.deleted_at.is_(None))
+    customer_query = apply_branch_filter(customer_query, Customer, current_user)
+    total_customers = customer_query.scalar() or 0
 
     return {
         "total_orders": total_orders,
@@ -344,10 +343,11 @@ def get_product_count(
     status: Optional[str] = None,
     order_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Return total product count for pagination — applies same filters as list_products."""
     query = db.query(func.count(Product.id))
+    query = apply_branch_filter(query, Product, current_user)
     if search:
         query = query.filter(
             (Product.id.ilike(f"%{search}%"))
@@ -384,6 +384,10 @@ def get_product(
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    # Branch access check: allow global MANAGER or same branch
+    if current_user["role"] != "MANAGER" and current_user.get("branch") is not None:
+        if product.branch != current_user["branch"]:
+            raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
     stok_tersedia = max(
         0,
         (product.stok_sistem or 0)
@@ -392,6 +396,7 @@ def get_product(
     )
     return ProductResponse(
         id=product.id,
+        branch=product.branch,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,
@@ -454,6 +459,7 @@ def update_product(
     )
     return ProductResponse(
         id=product.id,
+        branch=product.branch,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,
@@ -534,6 +540,7 @@ def update_product_stock(
     )
     return ProductResponse(
         id=product.id,
+        branch=product.branch,
         nama_barang=product.nama_barang,
         harga=product.harga,
         stok_sistem=product.stok_sistem or 0,

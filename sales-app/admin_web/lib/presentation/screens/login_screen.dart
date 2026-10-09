@@ -55,14 +55,17 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Hanya ADMIN dan MANAGER yang boleh login ke admin web
-      if (role != 'ADMIN' && role != 'MANAGER') {
+      // ADMIN, SUPERVISOR, and MANAGER (global) can login to admin web
+      if (role != 'ADMIN' && role != 'SUPERVISOR' && role != 'MANAGER') {
         setState(() {
-          _error = 'Hanya admin dan manager yang boleh mengakses dashboard ini.';
+          _error = 'Hanya admin, supervisor, dan manager yang boleh mengakses dashboard ini.';
           _isLoading = false;
         });
         return;
       }
+
+      final branch = data['branch']?.toString();
+      final branchNama = data['branch_nama']?.toString();
 
       await AuthStorage().saveTokens(
         accessToken: accessToken.toString(),
@@ -70,6 +73,8 @@ class _LoginScreenState extends State<LoginScreen> {
         username: _usernameController.text.trim(),
         nama: data['nama']?.toString(),
         role: role,
+        branch: branch,
+        branchNama: branchNama,
       );
 
       if (!mounted) return;
@@ -82,6 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
             username: _usernameController.text.trim(),
             nama: data['nama']?.toString() ?? '',
             role: role ?? 'ADMIN',
+            branch: branch,
+            branchNama: branchNama,
           ),
         ),
       );

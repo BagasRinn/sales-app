@@ -19,7 +19,7 @@ from app.schemas.schemas import (
     CustomerResponse,
     SalesAssignmentItem,
 )
-from app.core.security import require_manager, CurrentUser
+from app.core.security import require_manager, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/sales", tags=["Sales"])
 def list_sales_customers(
     sales_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Semua customer yang visible untuk sales ini (hybrid: area + direct override).
     Manager + admin only — untuk tab 'Per Sales' di admin web."""
@@ -63,26 +63,27 @@ def list_sales_customers(
             (Customer.id.in_(my_direct_subq)) |
             (Customer.kode_area.in_(my_areas_subq))
         )
-        .order_by(Customer.kode_area, Customer.nama_toko)
-        .all()
     )
+    # Apply branch filter
+    rows = apply_branch_filter(rows, Customer, current_user)
+    rows = rows.order_by(Customer.kode_area, Customer.nama_toko).all()
     return rows
 
 
 # ==================== Area assignment endpoints ====================
 
-def _list_area_assignments(db: Session) -> List[AreaAssignmentListItem]:
+def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignmentListItem]:
     """Return all distinct kode_area dengan sales yang di-assign.
     Areas tanpa assignment TETAP di-include (sales=[]), supaya manager bisa
     lihat area mana yang belum di-handle.
-    """
-    # Subquery: distinct kode_area dari customer (exclude null)
+    Branch-scoped: only returns areas from customers in the same branch."""
+    # Subquery: distinct kode_area dari customer (exclude null), filtered by branch
     customer_areas_subq = (
         db.query(Customer.kode_area)
         .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
-        .distinct()
-        .subquery()
     )
+    customer_areas_subq = apply_branch_filter(customer_areas_subq, Customer, current_user)
+    customer_areas_subq = customer_areas_subq.distinct().subquery()
     # Pakai select() explicit supaya tidak kena SAWarning "Coercing Subquery
     # object into a select()".
     from sqlalchemy import select
@@ -120,11 +121,11 @@ def _list_area_assignments(db: Session) -> List[AreaAssignmentListItem]:
 @router.get("/area-assignments", response_model=List[AreaAssignmentListItem])
 def list_area_assignments(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
     Manager + admin only — untuk tab 'Penugasan Sales' sub-view 'Per Area'."""
-    return _list_area_assignments(db)
+    return _list_area_assignments(db, current_user)
 
 
 @router.get("/area-assignments/{kode_area}", response_model=List[SalesAssignmentItem])
@@ -184,6 +185,15 @@ def put_area_assignment(
                 status_code=400,
                 detail=f"Sales ID tidak valid: {invalid}",
             )
+        # Branch validation: all sales must be in same branch as creator
+        user_branch = current_user.get("branch")
+        if user_branch is not None:
+            for u in valid:
+                if u.branch != user_branch:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Sales '{u.username}' tidak berada di branch ini",
+                    )
 
     # Idempotent replace
     db.query(AreaAssignment).filter(

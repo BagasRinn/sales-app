@@ -20,6 +20,8 @@ enum AdminState { initial, loading, loaded, error }
 class AdminProvider extends ChangeNotifier {
   final AdminRepository _repo;
 
+  AdminRepository get repository => _repo;
+
   AdminState _state = AdminState.initial;
   String? _errorMessage;
 

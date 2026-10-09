@@ -26,6 +26,8 @@ class Order {
   /// Backend sudah suplai via `notes` di response, tapi client ini belum parse
   /// sebelumnya — sekarang dipakai supaya tampil di order detail admin.
   final String? notes;
+  final String? branch;
+  final String? branchNama;
 
   Order({
     required this.id,
@@ -44,6 +46,8 @@ class Order {
     this.rejectReason,
     this.invoiceNumber,
     this.notes,
+    this.branch,
+    this.branchNama,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -67,6 +71,8 @@ class Order {
       rejectReason: json['reject_reason'] as String?,
       invoiceNumber: json['invoice_number'] as String?,
       notes: json['notes'] as String?,
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 

@@ -8,6 +8,8 @@ class Bulletin {
   final DateTime? expireAt;
   final DateTime createdAt;
   final bool isRead;
+  final String? branch;
+  final String? branchNama;
 
   Bulletin({
     required this.id,
@@ -17,6 +19,8 @@ class Bulletin {
     this.expireAt,
     required this.createdAt,
     this.isRead = false,
+    this.branch,
+    this.branchNama,
   });
 
   factory Bulletin.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,8 @@ class Bulletin {
           : null,
       createdAt: DateTime.parse(json['created_at'] as String).toWita(),
       isRead: json['is_read'] as bool? ?? false,
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 }

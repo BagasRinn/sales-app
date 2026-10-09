@@ -10,6 +10,8 @@ class Customer {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
+  final String? branch;
+  final String? branchNama;
 
   Customer({
     required this.id,
@@ -20,6 +22,8 @@ class Customer {
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
+    this.branch,
+    this.branchNama,
   });
 
   factory Customer.fromJson(Map<String, dynamic> json) {
@@ -36,6 +40,8 @@ class Customer {
       deletedAt: json['deleted_at'] != null
           ? DateTime.parse(json['deleted_at'] as String).toWita()
           : null,
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 
@@ -49,6 +55,8 @@ class Customer {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'deleted_at': deletedAt?.toIso8601String(),
+      'branch': branch,
+      'branch_nama': branchNama,
     };
   }
 }

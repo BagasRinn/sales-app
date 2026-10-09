@@ -12,7 +12,7 @@ from app.schemas.schemas import (
     SalesTargetUpdate,
     SalesTargetResponse,
 )
-from app.core.security import require_manager, require_auth, CurrentUser
+from app.core.security import require_manager, require_auth, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 
@@ -23,8 +23,19 @@ def list_sales_targets(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager),
 ):
-    """List all sales targets. Manager only."""
+    """List all sales targets. Manager only. Branch-scoped for ADMIN/SUPERVISOR."""
+    # First get sales users in the same branch
+    from app.models.models import User
+    sales_users_q = db.query(User.id).filter(
+        User.role == "SALES",
+        User.deleted_at.is_(None),
+    )
+    sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
+    sales_user_ids = [row[0] for row in sales_users_q.all()]
+
     query = db.query(SalesTarget)
+    if sales_user_ids:
+        query = query.filter(SalesTarget.user_id.in_(sales_user_ids))
     if period:
         query = query.filter(SalesTarget.period == period)
     return query.order_by(SalesTarget.period.desc(), SalesTarget.user_id).all()
@@ -39,13 +50,18 @@ def upsert_sales_target(
 ):
     """Set or update target + incentive for a sales user.
     Creates new record if none exists for (user_id, period), otherwise updates.
-    Manager only."""
+    Manager only. Branch-scoped: ADMIN/SUPERVISOR can only set targets for sales in their branch."""
     # Validate user exists and is SALES role
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user.role != "SALES":
         raise HTTPException(status_code=400, detail="Target hanya bisa diset untuk role SALES")
+
+    # Branch access check for ADMIN/SUPERVISOR
+    if current_user.get("role") in ("ADMIN", "SUPERVISOR") and current_user.get("branch") is not None:
+        if user.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak bisa mengatur target untuk sales di branch lain")
 
     # Upsert
     target = (

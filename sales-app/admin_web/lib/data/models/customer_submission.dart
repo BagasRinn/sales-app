@@ -42,6 +42,8 @@ class CustomerSubmission {
 
   // Order created via bareng_order. Null if bareng_order=False.
   final SubmissionOrder? order;
+  final String? branch;
+  final String? branchNama;
 
   CustomerSubmission({
     required this.id,
@@ -81,6 +83,8 @@ class CustomerSubmission {
     this.siklusKunjungan,
     this.hariKunjungan,
     this.order,
+    this.branch,
+    this.branchNama,
   });
 
   factory CustomerSubmission.fromJson(Map<String, dynamic> json) {
@@ -132,6 +136,8 @@ class CustomerSubmission {
       siklusKunjungan: json['siklus_kunjungan'] as String?,
       hariKunjungan: json['hari_kunjungan'] as String?,
       order: json['order'] != null ? SubmissionOrder.fromJson(json['order']) : null,
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 

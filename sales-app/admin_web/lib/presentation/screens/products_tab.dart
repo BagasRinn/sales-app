@@ -267,14 +267,14 @@ class _ProductsTabState extends State<ProductsTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availW = constraints.maxWidth;
-        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Aksi
-        // fixedW = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, aksi] (nama ambil sisa)
-        const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 90.0];
-        const fixedTotal = 1210.0;
+        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
+        // fixedW = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi] (nama ambil sisa)
+        const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
+        const fixedTotal = 1340.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         final totalW = namaW + fixedTotal;
-        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, aksi]
-        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9]];
+        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
+        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9], fixedW[10]];
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
         return SingleChildScrollView(
@@ -708,8 +708,8 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Aksi
-    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Aksi'];
+    // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
+    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
     return SizedBox(
       width: totalW,
       child: Container(
@@ -860,9 +860,23 @@ class _DataRow extends StatelessWidget {
               child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
           ),
-          // Aksi — colW[10]
+          // Cabang — colW[10]
           SizedBox(
             width: colW[10],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(
+                product.branchNama ?? product.branch ?? '-',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          // Aksi — colW[11]
+          SizedBox(
+            width: colW[11],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Center(

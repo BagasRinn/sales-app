@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission
-from app.core.security import require_manager
+from app.core.security import require_manager, require_manager_global, apply_branch_filter
 from app.schemas.schemas import (
     SalesPerformanceResponse,
     SalesPerformanceItem,
@@ -131,7 +131,7 @@ def daily_report(
         description="Status filter, comma-separated. Default APPROVED.",
     ),
     db: Session = Depends(get_db),
-    _current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_manager),
 ):
     """Generate Excel laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
 
@@ -166,9 +166,9 @@ def daily_report(
             Order.created_at >= start_utc,
             Order.created_at < end_utc,
         )
-        .order_by(Order.created_at.asc())
-        .all()
     )
+    orders = apply_branch_filter(orders, Order, current_user)
+    orders = orders.order_by(Order.created_at.asc()).all()
 
     wb = Workbook()
     ws = wb.active
@@ -195,7 +195,7 @@ def period_report(
         description="Status filter, comma-separated. Default APPROVED.",
     ),
     db: Session = Depends(get_db),
-    _current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_manager),
 ):
     """Generate Excel laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
 
@@ -235,9 +235,9 @@ def period_report(
             Order.created_at >= start_utc,
             Order.created_at < end_utc,
         )
-        .order_by(Order.created_at.asc())
-        .all()
     )
+    orders = apply_branch_filter(orders, Order, current_user)
+    orders = orders.order_by(Order.created_at.asc()).all()
 
     wb = Workbook()
     ws = wb.active
@@ -265,7 +265,7 @@ def sales_performance_report(
                    "Defaults to APPROVED for backward compatibility.",
     ),
     db: Session = Depends(get_db),
-    _current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_manager),
 ):
     """KPI performa per sales dalam rentang tanggal:
     order count, revenue (total setelah diskon), customer submission count.
@@ -294,12 +294,13 @@ def sales_performance_report(
     start_dt = datetime.combine(start, datetime.min.time()).replace(tzinfo=wita).astimezone(timezone.utc)
     end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time()).replace(tzinfo=wita).astimezone(timezone.utc)
 
-    # Get all sales users
-    sales_users = (
+    # Get all sales users (filtered by branch)
+    sales_users_q = (
         db.query(User)
         .filter(User.role == "SALES", User.is_active.is_(True), User.deleted_at.is_(None))
-        .all()
     )
+    sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
+    sales_users = sales_users_q.all()
 
     # Get order counts + revenue per sales (APPROVED orders only)
     from sqlalchemy import func
@@ -315,9 +316,9 @@ def sales_performance_report(
             Order.created_at >= start_dt,
             Order.created_at < end_dt,
         )
-        .group_by(Order.sales_id)
-        .all()
     )
+    order_stats = apply_branch_filter(order_stats, Order, current_user)
+    order_stats = order_stats.group_by(Order.sales_id).all()
     order_count_map = {s.sales_id: s.order_count for s in order_stats}
 
     # Revenue per sales: fetch items via Python (uses existing _three_layer_breakdown
@@ -333,8 +334,9 @@ def sales_performance_report(
             Order.created_at >= start_dt,
             Order.created_at < end_dt,
         )
-        .all()
     )
+    orders_with_items = apply_branch_filter(orders_with_items, Order, current_user)
+    orders_with_items = orders_with_items.all()
     revenue_map: dict = {}
     for order in orders_with_items:
         sid = order.sales_id
@@ -355,9 +357,9 @@ def sales_performance_report(
             CustomerRegistrationSubmission.created_at >= start_dt,
             CustomerRegistrationSubmission.created_at < end_dt,
         )
-        .group_by(CustomerRegistrationSubmission.sales_id)
-        .all()
     )
+    submission_stats = apply_branch_filter(submission_stats, CustomerRegistrationSubmission, current_user)
+    submission_stats = submission_stats.group_by(CustomerRegistrationSubmission.sales_id).all()
     submission_map = {s.sales_id: s.submission_count for s in submission_stats}
 
     items = []
@@ -378,7 +380,7 @@ def sales_performance_report(
 @router.get("/sales-performance/dashboard", response_model=SalesPerformanceDashboardResponse)
 def sales_performance_dashboard(
     db: Session = Depends(get_db),
-    _current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_manager),
 ):
     """Per-sales breakdown by status (APPROVED / PENDING / REJECTED) for MTD and Today.
     Manager only. Single call — no date params needed."""
@@ -415,7 +417,7 @@ def sales_performance_dashboard(
 
     # Load ALL orders (all statuses) for MTD and Today — single query each.
     # Date filter di SQL, bukan Python. joinedload(items.product) menghindari N+1.
-    mtd_orders = (
+    mtd_orders_q = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
         .filter(
@@ -423,9 +425,9 @@ def sales_performance_dashboard(
             Order.created_at >= month_start_dt,
             Order.created_at < today_end,
         )
-        .all()
     )
-    today_orders = (
+    mtd_orders = apply_branch_filter(mtd_orders_q, Order, current_user).all()
+    today_orders_q = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.product))
         .filter(
@@ -433,15 +435,16 @@ def sales_performance_dashboard(
             Order.created_at >= today_start,
             Order.created_at < today_end,
         )
-        .all()
     )
+    today_orders = apply_branch_filter(today_orders_q, Order, current_user).all()
 
-    # Get all active sales users (for building response list)
-    sales_users = (
+    # Get all active sales users (for building response list, filtered by branch)
+    sales_users_q = (
         db.query(User)
         .filter(User.role == "SALES", User.is_active.is_(True), User.deleted_at.is_(None))
-        .all()
     )
+    sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
+    sales_users = sales_users_q.all()
 
     # Split by status in Python — fast since data already loaded.
     def _split_by_status(orders: list[Order], status: str) -> list[Order]:
@@ -484,3 +487,129 @@ def sales_performance_dashboard(
         ))
 
     return SalesPerformanceDashboardResponse(sales=items)
+
+
+# ==================== Cross-branch reports (global MANAGER only) ====================
+
+@router.get("/cross-branch/sales-summary")
+def cross_branch_sales_summary(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_manager_global),
+):
+    """Per-branch approved count, revenue, pending count, customer count, sales count.
+    Global MANAGER only."""
+    from sqlalchemy import func, Integer, cast
+    from app.core import branch as branch_constants
+
+    summary = []
+    for code in branch_constants.BRANCH_CODES:
+        # Approved orders count + revenue
+        approved_q = (
+            db.query(func.count(Order.id))
+            .filter(Order.status == "APPROVED", Order.branch == code)
+        )
+        approved_count = approved_q.scalar() or 0
+
+        # Revenue
+        final_subtotal_expr, _ = _three_layer_subtotal_expr()
+        revenue_q = (
+            db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
+            .join(Order, Order.id == OrderItem.order_id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .filter(Order.status == "APPROVED", Order.branch == code)
+        )
+        revenue = revenue_q.scalar() or 0
+
+        # Pending orders
+        pending_count = (
+            db.query(func.count(Order.id))
+            .filter(Order.status == "PENDING", Order.branch == code)
+            .scalar() or 0
+        )
+
+        # Customer count
+        customer_count = (
+            db.query(func.count(Customer.id))
+            .filter(Customer.deleted_at.is_(None), Customer.branch == code)
+            .scalar() or 0
+        )
+
+        # Sales count
+        sales_count = (
+            db.query(func.count(User.id))
+            .filter(
+                User.role == "SALES",
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+                User.branch == code,
+            )
+            .scalar() or 0
+        )
+
+        summary.append({
+            "branch": code,
+            "branch_nama": branch_constants.BRANCH_LABELS.get(code, code),
+            "approved_count": approved_count,
+            "approved_revenue": int(revenue),
+            "pending_count": pending_count,
+            "customer_count": customer_count,
+            "sales_count": sales_count,
+        })
+
+    return {"branches": summary}
+
+
+@router.get("/cross-branch/stock-summary")
+def cross_branch_stock_summary(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_manager_global),
+):
+    """Per-branch stock value, SKU count, low-stock flags. Global MANAGER only."""
+    from sqlalchemy import func, Integer, cast
+    from app.core import branch as branch_constants
+
+    summary = []
+    for code in branch_constants.BRANCH_CODES:
+        sku_count = (
+            db.query(func.count(Product.id))
+            .filter(Product.branch == code)
+            .scalar() or 0
+        )
+
+        # Stock value = sum(stok_sistem * harga) per branch
+        stock_value_q = (
+            db.query(func.coalesce(func.sum(Product.stok_sistem * Product.harga), 0))
+            .filter(Product.branch == code)
+        )
+        stock_value = stock_value_q.scalar() or 0
+
+        # Low stock (stok_tersedia <= 5)
+        stok_expr = (
+            func.coalesce(Product.stok_sistem, 0)
+            - func.coalesce(Product.stok_booking, 0)
+            - func.coalesce(Product.stok_diterima, 0)
+        )
+        low_stock_count = (
+            db.query(func.count(Product.id))
+            .filter(
+                Product.branch == code,
+                stok_expr <= 5,
+                stok_expr > 0,
+            )
+            .scalar() or 0
+        )
+        out_of_stock = (
+            db.query(func.count(Product.id))
+            .filter(Product.branch == code, stok_expr <= 0)
+            .scalar() or 0
+        )
+
+        summary.append({
+            "branch": code,
+            "branch_nama": branch_constants.BRANCH_LABELS.get(code, code),
+            "sku_count": sku_count,
+            "total_stock_value": int(stock_value),
+            "low_stock_count": low_stock_count,
+        })
+
+    return {"branches": summary}

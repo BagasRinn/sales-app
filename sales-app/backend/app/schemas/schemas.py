@@ -25,7 +25,8 @@ class BaseSchema(BaseModel):
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
-    MANAGER = "MANAGER"
+    MANAGER = "MANAGER"  # global — branch=NULL
+    SUPERVISOR = "SUPERVISOR"  # branch-scoped (formerly MANAGER)
     SALES = "SALES"
 
 
@@ -44,8 +45,9 @@ class OrderStatus(str, Enum):
 class UserCreate(BaseSchema):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=72)
-    role: str = Field(..., description="ADMIN, MANAGER, atau SALES")
+    role: str = Field(..., description="ADMIN, SUPERVISOR, MANAGER, atau SALES")
     nama: Optional[str] = Field(None, max_length=100)
+    branch: Optional[str] = Field(None, description="Branch code. Required for ADMIN/SUPERVISOR/SALES. Omit or null for global MANAGER.")
 
 
 class UserUpdate(BaseSchema):
@@ -54,6 +56,7 @@ class UserUpdate(BaseSchema):
     role: Optional[str] = None
     password: Optional[str] = Field(None, min_length=6, max_length=72)
     is_active: Optional[bool] = None
+    branch: Optional[str] = Field(None, description="Branch code. Null = global MANAGER.")
 
 
 class ChangePasswordRequest(BaseSchema):
@@ -67,6 +70,7 @@ class UserResponse(BaseSchema):
     username: str
     nama: Optional[str] = None
     role: str
+    branch: Optional[str] = None
     is_active: bool = True
     created_at: Optional[datetime] = None
 
@@ -86,6 +90,8 @@ class Token(BaseSchema):
     username: Optional[str] = None
     nama: Optional[str] = None
     role: Optional[str] = None
+    branch: Optional[str] = None  # NULL for global MANAGER
+    branch_nama: Optional[str] = None  # display label for branch
     is_active: Optional[bool] = None
 
 
@@ -128,6 +134,7 @@ class ProductUpdate(BaseSchema):
 
 class ProductResponse(BaseSchema):
     id: str
+    branch: Optional[str] = None
     nama_barang: str
     harga: int
     stok_sistem: int
@@ -264,6 +271,7 @@ class CancelledItemResponse(BaseSchema):
 
 class OrderResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None
     sales_id: UUID
     customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
@@ -289,6 +297,7 @@ class OrderResponse(BaseSchema):
 
 class OrderListResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None
     sales_id: UUID
     customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
@@ -307,6 +316,7 @@ class OrderListResponse(BaseSchema):
 
 class OrderListWithItemsResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None
     sales_id: UUID
     sales_username: Optional[str] = None
     sales_nama: Optional[str] = None
@@ -385,6 +395,7 @@ class AreaAssignmentListItem(BaseSchema):
 
 class CustomerResponse(CustomerBase):
     id: UUID
+    branch: Optional[str] = None
     # Pengelompokan per area/rayon. Optional — legacy customer bisa null.
     kode_area: Optional[str] = None
     created_at: datetime
@@ -425,6 +436,7 @@ class SalesStatsResponse(BaseSchema):
 
 class StokLogResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None
     product_id: str
     sumber: str
     field_terdampak: str
@@ -565,6 +577,7 @@ class CustomerSubmissionCancelResponse(BaseSchema):
 
 class CustomerSubmissionResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None
     sales_id: UUID
     sales_nama: Optional[str] = None
     sales_username: Optional[str] = None
@@ -699,6 +712,7 @@ class BulletinUpdate(BaseSchema):
 
 class BulletinResponse(BaseSchema):
     id: UUID
+    branch: Optional[str] = None  # NULL = global bulletin
     title: str
     description: Optional[str] = None
     pdf_url: Optional[str] = None
@@ -708,3 +722,31 @@ class BulletinResponse(BaseSchema):
 
     class Config:
         from_attributes = True
+
+
+# ==================== CROSS-BRANCH REPORTS (global MANAGER only) ====================
+
+class BranchSalesSummary(BaseSchema):
+    branch: str
+    branch_nama: str
+    approved_count: int = 0
+    approved_revenue: int = 0
+    pending_count: int = 0
+    customer_count: int = 0
+    sales_count: int = 0
+
+
+class CrossBranchSalesSummaryResponse(BaseSchema):
+    branches: List[BranchSalesSummary]
+
+
+class BranchStockSummary(BaseSchema):
+    branch: str
+    branch_nama: str
+    sku_count: int = 0
+    total_stock_value: int = 0
+    low_stock_count: int = 0
+
+
+class CrossBranchStockSummaryResponse(BaseSchema):
+    branches: List[BranchStockSummary]

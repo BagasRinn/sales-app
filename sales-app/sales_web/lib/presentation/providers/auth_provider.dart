@@ -24,6 +24,8 @@ class AuthProvider with ChangeNotifier {
   AuthState get state => _state;
   String? get username => _username;
   String? get nama => _nama;
+  String? get branch => _authRepo.branch;
+  String? get branchNama => _authRepo.branchNama;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _state == AuthState.authenticated;
 

@@ -55,11 +55,15 @@ class WebAuthStorage {
     String? id,
     String? username,
     String? nama,
+    String? branch,
+    String? branchNama,
   }) async {
     if (role != null) web.window.sessionStorage.setItem(AppConfig.userRoleKey, role);
     if (id != null) web.window.sessionStorage.setItem(AppConfig.userIdKey, id);
     if (username != null) web.window.sessionStorage.setItem(AppConfig.userUsernameKey, username);
     if (nama != null) web.window.sessionStorage.setItem(AppConfig.userNamaKey, nama);
+    if (branch != null) web.window.sessionStorage.setItem(AppConfig.userBranchKey, branch);
+    if (branchNama != null) web.window.sessionStorage.setItem(AppConfig.userBranchNamaKey, branchNama);
   }
 
   /// Get user role from sessionStorage.
@@ -82,6 +86,16 @@ class WebAuthStorage {
     return web.window.sessionStorage.getItem(AppConfig.userNamaKey);
   }
 
+  /// Get user branch from sessionStorage.
+  String? getBranch() {
+    return web.window.sessionStorage.getItem(AppConfig.userBranchKey);
+  }
+
+  /// Get user branch nama from sessionStorage.
+  String? getBranchNama() {
+    return web.window.sessionStorage.getItem(AppConfig.userBranchNamaKey);
+  }
+
   /// Clear all auth data from sessionStorage.
   Future<void> clearAll() async {
     web.window.sessionStorage.removeItem(AppConfig.accessTokenKey);
@@ -90,6 +104,8 @@ class WebAuthStorage {
     web.window.sessionStorage.removeItem(AppConfig.userIdKey);
     web.window.sessionStorage.removeItem(AppConfig.userUsernameKey);
     web.window.sessionStorage.removeItem(AppConfig.userNamaKey);
+    web.window.sessionStorage.removeItem(AppConfig.userBranchKey);
+    web.window.sessionStorage.removeItem(AppConfig.userBranchNamaKey);
     _accessToken = null;
   }
 

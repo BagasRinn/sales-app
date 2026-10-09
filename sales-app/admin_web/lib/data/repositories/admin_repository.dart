@@ -12,6 +12,7 @@ import '../models/user_item.dart';
 import '../models/sales_performance.dart';
 import '../models/sales_target.dart';
 import '../models/bulletin.dart';
+import '../models/branch_report.dart';
 
 class AdminRepository {
   final ApiService _api;
@@ -24,6 +25,18 @@ class AdminRepository {
       access: resp['access_token'],
       refresh: resp['refresh_token'],
     );
+    // Returns full auth response for caller to extract branch/role
+    return resp;
+  }
+
+  /// Returns the raw login response data (caller uses for branch/role info).
+  Future<Map<String, dynamic>> loginFull(String username, String password) async {
+    final resp = await _api.post('/auth/login', body: {'username': username, 'password': password});
+    _api.setTokens(
+      access: resp['access_token'],
+      refresh: resp['refresh_token'],
+    );
+    return resp as Map<String, dynamic>;
   }
 
   void setTokens(String access, String refresh) => _api.setTokens(access: access, refresh: refresh);
@@ -655,5 +668,22 @@ class AdminRepository {
   Future<String> uploadBulletinPdf(List<int> fileBytes, String fileName) async {
     final data = await _api.postFile('/bulletins/upload-pdf', fileBytes, fileName);
     return data['pdf_url'] as String;
+  }
+
+  // ===== Cross-Branch Reports (global MANAGER only) =====
+  Future<List<BranchSalesSummary>> getCrossBranchSalesSummary() async {
+    final data = await _api.get('/reports/cross-branch/sales-summary');
+    final list = data['branches'] as List? ?? [];
+    return list
+        .map((e) => BranchSalesSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<BranchStockSummary>> getCrossBranchStockSummary() async {
+    final data = await _api.get('/reports/cross-branch/stock-summary');
+    final list = data['branches'] as List? ?? [];
+    return list
+        .map((e) => BranchStockSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

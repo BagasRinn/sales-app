@@ -907,6 +907,13 @@ class _OrderCardState extends State<_OrderCard> {
                   'Sales: ${_order.salesDisplayName}',
                   style: AppTextStyles.bodySmall,
                 ),
+              if (_order.branchNama != null || _order.branch != null)
+                SelectableText(
+                  'Cabang: ${_order.branchNama ?? _order.branch}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.primaryLight,
+                  ),
+                ),
               const SizedBox(height: 2),
               SelectableText(
                 '${_order.items.length} item • ${currencyFormat.format(_order.totalAmount)} • ${dateFormat.format(_order.createdAt)}',

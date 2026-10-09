@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_storage.dart';
+import '../../core/branch.dart';
 import '../../core/design_system.dart';
 import '../../core/jwt_utils.dart';
 import '../../core/navigator_key.dart';
@@ -21,6 +22,7 @@ import 'performance_tab.dart';
 import 'penugasan_sales_tab.dart';
 import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
+import 'cross_branch_reports_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
@@ -28,6 +30,8 @@ class DashboardScreen extends StatefulWidget {
   final String username;
   final String nama;
   final String role;
+  final String? branch;
+  final String? branchNama;
 
   const DashboardScreen({
     super.key,
@@ -36,6 +40,8 @@ class DashboardScreen extends StatefulWidget {
     required this.username,
     required this.nama,
     required this.role,
+    this.branch,
+    this.branchNama,
   });
 
   @override
@@ -59,6 +65,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       username: widget.username,
       nama: widget.nama.isEmpty ? null : widget.nama,
       role: widget.role,
+      branch: widget.branch,
+      branchNama: widget.branchNama,
     );
   }
 
@@ -76,6 +84,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         username: widget.username,
         nama: widget.nama,
         role: widget.role,
+        branch: widget.branch,
+        branchNama: widget.branchNama,
         apiService: _apiService,
       ),
     );
@@ -86,12 +96,16 @@ class _DashboardContent extends StatefulWidget {
   final String username;
   final String nama;
   final String role;
+  final String? branch;
+  final String? branchNama;
   final ApiService apiService;
 
   const _DashboardContent({
     required this.username,
     required this.nama,
     required this.role,
+    this.branch,
+    this.branchNama,
     required this.apiService,
   });
 
@@ -114,13 +128,13 @@ class _DashboardContentState extends State<_DashboardContent>
   DateTime _lastActivity = DateTime.now();
   Timer? _idleTimer;
 
-  bool get _isAdmin => widget.role == 'ADMIN';
-  bool get _isManager => widget.role == 'MANAGER';
+  bool get _isAdminOrSupervisor =>
+      widget.role == 'ADMIN' || widget.role == 'SUPERVISOR';
+  bool get _isGlobalManager => widget.role == 'MANAGER';
 
   List<_NavItem> get _navItems {
-    // Urutan shared untuk kedua role (Dashboard, Pesanan, Toko, Produk & Stok,
-    // Sinkronisasi). MANAGER dapat semua-nya tapi read-only di Pesanan/Produk/
-    // Sinkronisasi. Menu "User" hanya untuk MANAGER (admin tidak manage user).
+    // ADMIN / SUPERVISOR get write access on orders, products, sync.
+    // MANAGER (global) gets all tabs plus cross-branch reports.
     final items = <_NavItem>[
       const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
       const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
@@ -129,10 +143,14 @@ class _DashboardContentState extends State<_DashboardContent>
       const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
       const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
     ];
-    if (_isManager) {
+    if (_isGlobalManager) {
       items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
       items.add(const _NavItem(icon: Icons.trending_up_outlined, selectedIcon: Icons.trending_up, label: 'Performa Sales'));
       items.add(const _NavItem(icon: Icons.assignment_ind_outlined, selectedIcon: Icons.assignment_ind, label: 'Penugasan Sales'));
+      items.add(const _NavItem(icon: Icons.campaign_outlined, selectedIcon: Icons.campaign, label: 'Bulletin'));
+      items.add(const _NavItem(icon: Icons.compare_arrows_outlined, selectedIcon: Icons.compare_arrows, label: 'Laporan Lintas Cabang'));
+    } else if (_isAdminOrSupervisor) {
+      items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
       items.add(const _NavItem(icon: Icons.campaign_outlined, selectedIcon: Icons.campaign, label: 'Bulletin'));
     }
     return items;
@@ -147,10 +165,16 @@ class _DashboardContentState extends State<_DashboardContent>
       'Produk & Stok',
       'Sinkronisasi',
     ];
-    if (_isManager) titles.add('User');
-    if (_isManager) titles.add('Performa Sales');
-    if (_isManager) titles.add('Penugasan Sales');
-    if (_isManager) titles.add('Bulletin');
+    if (_isGlobalManager) {
+      titles.add('User');
+      titles.add('Performa Sales');
+      titles.add('Penugasan Sales');
+      titles.add('Bulletin');
+      titles.add('Laporan Lintas Cabang');
+    } else if (_isAdminOrSupervisor) {
+      titles.add('User');
+      titles.add('Bulletin');
+    }
     return titles;
   }
 
@@ -264,11 +288,13 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
-    final readOnly = !_isAdmin;
+    // ADMIN and SUPERVISOR have write access; MANAGER and others are read-only.
+    final readOnly = !_isAdminOrSupervisor;
 
-    // Indexes shared untuk ADMIN dan MANAGER: 0=Dashboard, 1=Pesanan, 2=Toko,
+    // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
     // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
-    // MANAGER punya index 6=User, 7=Performa Sales.
+    // Global MANAGER: 6=User, 7=Performa Sales, 8=Penugasan Sales, 9=Bulletin, 10=Laporan Lintas.
+    // ADMIN/SUPERVISOR: 6=User, 7=Bulletin.
     switch (i) {
       case 0:
         return StatsTab(role: widget.role);
@@ -283,16 +309,19 @@ class _DashboardContentState extends State<_DashboardContent>
       case 5:
         return SyncTab(readOnly: readOnly);
       case 6:
-        if (_isManager) return const UsersTab();
-        break;
+        return const UsersTab();
       case 7:
-        if (_isManager) return const PerformanceTab();
+        if (_isGlobalManager) return const PerformanceTab();
+        if (_isAdminOrSupervisor) return const BulletinsTab();
         break;
       case 8:
-        if (_isManager) return const PenugasanSalesTab();
+        if (_isGlobalManager) return const PenugasanSalesTab();
         break;
       case 9:
-        if (_isManager) return const BulletinsTab();
+        if (_isGlobalManager) return const BulletinsTab();
+        break;
+      case 10:
+        if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
     }
     return StatsTab(role: widget.role);
@@ -336,11 +365,11 @@ class _DashboardContentState extends State<_DashboardContent>
                         child: const Icon(Icons.local_shipping, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Sales Order',
                               style: TextStyle(
                                 color: Colors.white,
@@ -351,8 +380,8 @@ class _DashboardContentState extends State<_DashboardContent>
                               ),
                             ),
                             Text(
-                              'Admin Panel',
-                              style: TextStyle(
+                              widget.branchNama ?? BranchLabel.display(widget.branch) ?? 'Admin Panel',
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontFamily: AppTextStyles.fontFamily,
                                 fontSize: 12,

@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
-from app.core.security import require_auth, require_manager, CurrentUser
+from app.core.security import require_auth, require_manager, apply_branch_filter, CurrentUser
 from app.services.supabase_storage import upload_pdf, delete_file
 
 
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/bulletins", tags=["Bulletins"])
 def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
     return {
         "id": bulletin.id,
+        "branch": bulletin.branch,
         "title": bulletin.title,
         "description": bulletin.description,
         "pdf_url": bulletin.pdf_url,
@@ -61,6 +62,13 @@ def list_bulletins(
     if not include_read:
         base_filters.append(~is_dismissed_by_me)
 
+    # Branch filter: NULL = global (visible to all), or matching branch
+    user_branch = current_user.get("branch")
+    if user_branch is not None:
+        base_filters.append(
+            or_(Bulletin.branch.is_(None), Bulletin.branch == user_branch)
+        )
+
     query = db.query(Bulletin, is_dismissed_by_me.label("is_read")).filter(
         *base_filters,
     )
@@ -73,7 +81,7 @@ def list_bulletins(
 def create_bulletin(
     body: BulletinCreate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Create bulletin. MANAGER or ADMIN only."""
     bulletin = Bulletin(
@@ -81,6 +89,7 @@ def create_bulletin(
         description=body.description,
         pdf_url=body.pdf_url,
         expire_at=body.expire_at,
+        branch=current_user.get("branch"),  # ADMIN/SUPERVISOR → their branch; MANAGER → NULL (global)
         created_at=datetime.now(timezone.utc),
     )
     db.add(bulletin)

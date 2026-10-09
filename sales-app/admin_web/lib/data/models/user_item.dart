@@ -4,6 +4,8 @@ class UserItem {
   final String? nama;
   final String role;
   final bool isActive;
+  final String? branch;
+  final String? branchNama;
 
   UserItem({
     required this.id,
@@ -11,6 +13,8 @@ class UserItem {
     this.nama,
     required this.role,
     required this.isActive,
+    this.branch,
+    this.branchNama,
   });
 
   factory UserItem.fromJson(Map<String, dynamic> json) {
@@ -20,6 +24,8 @@ class UserItem {
       nama: json['nama'] as String?,
       role: json['role'] as String,
       isActive: json['is_active'] as bool? ?? true,
+      branch: json['branch'] as String?,
+      branchNama: json['branch_nama'] as String?,
     );
   }
 

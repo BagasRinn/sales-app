@@ -14,6 +14,7 @@ from app.core.security import (
     decode_token,
     require_auth,
 )
+from app.core import branch as branch_constants
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -24,13 +25,25 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username sudah terdaftar")
 
-    if user.role.upper() not in ("ADMIN", "MANAGER", "SALES"):
-        raise HTTPException(status_code=400, detail="Role harus ADMIN, MANAGER, atau SALES")
+    if user.role.upper() not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
+        raise HTTPException(status_code=400, detail="Role harus ADMIN, SUPERVISOR, MANAGER, atau SALES")
+
+    # Validate branch
+    branch = user.branch
+    if user.role.upper() == "MANAGER":
+        # Global manager: branch must be null or omitted
+        pass  # branch stays None
+    else:
+        if not branch:
+            raise HTTPException(status_code=400, detail="Branch wajib untuk ADMIN, SUPERVISOR, atau SALES")
+        if not branch_constants.is_valid_branch(branch):
+            raise HTTPException(status_code=400, detail=f"Branch tidak valid: {branch}")
 
     new_user = User(
         username=user.username,
         password_hash=get_password_hash(user.password),
         role=user.role.upper(),
+        branch=branch,
     )
     db.add(new_user)
     db.commit()
@@ -65,6 +78,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "branch": db_user.branch,
             "token_version": db_user.token_version or 0,
         }
     )
@@ -74,8 +88,15 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "branch": db_user.branch,
             "token_version": db_user.token_version or 0,
         }
+    )
+
+    branch_nama = (
+        branch_constants.BRANCH_LABELS.get(db_user.branch, db_user.branch)
+        if db_user.branch
+        else None
     )
 
     return {
@@ -85,6 +106,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         "username": db_user.username,
         "nama": db_user.nama,
         "role": db_user.role,
+        "branch": db_user.branch,
+        "branch_nama": branch_nama,
         "is_active": db_user.is_active,
     }
 
@@ -118,11 +141,27 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
             "sub": str(db_user.id),
             "username": db_user.username,
             "role": db_user.role,
+            "branch": db_user.branch,
             "token_version": db_user.token_version or 0,
         }
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    branch_nama = (
+        branch_constants.BRANCH_LABELS.get(db_user.branch, db_user.branch)
+        if db_user.branch
+        else None
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": db_user.username,
+        "nama": db_user.nama,
+        "role": db_user.role,
+        "branch": db_user.branch,
+        "branch_nama": branch_nama,
+        "is_active": db_user.is_active,
+    }
 
 
 @router.post("/change-password")

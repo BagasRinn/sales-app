@@ -37,6 +37,8 @@ class AuthRepository {
       id: data['id']?.toString(),
       username: data['username']?.toString(),
       nama: data['nama']?.toString(),
+      branch: data['branch']?.toString(),
+      branchNama: data['branch_nama']?.toString(),
     );
 
     return data;
@@ -105,5 +107,7 @@ class AuthRepository {
   String? get username => _storage.getUsername();
   String? get nama => _storage.getNama();
   String? get userId => _storage.getUserId();
+  String? get branch => _storage.getBranch();
+  String? get branchNama => _storage.getBranchNama();
   bool get isLoggedIn => _storage.isLoggedIn();
 }

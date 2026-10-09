@@ -10,6 +10,8 @@ class AuthStorage {
   static const String _usernameKey = 'admin_username';
   static const String _namaKey = 'admin_nama';
   static const String _roleKey = 'admin_role';
+  static const String _branchKey = 'admin_branch';
+  static const String _branchNamaKey = 'admin_branch_nama';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -17,6 +19,8 @@ class AuthStorage {
     required String username,
     String? nama,
     String? role,
+    String? branch,
+    String? branchNama,
   }) async {
     await _storage.write(key: _accessKey, value: accessToken);
     await _storage.write(key: _refreshKey, value: refreshToken);
@@ -26,6 +30,12 @@ class AuthStorage {
     }
     if (role != null && role.isNotEmpty) {
       await _storage.write(key: _roleKey, value: role);
+    }
+    if (branch != null && branch.isNotEmpty) {
+      await _storage.write(key: _branchKey, value: branch);
+    }
+    if (branchNama != null && branchNama.isNotEmpty) {
+      await _storage.write(key: _branchNamaKey, value: branchNama);
     }
   }
 
@@ -38,6 +48,8 @@ class AuthStorage {
       'username': await _storage.read(key: _usernameKey),
       'nama': await _storage.read(key: _namaKey),
       'role': await _storage.read(key: _roleKey),
+      'branch': await _storage.read(key: _branchKey),
+      'branch_nama': await _storage.read(key: _branchNamaKey),
     };
   }
 
@@ -47,5 +59,7 @@ class AuthStorage {
     await _storage.delete(key: _usernameKey);
     await _storage.delete(key: _namaKey);
     await _storage.delete(key: _roleKey);
+    await _storage.delete(key: _branchKey);
+    await _storage.delete(key: _branchNamaKey);
   }
 }

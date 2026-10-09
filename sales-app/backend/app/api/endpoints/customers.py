@@ -26,7 +26,8 @@ from app.schemas.schemas import (
     SalesAssignmentItem,
     SyncResultResponse,
 )
-from app.core.security import require_manager, require_auth, CurrentUser
+from app.core.security import require_manager, require_auth, apply_branch_filter, CurrentUser
+from app.core.visibility import visible_customer_query
 from app.services.customer_sync import sync_customers_from_excel
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
@@ -62,9 +63,10 @@ def list_customers(
     limit: int = 50,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     query = _exclude_deleted(db.query(Customer))
+    query = apply_branch_filter(query, Customer, current_user)
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
     return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
@@ -74,10 +76,11 @@ def list_customers(
 def get_customer_count(
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Total customers matching current filter — for pagination UI."""
     query = _exclude_deleted(db.query(func.count(Customer.id)))
+    query = apply_branch_filter(query, Customer, current_user)
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
     return {"total": query.scalar() or 0}
@@ -93,66 +96,28 @@ def list_my_customers(
 ):
     """Customer yang visible untuk current user.
 
-    - ADMIN/MANAGER: semua active customer.
+    - ADMIN/SUPERVISOR: semua customer di branch mereka (filtered via apply_branch_filter).
+    - MANAGER (global): semua customer di semua branch.
     - SALES: customer yang COCOK dengan salah satu dari (semua di-OR):
         * `customer_assignments` punya row untuk sales ini (per-customer override)
         * `area_assignments` punya row untuk sales ini DAN customer.kode_area
           cocok dengan area_assignments.kode_area (default coverage by area)
         * customer tanpa assignment dan customer.kode_area tanpa assignment
           (unassigned = visible to all, backward-compat untuk gradual rollout)
+    Branch filter applied via apply_branch_filter for ADMIN/SUPERVISOR/MANAGER.
 
     Limit dinaikkan ke 3000 (sebelumnya 1000) supaya muat ~2025 customer
     untuk sales. Mobile belum paginate jadi list harus include semua customer
     yang visible dalam 1 fetch. Kalau di masa depan >> 3000, switch mobile
     ke pagination proper.
     """
-    if current_user["role"] in ("ADMIN", "MANAGER"):
+    if current_user["role"] in ("ADMIN", "SUPERVISOR", "MANAGER"):
         query = _exclude_deleted(db.query(Customer))
+        query = apply_branch_filter(query, Customer, current_user)
     else:
-        me = UUID(current_user["user_id"])
-        # Pakai select() explicit (SQLAlchemy 2.x style) supaya tidak kena
-        # SAWarning "Coercing Subquery object into a select()".
-        from sqlalchemy import select
-        # Subquery 1: customer yang punya assignment langsung ke saya
-        mine_subq = (
-            select(CustomerAssignment.customer_id)
-            .where(CustomerAssignment.sales_id == me)
-            .subquery()
-        )
-        # Subquery 2: kode_area yang saya cover
-        my_areas_subq = (
-            select(AreaAssignment.kode_area)
-            .where(AreaAssignment.sales_id == me)
-            .subquery()
-        )
-        # Subquery 3: semua customer yang punya assignment apapun (untuk NOT IN)
-        all_customer_assigned = (
-            select(CustomerAssignment.customer_id).subquery()
-        )
-        # Subquery 4: semua kode_area yang punya assignment
-        all_assigned_areas = (
-            select(AreaAssignment.kode_area).subquery()
-        )
-        query = (
-            _exclude_deleted(db.query(Customer))
-            .filter(
-                or_(
-                    # Saya di-assign langsung ke customer
-                    Customer.id.in_(select(mine_subq.c.customer_id)),
-                    # Customer di area yang saya cover
-                    Customer.kode_area.in_(select(my_areas_subq.c.kode_area)),
-                    # Unassigned: customer tanpa assignment apapun
-                    # DAN customer.kode_area tanpa assignment apapun
-                    and_(
-                        ~Customer.id.in_(select(all_customer_assigned.c.customer_id)),
-                        or_(
-                            Customer.kode_area.is_(None),
-                            ~Customer.kode_area.in_(select(all_assigned_areas.c.kode_area)),
-                        ),
-                    ),
-                )
-            )
-        )
+        query = visible_customer_query(db, current_user)
+        # Apply branch filter on top for SALES
+        query = apply_branch_filter(query, Customer, current_user)
 
     if search:
         pattern = f"%{search}%"
@@ -170,34 +135,49 @@ def list_my_customers(
 @router.get("/kode-areas", response_model=KodeAreaListResponse)
 def list_kode_areas(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Distinct kode_area dari customers — sumber dropdown di mobile
     submission form. Sales boleh membuat kode_area baru yang tidak ada
     di list (free-text fallback di form, tidak ada 409/422).
+    Branch-scoped: ADMIN/SUPERVISOR sees only their branch's kode_areas.
+    SALES sees only their accessible areas (via visibility query).
+    MANAGER sees all.
 
     Auth: require_auth (bukan require_manager) karena sales butuh akses
     untuk isi form pengajuan customer. Data yang dikembalikan (list of
     strings) tidak sensitif — tidak ada info sales-roster.
     """
-    rows = (
-        db.query(Customer.kode_area)
-        .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
-        .distinct()
-        .order_by(Customer.kode_area)
-        .all()
-    )
-    return KodeAreaListResponse(items=[r[0] for r in rows if r[0]])
+    if current_user["role"] in ("ADMIN", "SUPERVISOR", "MANAGER"):
+        rows = (
+            db.query(Customer.kode_area)
+            .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
+        )
+        rows = apply_branch_filter(rows, Customer, current_user)
+        rows = rows.distinct().order_by(Customer.kode_area).all()
+    else:
+        # SALES: get kode_areas from visible customers
+        vis_q = visible_customer_query(db, current_user)
+        vis_q = apply_branch_filter(vis_q, Customer, current_user)
+        rows = (
+            vis_q.filter(Customer.kode_area.isnot(None))
+            .with_entities(Customer.kode_area)
+            .distinct()
+            .order_by(Customer.kode_area)
+            .all()
+        )
+    return KodeAreaListResponse(items=[r[0] if isinstance(r, tuple) else r for r in rows if r[0] if isinstance(r, tuple) else r])
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
 def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Identity toko = (nama_toko, alamat) — kedua kolom wajib dan dicocokkan
-    case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda."""
+    case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda.
+    Branch is set to the admin's branch (enforced via apply_branch_filter on list)."""
     nama_norm = customer.nama_toko.strip().lower()
     alamat_norm = customer.alamat.strip().lower()
 
@@ -215,7 +195,8 @@ def create_customer(
             ),
         )
 
-    new_customer = Customer(**customer.model_dump())
+    user_branch = current_user.get("branch")
+    new_customer = Customer(**customer.model_dump(), branch=user_branch)
     db.add(new_customer)
     db.commit()
     db.refresh(new_customer)
@@ -227,13 +208,17 @@ def update_customer(
     customer_id: UUID,
     update: CustomerUpdate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    # Branch access check
+    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
+        if customer.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
 
     data = update.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -247,13 +232,16 @@ def update_customer(
 def get_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
+        if customer.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
     return customer
 
 
@@ -261,7 +249,7 @@ def get_customer(
 def list_customer_assignments(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """List sales yang di-assign ke customer ini. Manager + admin only."""
     customer = _exclude_deleted(
@@ -269,6 +257,9 @@ def list_customer_assignments(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
+        if customer.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
     return _list_assignments(customer_id, db)
 
 
@@ -281,12 +272,15 @@ def put_customer_assignments(
 ):
     """Replace full set of sales assigned to a customer. Idempotent.
     Empty sales_ids = unassign everyone (customer jadi visible-to-all).
-    """
+    Branch access check applied."""
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
+        if customer.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
 
     # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted.
     if body.sales_ids:
@@ -327,13 +321,16 @@ def put_customer_assignments(
 def delete_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
+        if customer.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
 
     customer.deleted_at = datetime.now(timezone.utc)
     db.commit()
@@ -344,7 +341,7 @@ def delete_customer(
 def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Format file harus .xlsx")
@@ -356,8 +353,9 @@ def import_excel(
     sync_result = sync_customers_from_excel(
         contents, db,
         current_user={
-            "user_id": _current_user["user_id"],
-            "nama": _current_user.get("nama"),
+            "user_id": current_user["user_id"],
+            "nama": current_user.get("nama"),
+            "branch": current_user.get("branch"),
         },
         file_name=file.filename,
     )

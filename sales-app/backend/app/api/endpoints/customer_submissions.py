@@ -20,7 +20,7 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelRequest,
     CustomerSubmissionCancelResponse,
 )
-from app.core.security import require_auth, require_admin, require_manager, CurrentUser
+from app.core.security import require_auth, require_admin, require_manager, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
     )
     result = {
         "id": submission.id,
+        "branch": submission.branch,
         "sales_id": submission.sales_id,
         "sales_nama": (sales.nama or sales.username) if sales else None,
         "sales_username": sales.username if sales else None,
@@ -121,6 +122,7 @@ def submit_customer_registration(
     submission = CustomerRegistrationSubmission(
         id=uuid4(),
         sales_id=sales_id,
+        branch=current_user.get("branch"),
         status='PENDING',
         **payload_dict,
     )
@@ -137,6 +139,7 @@ def submit_customer_registration(
             nama_toko=payload.nama_langganan,
             alamat=payload.alamat_kirim or payload.alamat_ktp or '',
             kode_area=payload.kode_area,
+            branch=current_user.get("branch"),
         )
         db.add(customer)
 
@@ -160,6 +163,7 @@ def submit_customer_registration(
             id=uuid4(),
             sales_id=sales_id,
             customer_id=customer_id,
+            branch=current_user.get("branch"),
             status='DRAFT',
             created_at=datetime.now(timezone.utc),
             order_type=order_type,
@@ -193,9 +197,9 @@ def list_my_submissions(
     submissions = (
         db.query(CustomerRegistrationSubmission)
         .filter(CustomerRegistrationSubmission.sales_id == sales_id)
-        .order_by(CustomerRegistrationSubmission.created_at.desc())
-        .all()
     )
+    submissions = apply_branch_filter(submissions, CustomerRegistrationSubmission, current_user)
+    submissions = submissions.order_by(CustomerRegistrationSubmission.created_at.desc()).all()
     return [_serialize(s, db) for s in submissions]
 
 
@@ -236,10 +240,11 @@ def check_duplicate_customer(
 def list_submissions(
     status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Admin/manager lihat semua submissions. Default: semua status (untuk log view)."""
     query = db.query(CustomerRegistrationSubmission)
+    query = apply_branch_filter(query, CustomerRegistrationSubmission, current_user)
     if status:
         query = query.filter(CustomerRegistrationSubmission.status == status.upper())
     submissions = query.order_by(CustomerRegistrationSubmission.created_at.desc()).all()
@@ -263,6 +268,10 @@ def get_submission(
     user_id = current_user["user_id"]
     if role not in ("ADMIN", "MANAGER") and str(submission.sales_id) != user_id:
         raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+    # Branch access check for ADMIN
+    if role == "ADMIN" and current_user.get("branch") is not None:
+        if submission.branch != current_user["branch"]:
+            raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
 
     return _serialize(submission, db)
 
@@ -283,6 +292,8 @@ def approve_submission(
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+    if current_user.get("branch") is not None and submission.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
     if submission.status != "PENDING":
         raise HTTPException(
             status_code=409,
@@ -390,7 +401,7 @@ def reject_submission(
     submission_id: UUID,
     payload: CustomerSubmissionReject,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_manager),
 ):
     """Reject submission → status jadi REJECTED dengan reject_reason (opsional)."""
     submission = (
@@ -401,13 +412,15 @@ def reject_submission(
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
+    if current_user.get("branch") is not None and submission.branch != current_user["branch"]:
+        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
     if submission.status != "PENDING":
         raise HTTPException(
             status_code=409,
             detail=f"Pengajuan tidak bisa di-reject (status saat ini: {submission.status})",
         )
 
-    admin_id = UUID(_current_user["user_id"])
+    admin_id = UUID(current_user["user_id"])
     submission.status = 'REJECTED'
     submission.reject_reason = payload.reject_reason
     submission.reviewed_by = admin_id

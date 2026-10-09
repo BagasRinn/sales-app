@@ -4,7 +4,7 @@ import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -48,7 +48,6 @@ def create_access_token(data: dict) -> str:
     to_encode.update({
         "exp": expire,
         "type": "access",
-        # Embed token_version supaya token invalid setelah password change.
         "tv": data.get("token_version", 0),
     })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -85,8 +84,10 @@ def get_current_user(
     """Decode token, lookup user, dan validasi token_version.
 
     Return dict berisi info user. Raise 401 kalau token invalid, user tidak
-    ada, atau token_version tidak match dengan current_user.token_version
-    (artinya sesi sudah di-invalidate — biasanya karena password diubah).
+    ada, atau token_version tidak match dengan current_user.token_version.
+    Reads role + branch FESH from DB row (NOT from JWT payload) to support
+    zero-downtime migration: in-flight tokens stay valid after role/branch
+    changes because the authoritative source is always the DB.
     """
     payload = decode_token(token)
     if payload is None:
@@ -121,7 +122,11 @@ def get_current_user(
     return {
         "user_id": user_id,
         "username": payload.get("username"),
-        "role": payload.get("role"),
+        # role + branch from DB row (authoritative), not from JWT payload.
+        # This ensures that role/branch changes take effect immediately
+        # without requiring the user to re-login.
+        "role": user.role,
+        "branch": user.branch,
         "nama": user.nama,
     }
 
@@ -140,7 +145,10 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 def require_manager(current_user: dict = Depends(get_current_user)) -> dict:
-    """Izinkan MANAGER + ADMIN (ADMIN tetap punya akses penuh ke user management)."""
+    """Izinkan MANAGER (global) + ADMIN (branch-scoped).
+    Note: SUPERVISOR is a branch-scoped role, not included here.
+    Use require_admin_or_supervisor for branch-scoped management access.
+    """
     role = current_user.get("role")
     if role not in ("MANAGER", "ADMIN"):
         raise HTTPException(
@@ -148,6 +156,63 @@ def require_manager(current_user: dict = Depends(get_current_user)) -> dict:
             detail="Akses ditolak. Hanya manager atau admin yang dapat mengakses endpoint ini.",
         )
     return current_user
+
+
+def require_supervisor(current_user: dict = Depends(get_current_user)) -> dict:
+    """Branch-scoped SUPERVISOR only."""
+    if current_user.get("role") != "SUPERVISOR":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akses ditolak. Hanya supervisor yang dapat mengakses endpoint ini.",
+        )
+    return current_user
+
+
+def require_manager_global(current_user: dict = Depends(get_current_user)) -> dict:
+    """Global MANAGER only (branch=NULL)."""
+    if current_user.get("role") != "MANAGER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akses ditolak. Hanya manager global yang dapat mengakses endpoint ini.",
+        )
+    return current_user
+
+
+def require_admin_or_supervisor(current_user: dict = Depends(get_current_user)) -> dict:
+    """ADMIN (branch-scoped) or SUPERVISOR (branch-scoped)."""
+    role = current_user.get("role")
+    if role not in ("ADMIN", "SUPERVISOR"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akses ditolak. Hanya admin atau supervisor yang dapat mengakses endpoint ini.",
+        )
+    return current_user
+
+
+def apply_branch_filter(query, model, current_user: dict):
+    """Apply branch filter to a query based on the current user.
+
+    - Global MANAGER (branch=NULL): returns query unchanged (sees all branches).
+    - Branch-scoped users (ADMIN/SUPERVISOR/SALES): filters to their branch.
+    - Fallback during migration (branch=NULL for branch-scoped users before
+      backfill completes): returns query unchanged as a temporary bridge.
+      This fallback is removed after migration stage C completes.
+    """
+    role = current_user.get("role")
+    branch = current_user.get("branch")
+
+    # Global MANAGER: no filter (sees all branches).
+    if role == "MANAGER":
+        return query
+
+    # Branch-scoped user with branch set: apply filter.
+    if branch is not None:
+        return query.filter(model.branch == branch)
+
+    # Fallback: branch is NULL but user is not global MANAGER.
+    # This happens during migration staging between code deploy and backfill.
+    # Return query unchanged to avoid filtering out all rows.
+    return query
 
 
 CurrentUser = dict
