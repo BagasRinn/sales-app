@@ -166,7 +166,13 @@ def list_kode_areas(
             .order_by(Customer.kode_area)
             .all()
         )
-    return KodeAreaListResponse(items=[r[0] if isinstance(r, tuple) else r for r in rows])
+    items = []
+    for r in rows:
+        val = r[0] if hasattr(r, '__getitem__') else r
+        if isinstance(val, tuple):
+            val = val[0]
+        items.append(val)
+    return KodeAreaListResponse(items=items)
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
