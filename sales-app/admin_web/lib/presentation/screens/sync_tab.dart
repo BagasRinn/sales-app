@@ -69,42 +69,6 @@ class _SyncTabState extends State<SyncTab> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: AppColors.primaryLight),
-                            const SizedBox(width: 6),
-                            Text('Kolom yang harus ada di file',
-                                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            _colChip('code'),
-                            _colChip('KATEGORI'),
-                            _colChip('NAME ITEM'),
-                            _colChip('STOK'),
-                            _colChip('OUM'),
-                            _colChip('FIX'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -157,21 +121,6 @@ class _SyncTabState extends State<SyncTab> {
           const SizedBox(height: 16),
           _SyncErrorsSection(readOnly: widget.readOnly),
         ],
-      ),
-    );
-  }
-
-  Widget _colChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
       ),
     );
   }
@@ -1053,43 +1002,6 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
               ],
             ),
             const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline, size: 16, color: AppColors.success),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Kolom yang harus ada di file',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      _customerColChip('kode', required: true),
-                      _customerColChip('nama_toko', required: true),
-                      _customerColChip('alamat', required: true),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -1167,21 +1079,6 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
         ),
       );
     }
-  }
-
-  Widget _customerColChip(String label, {required bool required}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
-      ),
-    );
   }
 }
 
