@@ -151,6 +151,8 @@ class _DashboardContentState extends State<_DashboardContent>
       items.add(const _NavItem(icon: Icons.compare_arrows_outlined, selectedIcon: Icons.compare_arrows, label: 'Laporan Lintas Cabang'));
     } else if (widget.role == 'SUPERVISOR') {
       items.add(const _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'User'));
+      items.add(const _NavItem(icon: Icons.trending_up_outlined, selectedIcon: Icons.trending_up, label: 'Performa Sales'));
+      items.add(const _NavItem(icon: Icons.assignment_ind_outlined, selectedIcon: Icons.assignment_ind, label: 'Penugasan Sales'));
       items.add(const _NavItem(icon: Icons.campaign_outlined, selectedIcon: Icons.campaign, label: 'Bulletin'));
     }
     return items;
@@ -171,6 +173,11 @@ class _DashboardContentState extends State<_DashboardContent>
       titles.add('Penugasan Sales');
       titles.add('Bulletin');
       titles.add('Laporan Lintas Cabang');
+    } else if (widget.role == 'SUPERVISOR') {
+      titles.add('User');
+      titles.add('Performa Sales');
+      titles.add('Penugasan Sales');
+      titles.add('Bulletin');
     }
     return titles;
   }
@@ -308,14 +315,11 @@ class _DashboardContentState extends State<_DashboardContent>
       case 6:
         return const UsersTab();
       case 7:
-        if (_isGlobalManager) return const PerformanceTab();
-        return const BulletinsTab(); // SUPERVISOR: Bulletin at index 7
+        return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 8:
-        if (_isGlobalManager) return const PenugasanSalesTab();
-        break;
+        return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case 9:
-        if (_isGlobalManager) return const BulletinsTab();
-        break;
+        return const BulletinsTab(); // MANAGER & SUPERVISOR
       case 10:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
