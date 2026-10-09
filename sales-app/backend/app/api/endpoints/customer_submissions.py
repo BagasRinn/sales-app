@@ -20,7 +20,7 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelRequest,
     CustomerSubmissionCancelResponse,
 )
-from app.core.security import require_auth, require_admin, require_manager, apply_branch_filter, CurrentUser
+from app.core.security import require_auth, require_admin, require_admin_or_supervisor, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
 logger = logging.getLogger(__name__)
