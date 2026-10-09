@@ -305,6 +305,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         onApprove: widget.readOnly ? null : () => _approveOrder(orders[i].id),
         onReject: widget.readOnly ? null : () => _rejectOrder(orders[i].id),
         onCancelItem: widget.readOnly ? null : (item) => _cancelItem(orders[i].id, item),
+        readOnly: widget.readOnly,
       ),
     );
   }
@@ -435,7 +436,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   : ListView.builder(
                       padding: const EdgeInsets.all(20),
                       itemCount: orders.length,
-                      itemBuilder: (ctx, i) => _OrderCard(order: orders[i]),
+                      itemBuilder: (ctx, i) => _OrderCard(order: orders[i], readOnly: widget.readOnly),
                     ),
         ),
         if (total > 0)
@@ -754,12 +755,14 @@ class _OrderCard extends StatefulWidget {
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
   final void Function(OrderItem item)? onCancelItem;
+  final bool readOnly;
 
   const _OrderCard({
     required this.order,
     this.onApprove,
     this.onReject,
     this.onCancelItem,
+    this.readOnly = false,
   });
 
   @override
@@ -926,7 +929,7 @@ class _OrderCardState extends State<_OrderCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             OrderStatusChip(status: _order.status),
-            if (_order.status == 'PENDING' && widget.onApprove != null) ...[
+            if (_order.status == 'PENDING' && widget.onApprove != null && !widget.readOnly) ...[
               const SizedBox(width: 8),
               SizedBox(
                 height: 36,
@@ -1112,9 +1115,9 @@ class _OrderCardState extends State<_OrderCard> {
                       child: _OrderItemRow(
                         item: item,
                         currencyFormat: currencyFormat,
-                        canEdit: _order.status == 'PENDING',
+                        canEdit: _order.status == 'PENDING' && !widget.readOnly,
                         onEdit: () => _openItemDiscountDialog(item),
-                        onCancel: widget.onCancelItem != null
+                        onCancel: !widget.readOnly && widget.onCancelItem != null
                             ? () => widget.onCancelItem!(item)
                             : null,
                       ),
