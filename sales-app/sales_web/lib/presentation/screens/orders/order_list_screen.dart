@@ -769,14 +769,34 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  void _editOrder(BuildContext context) {
-    context.read<DraftOrderProvider>().loadFromExisting(order);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => OrderFlowScreen(existingOrder: order),
-      ),
-    );
+  void _editOrder(BuildContext context) async {
+    final draft = context.read<DraftOrderProvider>();
+    final orderProvider = context.read<OrderProvider>();
+
+    // Always fetch fresh order detail from server before editing.
+    // List endpoint may return minimal items (especially for PENDING).
+    final fresh = await orderProvider.getOrderDetail(order.id);
+    if (fresh == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal mengambil data order'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    draft.loadFromExisting(fresh);
+    if (context.mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => OrderFlowScreen(existingOrder: fresh),
+        ),
+      );
+    }
   }
 
   void _confirmDelete(BuildContext context) {
