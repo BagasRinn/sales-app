@@ -258,10 +258,21 @@ class DraftOrderProvider with ChangeNotifier {
   }
 
   List<Map<String, dynamic>> buildItemsPayload() {
-    return _items.map((item) => {
-      'product_id': item.productId,
-      'qty': item.qty,
-      'discount': item.discount.toJson(),
+    return _items.map((item) {
+      final d = item.discount;
+      return {
+        'product_id': item.productId,
+        'qty': item.qty,
+        'discount_type': d.layer1?.type ?? 'PERCENT',
+        'discount_percent': d.layer1?.type == 'PERCENT' ? d.layer1!.value : 0.0,
+        'discount_nominal': d.layer1?.type == 'NOMINAL' ? d.layer1!.value.round() : 0,
+        'discount2_type': d.layer2?.type ?? 'PERCENT',
+        'discount2_percent': d.layer2?.type == 'PERCENT' ? d.layer2!.value : 0.0,
+        'discount2_nominal': d.layer2?.type == 'NOMINAL' ? d.layer2!.value.round() : 0,
+        'discount3_type': d.layer3?.type ?? 'PERCENT',
+        'discount3_percent': d.layer3?.type == 'PERCENT' ? d.layer3!.value : 0.0,
+        'discount3_nominal': d.layer3?.type == 'NOMINAL' ? d.layer3!.value.round() : 0,
+      };
     }).toList();
   }
 
