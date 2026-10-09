@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from sqlalchemy import cast, func
+from sqlalchemy.types import Integer
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.database import get_db
@@ -28,6 +30,37 @@ def _layer_cut_value(type_val: str, percent: int, nominal: int, running: int) ->
     if (type_val or "PERCENT").upper() == "NOMINAL":
         return min(max(0, nominal or 0), running)
     return int(round(running * max(0, min(100, percent or 0)) / 100))
+
+
+def _three_layer_subtotal_expr():
+    """SQL expression untuk hitung subtotal akhir setelah 3-layer diskon.
+    Return (final_subtotal_expr, raw_subtotal_expr) sebagai SQLAlchemy expressions.
+    """
+    from sqlalchemy import case
+
+    def _cut_expr(type_col, percent_col, nominal_col, running):
+        return case(
+            ((type_col.is_(None) | (type_col == 'PERCENT')),
+             cast(running * func.coalesce(percent_col, 0) / 100, Integer)),
+            else_=func.coalesce(func.least(func.coalesce(nominal_col, 0), running), 0),
+        )
+
+    harga_qty = OrderItem.qty * Product.harga
+    raw = func.coalesce(harga_qty, 0)
+
+    d1 = _cut_expr(OrderItem.discount_type, OrderItem.discount_percent,
+                    OrderItem.discount_nominal, raw)
+    after1 = raw - d1
+
+    d2 = _cut_expr(OrderItem.discount2_type, OrderItem.discount2_percent,
+                    OrderItem.discount2_nominal, after1)
+    after2 = after1 - d2
+
+    d3 = _cut_expr(OrderItem.discount3_type, OrderItem.discount3_percent,
+                    OrderItem.discount3_nominal, after2)
+    final = after2 - d3
+
+    return final, raw
 
 
 def _three_layer_breakdown(item) -> tuple[int, int, int, int, int]:
@@ -54,6 +87,8 @@ def _build_report(
     ws.title = title
 
     headers = [
+        "Tanggal",
+        "Cabang",
         "Kode Pelanggan",
         "Nama Pelanggan",
         "Kode Item",
@@ -87,6 +122,7 @@ def _build_report(
         sales_name = ""
         if sales:
             sales_name = sales.nama if (sales.nama and sales.nama.strip()) else (sales.username or "")
+        order_date = order.created_at.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d") if order.created_at else ""
         for item in order.items:
             product = item.product
             harga_satuan = product.harga if product else 0
@@ -96,6 +132,8 @@ def _build_report(
             total_diskon = d1 + d2 + d3
 
             ws.append([
+                order_date,
+                order.branch or "",
                 customer.kode if customer else "",
                 customer.nama_toko if customer else "",
                 item.product_id or "",
@@ -116,7 +154,7 @@ def _build_report(
             total_rows += 1
 
     # Auto-width columns
-    widths = [16, 28, 14, 32, 6, 8, 14, 20, 14, 14, 14, 14, 20, 12, 20, 28]
+    widths = [14, 10, 16, 28, 14, 32, 6, 8, 14, 20, 14, 14, 14, 14, 20, 12, 20, 28]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -135,7 +173,7 @@ def daily_report(
 ):
     """Generate Excel laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
 
-    15 kolom: Kode/Nama Pelanggan, Kode/Nama Item, Qty, Satuan,
+    17 kolom: Tanggal, Cabang, Kode/Nama Pelanggan, Kode/Nama Item, Qty, Satuan,
     Harga Satuan, Total Sebelum Diskon, Diskon Layer 1/2/3, Total Diskon,
     Total Setelah Diskon, Nama Sales, Supplier.
     """
@@ -199,7 +237,7 @@ def period_report(
 ):
     """Generate Excel laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
 
-    15 kolom sama dengan laporan harian.
+    17 kolom sama dengan laporan harian (plus kolom Tanggal & Cabang).
     """
     try:
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
