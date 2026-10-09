@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
-from app.core.security import require_auth, require_manager, apply_branch_filter, CurrentUser
+from app.core.security import require_auth, require_admin_or_supervisor, apply_branch_filter, CurrentUser
 from app.services.supabase_storage import upload_pdf, delete_file
 
 
@@ -81,9 +81,9 @@ def list_bulletins(
 def create_bulletin(
     body: BulletinCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Create bulletin. MANAGER or ADMIN only."""
+    """Create bulletin.
     bulletin = Bulletin(
         title=body.title,
         description=body.description,
@@ -101,9 +101,9 @@ def create_bulletin(
 @router.post("/upload-pdf")
 def bulletin_upload_pdf(
     file: UploadFile = File(...),
-    _current_user: CurrentUser = Depends(require_manager),
+    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Upload file PDF ke Supabase Storage. MANAGER or ADMIN only."""
+    """Upload file PDF ke Supabase Storage."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Hanya file PDF yang diizinkan")
 
@@ -128,9 +128,9 @@ def update_bulletin(
     bulletin_id: UUID,
     body: BulletinUpdate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Update bulletin. MANAGER or ADMIN only."""
+    """Update bulletin."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
@@ -163,9 +163,9 @@ def update_bulletin(
 def delete_bulletin(
     bulletin_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Delete bulletin dan semua dismiss record terkait. MANAGER or ADMIN only."""
+    """Delete bulletin dan semua dismiss record terkait."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")

@@ -15,8 +15,8 @@ from app.schemas.schemas import (
     SalesUserResponse,
 )
 from app.core.security import (
+    require_admin_or_supervisor,
     require_admin,
-    require_manager,
     require_auth,
     get_password_hash,
     apply_branch_filter,
@@ -49,9 +49,9 @@ def list_users(
     role: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """List semua user (kecuali soft-deleted) — manager + admin only.
+    """List semua user (kecuali soft-deleted) — admin + supervisor only.
     Branch-scoped for ADMIN/SUPERVISOR; global MANAGER sees all."""
     query = _exclude_deleted(db.query(User))
     # Branch filter applied first
@@ -70,9 +70,9 @@ def list_users(
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Buat user baru — manager + admin only.
+    """Buat user baru — admin + supervisor only.
 
     Strict rule: ADMIN/SUPERVISOR cannot create users in another branch.
     If they attempt to do so → 400.
@@ -138,9 +138,9 @@ def update_user(
     user_id: UUID,
     update: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Edit user — manager + admin only. Branch-scoped: ADMIN/SUPERVISOR
+    """Edit user — admin + supervisor only. Branch-scoped: ADMIN/SUPERVISOR
     can only edit users in their own branch. Global MANAGER can edit anyone."""
     target_user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
     if not target_user:
@@ -208,7 +208,7 @@ def update_user(
 def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_manager),
+    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Soft-delete user — DIHAPUS.
 

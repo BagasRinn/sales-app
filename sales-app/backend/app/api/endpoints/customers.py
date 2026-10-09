@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     SalesAssignmentItem,
     SyncResultResponse,
 )
-from app.core.security import require_manager, require_auth, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
 from app.core.visibility import visible_customer_query
 from app.services.customer_sync import sync_customers_from_excel
 
@@ -63,7 +63,7 @@ def list_customers(
     limit: int = 50,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     query = _exclude_deleted(db.query(Customer))
     query = apply_branch_filter(query, Customer, current_user)
@@ -76,7 +76,7 @@ def list_customers(
 def get_customer_count(
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Total customers matching current filter — for pagination UI."""
     query = _exclude_deleted(db.query(func.count(Customer.id)))
@@ -173,7 +173,7 @@ def list_kode_areas(
 def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Identity toko = (nama_toko, alamat) — kedua kolom wajib dan dicocokkan
     case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda.
@@ -208,7 +208,7 @@ def update_customer(
     customer_id: UUID,
     update: CustomerUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
@@ -232,7 +232,7 @@ def update_customer(
 def get_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
@@ -249,7 +249,7 @@ def get_customer(
 def list_customer_assignments(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """List sales yang di-assign ke customer ini. Manager + admin only."""
     customer = _exclude_deleted(
@@ -268,7 +268,7 @@ def put_customer_assignments(
     customer_id: UUID,
     body: CustomerAssignmentsPut,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Replace full set of sales assigned to a customer. Idempotent.
     Empty sales_ids = unassign everyone (customer jadi visible-to-all).
@@ -321,7 +321,7 @@ def put_customer_assignments(
 def delete_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
@@ -341,7 +341,7 @@ def delete_customer(
 def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Format file harus .xlsx")

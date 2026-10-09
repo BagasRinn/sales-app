@@ -12,7 +12,7 @@ from app.schemas.schemas import (
     SalesTargetUpdate,
     SalesTargetResponse,
 )
-from app.core.security import require_manager, require_auth, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 
@@ -21,9 +21,9 @@ router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 def list_sales_targets(
     period: Optional[str] = Query(None, description="Filter by period (YYYY-MM)"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """List all sales targets. Manager only. Branch-scoped for ADMIN/SUPERVISOR."""
+    """List all sales targets. Admin/Supervisor only. Branch-scoped for ADMIN/SUPERVISOR."""
     # First get sales users in the same branch
     from app.models.models import User
     sales_users_q = db.query(User.id).filter(
@@ -46,11 +46,11 @@ def upsert_sales_target(
     user_id: UUID,
     payload: SalesTargetUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Set or update target + incentive for a sales user.
     Creates new record if none exists for (user_id, period), otherwise updates.
-    Manager only. Branch-scoped: ADMIN/SUPERVISOR can only set targets for sales in their branch."""
+    Admin/Supervisor only. Branch-scoped: ADMIN/SUPERVISOR can only set targets for sales in their branch."""
     # Validate user exists and is SALES role
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission
-from app.core.security import require_manager, require_manager_global, apply_branch_filter
+from app.core.security import require_admin_or_supervisor, require_manager_global, apply_branch_filter
 from app.schemas.schemas import (
     SalesPerformanceResponse,
     SalesPerformanceItem,
@@ -131,7 +131,7 @@ def daily_report(
         description="Status filter, comma-separated. Default APPROVED.",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_admin_or_supervisor),
 ):
     """Generate Excel laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
 
@@ -195,7 +195,7 @@ def period_report(
         description="Status filter, comma-separated. Default APPROVED.",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_admin_or_supervisor),
 ):
     """Generate Excel laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
 
@@ -265,7 +265,7 @@ def sales_performance_report(
                    "Defaults to APPROVED for backward compatibility.",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_admin_or_supervisor),
 ):
     """KPI performa per sales dalam rentang tanggal:
     order count, revenue (total setelah diskon), customer submission count.
@@ -380,10 +380,10 @@ def sales_performance_report(
 @router.get("/sales-performance/dashboard", response_model=SalesPerformanceDashboardResponse)
 def sales_performance_dashboard(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_manager),
+    current_user: dict = Depends(require_admin_or_supervisor),
 ):
     """Per-sales breakdown by status (APPROVED / PENDING / REJECTED) for MTD and Today.
-    Manager only. Single call — no date params needed."""
+    Admin/Supervisor access. Single call — no date params needed."""
     wita = timezone(timedelta(hours=8))
     now_wita = datetime.now(wita)
     today = now_wita.date()

@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     CancelItemsRequest,
     OrderReject,
 )
-from app.core.security import require_admin, require_manager, require_auth, apply_branch_filter, CurrentUser
+from app.core.security import require_admin, require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
 from app.services.stock_logger import log_stock_change
 
 logger = logging.getLogger(__name__)
@@ -967,7 +967,7 @@ def list_pending_orders(
     limit: int = 50,
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     query = (
         db.query(Order)
@@ -1013,7 +1013,7 @@ def list_all_orders(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
     date_from/date_to opsional — kalau dua-duanya kosong, semua pesanan.
@@ -1113,7 +1113,7 @@ def get_order_detail(
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user["role"] not in ("ADMIN", "MANAGER"):
+    if current_user["role"] not in ("ADMIN", "MANAGER", "SUPERVISOR"):
         if str(order.sales_id) != current_user["user_id"]:
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
     elif current_user.get("role") == "ADMIN" and current_user.get("branch") is not None:

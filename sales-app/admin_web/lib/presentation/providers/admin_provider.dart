@@ -162,6 +162,7 @@ class AdminProvider extends ChangeNotifier {
   String get userRole => _userRole;
   bool get isAdmin => _userRole == 'ADMIN';
   bool get isManager => _userRole == 'MANAGER';
+  bool get isSupervisor => _userRole == 'SUPERVISOR';
 
   void setUserRole(String role) {
     // Tidak notifyListeners: _userRole cuma dipakai loadAll() untuk skip endpoint
@@ -197,7 +198,7 @@ class AdminProvider extends ChangeNotifier {
           _customerSubmissions.where((s) => s.status == 'PENDING').length;
       final tasks = <Future<void>>[
         _loadPendingOrders(),
-        if (isAdmin || isManager) _loadStats(),
+        if (isAdmin || isManager || isSupervisor) _loadStats(),
         // Refresh customer submissions only kalau sudah pernah di-load (avoid
         // hitting endpoint saat tab belum pernah dibuka).
         if (_customerSubmissions.isNotEmpty || _customerSubmissionsStatus != null)
@@ -206,7 +207,7 @@ class AdminProvider extends ChangeNotifier {
       await Future.wait(tasks);
       // Only rebuild UI if data actually changed
       final pendingChanged = _pendingOrders.length != prevLength;
-      final statsChanged = (isAdmin || isManager) && !_mapEquals(_stats, prevStats);
+      final statsChanged = (isAdmin || isManager || isSupervisor) && !_mapEquals(_stats, prevStats);
       final submissionsChanged = _customerSubmissions.length != prevSubmissionsLen ||
           _customerSubmissions.where((s) => s.status == 'PENDING').length !=
               prevSubmissionsPending;
@@ -703,7 +704,7 @@ class AdminProvider extends ChangeNotifier {
       await Future.wait([
         _loadPendingOrders(cancelToken),
         _loadAllOrders(cancelToken),
-        if (isAdmin || isManager) _loadStats(date: date, cancelToken: cancelToken),
+        if (isAdmin || isManager || isSupervisor) _loadStats(date: date, cancelToken: cancelToken),
       ]);
       // Batch 2: customers + products (dipakai Toko + Produk). Dijalankan
       // setelah batch 1 supaya kalau tab Pesanan di-lewat cepat, batch 2

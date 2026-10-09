@@ -240,9 +240,9 @@ def check_duplicate_customer(
 def list_submissions(
     status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Admin/manager lihat semua submissions. Default: semua status (untuk log view)."""
+    """Admin/Supervisor lihat semua submissions. Default: semua status (untuk log view)."""
     query = db.query(CustomerRegistrationSubmission)
     query = apply_branch_filter(query, CustomerRegistrationSubmission, current_user)
     if status:
@@ -266,7 +266,7 @@ def get_submission(
 
     role = current_user.get("role")
     user_id = current_user["user_id"]
-    if role not in ("ADMIN", "MANAGER") and str(submission.sales_id) != user_id:
+    if role not in ("ADMIN", "MANAGER", "SUPERVISOR") and str(submission.sales_id) != user_id:
         raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
     # Branch access check for ADMIN
     if role == "ADMIN" and current_user.get("branch") is not None:
@@ -401,7 +401,7 @@ def reject_submission(
     submission_id: UUID,
     payload: CustomerSubmissionReject,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Reject submission → status jadi REJECTED dengan reject_reason (opsional)."""
     submission = (
