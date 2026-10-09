@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 
+# Build: v2 - force cache bust
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
