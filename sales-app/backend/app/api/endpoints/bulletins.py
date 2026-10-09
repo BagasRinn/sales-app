@@ -83,7 +83,7 @@ def create_bulletin(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Create bulletin.
+    """Create bulletin."""
     bulletin = Bulletin(
         title=body.title,
         description=body.description,
