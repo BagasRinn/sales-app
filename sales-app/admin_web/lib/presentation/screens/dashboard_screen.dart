@@ -128,13 +128,10 @@ class _DashboardContentState extends State<_DashboardContent>
   DateTime _lastActivity = DateTime.now();
   Timer? _idleTimer;
 
-  bool get _isAdminOrSupervisor =>
-      widget.role == 'ADMIN' || widget.role == 'SUPERVISOR';
   bool get _isGlobalManager => widget.role == 'MANAGER';
 
   List<_NavItem> get _navItems {
-    // ADMIN / SUPERVISOR get write access on orders, products, sync.
-    // MANAGER (global) gets all tabs plus cross-branch reports.
+    // ADMIN has write access; SUPERVISOR, MANAGER are read-only (monitoring only).
     final items = <_NavItem>[
       const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
       const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
@@ -292,8 +289,8 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
-    // ADMIN and SUPERVISOR have write access; MANAGER and others are read-only.
-    final readOnly = !_isAdminOrSupervisor;
+    // Only ADMIN has write access; SUPERVISOR, MANAGER, and others are read-only.
+    final readOnly = widget.role != 'ADMIN';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
     // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
@@ -305,9 +302,9 @@ class _DashboardContentState extends State<_DashboardContent>
       case 1:
         return OrdersTab(readOnly: readOnly);
       case 2:
-        return const CustomersTab();
+        return CustomersTab(readOnly: readOnly);
       case 3:
-        return const CustomerSubmissionsTab();
+        return CustomerSubmissionsTab(readOnly: readOnly);
       case 4:
         return ProductsTab(readOnly: readOnly);
       case 5:

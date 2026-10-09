@@ -5,7 +5,9 @@ import '../providers/admin_provider.dart';
 import '../../data/models/customer.dart';
 
 class CustomersTab extends StatefulWidget {
-  const CustomersTab({super.key});
+  final bool readOnly;
+
+  const CustomersTab({super.key, this.readOnly = false});
 
   @override
   State<CustomersTab> createState() => _CustomersTabState();
@@ -289,18 +291,19 @@ class _CustomersTabState extends State<CustomersTab> {
                       onPressed: () => _openDetail(c),
                       icon: const Icon(Icons.visibility_outlined, size: 18),
                       color: AppColors.primaryLight,
-                      tooltip: 'Lihat / edit',
+                      tooltip: 'Lihat',
                       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                       padding: EdgeInsets.zero,
                     ),
-                    IconButton(
-                      onPressed: () => _confirmDelete(c),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      color: AppColors.error,
-                      tooltip: 'Hapus toko',
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                      padding: EdgeInsets.zero,
-                    ),
+                    if (!widget.readOnly)
+                      IconButton(
+                        onPressed: () => _confirmDelete(c),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        color: AppColors.error,
+                        tooltip: 'Hapus toko',
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                      ),
                   ],
                 ),
               ),
@@ -318,6 +321,7 @@ class _CustomersTabState extends State<CustomersTab> {
       builder: (_) => _CustomerDetailDialog(
         customerId: c.id,
         provider: provider,
+        readOnly: widget.readOnly,
       ),
     );
   }
@@ -379,7 +383,8 @@ class _CustomersTabState extends State<CustomersTab> {
 class _CustomerDetailDialog extends StatefulWidget {
   final String customerId;
   final AdminProvider provider;
-  const _CustomerDetailDialog({required this.customerId, required this.provider});
+  final bool readOnly;
+  const _CustomerDetailDialog({required this.customerId, required this.provider, this.readOnly = false});
 
   @override
   State<_CustomerDetailDialog> createState() => _CustomerDetailDialogState();
@@ -624,6 +629,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
   }
 
   Widget _buildFooter() {
+    if (widget.readOnly) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(

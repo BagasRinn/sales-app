@@ -7,7 +7,9 @@ import '../../data/models/customer_submission.dart';
 /// Tab "Pengajuan Customer" — list submissions dengan filter chips (Semua/PENDING/APPROVED/REJECTED).
 /// Tap card → detail screen dengan semua field + section Pengaju/Pengapprove + tombol Approve/Reject.
 class CustomerSubmissionsTab extends StatefulWidget {
-  const CustomerSubmissionsTab({super.key});
+  final bool readOnly;
+
+  const CustomerSubmissionsTab({super.key, this.readOnly = false});
 
   @override
   State<CustomerSubmissionsTab> createState() => _CustomerSubmissionsTabState();
@@ -146,7 +148,7 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
                   itemCount: submissions.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
-                    return _SubmissionCard(submission: submissions[i]);
+                    return _SubmissionCard(submission: submissions[i], readOnly: widget.readOnly);
                   },
                 ),
         ),
@@ -230,7 +232,8 @@ class _StatCard extends StatelessWidget {
 
 class _SubmissionCard extends StatelessWidget {
   final CustomerSubmission submission;
-  const _SubmissionCard({required this.submission});
+  final bool readOnly;
+  const _SubmissionCard({required this.submission, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +257,7 @@ class _SubmissionCard extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => ChangeNotifierProvider<AdminProvider>.value(
                 value: provider,
-                child: _SubmissionDetailScreen(submission: s),
+                child: _SubmissionDetailScreen(submission: s, readOnly: readOnly),
               ),
             ),
           );
@@ -634,12 +637,13 @@ class _OrderSection extends StatelessWidget {
 /// Detail screen — show all form fields + audit info + Approve/Reject buttons (kalau PENDING).
 class _SubmissionDetailScreen extends StatelessWidget {
   final CustomerSubmission submission;
-  const _SubmissionDetailScreen({required this.submission});
+  final bool readOnly;
+  const _SubmissionDetailScreen({required this.submission, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
     final s = submission;
-    final canApprove = s.status == 'PENDING';
+    final canApprove = s.status == 'PENDING' && !readOnly;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detail Pengajuan')),
