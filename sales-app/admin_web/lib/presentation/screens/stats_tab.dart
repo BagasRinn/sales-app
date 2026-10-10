@@ -1209,6 +1209,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
+    final totalDiscount = orders.fold<int>(0, (sum, o) => sum + o.totalDiscount);
 
     return GestureDetector(
       onTap: () {
@@ -1325,6 +1326,21 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                       color: AppColors.primary,
                                     ),
                                   ),
+                                  if (totalDiscount > 0) ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Total Diskon',
+                                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                    ),
+                                    Text(
+                                      '-Rp ${_fmt(totalDiscount)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: AppColors.error,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1617,13 +1633,27 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
-                                                  Text(
-                                                    'Rp ${_fmt(order.totalAmount)}',
-                                                    style: const TextStyle(
-                                                      fontWeight: FontWeight.w700,
-                                                      fontSize: 13,
-                                                      color: AppColors.primary,
-                                                    ),
+                                                  Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                                    children: [
+                                                      Text(
+                                                        'Rp ${_fmt(order.totalAmount)}',
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 13,
+                                                          color: AppColors.primary,
+                                                        ),
+                                                      ),
+                                                      if (order.totalDiscount > 0)
+                                                        Text(
+                                                          '-Rp ${_fmt(order.totalDiscount)}',
+                                                          style: const TextStyle(
+                                                            fontSize: 10,
+                                                            color: AppColors.error,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Container(
@@ -1783,9 +1813,21 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                           ),
                                                         ),
                                                         SizedBox(
-                                                          width: 80,
+                                                          width: 70,
                                                           child: Text(
                                                             'Harga',
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 70,
+                                                          child: Text(
+                                                            'Diskon',
+                                                            textAlign: TextAlign.right,
                                                             style: TextStyle(
                                                               fontSize: 10,
                                                               fontWeight: FontWeight.w700,
@@ -2038,11 +2080,29 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             ),
           ),
           SizedBox(
-            width: 80,
+            width: 70,
             child: Text(
               'Rp ${_fmt(item.hargaSatuan)}',
               style: const TextStyle(fontSize: 11),
             ),
+          ),
+          SizedBox(
+            width: 70,
+            child: item.hasDiscount
+                ? Text(
+                    '-Rp ${_fmt(item.nominalDiskon)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.right,
+                  )
+                : const Text(
+                    '—',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    textAlign: TextAlign.right,
+                  ),
           ),
           SizedBox(
             width: 80,
