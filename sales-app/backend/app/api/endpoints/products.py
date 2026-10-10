@@ -380,16 +380,18 @@ def get_product_count(
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(
     product_id: str,
+    branch: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    # Filter by branch: use explicit branch if provided, otherwise user's branch
+    lookup_branch = branch or current_user.get("branch")
+    if lookup_branch:
+        query = query.filter(Product.branch == lookup_branch)
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-    # Branch access check: allow global MANAGER or same branch
-    if current_user["role"] != "MANAGER" and current_user.get("branch") is not None:
-        if product.branch != current_user["branch"]:
-            raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
     stok_tersedia = max(
         0,
         (product.stok_sistem or 0)
@@ -421,14 +423,18 @@ def get_product(
 def update_product(
     product_id: str,
     payload: ProductUpdate,
+    branch: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Partial update untuk produk - admin/supervisor. Field yang None di-skip.
     order_type hanya menerima 'REGULER' atau '4P'."""
+    query = db.query(Product).filter(Product.id == product_id)
+    lookup_branch = branch or current_user.get("branch")
+    if lookup_branch:
+        query = query.filter(Product.branch == lookup_branch)
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
+        query
         .with_for_update()
         .first()
     )
@@ -483,15 +489,23 @@ def update_product(
 @router.delete("/{product_id}", status_code=204)
 def delete_product(
     product_id: str,
+    branch: Optional[str] = None,
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_admin),
 ):
     from app.models.models import OrderItem
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    lookup_branch = branch or ""
+    if lookup_branch:
+        query = query.filter(Product.branch == lookup_branch)
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
 
-    db.query(OrderItem).filter(OrderItem.product_id == product_id).delete()
+    db.query(OrderItem).filter(
+        OrderItem.product_id == product_id,
+        OrderItem.branch == product.branch,
+    ).delete()
     db.delete(product)
     db.commit()
 
@@ -500,12 +514,16 @@ def delete_product(
 def update_product_stock(
     product_id: str,
     stock_update: ProductUpdateStock,
+    branch: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
+    query = db.query(Product).filter(Product.id == product_id)
+    lookup_branch = branch or current_user.get("branch")
+    if lookup_branch:
+        query = query.filter(Product.branch == lookup_branch)
     product = (
-        db.query(Product)
-        .filter(Product.id == product_id)
+        query
         .with_for_update()
         .first()
     )

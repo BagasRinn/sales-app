@@ -17,7 +17,7 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER", "NO"]
+EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
 
 
 SUPPLIERS_4P = [
@@ -194,8 +194,7 @@ def sync_products_from_excel(
         harga = int(harga_raw) if harga_raw else 0
         stok = int(good_raw) if good_raw else 0
         order_type = _supplier_order_type(nama_supplier)
-        cabang_raw = row.get("NO")
-        cabang = str(cabang_raw).strip().upper() if cabang_raw else (current_user.get("branch") or "")
+        cabang = current_user.get("branch") or ""
         validated_rows.append({
             "sku": sku,
             "nama_barang": nama_produk,
@@ -244,18 +243,23 @@ def sync_products_from_excel(
 
 def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = None) -> Tuple[int, int]:
     """
-    Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE.
+    Bulk upsert using PostgreSQL ON CONFLICT DO UPDATE on (id, branch).
     Returns (inserted_count, updated_count).
+    Same SKU can exist in different branches.
     """
+    # Query existing products by (sku, branch)
     skus = [r["sku"] for r in rows]
+    branch_filter = branch if branch else ""
     existing = {
-        p.id: p.stok_sistem
-        for p in db.query(Product).filter(Product.id.in_(skus))
-        .with_entities(Product.id, Product.stok_sistem).all()
+        (p.id, p.branch): p.stok_sistem
+        for p in db.query(Product).filter(
+            Product.id.in_(skus),
+            Product.branch == branch_filter,
+        ).with_entities(Product.id, Product.branch, Product.stok_sistem).all()
     }
 
-    to_insert = [r for r in rows if r["sku"] not in existing]
-    to_update = [r for r in rows if r["sku"] in existing]
+    to_insert = [r for r in rows if (r["sku"], branch_filter) not in existing]
+    to_update = [r for r in rows if (r["sku"], branch_filter) in existing]
 
     if to_insert:
         stmt = insert(Product).values([
@@ -265,7 +269,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
              "kategori": r.get("kategori"),
              "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
              "order_type": r.get("order_type", "REGULER"),
-             "branch": r.get("branch") or branch}
+             "branch": branch}
             for r in to_insert
         ])
         db.execute(stmt)
@@ -274,22 +278,22 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
     if to_update:
         def _stock_changed(existing_val, excel_val):
             return (existing_val or 0) != (excel_val or 0)
-        changed = [r for r in to_update if _stock_changed(existing[r["sku"]], r["stok"])]
-        unchanged = [r for r in to_update if not _stock_changed(existing[r["sku"]], r["stok"])]
+        changed = [r for r in to_update if _stock_changed(existing[(r["sku"], branch_filter)], r["stok"])]
+        unchanged = [r for r in to_update if not _stock_changed(existing[(r["sku"], branch_filter)], r["stok"])]
 
         if changed:
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"], "stok_sistem": r["stok"],
-                 "stok_booking": 0, "stok_diterima": 0,  # reset saat sync Excel baru
+                 "stok_booking": 0, "stok_diterima": 0,
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
                  "order_type": r.get("order_type", "REGULER"),
-                 "branch": r.get("branch") or branch}
+                 "branch": branch}
                 for r in changed
             ])
             stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=["id", "branch"],
                 set_={"nama_barang": stmt.excluded.nama_barang,
                       "harga": stmt.excluded.harga,
                       "stok_sistem": stmt.excluded.stok_sistem,
@@ -306,10 +310,10 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                 log_stock_change(
                     db=db, product_id=r["sku"], sumber="SYNC",
                     field_terdampak="stok_sistem",
-                    delta=r["stok"] - existing[r["sku"]],
-                    nilai_sebelum=existing[r["sku"]], nilai_sesudah=r["stok"],
+                    delta=r["stok"] - existing[(r["sku"], branch_filter)],
+                    nilai_sebelum=existing[(r["sku"], branch_filter)], nilai_sesudah=r["stok"],
                     actor_id=None, order_id=None,
-                    branch=r.get("branch") or branch,
+                    branch=branch,
                 )
         if unchanged:
             stmt = insert(Product).values([
@@ -318,11 +322,11 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
                  "order_type": r.get("order_type", "REGULER"),
-                 "branch": r.get("branch") or branch}
+                 "branch": branch}
                 for r in unchanged
             ])
             stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=["id", "branch"],
                 set_={"nama_barang": stmt.excluded.nama_barang,
                       "harga": stmt.excluded.harga,
                       "kategori": stmt.excluded.kategori,

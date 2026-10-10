@@ -39,13 +39,10 @@ class User(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (
-        UniqueConstraint("branch", "id", name="uq_products_branch_id"),
-    )
 
-    id = Column(String, primary_key=True, index=True)
-    # Branch scoping: same SKU can exist in different branches with different prices/stock.
-    branch = Column(String(20), nullable=False, index=True)
+    # Composite PK: (branch, id) — same SKU can exist in different branches.
+    id = Column(String, primary_key=True)
+    branch = Column(String(20), primary_key=True, index=True)
     nama_barang = Column(String, index=True)
     harga = Column(Integer)
     stok_sistem = Column(Integer, default=0)
@@ -203,10 +200,14 @@ class Order(Base):
 
 class OrderItem(Base):
     __tablename__ = "order_items"
+    __table_args__ = (
+        ForeignKeyConstraint(["product_id", "branch"], ["products.id", "products.branch"]),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"))
-    product_id = Column(String, ForeignKey("products.id"))
+    product_id = Column(String)
+    branch = Column(String(20), nullable=False)  # branch diset saat item dibuat = branch dari parent Order
     qty = Column(Integer)
 
     # --- Discount Layer 1 (existing single discount, retained as layer 1) ---
@@ -230,11 +231,14 @@ class OrderItem(Base):
 
 class StokLog(Base):
     __tablename__ = "stok_log"
+    __table_args__ = (
+        ForeignKeyConstraint(["product_id", "branch"], ["products.id", "products.branch"]),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Branch denormalized from product for branch-scoped audit trail.
     branch = Column(String(20), nullable=False, index=True)
-    product_id = Column(String, ForeignKey("products.id"), index=True)
+    product_id = Column(String, index=True)
     sumber = Column(String(20))
     field_terdampak = Column(String(20))
     delta = Column(Integer)

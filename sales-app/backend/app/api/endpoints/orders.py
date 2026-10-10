@@ -263,14 +263,16 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
                 text(
                     "UPDATE products "
                     "SET stok_booking = stok_booking + :delta "
-                    "WHERE id = :pid AND (stok_sistem - stok_booking - stok_diterima) >= :delta "
+                    "WHERE id = :pid AND branch = :branch AND (stok_sistem - stok_booking - stok_diterima) >= :delta "
                     "RETURNING stok_booking"
                 ),
-                {"pid": pid, "delta": delta},
+                {"pid": pid, "branch": branch, "delta": delta},
             ).first()
             if result is None:
                 db.rollback()
-                product = db.query(Product).filter(Product.id == pid).first()
+                product = db.query(Product).filter(
+                    Product.id == pid, Product.branch == branch
+                ).first()
                 if not product:
                     raise HTTPException(
                         status_code=404,
@@ -312,10 +314,10 @@ def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str
                 text(
                     "UPDATE products "
                     "SET stok_booking = stok_booking - :delta "
-                    "WHERE id = :pid "
+                    "WHERE id = :pid AND branch = :branch "
                     "RETURNING stok_booking"
                 ),
-                {"pid": pid, "delta": abs_delta},
+                {"pid": pid, "branch": branch, "delta": abs_delta},
             ).first()
             new_booking = result[0]
             old_booking = new_booking + abs_delta
@@ -342,15 +344,17 @@ def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT",
             text(
                 "UPDATE products "
                 "SET stok_booking = stok_booking + :qty "
-                "WHERE id = :product_id AND (stok_sistem - stok_booking - stok_diterima) >= :qty "
+                "WHERE id = :product_id AND branch = :branch AND (stok_sistem - stok_booking - stok_diterima) >= :qty "
                 "RETURNING id"
             ),
-            {"product_id": item.product_id, "qty": item.qty},
+            {"product_id": item.product_id, "branch": branch, "qty": item.qty},
         ).first()
 
         if result is None:
             db.rollback()
-            product = db.query(Product).filter(Product.id == item.product_id).first()
+            product = db.query(Product).filter(
+                Product.id == item.product_id, Product.branch == branch
+            ).first()
             if not product:
                 detail = f"Produk '{item.product_id}' tidak ditemukan"
             else:
@@ -366,7 +370,9 @@ def _book_items(items, db, sales_id, order_id_for_log, sumber: str = "CHECKOUT",
                 )
             raise HTTPException(status_code=409, detail=detail)
 
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id, Product.branch == branch
+        ).first()
         if product:
             old_booking = (product.stok_booking or 0) - item.qty
             log_stock_change(
@@ -420,7 +426,10 @@ def create_order(
     # aktual dilakukan di _book_items() setelah Order+OrderItems ditambah, supaya
     # race "stok diambil orang lain" bisa terdeteksi secara atomic.
     for item in order_req.items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id,
+            Product.branch == user_branch if user_branch else True,
+        ).first()
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -466,7 +475,10 @@ def create_order(
             (item.discount2_type, item.discount2_percent, item.discount2_nominal),
             (item.discount3_type, item.discount3_percent, item.discount3_nominal),
         ]
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id,
+            Product.branch == user_branch if user_branch else True,
+        ).first()
         harga_satuan = (product.harga or 0) if product else 0
         raw_subtotal = harga_satuan * item.qty
 
@@ -486,6 +498,7 @@ def create_order(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
+            branch=order.branch,
             qty=item.qty,
             # Layer 1
             discount_type=(l1[0] or "PERCENT").upper(),
@@ -585,7 +598,7 @@ def get_my_stats(
     omset_today_q = (
         db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
-        .join(Product, Product.id == OrderItem.product_id)
+        .join(Product, (Product.id == OrderItem.product_id) & (Product.branch == OrderItem.branch))
         .filter(
             Order.sales_id == sales_id,
             Order.status == "APPROVED",
@@ -614,7 +627,7 @@ def get_my_stats(
     selesai_total_q = (
         db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
         .join(Order, Order.id == OrderItem.order_id)
-        .join(Product, Product.id == OrderItem.product_id)
+        .join(Product, (Product.id == OrderItem.product_id) & (Product.branch == OrderItem.branch))
         .filter(
             Order.sales_id == sales_id,
             Order.status == "APPROVED",
@@ -704,7 +717,10 @@ def update_draft_order(
 
     # Validasi setiap item.product.order_type cocok dengan new_order_type.
     for item in order_update.items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id,
+            Product.branch == order.branch,
+        ).first()
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -728,7 +744,10 @@ def update_draft_order(
             (item.discount2_type, item.discount2_percent, item.discount2_nominal),
             (item.discount3_type, item.discount3_percent, item.discount3_nominal),
         ]
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id,
+            Product.branch == user_branch if user_branch else True,
+        ).first()
         harga_satuan = (product.harga or 0) if product else 0
         raw_subtotal = harga_satuan * item.qty
 
@@ -748,6 +767,7 @@ def update_draft_order(
             id=uuid4(),
             order_id=order.id,
             product_id=item.product_id,
+            branch=order.branch,
             qty=item.qty,
             discount_type=(l1[0] or "PERCENT").upper(),
             discount_percent=l1[1] if (l1[0] or "PERCENT").upper() == "PERCENT" else 0,
@@ -858,10 +878,10 @@ def delete_draft_order(
             text(
                 "UPDATE products "
                 "SET stok_booking = stok_booking - :qty "
-                "WHERE id = :pid "
+                "WHERE id = :pid AND branch = :branch "
                 "RETURNING stok_booking"
             ),
-            {"pid": item.product_id, "qty": item.qty},
+            {"pid": item.product_id, "branch": item.branch, "qty": item.qty},
         ).first()
         if result is None:
             # Defensive: stok_booking sudah 0 (legacy DRAFT). Lanjut saja,
@@ -923,12 +943,12 @@ def cancel_order(
         items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
         product_ids = [item.product_id for item in items]
         products = {
-            p.id: p for p in
+            (p.id, p.branch): p for p in
             db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
         }
 
         for item in items:
-            product = products.get(item.product_id)
+            product = products.get((item.product_id, item.branch))
             if product:
                 old_booking = product.stok_booking or 0
                 product.stok_booking = max(0, old_booking - item.qty)
@@ -1225,14 +1245,15 @@ def approve_order(
 
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     product_ids = [item.product_id for item in items]
+    # Build composite-keyed product lookup for branch-aware resolution.
     products = {
-        p.id: p for p in
+        (p.id, p.branch): p for p in
         db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
     }
 
     actor_id = UUID(current_user["user_id"])
     for item in items:
-        product = products.get(item.product_id)
+        product = products.get((item.product_id, item.branch))
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -1251,11 +1272,11 @@ def approve_order(
                 text(
                     "UPDATE products "
                     "SET stok_booking = stok_booking + :shortfall "
-                    "WHERE id = :pid "
+                    "WHERE id = :pid AND branch = :branch "
                     "  AND (stok_sistem - stok_booking - stok_diterima) >= :shortfall "
                     "RETURNING stok_booking"
                 ),
-                {"pid": item.product_id, "shortfall": shortfall},
+                {"pid": item.product_id, "branch": item.branch, "shortfall": shortfall},
             ).first()
             if backfill is None:
                 db.rollback()
@@ -1295,10 +1316,10 @@ def approve_order(
                 "UPDATE products "
                 "SET stok_booking = stok_booking - :qty, "
                 "    stok_diterima = stok_diterima + :qty "
-                "WHERE id = :pid AND stok_booking >= :qty "
+                "WHERE id = :pid AND branch = :branch AND stok_booking >= :qty "
                 "RETURNING stok_booking, stok_diterima"
             ),
-            {"pid": item.product_id, "qty": item.qty},
+            {"pid": item.product_id, "branch": item.branch, "qty": item.qty},
         ).first()
         if result is None:
             db.rollback()
@@ -1372,12 +1393,12 @@ def reject_order(
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     product_ids = [item.product_id for item in items]
     products = {
-        p.id: p for p in
+        (p.id, p.branch): p for p in
         db.query(Product).filter(Product.id.in_(product_ids)).with_for_update().all()
     }
 
     for item in items:
-        product = products.get(item.product_id)
+        product = products.get((item.product_id, item.branch))
         if product:
             old_booking = product.stok_booking or 0
             # Reject dari PENDING: booking dilepas (stok kembali tersedia).
@@ -1447,7 +1468,8 @@ def cancel_order_items(
             )
         # Lookup produk sekali: dipakai untuk nama_barang + release stok_booking.
         product = db.query(Product).filter(
-            Product.id == item.product_id
+            Product.id == item.product_id,
+            Product.branch == order.branch,
         ).with_for_update().first()
         if product:
             old_booking = product.stok_booking or 0
