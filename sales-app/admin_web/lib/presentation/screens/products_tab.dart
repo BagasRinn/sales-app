@@ -271,10 +271,15 @@ class _ProductsTabState extends State<ProductsTab> {
         // fixedW = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi] (nama ambil sisa)
         const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
         const fixedTotal = 1340.0;
+        const aksiWidth = 90.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
-        final totalW = namaW + fixedTotal;
+        // totalW: exclude aksi column if readOnly
+        final totalW = widget.readOnly
+            ? namaW + fixedTotal - aksiWidth
+            : namaW + fixedTotal;
         // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
-        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9], fixedW[10]];
+        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9]];
+        if (!widget.readOnly) colW.add(fixedW[10]); // aksi
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
         return SingleChildScrollView(
@@ -284,7 +289,7 @@ class _ProductsTabState extends State<ProductsTab> {
             child: Column(
               children: [
                 // Header (fixed height)
-                _TableHeader(colW, totalW),
+                _TableHeader(colW, totalW, readOnly: widget.readOnly),
                 const Divider(height: 1),
                 // Data rows — ListView with separator
                 Expanded(
@@ -704,12 +709,16 @@ class _ProductsTabState extends State<ProductsTab> {
 class _TableHeader extends StatelessWidget {
   final List<double> colW;
   final double totalW;
-  const _TableHeader(this.colW, this.totalW);
+  final bool readOnly;
+  const _TableHeader(this.colW, this.totalW, {this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
     // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
-    const labels = ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
+    final labels = readOnly
+        ? ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang']
+        : ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
+    final colsToRender = readOnly ? colW.length - 1 : colW.length;
     return SizedBox(
       width: totalW,
       child: Container(
@@ -717,7 +726,7 @@ class _TableHeader extends StatelessWidget {
         color: AppColors.surface,
         child: Row(
           children: [
-            for (int i = 0; i < labels.length; i++)
+            for (int i = 0; i < colsToRender; i++)
               SizedBox(
                 width: colW[i],
                 child: Padding(
@@ -760,160 +769,138 @@ class _DataRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = stockStatusColor(stockStatusFromValue(product.stokTersedia));
     final fmtCurrency = NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
-    return SizedBox(
-      width: totalW,
-      height: 60,
-      child: Row(
-        children: [
-          // SKU — colW[0]
-          SizedBox(
-            width: colW[0],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.id, style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,),
-            ),
-          ),
-          // Nama — colW[1], wrap text
-          SizedBox(
-            width: colW[1],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-            ),
-          ),
-          // Kategori — colW[2]
-          SizedBox(
-            width: colW[2],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.kategori ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-            ),
-          ),
-          // Harga — colW[3]
-          SizedBox(
-            width: colW[3],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Text(
-                fmtCurrency.format(product.harga),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w600),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          // Stok Sistem — colW[4]. Merah kalau stok_sistem < (booking + diterima)
-          // artinya stok_tersedia sudah tidak bisa dipesan, perlu audit.
-          SizedBox(
-            width: colW[4],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text('${product.stokSistem}', textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: product.stokSistem < (product.stokBooking + product.stokDiterima)
-                        ? AppColors.error
-                        : null,
-                  ),
-                  maxLines: 2),
-            ),
-          ),
-          // Stok Booking — colW[5]
-          SizedBox(
-            width: colW[5],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
-            ),
-          ),
-          // Stok Diterima — colW[6] (kolom baru, hanya admin web)
-          SizedBox(
-            width: colW[6],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text('${product.stokDiterima}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
-            ),
-          ),
-          // Stok Tersedia — colW[7]
-          SizedBox(
-            width: colW[7],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text('${product.stokTersedia}', textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
-            ),
-          ),
-          // Satuan — colW[8]
-          SizedBox(
-            width: colW[8],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
-            ),
-          ),
-          // Supplier — colW[9]
-          SizedBox(
-            width: colW[9],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-          // Cabang — colW[10]
-          SizedBox(
-            width: colW[10],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(
-                product.branchNama ?? product.branch ?? '-',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          // Aksi — colW[11]
-          SizedBox(
-            width: colW[11],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Center(
-                child: readOnly
-                    ? Text(
-                        '—',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textMuted,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextButton(
-                            onPressed: () => onShowStock(product),
-                            child: const Text('Ubah'),
-                          ),
-                          TextButton(
-                            onPressed: () => onShowEdit(product),
-                            child: const Text('Edit'),
-                          ),
-                          IconButton(
-                            onPressed: () => onConfirmDelete(product),
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            color: AppColors.error,
-                            tooltip: 'Hapus',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        ],
+    final isReadOnly = readOnly;
+
+    final cells = <Widget>[
+      // 0: SKU
+      SizedBox(
+        width: colW[0],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.id, style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+        ),
       ),
+      // 1: Nama
+      SizedBox(
+        width: colW[1],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+        ),
+      ),
+      // 2: Kategori
+      SizedBox(
+        width: colW[2],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.kategori ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+        ),
+      ),
+      // 3: Harga
+      SizedBox(
+        width: colW[3],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Text(fmtCurrency.format(product.harga), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+      // 4: Stok Sistem
+      SizedBox(
+        width: colW[4],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text('${product.stokSistem}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: product.stokSistem < (product.stokBooking + product.stokDiterima) ? AppColors.error : null), maxLines: 2),
+        ),
+      ),
+      // 5: Stok Booking
+      SizedBox(
+        width: colW[5],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+        ),
+      ),
+      // 6: Stok Diterima
+      SizedBox(
+        width: colW[6],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text('${product.stokDiterima}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+        ),
+      ),
+      // 7: Stok Tersedia
+      SizedBox(
+        width: colW[7],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text('${product.stokTersedia}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
+        ),
+      ),
+      // 8: Satuan
+      SizedBox(
+        width: colW[8],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+        ),
+      ),
+      // 9: Supplier
+      SizedBox(
+        width: colW[9],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+      // 10: Cabang
+      SizedBox(
+        width: colW[10],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(product.branchNama ?? product.branch ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 3, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+    ];
+
+    // Aksi column hanya untuk non-readOnly
+    if (!isReadOnly) {
+      cells.add(
+        SizedBox(
+          width: colW[11],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => onShowStock(product),
+                    child: const Text('Ubah'),
+                  ),
+                  TextButton(
+                    onPressed: () => onShowEdit(product),
+                    child: const Text('Edit'),
+                  ),
+                  IconButton(
+                    onPressed: () => onConfirmDelete(product),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    color: AppColors.error,
+                    tooltip: 'Hapus',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: isReadOnly ? totalW - colW[11] : totalW,
+      height: 60,
+      child: Row(children: cells),
     );
   }
 }
