@@ -1089,9 +1089,8 @@ def list_all_orders(
         )
 
     total = count_query.count()
-    response.headers["x-total-count"] = str(total)
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
-    return [_build_order_response(o) for o in orders]
+    return {"orders": [_build_order_response(o) for o in orders], "total": total}
 
 
 @router.get("/{order_id}", response_model=OrderResponse)

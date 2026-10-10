@@ -150,10 +150,10 @@ class AdminRepository {
       '/orders$qs',
       options: Options(responseType: ResponseType.json),
     );
-    final data = response.data as List;
-    final orders = data.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
-    final totalHeader = response.headers.value('x-total-count');
-    final total = int.tryParse(totalHeader ?? '') ?? orders.length;
+    final body = response.data as Map<String, dynamic>;
+    final ordersList = body['orders'] as List? ?? body as List;
+    final orders = ordersList.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final total = (body['total'] as num?)?.toInt() ?? orders.length;
     return (orders: orders, total: total);
   }
 
