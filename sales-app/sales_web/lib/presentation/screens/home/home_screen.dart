@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/branch.dart';
 import '../../../core/design_system.dart';
+import '../../../core/datetime_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
@@ -214,7 +215,6 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildOrderCard(BuildContext context, dynamic order) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id');
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -244,7 +244,7 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                dateFormat.format(order.createdAt.toLocal()),
+                witaFormat(order.createdAt, pattern: 'dd MMM yyyy, HH:mm'),
                 style: AppTextStyles.bodySmall,
               ),
               const SizedBox(height: 8),

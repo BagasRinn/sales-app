@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/datetime_utils.dart';
 import '../../../data/models/customer_submission.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../../core/api_service.dart';
@@ -158,8 +159,7 @@ class _CustomerSubmissionDetailScreenState extends State<CustomerSubmissionDetai
   }
 
   String _formatDate(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return witaFormat(dt, pattern: 'dd/MM/yyyy HH:mm');
   }
 }
 

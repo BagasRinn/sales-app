@@ -1,27 +1,22 @@
 import 'package:intl/intl.dart';
 
-/// Extension untuk convert DateTime ke WITA (Waktu Indonesia Tengah, UTC+8).
+/// Sejak backend serialize semua datetime sebagai WITA (`+08:00`),
+/// parsing langsung menghasilkan DateTime yang field hour/minute-nya
+/// sudah dalam WITA. Frontend cukup format — tidak perlu konversi
+/// tambahan.
 ///
-/// Lebih reliable dari `.toLocal()` karena display selalu WITA, tidak
-/// tergantung timezone device. Backend menyimpan timestamp dalam UTC,
-/// extension ini convert ke WITA untuk konsistensi dengan sales flow.
-///
-/// Behavior:
-/// - UTC DateTime → ditambah 8 jam, return as local DateTime
-/// - Already-local DateTime → diasumsikan sudah di device's timezone (WITA);
-///   pass-through supaya tidak double-convert
+/// `toWita()` dipertahankan sebagai no-op untuk backward compat dengan
+/// call sites yang sudah ada; tidak melakukan shift apapun.
+
 extension WitaDateTime on DateTime {
-  DateTime toWita() {
-    if (isUtc) {
-      return add(const Duration(hours: 8));
-    }
-    return this;
-  }
+  /// No-op. Backend sudah mengirim WITA. Return `this` supaya call
+  /// sites lama yang memanggil `.toWita()` tidak error dan tidak
+  /// double-shift waktu.
+  DateTime toWita() => this;
 }
 
-/// Format WITA DateTime ke string. Use untuk menggantikan
-/// `DateFormat.format(dt.toLocal())` — sekarang langsung format ke
-/// WITA tanpa intermediate conversion.
-String witaFormat(DateTime utc, {String pattern = 'dd MMM yyyy HH:mm'}) {
-  return DateFormat(pattern).format(utc.toWita());
+/// Format DateTime ke string. Asumsikan input sudah dalam WITA
+/// (datang dari backend).
+String witaFormat(DateTime wita, {String pattern = 'dd MMM yyyy HH:mm'}) {
+  return DateFormat(pattern).format(wita);
 }

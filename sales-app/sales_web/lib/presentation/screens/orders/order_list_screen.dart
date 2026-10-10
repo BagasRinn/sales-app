@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/datetime_utils.dart';
 import '../../../data/models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/draft_order_provider.dart';
@@ -188,7 +189,6 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id');
     final idr = NumberFormat('#,###', 'id');
 
     return Card(
@@ -234,7 +234,7 @@ class _OrderCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    dateFormat.format(order.createdAt.toLocal()),
+                    witaFormat(order.createdAt, pattern: 'dd MMM yyyy, HH:mm'),
                     style: AppTextStyles.bodySmall,
                   ),
                   const Spacer(),

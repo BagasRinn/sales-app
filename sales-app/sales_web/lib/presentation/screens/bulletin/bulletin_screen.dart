@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/bulletin_provider.dart';
+import '../../../core/datetime_utils.dart';
 import '../../../data/models/bulletin.dart';
 
 class BulletinScreen extends StatefulWidget {
@@ -23,7 +23,6 @@ class _BulletinScreenState extends State<BulletinScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BulletinProvider>();
-    final dateFormat = DateFormat('dd MMM yyyy', 'id');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -63,7 +62,6 @@ class _BulletinScreenState extends State<BulletinScreen> {
                       final bulletin = provider.bulletins[index];
                       return _BulletinCard(
                         bulletin: bulletin,
-                        dateFormat: dateFormat,
                         onTap: () => _showDetail(context, bulletin),
                       );
                     },
@@ -73,7 +71,6 @@ class _BulletinScreenState extends State<BulletinScreen> {
   }
 
   void _showDetail(BuildContext context, Bulletin bulletin) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id');
     context.read<BulletinProvider>().markAsRead(bulletin.id);
 
     showModalBottomSheet(
@@ -131,7 +128,7 @@ class _BulletinScreenState extends State<BulletinScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                dateFormat.format(bulletin.createdAt.toLocal()),
+                witaFormat(bulletin.createdAt, pattern: 'dd MMM yyyy, HH:mm'),
                 style: const TextStyle(
                   fontSize: 12,
                   color: Color(0xFF94A3B8),
@@ -172,12 +169,10 @@ class _BulletinScreenState extends State<BulletinScreen> {
 
 class _BulletinCard extends StatelessWidget {
   final Bulletin bulletin;
-  final DateFormat dateFormat;
   final VoidCallback onTap;
 
   const _BulletinCard({
     required this.bulletin,
-    required this.dateFormat,
     required this.onTap,
   });
 
@@ -234,7 +229,7 @@ class _BulletinCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      dateFormat.format(bulletin.createdAt.toLocal()),
+                      witaFormat(bulletin.createdAt, pattern: 'dd MMM yyyy'),
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF94A3B8),

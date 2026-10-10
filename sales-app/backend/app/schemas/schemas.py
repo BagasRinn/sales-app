@@ -1,25 +1,34 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from uuid import UUID
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
+
+
+# Backend menyimpan semua timestamp sebagai UTC di Postgres
+# (DateTime(timezone=True)). Saat di-read, SQLAlchemy strip tzinfo
+# sehingga Pydantic serialize tanpa suffix. Selain itu, business timezone
+# aplikasi ini adalah WITA (UTC+8) — semua datetime yang dikembalikan ke
+# client (Flutter mobile + web) harus dalam WITA supaya frontend cukup
+# parse + format tanpa konversi timezone sendiri.
+WITA = timezone(timedelta(hours=8))
 
 
 class BaseSchema(BaseModel):
     """Base untuk semua response schema.
 
-    SQLAlchemy + DateTime(timezone=True) menyimpan nilai UTC tapi strip
-    tzinfo saat read, sehingga Pydantic serialize tanpa suffix "+00:00".
-    Akibatnya client (Flutter) tidak bisa bedakan UTC vs local dan
-    konversi WITA tidak terjadi. Fix: pastikan semua datetime field
-    di-attach dengan UTC tzinfo sebelum serialization.
+    Validator ini: (1) re-attach tzinfo=UTC kalau datetime naive (dari
+    SQLAlchemy), lalu (2) convert ke WITA. Hasilnya ISO string selalu
+    pakai suffix "+08:00", frontend tidak perlu konversi lagi.
     """
 
     @field_validator("*", mode="before")
     @classmethod
-    def _ensure_utc_datetime(cls, v):
-        if isinstance(v, datetime) and v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
+    def _to_wita_datetime(cls, v):
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            v = v.astimezone(WITA)
         return v
 
 

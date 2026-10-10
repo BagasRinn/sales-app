@@ -1,18 +1,12 @@
 import 'package:intl/intl.dart';
 
-extension DateTimeWita on DateTime {
-  /// Convert UTC DateTime to WITA (UTC+8).
-  DateTime toWita() {
-    return toUtc().add(const Duration(hours: 8));
-  }
+/// Sejak backend serialize semua datetime sebagai WITA (`+08:00`),
+/// parsing langsung menghasilkan DateTime yang field hour/minute-nya
+/// sudah dalam WITA. Frontend cukup format — tidak perlu konversi
+/// tambahan atau `.toLocal()` (yang tergantung timezone browser).
 
-  /// Format as Indonesian date string.
-  String toIdDate() {
-    return DateFormat('dd MMM yyyy', 'id').format(toWita());
-  }
-
-  /// Format as Indonesian date-time string.
-  String toIdDateTime() {
-    return DateFormat('dd MMM yyyy, HH:mm', 'id').format(toWita());
-  }
+/// Format DateTime ke string sesuai pattern. Asumsikan input sudah
+/// dalam WITA (datang dari backend).
+String witaFormat(DateTime wita, {String pattern = 'dd MMM yyyy HH:mm'}) {
+  return DateFormat(pattern).format(wita);
 }
