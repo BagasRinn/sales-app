@@ -268,6 +268,7 @@ def sync_customers_from_excel(
         nama=current_user.get("nama"),
         import_type="CUSTOMER",
         file_name=file_name,
+        branch=current_user.get("branch"),
     )
     db.add(import_log)
     db.flush()

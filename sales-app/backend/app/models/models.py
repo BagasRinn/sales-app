@@ -360,6 +360,11 @@ class ImportLog(Base):
     updated = Column(Integer, default=0)
     skipped = Column(Integer, default=0)
     file_name = Column(String, nullable=True)
+    # Branch dari JWT user yang melakukan import. Nullable untuk log lama
+    # sebelum tagging ini; endpoint read treat NULL sebagai legacy-visible
+    # (semua admin bisa lihat supaya histori tidak hilang). Tag dari
+    # import_logs endpoint sudah filter by current_user.branch.
+    branch = Column(String(20), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

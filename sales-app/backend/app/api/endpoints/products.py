@@ -232,43 +232,77 @@ def import_excel(
     )
 
 
+def _import_logs_branch_scope(current_user: dict) -> str | None:
+    """Return branch to filter by, atau None untuk MANAGER (lihat semua).
+
+    Legacy: import_logs.branch NULL sebelum tagging dianggap visible-to-all
+    (jangan hilang). Filter by-branch = `WHERE branch = :scope OR branch IS NULL`.
+    Helper ini return tuple-friendly clause via tuple return — caller pakai
+    `or_(ImportLog.branch == scope, ImportLog.branch.is_(None))` kalau scope
+    non-None; kalau None (MANAGER), no filter.
+    """
+    return current_user.get("branch")
+
+
 @router.get("/import-logs", response_model=List[ImportLogResponse])
 def get_import_logs(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Ambil histori import Excel (max 20 terbaru; pagination 5/halaman di client)."""
-    logs = db.query(ImportLog).order_by(ImportLog.created_at.desc()).limit(20).all()
-    return logs
+    """Ambil histori import Excel (max 20 terbaru; pagination 5/halaman di client).
+
+    Branch-scoped untuk ADMIN/SUPERVISOR: hanya log dengan branch = current
+    user.branch, plus log legacy (branch NULL). MANAGER (global) lihat semua.
+    """
+    from sqlalchemy import or_
+    scope = _import_logs_branch_scope(current_user)
+    q = db.query(ImportLog)
+    if scope is not None:
+        q = q.filter(or_(ImportLog.branch == scope, ImportLog.branch.is_(None)))
+    return q.order_by(ImportLog.created_at.desc()).limit(20).all()
 
 
 @router.delete("/import-errors", status_code=204)
 def clear_import_errors(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
-    """Hapus semua histori error import. Admin-only karena read-only manager
-    tidak boleh mengubah state monitoring."""
-    db.query(SyncValidationError).delete()
+    """Hapus histori error import. Admin-only karena read-only manager
+    tidak boleh mengubah state monitoring.
+
+    Branch-scoped: ADMIN hanya hapus error di branch-nya. MANAGER (global)
+    hapus semua.
+    """
+    from sqlalchemy import or_
+    scope = _import_logs_branch_scope(current_user)
+    q = db.query(SyncValidationError).join(
+        ImportLog, SyncValidationError.import_log_id == ImportLog.id
+    )
+    if scope is not None:
+        q = q.filter(or_(ImportLog.branch == scope, ImportLog.branch.is_(None)))
+    q.delete(synchronize_session=False)
     db.commit()
 
 
 @router.get("/sync/errors", response_model=List[dict])
 def get_sync_errors(
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """Ambil error validasi dari sync terakhir (gabung dengan import_logs untuk
-    menampilkan file name, import type, dan timestamp). 100 baris terbaru."""
-    from app.models.models import SyncValidationError, ImportLog
+    menampilkan file name, import type, dan timestamp). 100 baris terbaru.
 
-    rows = (
+    Branch-scoped: sama dengan /import-logs.
+    """
+    from sqlalchemy import or_
+    scope = _import_logs_branch_scope(current_user)
+    q = (
         db.query(SyncValidationError, ImportLog)
         .outerjoin(ImportLog, SyncValidationError.import_log_id == ImportLog.id)
-        .order_by(SyncValidationError.created_at.desc())
-        .limit(100)
-        .all()
     )
+    if scope is not None:
+        q = q.filter(or_(ImportLog.branch == scope, ImportLog.branch.is_(None)))
+    rows = q.order_by(SyncValidationError.created_at.desc()).limit(100).all()
 
     return [
         {

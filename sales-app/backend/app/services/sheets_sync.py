@@ -140,6 +140,7 @@ def sync_products_from_excel(
         nama=current_user.get("nama"),
         import_type="PRODUCT",
         file_name=file_name,
+        branch=current_user.get("branch"),
     )
     db.add(import_log)
     db.flush()
