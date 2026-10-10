@@ -82,6 +82,15 @@ app = FastAPI(
 _allowed_origins = os.getenv("CORS_ORIGINS", "").split(",")
 if not _allowed_origins or _allowed_origins == [""]:
     _allowed_origins = ["*"]  # dev fallback — set CORS_ORIGINS in production
+    # Per CORS spec, browsers reject the wildcard when allow_credentials=True.
+    # That means any web call carrying the Authorization header (i.e. almost
+    # every call once the user logs in) will be blocked with a CORS error.
+    # Log loudly so this can't slip past on the next deploy.
+    logger.warning(
+        "[CORS] CORS_ORIGINS is unset — falling back to '*'. "
+        "Browsers will REJECT credentialed requests, so the web app cannot "
+        "reach the API. Set CORS_ORIGINS env var to your web app origin(s)."
+    )
 
 app.add_middleware(
     CORSMiddleware,
