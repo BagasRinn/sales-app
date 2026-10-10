@@ -17,7 +17,7 @@ from app.models.models import Product, SyncValidationError, ImportLog
 from app.services.stock_logger import log_stock_change
 
 
-EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
+EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER", "NO"]
 
 
 SUPPLIERS_4P = [
@@ -194,6 +194,8 @@ def sync_products_from_excel(
         harga = int(harga_raw) if harga_raw else 0
         stok = int(good_raw) if good_raw else 0
         order_type = _supplier_order_type(nama_supplier)
+        cabang_raw = row.get("NO")
+        cabang = str(cabang_raw).strip().upper() if cabang_raw else (current_user.get("branch") or "")
         validated_rows.append({
             "sku": sku,
             "nama_barang": nama_produk,
@@ -203,6 +205,7 @@ def sync_products_from_excel(
             "satuan": satuan,
             "nama_supplier": nama_supplier,
             "order_type": order_type,
+            "branch": cabang,
         })
 
     inserted = updated = 0
@@ -262,7 +265,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
              "kategori": r.get("kategori"),
              "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
              "order_type": r.get("order_type", "REGULER"),
-             "branch": branch}
+             "branch": r.get("branch") or branch}
             for r in to_insert
         ])
         db.execute(stmt)
@@ -282,7 +285,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
                  "order_type": r.get("order_type", "REGULER"),
-                 "branch": branch}
+                 "branch": r.get("branch") or branch}
                 for r in changed
             ])
             stmt = stmt.on_conflict_do_update(
@@ -295,7 +298,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan,
                       "nama_supplier": stmt.excluded.nama_supplier,
-                      "order_type": stmt.excluded.order_type},
+                      "order_type": stmt.excluded.order_type,
+                      "branch": stmt.excluded.branch},
             )
             db.execute(stmt)
             for r in changed:
@@ -305,7 +309,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                     delta=r["stok"] - existing[r["sku"]],
                     nilai_sebelum=existing[r["sku"]], nilai_sesudah=r["stok"],
                     actor_id=None, order_id=None,
-                    branch=branch,
+                    branch=r.get("branch") or branch,
                 )
         if unchanged:
             stmt = insert(Product).values([
@@ -313,7 +317,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                  "harga": r["harga"],
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
-                 "order_type": r.get("order_type", "REGULER")}
+                 "order_type": r.get("order_type", "REGULER"),
+                 "branch": r.get("branch") or branch}
                 for r in unchanged
             ])
             stmt = stmt.on_conflict_do_update(
