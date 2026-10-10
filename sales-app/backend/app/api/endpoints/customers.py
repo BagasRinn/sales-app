@@ -27,10 +27,27 @@ from app.schemas.schemas import (
     SyncResultResponse,
 )
 from app.core.security import require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
+from app.core import branch as branch_constants
 from app.core.visibility import visible_customer_query
 from app.services.customer_sync import sync_customers_from_excel
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
+
+
+def _customer_to_response(c: Customer) -> CustomerResponse:
+    """Build CustomerResponse. Adds branch_nama via cache (single lookup)."""
+    return CustomerResponse(
+        id=c.id,
+        branch=c.branch,
+        branch_nama=branch_constants.get_branch_nama(c.branch),
+        kode=c.kode,
+        nama_toko=c.nama_toko,
+        alamat=c.alamat,
+        kode_area=c.kode_area,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+        deleted_at=c.deleted_at,
+    )
 
 
 def _exclude_deleted(query):
@@ -69,7 +86,7 @@ def list_customers(
     query = apply_branch_filter(query, Customer, current_user)
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
-    return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
+    return [_customer_to_response(c) for c in query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()]
 
 
 @router.get("/count")
@@ -129,7 +146,7 @@ def list_my_customers(
                 Customer.kode_area.ilike(pattern),
             )
         )
-    return query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()
+    return [_customer_to_response(c) for c in query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()]
 
 
 @router.get("/kode-areas", response_model=KodeAreaListResponse)
@@ -206,7 +223,7 @@ def create_customer(
     db.add(new_customer)
     db.commit()
     db.refresh(new_customer)
-    return new_customer
+    return _customer_to_response(new_customer)
 
 
 @router.put("/{customer_id}", response_model=CustomerResponse)
@@ -231,7 +248,7 @@ def update_customer(
         setattr(customer, field, value)
     db.commit()
     db.refresh(customer)
-    return customer
+    return _customer_to_response(customer)
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
@@ -248,7 +265,7 @@ def get_customer(
     if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
         if customer.branch != current_user["branch"]:
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
-    return customer
+    return _customer_to_response(customer)
 
 
 @router.get("/{customer_id}/assignments", response_model=List[SalesAssignmentItem])

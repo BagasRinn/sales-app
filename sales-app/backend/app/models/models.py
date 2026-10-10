@@ -37,6 +37,34 @@ class User(Base):
     )
 
 
+class Branch(Base):
+    """Single source of truth for branch codes & display labels.
+
+    Replaces the hardcoded BRANCH_CODES / BRANCH_LABELS in app/core/branch.py.
+    Other tables (users, products, customers, orders, bulletins, etc.) hold a
+    VARCHAR(20) `branch` column with FK to this table (added via migration
+    migrate_2026_10_10_02).
+
+    Note: there is no `relationship` defined here because existing `branch`
+    columns are plain `String` (not `ForeignKey`). Endpoints that need
+    `branch_nama` do manual `outerjoin(Branch, Branch.code == ...branch_col)`.
+    """
+    __tablename__ = "branches"
+    __table_args__ = (
+        Index("ix_branches_is_active", "is_active"),
+    )
+
+    code = Column(String(20), primary_key=True)
+    nama = Column(String(100), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class Product(Base):
     __tablename__ = "products"
 

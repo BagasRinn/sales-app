@@ -27,6 +27,7 @@ from app.schemas.schemas import (
     OrderReject,
 )
 from app.core.security import require_admin, require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
+from app.core import branch as branch_constants
 from app.services.stock_logger import log_stock_change
 
 logger = logging.getLogger(__name__)
@@ -210,6 +211,7 @@ def _build_order_response(order: Order) -> dict:
     return {
         "id": order.id,
         "branch": order.branch,
+        "branch_nama": branch_constants.get_branch_nama(order.branch),
         "sales_id": order.sales_id,
         "sales_username": order.sales.username if order.sales else None,
         "sales_nama": order.sales.nama if order.sales else None,

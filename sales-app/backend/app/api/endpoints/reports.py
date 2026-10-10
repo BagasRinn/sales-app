@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission
 from app.core.security import require_admin_or_supervisor, require_manager_global, apply_branch_filter
+from app.core import branch as branch_constants
 from app.schemas.schemas import (
     SalesPerformanceResponse,
     SalesPerformanceItem,
@@ -536,11 +537,10 @@ def cross_branch_sales_summary(
 ):
     """Per-branch approved count, revenue, pending count, customer count, sales count.
     Global MANAGER only."""
-    from sqlalchemy import func, Integer, cast
     from app.core import branch as branch_constants
 
     summary = []
-    for code in branch_constants.BRANCH_CODES:
+    for code in branch_constants.get_valid_branch_codes():
         # Approved orders count + revenue
         approved_q = (
             db.query(func.count(Order.id))
@@ -586,7 +586,7 @@ def cross_branch_sales_summary(
 
         summary.append({
             "branch": code,
-            "branch_nama": branch_constants.BRANCH_LABELS.get(code, code),
+            "branch_nama": branch_constants.get_branch_nama(code),
             "approved_count": approved_count,
             "approved_revenue": int(revenue),
             "pending_count": pending_count,
@@ -607,7 +607,7 @@ def cross_branch_stock_summary(
     from app.core import branch as branch_constants
 
     summary = []
-    for code in branch_constants.BRANCH_CODES:
+    for code in branch_constants.get_valid_branch_codes():
         sku_count = (
             db.query(func.count(Product.id))
             .filter(Product.branch == code)
@@ -644,7 +644,7 @@ def cross_branch_stock_summary(
 
         summary.append({
             "branch": code,
-            "branch_nama": branch_constants.BRANCH_LABELS.get(code, code),
+            "branch_nama": branch_constants.get_branch_nama(code),
             "sku_count": sku_count,
             "total_stock_value": int(stock_value),
             "low_stock_count": low_stock_count,

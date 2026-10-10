@@ -10,6 +10,7 @@ from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
 from app.core.security import require_auth, require_admin_or_supervisor, apply_branch_filter, CurrentUser
+from app.core import branch as branch_constants
 from app.services.supabase_storage import upload_pdf, delete_file
 
 
@@ -20,6 +21,7 @@ def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
     return {
         "id": bulletin.id,
         "branch": bulletin.branch,
+        "branch_nama": branch_constants.get_branch_nama(bulletin.branch),
         "title": bulletin.title,
         "description": bulletin.description,
         "pdf_url": bulletin.pdf_url,

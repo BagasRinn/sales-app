@@ -27,6 +27,20 @@ from app.core import branch as branch_constants
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
+def _user_to_response(u: User) -> UserResponse:
+    """Build UserResponse ORM-style. Adds branch_nama via cache (single lookup)."""
+    return UserResponse(
+        id=u.id,
+        username=u.username,
+        nama=u.nama,
+        role=u.role,
+        branch=u.branch,
+        branch_nama=branch_constants.get_branch_nama(u.branch),
+        is_active=u.is_active,
+        created_at=u.created_at,
+    )
+
+
 def _exclude_deleted(query):
     return query.filter(User.deleted_at.is_(None))
 
@@ -63,7 +77,7 @@ def list_users(
         query = query.filter(
             (User.username.ilike(like)) | (User.nama.ilike(like))
         )
-    return query.order_by(User.role, User.username).all()
+    return [_user_to_response(u) for u in query.order_by(User.role, User.username).all()]
 
 
 @router.post("", response_model=UserResponse, status_code=201)
@@ -130,7 +144,7 @@ def create_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return new_user
+    return _user_to_response(new_user)
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -201,7 +215,7 @@ def update_user(
     target_user.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(target_user)
-    return target_user
+    return _user_to_response(target_user)
 
 
 @router.delete("/{user_id}", status_code=204)

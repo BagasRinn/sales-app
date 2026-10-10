@@ -7,7 +7,7 @@ import os
 
 from app.models.database import get_db
 from app.models.models import Product, Order, ImportLog, SyncValidationError
-from app.core.branch import BRANCH_LABELS
+from app.core import branch as branch_constants
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
@@ -108,7 +108,7 @@ def list_products(
             ProductResponse(
                 id=p.id,
                 branch=p.branch,
-                branch_nama=BRANCH_LABELS.get(p.branch) if p.branch else None,
+                branch_nama=branch_constants.get_branch_nama(p.branch),
                 nama_barang=p.nama_barang,
                 harga=p.harga,
                 stok_sistem=p.stok_sistem or 0,

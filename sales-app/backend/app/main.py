@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches
 from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -54,6 +54,10 @@ def seed_initial_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Load branch labels/names from DB into in-memory cache. Falls back to
+    # hardcoded constants if the branches table doesn't exist yet (pre-migration).
+    from app.core import branch as branch_constants
+    branch_constants.load_branches_cache()
     if os.getenv("SEED_DEMO_USERS", "false").lower() == "true":
         seed_initial_data()
     else:
@@ -110,6 +114,7 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(sales_targets.router, prefix="/api/v1")
 app.include_router(bulletins.router, prefix="/api/v1")
 app.include_router(sales.router, prefix="/api/v1")
+app.include_router(branches.router, prefix="/api/v1")
 
 
 @app.get("/")

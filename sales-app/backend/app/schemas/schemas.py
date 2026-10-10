@@ -80,6 +80,7 @@ class UserResponse(BaseSchema):
     nama: Optional[str] = None
     role: str
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None  # populated via JOIN to branches table
     is_active: bool = True
     created_at: Optional[datetime] = None
 
@@ -282,6 +283,7 @@ class CancelledItemResponse(BaseSchema):
 class OrderResponse(BaseSchema):
     id: UUID
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None  # populated via JOIN/cache
     sales_id: UUID
     customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
@@ -308,6 +310,7 @@ class OrderResponse(BaseSchema):
 class OrderListResponse(BaseSchema):
     id: UUID
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None
     sales_id: UUID
     customer_id: Optional[UUID] = None
     customer_name: Optional[str] = None
@@ -327,6 +330,7 @@ class OrderListResponse(BaseSchema):
 class OrderListWithItemsResponse(BaseSchema):
     id: UUID
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None
     sales_id: UUID
     sales_username: Optional[str] = None
     sales_nama: Optional[str] = None
@@ -406,6 +410,7 @@ class AreaAssignmentListItem(BaseSchema):
 class CustomerResponse(CustomerBase):
     id: UUID
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None  # populated via JOIN
     # Pengelompokan per area/rayon. Optional — legacy customer bisa null.
     kode_area: Optional[str] = None
     created_at: datetime
@@ -588,6 +593,7 @@ class CustomerSubmissionCancelResponse(BaseSchema):
 class CustomerSubmissionResponse(BaseSchema):
     id: UUID
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None  # populated via bulk lookup
     sales_id: UUID
     sales_nama: Optional[str] = None
     sales_username: Optional[str] = None
@@ -723,6 +729,7 @@ class BulletinUpdate(BaseSchema):
 class BulletinResponse(BaseSchema):
     id: UUID
     branch: Optional[str] = None  # NULL = global bulletin
+    branch_nama: Optional[str] = None  # populated via bulk lookup
     title: str
     description: Optional[str] = None
     pdf_url: Optional[str] = None
@@ -760,3 +767,55 @@ class BranchStockSummary(BaseSchema):
 
 class CrossBranchStockSummaryResponse(BaseSchema):
     branches: List[BranchStockSummary]
+
+
+# ==================== BRANCHES ====================
+
+import re as _re  # at module top would be cleaner, but co-locate here to minimize diff
+
+_BRANCH_CODE_PATTERN = _re.compile(r"^[A-Z0-9_]+$")
+
+
+class BranchBase(BaseSchema):
+    nama: str = Field(..., min_length=1, max_length=100, description="Display label, e.g. 'Cabang Banjarmasin'")
+
+
+class BranchCreate(BranchBase):
+    code: str = Field(..., min_length=1, max_length=20, description="Branch code, uppercase letters/digits/underscore")
+
+    @field_validator("code")
+    @classmethod
+    def _validate_code(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not _BRANCH_CODE_PATTERN.match(v):
+            raise ValueError("code harus uppercase dan hanya berisi huruf/angka/underscore")
+        return v
+
+
+class BranchUpdate(BaseSchema):
+    """Partial update — only fields that are sent are applied."""
+    nama: Optional[str] = Field(None, min_length=1, max_length=100)
+    is_active: Optional[bool] = None
+
+
+class BranchResponse(BaseSchema):
+    code: str
+    nama: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class BranchStatsResponse(BaseSchema):
+    """Aggregate counts for a branch — used by Admin UI before disable."""
+    code: str
+    nama: str
+    is_active: bool
+    user_count: int = 0
+    active_user_count: int = 0
+    product_count: int = 0
+    customer_count: int = 0
+    sales_count: int = 0

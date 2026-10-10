@@ -21,6 +21,7 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelResponse,
 )
 from app.core.security import require_auth, require_admin, require_admin_or_supervisor, apply_branch_filter, CurrentUser
+from app.core import branch as branch_constants
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
     result = {
         "id": submission.id,
         "branch": submission.branch,
+        "branch_nama": branch_constants.get_branch_nama(submission.branch),
         "sales_id": submission.sales_id,
         "sales_nama": (sales.nama or sales.username) if sales else None,
         "sales_username": sales.username if sales else None,

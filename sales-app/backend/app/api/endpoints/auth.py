@@ -93,11 +93,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         }
     )
 
-    branch_nama = (
-        branch_constants.BRANCH_LABELS.get(db_user.branch, db_user.branch)
-        if db_user.branch
-        else None
-    )
+    branch_nama = branch_constants.get_branch_nama(db_user.branch)
 
     return {
         "access_token": access_token,
@@ -146,11 +142,7 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
         }
     )
 
-    branch_nama = (
-        branch_constants.BRANCH_LABELS.get(db_user.branch, db_user.branch)
-        if db_user.branch
-        else None
-    )
+    branch_nama = branch_constants.get_branch_nama(db_user.branch)
 
     return {
         "access_token": access_token,
