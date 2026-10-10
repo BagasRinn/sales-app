@@ -268,18 +268,31 @@ class _ProductsTabState extends State<ProductsTab> {
       builder: (context, constraints) {
         final availW = constraints.maxWidth;
         // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
-        // fixedW = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi] (nama ambil sisa)
+        // fixedW tanpa aksi = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang]
         const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
-        const fixedTotal = 1340.0;
+        // Total fixed tanpa aksi
+        const fixedTotal = 1340.0; // sum of first 10 items
         const aksiWidth = 90.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         // totalW: exclude aksi column if readOnly
         final totalW = widget.readOnly
-            ? namaW + fixedTotal - aksiWidth
-            : namaW + fixedTotal;
+            ? namaW + fixedTotal
+            : namaW + fixedTotal + aksiWidth;
         // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
-        final colW = <double>[fixedW[0], namaW, fixedW[1], fixedW[2], fixedW[3], fixedW[4], fixedW[5], fixedW[6], fixedW[7], fixedW[8], fixedW[9]];
-        if (!widget.readOnly) colW.add(fixedW[10]); // aksi
+        final colW = <double>[
+          fixedW[0], // SKU
+          namaW, // Nama
+          fixedW[1], // Kategori
+          fixedW[2], // Harga
+          fixedW[3], // Stok Sistem
+          fixedW[4], // Stok Booking
+          fixedW[5], // Stok Diterima
+          fixedW[6], // Stok Tersedia
+          fixedW[7], // Satuan
+          fixedW[8], // Supplier
+          fixedW[9], // Cabang
+        ];
+        if (!widget.readOnly) colW.add(fixedW[10]); // Aksi
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
         return SingleChildScrollView(
