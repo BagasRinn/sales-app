@@ -125,17 +125,37 @@ def bulletin_upload_pdf(
     return {"pdf_url": public_url}
 
 
+def _assert_bulletin_visible(bulletin: Bulletin, current_user: dict) -> None:
+    """Raise 404 kalau bulletin di luar scope user. Sama dengan pattern
+    branch-scope di seluruh app: ADMIN/SUPERVISOR hanya boleh akses bulletin
+    di branch-nya; MANAGER (branch=NULL) boleh akses semua termasuk global."""
+    user_branch = current_user.get("branch")
+    if user_branch is None:
+        return  # MANAGER global
+    if bulletin.branch is None:
+        return  # global bulletin
+    if bulletin.branch == user_branch:
+        return
+    raise HTTPException(
+        status_code=404,
+        detail="Bulletin tidak ditemukan",
+    )
+
+
 @router.put("/{bulletin_id}", response_model=BulletinResponse)
 def update_bulletin(
     bulletin_id: UUID,
     body: BulletinUpdate,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Update bulletin."""
+    """Update bulletin. Branch-scoped: ADMIN/SUPERVISOR hanya bisa update
+    bulletin di branch-nya (atau bulletin global). MANAGER (branch=NULL) bisa
+    update bulletin mana saja."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+    _assert_bulletin_visible(bulletin, current_user)
 
     if body.title is not None:
         bulletin.title = body.title
@@ -152,7 +172,7 @@ def update_bulletin(
 
     # is_read untuk current user (walaupun ini endpoint manager,
     # is_read di-response adalah field utilitarian -- not critical)
-    sales_id = UUID(_current_user["user_id"])
+    sales_id = UUID(current_user["user_id"])
     dismiss = (
         db.query(BulletinDismiss)
         .filter(BulletinDismiss.bulletin_id == bulletin_id, BulletinDismiss.sales_id == sales_id)
@@ -165,12 +185,13 @@ def update_bulletin(
 def delete_bulletin(
     bulletin_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """Delete bulletin dan semua dismiss record terkait."""
+    """Delete bulletin dan semua dismiss record terkait. Branch-scoped."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+    _assert_bulletin_visible(bulletin, current_user)
 
     db.query(BulletinDismiss).filter(BulletinDismiss.bulletin_id == bulletin_id).delete(
         synchronize_session=False
@@ -195,10 +216,12 @@ def dismiss_bulletin(
     current_user: CurrentUser = Depends(require_auth),
 ):
     """Mark bulletin sebagai di-dismiss (popup sudah ditutup) oleh current user.
-    Idempotent - memanggil ulang tidak error."""
+    Idempotent - memanggil ulang tidak error. Branch-scoped: hanya bulletin
+    yang visible untuk user yang boleh di-dismiss (lihat _assert_bulletin_visible)."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()
     if not bulletin:
         raise HTTPException(status_code=404, detail="Bulletin tidak ditemukan")
+    _assert_bulletin_visible(bulletin, current_user)
 
     sales_id = UUID(current_user["user_id"])
 
