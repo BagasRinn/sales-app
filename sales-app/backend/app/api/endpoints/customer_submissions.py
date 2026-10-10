@@ -302,16 +302,19 @@ def approve_submission(
             detail=f"Pengajuan tidak bisa di-approve (status saat ini: {submission.status})",
         )
 
-    # Cek kode belum dipakai customer lain (kecuali customer bareng_order).
+    # Cek kode belum dipakai customer lain DI BRANCH YANG SAMA (kecuali
+    # customer bareng_order). Kode boleh sama antar branch (lihat
+    # Customer unique constraint di models.py).
     kode = payload.kode.strip()
     existing = db.query(Customer).filter(
         Customer.deleted_at.is_(None),
+        Customer.branch == submission.branch,
         Customer.kode == kode,
     ).first()
     if existing and existing.id != submission.bareng_customer_id:
         raise HTTPException(
             status_code=409,
-            detail=f"Kode '{kode}' sudah dipakai customer lain",
+            detail=f"Kode '{kode}' sudah dipakai customer lain di branch '{submission.branch}'",
         )
 
     admin_id = UUID(current_user["user_id"])

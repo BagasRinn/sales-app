@@ -126,14 +126,14 @@ def _bulk_upsert_customers(
     """
     Bulk upsert customers using PostgreSQL ON CONFLICT DO UPDATE.
 
-    Branch is taken from the caller (the JWT-authenticated user). The
-    Composite unique key (branch, kode, kode_area) means a customer
-    `OUT001/MULIA2` in BATULICIN is distinct from `OUT001/MULIA2` in
-    BANJARMASIN — cross-branch upserts are independent.
+    Identity = (branch, kode), sama seperti Product identity (id, branch).
+    `kode` yang sama BOLEH di branch berbeda (mis. 'OUT001' di BATULICIN
+    dan 'OUT001' di BARABAI = 2 customer beda), tapi HARUS unik dalam 1
+    branch. `kode_area` jadi field deskriptif saja.
 
-    `branch` MUST be non-None for new inserts (customers.branch is NOT NULL).
-    Re-activation path (existing soft-deleted rows) is unaffected because
-    it loads the row first.
+    Branch diambil dari caller (JWT user). Wajib non-None untuk insert baru
+    (customers.branch NOT NULL). Re-activation path (existing soft-deleted
+    rows) tidak kena constraint ini karena load row dulu.
 
     Returns (inserted_count, updated_count).
     """
@@ -145,53 +145,53 @@ def _bulk_upsert_customers(
         for r in rows:
             r["branch"] = branch
 
-    # Lookup existing customers by (branch, kode, kode_area) triple. Rows
-    # with NULL kode or NULL kode_area skip the lookup (non-partial UNIQUE
-    # index treats NULL as distinct → no conflict possible).
-    triples_in_file = sorted({
-        (r["branch"], r["kode"], r["kode_area"])
+    # Lookup existing customers by (branch, kode) pair. Rows with NULL kode
+    # skip the lookup — non-partial UNIQUE index treats NULL as distinct,
+    # jadi multiple toko tanpa kode per branch tetap allowed.
+    pairs_in_file = sorted({
+        (r["branch"], r["kode"])
         for r in rows
-        if r.get("kode") and r.get("kode_area") and r.get("branch")
+        if r.get("kode") and r.get("branch")
     })
     from sqlalchemy import and_, or_
     existing_rows = []
-    if triples_in_file:
-        if len(triples_in_file) == 1:
-            br, k, a = triples_in_file[0]
+    if pairs_in_file:
+        if len(pairs_in_file) == 1:
+            br, k = pairs_in_file[0]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.branch, Customer.deleted_at)
-                .filter(and_(Customer.branch == br, Customer.kode == k, Customer.kode_area == a))
+                db.query(Customer.id, Customer.kode, Customer.branch, Customer.deleted_at)
+                .filter(and_(Customer.branch == br, Customer.kode == k))
                 .all()
             )
         else:
             conditions = [
-                and_(Customer.branch == br, Customer.kode == k, Customer.kode_area == a)
-                for br, k, a in triples_in_file
+                and_(Customer.branch == br, Customer.kode == k)
+                for br, k in pairs_in_file
             ]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.branch, Customer.deleted_at)
+                db.query(Customer.id, Customer.kode, Customer.branch, Customer.deleted_at)
                 .filter(or_(*conditions))
                 .all()
             )
-    # Build lookup: (branch, kode, kode_area) -> (customer_id, is_deleted)
+    # Build lookup: (branch, kode) -> (customer_id, is_deleted)
     existing_map: Dict[tuple, tuple] = {}
     for row in existing_rows:
-        if row.kode and row.kode_area and row.branch:
-            existing_map[(row.branch, row.kode, row.kode_area)] = (
+        if row.kode and row.branch:
+            existing_map[(row.branch, row.kode)] = (
                 str(row.id), row.deleted_at is not None
             )
 
-    to_insert = []   # new customers (no existing triple, or NULL kode/area)
+    to_insert = []   # new customers (no existing pair, or NULL kode)
     to_update = []  # re-activate deleted customers
 
     for r in rows:
         kode = r.get("kode")
-        kode_area = r.get("kode_area")
-        # NULL/empty kode atau kode_area → always insert (no conflict possible)
-        if not kode or not kode_area:
+        # NULL/empty kode → always insert (no conflict possible by UNIQUE
+        # semantics, multiple NULLs allowed per branch).
+        if not kode:
             to_insert.append(r)
             continue
-        key = (r["branch"], kode, kode_area)
+        key = (r["branch"], kode)
         if key in existing_map:
             cid, is_deleted = existing_map[key]
             if is_deleted:
@@ -215,17 +215,17 @@ def _bulk_upsert_customers(
             }
             for r in to_insert
         ])
-        # ON CONFLICT must match the actual unique constraint
-        # (branch, kode, kode_area) per models.Customer.__table_args__.
-        # NOT updating `branch` on conflict — if a customer already exists
-        # in this branch with same (kode, kode_area), keep its branch.
+        # ON CONFLICT must match the actual unique constraint (branch, kode)
+        # per models.Customer.__table_args__. NOT updating `branch` on conflict
+        # — kalau ada existing customer di branch yang sama dengan kode sama,
+        # pertahankan branch-nya.
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Customer.branch, Customer.kode, Customer.kode_area],
+            index_elements=[Customer.branch, Customer.kode],
             set_={
-                "kode_area": stmt.excluded.kode_area,
                 "kode": stmt.excluded.kode,
                 "nama_toko": stmt.excluded.nama_toko,
                 "alamat": stmt.excluded.alamat,
+                "kode_area": stmt.excluded.kode_area,
                 "deleted_at": None,
             },
         )
@@ -301,9 +301,9 @@ def sync_customers_from_excel(
         }
 
     total_rows = len(raw_rows)
-    # Identity customer = (branch, kode, kode_area) triple. Same (kode, kode_area)
-    # boleh di branch berbeda; dalam satu branch harus unik per area.
-    # Null/null pairs di-skip dari unique check.
+    # Identity customer = (branch, kode). Same kode boleh di branch berbeda;
+    # dalam 1 branch harus unik. NULL kode di-skip dari unique check.
+    branch_norm = _normalize(current_user.get("branch"))
     seen_keys: set = set()
 
     for idx, row in enumerate(raw_rows, start=1):
@@ -318,20 +318,19 @@ def sync_customers_from_excel(
             skipped += 1
             continue
 
-        # Kode null/empty atau kode_area null/empty → skip unique check
-        # (akan jadi insert baru, no conflict possible).
+        # Cek duplikat (branch, kode) di dalam file ini. NULL kode skip —
+        # multiple NULLs diperbolehkan per branch oleh UNIQUE index.
         kode_norm = _normalize(kode_raw)
-        kode_area_norm = _normalize(kode_area_raw)
-        if kode_norm and kode_area_norm:
-            key = (kode_norm, kode_area_norm)
+        if kode_norm:
+            key = (branch_norm, kode_norm)
             if key in seen_keys:
                 validation_errors.append({
                     "row": idx,
                     "sku": str(kode_raw),
                     "reason": (
-                        f"Kode '{kode_raw}' muncul lebih dari sekali di area '{kode_area_raw}' "
-                        "di file ini. Kode yang sama boleh di area berbeda, tapi dalam "
-                        "satu area harus unik."
+                        f"Kode '{kode_raw}' muncul lebih dari sekali di branch "
+                        f"'{current_user.get('branch')}' di file ini. Kode yang sama "
+                        "boleh di branch berbeda, tapi dalam satu branch harus unik."
                     ),
                 })
                 skipped += 1

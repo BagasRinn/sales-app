@@ -92,19 +92,21 @@ class Product(Base):
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
-        UniqueConstraint("branch", "kode", "kode_area", name="uq_customers_branch_kode_kode_area"),
+        # Customer identity = (branch, kode). Same pattern as Product (id, branch).
+        # kode may be NULL; multiple NULLs allowed by Postgres UNIQUE index.
+        UniqueConstraint("branch", "kode", name="uq_customers_branch_kode"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # Branch scoping: kode can repeat across branches but unique within a branch.
+    # Branch scoping: kode unique within a branch, may repeat across branches.
     branch = Column(String(20), nullable=False, index=True)
     kode = Column(String(50), nullable=True, index=True)
     nama_toko = Column(String(200), nullable=False, index=True)
     alamat = Column(String(500), nullable=True)
     # Pengelompokan customer per area/rayon. Default assignment sales pakai
     # kolom ini — manager assign 1 sales ke "MULIA2" → semua customer dengan
-    # kode_area='MULIA2' otomatis dapat coverage. Optional (legacy customer
-    # tanpa kode_area = visible-to-all seperti area tanpa assignment).
+    # kode_area='MULIA2' otomatis dapat coverage. Field deskriptif saja,
+    # bukan bagian dari identity (lihat UniqueConstraint di atas).
     kode_area = Column(String(50), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())

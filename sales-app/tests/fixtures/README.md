@@ -24,9 +24,15 @@ Lihat: `sales-app/backend/app/services/sheets_sync.py:20`.
 | PALANGKARAYA  | `test_customers_palangkaraya.xlsx`| `PK-C`      | 7    |
 | SAMPIT        | `test_customers_sampit.xlsx`      | `SP-C`      | 4    |
 
-Total 22 rows. Backend identity: `(branch, kode, kode_area)`. Header
-wajib persis: `kode, nama_toko, alamat, kode_area`. Lihat:
+Total 22 rows. Backend identity: `(branch, kode)` — sama pattern
+dengan Product `(id, branch)`. Header wajib persis:
+`kode, nama_toko, alamat, kode_area`. Lihat:
 `sales-app/backend/app/services/customer_sync.py:27`.
+
+**Identity rule**: `kode` unique per branch. Same `kode` BOLEH di branch
+berbeda (mis. `OUT001` di BATULICIN dan `OUT001` di BARABAI = 2 customer
+beda), tapi dalam 1 branch harus unik. `kode_area` jadi field deskriptif
+saja (bukan bagian dari identity).
 
 **Semua 4 kolom wajib terisi** — fixture ini happy-path only, tidak cover
 case "kode kosong" / "kode_area kosong". Kalau mau test validasi field
