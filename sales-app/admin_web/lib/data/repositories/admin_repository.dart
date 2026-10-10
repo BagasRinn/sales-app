@@ -112,8 +112,15 @@ class AdminRepository {
           '${dateTo.day.toString().padLeft(2, '0')}';
     }
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/orders$qs', cancelToken: cancelToken);
-    return (data as List).map((e) => Order.fromJson(e)).toList();
+    final response = await _api.dio.get<dynamic>(
+      '/orders$qs',
+      options: Options(responseType: ResponseType.json),
+    );
+    final body = response.data as Map<String, dynamic>;
+    final ordersList = body['orders'] as List? ?? body as List;
+    return ordersList
+        .map((e) => Order.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Sama dengan [getAllOrders] tapi juga baca header X-Total-Count —
