@@ -1337,7 +1337,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
-                                        color: AppColors.error,
+                                        color: AppColors.success,
                                       ),
                                     ),
                                   ],
@@ -1649,7 +1649,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                           '-Rp ${_fmt(order.totalDiscount)}',
                                                           style: const TextStyle(
                                                             fontSize: 10,
-                                                            color: AppColors.error,
+                                                            color: AppColors.success,
                                                             fontWeight: FontWeight.w600,
                                                           ),
                                                         ),
@@ -2139,15 +2139,15 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                     textAlign: TextAlign.right,
                   )
                 : item.hasDiscount
-                    ? Text(
-                        '-Rp ${_fmt(item.nominalDiskon)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.error,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.right,
-                      )
+                ? Text(
+                    '-Rp ${_fmt(item.nominalDiskon)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.right,
+                  )
                     : const Text(
                         '—',
                         style: TextStyle(fontSize: 11, color: AppColors.textMuted),
