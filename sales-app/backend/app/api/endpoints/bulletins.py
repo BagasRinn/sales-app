@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
-from app.core.security import require_auth, require_admin_or_supervisor, apply_branch_filter, CurrentUser
+from app.core.security import require_auth, require_admin_or_supervisor, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
 from app.services.supabase_storage import upload_pdf, delete_file
 
@@ -83,7 +83,7 @@ def list_bulletins(
 def create_bulletin(
     body: BulletinCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Create bulletin."""
     bulletin = Bulletin(
@@ -103,7 +103,7 @@ def create_bulletin(
 @router.post("/upload-pdf")
 def bulletin_upload_pdf(
     file: UploadFile = File(...),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    _current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Upload file PDF ke Supabase Storage."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -147,7 +147,7 @@ def update_bulletin(
     bulletin_id: UUID,
     body: BulletinUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Update bulletin. Branch-scoped: ADMIN/SUPERVISOR hanya bisa update
     bulletin di branch-nya (atau bulletin global). MANAGER (branch=NULL) bisa
@@ -185,7 +185,7 @@ def update_bulletin(
 def delete_bulletin(
     bulletin_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Delete bulletin dan semua dismiss record terkait. Branch-scoped."""
     bulletin = db.query(Bulletin).filter(Bulletin.id == bulletin_id).first()

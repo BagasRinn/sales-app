@@ -5,7 +5,8 @@ import '../providers/admin_provider.dart';
 import '../../data/models/user_item.dart';
 
 class UsersTab extends StatefulWidget {
-  const UsersTab({super.key});
+  final bool readOnly;
+  const UsersTab({super.key, this.readOnly = false});
 
   @override
   State<UsersTab> createState() => _UsersTabState();
@@ -120,7 +121,7 @@ class _UsersTabState extends State<UsersTab> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
-                    onPressed: () => _openCreateDialog(context),
+                    onPressed: !widget.readOnly ? () => _openCreateDialog(context) : null,
                     icon: const Icon(Icons.person_add, size: 18),
                     label: const Text('Tambah'),
                     style: FilledButton.styleFrom(
@@ -131,7 +132,7 @@ class _UsersTabState extends State<UsersTab> {
               ),
             ),
             const Divider(height: 1),
-            const _TableHeader(),
+            _TableHeader(readOnly: widget.readOnly),
             const Divider(height: 1),
             Expanded(
               child: isLoading && users.isEmpty
@@ -158,7 +159,7 @@ class _UsersTabState extends State<UsersTab> {
                       : ListView.builder(
                           itemCount: users.length,
                           itemBuilder: (ctx, index) =>
-                              _UserRow(user: users[index]),
+                              _UserRow(user: users[index], readOnly: widget.readOnly),
                         ),
             ),
           ],
@@ -177,7 +178,8 @@ class _UsersTabState extends State<UsersTab> {
 }
 
 class _TableHeader extends StatelessWidget {
-  const _TableHeader();
+  final bool readOnly;
+  const _TableHeader({this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +193,7 @@ class _TableHeader extends StatelessWidget {
           SizedBox(width: 110, child: Center(child: Text('ROLE', style: AppTextStyles.labelMedium))),
           SizedBox(width: 150, child: Center(child: Text('CABANG', style: AppTextStyles.labelMedium))),
           SizedBox(width: 100, child: Center(child: Text('STATUS', style: AppTextStyles.labelMedium))),
-          SizedBox(width: 100, child: Center(child: Text('AKSI', style: AppTextStyles.labelMedium))),
+          if (!readOnly) SizedBox(width: 100, child: Center(child: Text('AKSI', style: AppTextStyles.labelMedium))),
         ],
       ),
     );
@@ -200,7 +202,8 @@ class _TableHeader extends StatelessWidget {
 
 class _UserRow extends StatelessWidget {
   final UserItem user;
-  const _UserRow({required this.user});
+  final bool readOnly;
+  const _UserRow({required this.user, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -260,23 +263,24 @@ class _UserRow extends StatelessWidget {
               child: _StatusBadge(active: user.isActive),
             ),
           ),
-          SizedBox(
-            width: 100,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: () => _openEditDialog(context),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  color: AppColors.primaryLight,
-                  tooltip: 'Edit user',
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                  padding: EdgeInsets.zero,
-                ),
-              ],
+          if (!readOnly)
+            SizedBox(
+              width: 100,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: () => _openEditDialog(context),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: AppColors.primaryLight,
+                    tooltip: 'Edit user',
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

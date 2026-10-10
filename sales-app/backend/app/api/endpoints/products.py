@@ -15,7 +15,7 @@ from app.schemas.schemas import (
     SyncResultResponse,
     ImportLogResponse,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
+from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
@@ -137,7 +137,7 @@ def list_products(
 @router.get("/kategori", response_model=List[str])
 def get_kategori_list(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Return distinct kategori values for the filter dropdown (admin + manager).
     Branch-scoped."""
@@ -152,7 +152,7 @@ def get_kategori_list(
 @router.get("/supplier", response_model=List[str])
 def get_supplier_list(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Return distinct supplier values for the filter dropdown (admin/supervisor).
     Branch-scoped."""
@@ -167,7 +167,7 @@ def get_supplier_list(
 @router.post("/sync", response_model=SyncResultResponse)
 def sync_products(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     sync_result = sync_products_from_excel(None, db, current_user={
         "user_id": current_user["user_id"],
@@ -192,7 +192,7 @@ def sync_products(
 def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """
     Upload file Excel (.xlsx) untuk import / update data produk.
@@ -247,7 +247,7 @@ def _import_logs_branch_scope(current_user: dict) -> str | None:
 @router.get("/import-logs", response_model=List[ImportLogResponse])
 def get_import_logs(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Ambil histori import Excel (max 20 terbaru; pagination 5/halaman di client).
 
@@ -287,7 +287,7 @@ def clear_import_errors(
 @router.get("/sync/errors", response_model=List[dict])
 def get_sync_errors(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Ambil error validasi dari sync terakhir (gabung dengan import_logs untuk
     menampilkan file name, import type, dan timestamp). 100 baris terbaru.
@@ -322,7 +322,7 @@ def get_sync_errors(
 def get_admin_stats(
     date: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Server-side dashboard stats - admin/supervisor access. Branch-scoped. Jika `date`
     Branch-scoped. Jika `date` diberikan (format YYYY-MM-DD), stats difilter untuk order
@@ -379,7 +379,7 @@ def get_product_count(
     status: Optional[str] = None,
     order_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Return total product count for pagination - applies same filters as list_products."""
     query = db.query(func.count(Product.id))
@@ -459,7 +459,7 @@ def update_product(
     payload: ProductUpdate,
     branch: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Partial update untuk produk - admin/supervisor. Field yang None di-skip.
     order_type hanya menerima 'REGULER' atau '4P'."""
@@ -550,7 +550,7 @@ def update_product_stock(
     stock_update: ProductUpdateStock,
     branch: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     query = db.query(Product).filter(Product.id == product_id)
     lookup_branch = branch or current_user.get("branch")

@@ -289,8 +289,8 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
-    // Only ADMIN has write access; SUPERVISOR, MANAGER, and others are read-only.
-    final readOnly = widget.role != 'ADMIN';
+    // ADMIN is read-only; SUPERVISOR and MANAGER can write.
+    final readOnly = widget.role == 'ADMIN';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
     // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
@@ -310,13 +310,13 @@ class _DashboardContentState extends State<_DashboardContent>
       case 5:
         return SyncTab(readOnly: readOnly);
       case 6:
-        return const UsersTab();
+        return UsersTab(readOnly: readOnly);
       case 7:
         return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 8:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case 9:
-        return const BulletinsTab(); // MANAGER & SUPERVISOR
+        return BulletinsTab(readOnly: readOnly); // MANAGER & SUPERVISOR
       case 10:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;

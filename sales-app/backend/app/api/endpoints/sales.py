@@ -19,7 +19,7 @@ from app.schemas.schemas import (
     CustomerResponse,
     SalesAssignmentItem,
 )
-from app.core.security import require_admin_or_supervisor, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/sales", tags=["Sales"])
 def list_sales_customers(
     sales_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Semua customer yang visible untuk sales ini (hybrid: area + direct override).
     Admin + supervisor only - untuk tab 'Per Sales' di admin web."""
@@ -127,7 +127,7 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
 @router.get("/area-assignments", response_model=List[AreaAssignmentListItem])
 def list_area_assignments(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
     Branch-scoped — hanya dari branch user yang login. MANAGER (branch=NULL)
@@ -139,7 +139,7 @@ def list_area_assignments(
 def list_area_assignment_detail(
     kode_area: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """List sales yang di-assign ke kode_area tertentu. Branch-scoped."""
     user_branch = current_user.get("branch")
@@ -170,7 +170,7 @@ def put_area_assignment(
     kode_area: str,
     body: AreaAssignmentsPut,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Replace full set of sales assigned to kode_area. Idempotent.
     Empty sales_ids = unassign semua sales dari area ini (customer di area

@@ -189,6 +189,21 @@ def require_admin_or_supervisor(current_user: dict = Depends(get_current_user)) 
     return current_user
 
 
+def require_supervisor_or_manager_global(current_user: dict = Depends(get_current_user)) -> dict:
+    """SUPERVISOR (branch-scoped) or MANAGER (global, branch=NULL).
+    ADMIN excluded — admin is read-only.
+    MANAGER global sees all branches; SUPERVISOR is branch-scoped."""
+    role = current_user.get("role")
+    if role == "MANAGER":
+        return current_user
+    if role == "SUPERVISOR":
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Akses ditolak. Hanya supervisor atau manager global yang dapat mengakses endpoint ini.",
+    )
+
+
 def apply_branch_filter(query, model, current_user: dict):
     """Apply branch filter to a query based on the current user.
 

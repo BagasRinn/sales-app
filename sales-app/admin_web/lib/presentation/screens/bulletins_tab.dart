@@ -9,7 +9,8 @@ import 'bulletin_pdf_picker_stub.dart'
 
 /// Tab "Bulletin" — manager-only bulletin management.
 class BulletinsTab extends StatefulWidget {
-  const BulletinsTab({super.key});
+  final bool readOnly;
+  const BulletinsTab({super.key, this.readOnly = false});
 
   @override
   State<BulletinsTab> createState() => _BulletinsTabState();
@@ -56,20 +57,22 @@ class _BulletinsTabState extends State<BulletinsTab> {
           itemBuilder: (context, i) {
             return _BulletinCard(
               bulletin: bulletins[i],
+              readOnly: widget.readOnly,
               onEdit: () => _showFormDialog(context, bulletins[i]),
               onDelete: () => _showDeleteDialog(context, bulletins[i]),
             );
           },
         ),
-        Positioned(
-          right: 24,
-          bottom: 24,
-          child: FloatingActionButton.extended(
-            onPressed: () => _showFormDialog(context, null),
-            icon: const Icon(Icons.add),
-            label: const Text('Buat Bulletin'),
+        if (!widget.readOnly)
+          Positioned(
+            right: 24,
+            bottom: 24,
+            child: FloatingActionButton.extended(
+              onPressed: () => _showFormDialog(context, null),
+              icon: const Icon(Icons.add),
+              label: const Text('Buat Bulletin'),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -364,11 +367,13 @@ class _BulletinsTabState extends State<BulletinsTab> {
 
 class _BulletinCard extends StatelessWidget {
   final Bulletin bulletin;
+  final bool readOnly;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _BulletinCard({
     required this.bulletin,
+    required this.readOnly,
     required this.onEdit,
     required this.onDelete,
   });
@@ -431,7 +436,7 @@ class _BulletinCard extends StatelessWidget {
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     color: AppColors.textSecondary,
                     tooltip: 'Edit',
-                    onPressed: onEdit,
+                    onPressed: readOnly ? null : onEdit,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     padding: EdgeInsets.zero,
                   ),
@@ -439,7 +444,7 @@ class _BulletinCard extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline, size: 18),
                     color: AppColors.error,
                     tooltip: 'Hapus',
-                    onPressed: onDelete,
+                    onPressed: readOnly ? null : onDelete,
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     padding: EdgeInsets.zero,
                   ),

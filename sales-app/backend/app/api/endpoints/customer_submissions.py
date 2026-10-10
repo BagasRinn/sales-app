@@ -20,7 +20,7 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelRequest,
     CustomerSubmissionCancelResponse,
 )
-from app.core.security import require_auth, require_admin, require_admin_or_supervisor, apply_branch_filter, CurrentUser
+from app.core.security import require_auth, require_admin, require_admin_or_supervisor, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
@@ -242,7 +242,7 @@ def check_duplicate_customer(
 def list_submissions(
     status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """Admin/Supervisor lihat semua submissions. Default: semua status (untuk log view)."""
     query = db.query(CustomerRegistrationSubmission)
@@ -283,7 +283,7 @@ def approve_submission(
     submission_id: UUID,
     payload: CustomerSubmissionApprove,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Approve submission → bikin Customer baru (dengan kode dari admin) → update submission jadi APPROVED."""
     submission = (
@@ -406,7 +406,7 @@ def reject_submission(
     submission_id: UUID,
     payload: CustomerSubmissionReject,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Reject submission → status jadi REJECTED dengan reject_reason (opsional)."""
     submission = (

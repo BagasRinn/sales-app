@@ -13,7 +13,8 @@ import '../providers/admin_provider.dart';
 /// Area-based assignment adalah default — manager tinggal pilih area → pilih sales
 /// → semua customer di area itu otomatis ke-cover. Customer-level jadi override.
 class PenugasanSalesTab extends StatefulWidget {
-  const PenugasanSalesTab({super.key});
+  final bool readOnly;
+  const PenugasanSalesTab({super.key, this.readOnly = false});
 
   @override
   State<PenugasanSalesTab> createState() => _PenugasanSalesTabState();
@@ -151,6 +152,7 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                   areas: _filteredAreaRows(),
                   onChanged: _loadAll,
                   allSalesUsers: _allSalesUsers,
+                  readOnly: widget.readOnly,
                 )
               : _subView == 1
                   ? _PerCustomerView(
@@ -196,11 +198,13 @@ class _PerAreaView extends StatelessWidget {
   final List<_AreaRow> areas;
   final List<SalesUser> allSalesUsers;
   final VoidCallback onChanged;
+  final bool readOnly;
 
   const _PerAreaView({
     required this.areas,
     required this.allSalesUsers,
     required this.onChanged,
+    required this.readOnly,
   });
 
   @override
@@ -241,6 +245,7 @@ class _PerAreaView extends StatelessWidget {
           area: a,
           allSalesUsers: allSalesUsers,
           onChanged: onChanged,
+          readOnly: readOnly,
         );
       },
     );
@@ -251,11 +256,13 @@ class _AreaAssignmentRow extends StatefulWidget {
   final _AreaRow area;
   final List<SalesUser> allSalesUsers;
   final VoidCallback onChanged;
+  final bool readOnly;
 
   const _AreaAssignmentRow({
     required this.area,
     required this.allSalesUsers,
     required this.onChanged,
+    required this.readOnly,
   });
 
   @override
@@ -303,7 +310,7 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: _openEditor,
+        onTap: widget.readOnly ? null : _openEditor,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -330,7 +337,7 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
                   ),
                   const Spacer(),
                   TextButton.icon(
-                    onPressed: _openEditor,
+                    onPressed: widget.readOnly ? null : _openEditor,
                     icon: const Icon(Icons.edit_outlined, size: 16),
                     label: const Text('Kelola'),
                   ),

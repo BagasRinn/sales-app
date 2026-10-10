@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     CancelItemsRequest,
     OrderReject,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, apply_branch_filter, CurrentUser
+from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
 from app.services.stock_logger import log_stock_change
 
@@ -999,7 +999,7 @@ def list_pending_orders(
     limit: int = 50,
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     query = (
         db.query(Order)
@@ -1045,7 +1045,7 @@ def list_all_orders(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_auth),
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
     date_from/date_to opsional - kalau dua-duanya kosong, semua pesanan.
