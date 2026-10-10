@@ -144,6 +144,7 @@ class ProductUpdate(BaseSchema):
 class ProductResponse(BaseSchema):
     id: str
     branch: Optional[str] = None
+    branch_nama: Optional[str] = None
     nama_barang: str
     harga: int
     stok_sistem: int

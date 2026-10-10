@@ -87,7 +87,6 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
     # Pakai select() explicit supaya tidak kena SAWarning "Coercing Subquery
     # object into a select()".
     from sqlalchemy import select
-    customer_areas_subq_select = select(customer_areas_subq.c.kode_area).subquery()
     # LEFT JOIN ke area_assignments + User
     rows = (
         db.query(AreaAssignment, User)
@@ -95,7 +94,7 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
             User,
             (User.id == AreaAssignment.sales_id) & (User.deleted_at.is_(None)),
         )
-        .filter(AreaAssignment.kode_area.in_(customer_areas_subq_select))
+        .filter(AreaAssignment.kode_area.in_(select(customer_areas_subq.c.kode_area)))
         .order_by(AreaAssignment.kode_area, User.username)
         .all()
     )
