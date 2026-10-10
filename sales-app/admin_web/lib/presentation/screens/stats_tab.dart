@@ -228,12 +228,17 @@ class _StatsTabState extends State<StatsTab> {
       runSpacing: 12,
       children: sales.map((s) => _SalesPerformanceCard(
         s: s,
-        onTap: () => _openSalesDetail(provider, s),
+        onTapSection: (status) =>
+            _openSalesDetail(provider, s, initialStatus: status),
       )).toList(),
     );
   }
 
-  void _openSalesDetail(AdminProvider provider, SalesPerformanceDashboardItem s) {
+  void _openSalesDetail(
+    AdminProvider provider,
+    SalesPerformanceDashboardItem s, {
+    String? initialStatus,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -244,6 +249,7 @@ class _StatsTabState extends State<StatsTab> {
         child: _SalesOverlayDialog(
           provider: provider,
           sales: s,
+          initialStatus: initialStatus,
           onClose: () {
             provider.clearSalesDetailOrders();
             Navigator.of(ctx).pop();
@@ -911,82 +917,105 @@ class _ReportDownloadCard extends StatelessWidget {
 
 class _SalesPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem s;
-  final VoidCallback onTap;
+  /// Callback untuk klik pada bagian card. Status null = "Semua"
+  /// (klik nama atau area kosong), 'APPROVED'/'PENDING'/'REJECTED' = klik
+  /// section status yang sesuai di card.
+  final ValueChanged<String?> onTapSection;
 
-  const _SalesPerformanceCard({required this.s, required this.onTap});
+  const _SalesPerformanceCard({required this.s, required this.onTapSection});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-      width: 300,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: Text(
-                  s.displayName.isNotEmpty ? s.displayName[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Name row — klik → "Semua" (no status filter)
+            GestureDetector(
+              onTap: () => onTapSection(null),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        s.displayName.isNotEmpty ? s.displayName[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        s.displayName,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  s.displayName,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ),
+            const SizedBox(height: 12),
+            // Disetujui — klik → APPROVED
+            GestureDetector(
+              onTap: () => onTapSection('APPROVED'),
+              behavior: HitTestBehavior.opaque,
+              child: _buildStatusSection(
+                label: 'Disetujui',
+                mtdCount: s.approvedMtdCount,
+                mtdRevenue: s.approvedMtdRevenue,
+                todayCount: s.approvedTodayCount,
+                todayRevenue: s.approvedTodayRevenue,
+                color: AppColors.success,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildStatusSection(
-            label: 'Disetujui',
-            mtdCount: s.approvedMtdCount,
-            mtdRevenue: s.approvedMtdRevenue,
-            todayCount: s.approvedTodayCount,
-            todayRevenue: s.approvedTodayRevenue,
-            color: AppColors.success,
-          ),
-          const Divider(height: 20),
-          _buildStatusSection(
-            label: 'Menunggu',
-            mtdCount: s.pendingMtdCount,
-            mtdRevenue: s.pendingMtdRevenue,
-            todayCount: s.pendingTodayCount,
-            todayRevenue: s.pendingTodayRevenue,
-            color: AppColors.warning,
-          ),
-          const Divider(height: 20),
-          _buildStatusSection(
-            label: 'Ditolak',
-            mtdCount: s.rejectedMtdCount,
-            mtdRevenue: s.rejectedMtdRevenue,
-            todayCount: s.rejectedTodayCount,
-            todayRevenue: s.rejectedTodayRevenue,
-            color: AppColors.error,
-          ),
-        ],
+            ),
+            const Divider(height: 20),
+            // Menunggu — klik → PENDING
+            GestureDetector(
+              onTap: () => onTapSection('PENDING'),
+              behavior: HitTestBehavior.opaque,
+              child: _buildStatusSection(
+                label: 'Menunggu',
+                mtdCount: s.pendingMtdCount,
+                mtdRevenue: s.pendingMtdRevenue,
+                todayCount: s.pendingTodayCount,
+                todayRevenue: s.pendingTodayRevenue,
+                color: AppColors.warning,
+              ),
+            ),
+            const Divider(height: 20),
+            // Ditolak — klik → REJECTED
+            GestureDetector(
+              onTap: () => onTapSection('REJECTED'),
+              behavior: HitTestBehavior.opaque,
+              child: _buildStatusSection(
+                label: 'Ditolak',
+                mtdCount: s.rejectedMtdCount,
+                mtdRevenue: s.rejectedMtdRevenue,
+                todayCount: s.rejectedTodayCount,
+                todayRevenue: s.rejectedTodayRevenue,
+                color: AppColors.error,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-    ),
     );
   }
 
@@ -1066,11 +1095,13 @@ class _SalesOverlayDialog extends StatelessWidget {
   final AdminProvider provider;
   final SalesPerformanceDashboardItem sales;
   final VoidCallback onClose;
+  final String? initialStatus;
 
   const _SalesOverlayDialog({
     required this.provider,
     required this.sales,
     required this.onClose,
+    this.initialStatus,
   });
 
   @override
@@ -1089,6 +1120,7 @@ class _SalesOverlayDialog extends StatelessWidget {
             provider: provider,
             sales: sales,
             onClose: onClose,
+            initialStatus: initialStatus,
           ),
         ),
       ),
@@ -1100,11 +1132,16 @@ class _SalesDetailDialogBody extends StatefulWidget {
   final AdminProvider provider;
   final SalesPerformanceDashboardItem sales;
   final VoidCallback onClose;
+  /// Status pre-applied saat dialog pertama dibuka. Null = tampilkan semua
+  /// status ("Semua"). Dipakai untuk deep-link dari klik salah satu section
+  /// di dashboard card (Disetujui/Menunggu/Ditolak → APPROVED/PENDING/REJECTED).
+  final String? initialStatus;
 
   const _SalesDetailDialogBody({
     required this.provider,
     required this.sales,
     required this.onClose,
+    this.initialStatus,
   });
 
   @override
@@ -1123,6 +1160,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   @override
   void initState() {
     super.initState();
+    _statusFilter = widget.initialStatus;
     widget.provider.addListener(_onProviderUpdate);
     _applyFilters();
   }
