@@ -2061,14 +2061,45 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   Widget _itemRow(OrderItem item) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: item.isFree
+          ? BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(4),
+            )
+          : null,
       child: Row(
         children: [
           Expanded(
             flex: 3,
-            child: Text(
-              item.namaBarang,
-              style: const TextStyle(fontSize: 11),
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.namaBarang,
+                    style: const TextStyle(fontSize: 11),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (item.isFree) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'GRATIS',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           SizedBox(
@@ -2081,36 +2112,65 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
           ),
           SizedBox(
             width: 70,
-            child: Text(
-              'Rp ${_fmt(item.hargaSatuan)}',
-              style: const TextStyle(fontSize: 11),
-            ),
+            child: item.isFree
+                ? Text(
+                    'Rp ${_fmt(item.hargaSatuan)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  )
+                : Text(
+                    'Rp ${_fmt(item.hargaSatuan)}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
           ),
           SizedBox(
             width: 70,
-            child: item.hasDiscount
+            child: item.isFree
                 ? Text(
                     '-Rp ${_fmt(item.nominalDiskon)}',
                     style: const TextStyle(
                       fontSize: 11,
-                      color: AppColors.error,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w700,
                     ),
                     textAlign: TextAlign.right,
                   )
-                : const Text(
-                    '—',
-                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                    textAlign: TextAlign.right,
-                  ),
+                : item.hasDiscount
+                    ? Text(
+                        '-Rp ${_fmt(item.nominalDiskon)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.right,
+                      )
+                    : const Text(
+                        '—',
+                        style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        textAlign: TextAlign.right,
+                      ),
           ),
           SizedBox(
             width: 80,
-            child: Text(
-              'Rp ${_fmt(item.subtotal)}',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-              textAlign: TextAlign.right,
-            ),
+            child: item.isFree
+                ? const Text(
+                    'Rp 0',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    textAlign: TextAlign.right,
+                  )
+                : Text(
+                    'Rp ${_fmt(item.subtotal)}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.right,
+                  ),
           ),
         ],
       ),

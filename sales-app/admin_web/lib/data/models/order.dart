@@ -186,6 +186,11 @@ class OrderItem {
   int get nominalDiskon => hargaSatuan * qty - subtotal;
 
   bool get hasDiscount => nominalDiskon > 0;
+
+  /// True kalau item ada di order tapi bayar Rp 0 — mis. barang bonus promo
+  /// "beli 5 gratis 1" atau diskon 100% dari sales. Ditandai dengan qty > 0
+  /// supaya baris kosong (qty=0, subtotal=0) tidak ikut dianggap gratis.
+  bool get isFree => qty > 0 && subtotal == 0;
 }
 
 class CancelledItem {
