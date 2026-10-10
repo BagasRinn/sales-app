@@ -29,6 +29,8 @@ Run from repo root:
     python sales-app/backend/scripts/_gen_test_import_fixture.py
 """
 import os
+import shutil
+import tempfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
@@ -101,46 +103,44 @@ PRODUCTS = {
 CUSTOMER_HEADERS = ["kode", "nama_toko", "alamat", "kode_area"]
 
 # Per-branch customer data: (kode, nama_toko, alamat, kode_area)
-# kode bisa None/empty = insert baru tanpa kode.
-# kode_area boleh None/empty juga; same (kode, kode_area) unique hanya dalam
-# 1 branch — di file ini tiap branch berdiri sendiri jadi tidak konflik
-# dengan branch lain.
+# SEMUA 4 kolom wajib terisi — fixture ini untuk happy-path testing, bukan
+# untuk test validasi field kosong. Kalau mau test "kode kosong" / "alamat
+# kosong" / etc, bikin file terpisah.
 #
-# Mix skenario yang dicakup per file:
-#   - row dengan kode + kode_area (upsert path identity-based)
-#   - row dengan kode tapi tanpa kode_area (insert baru)
-#   - row tanpa kode (insert baru, no conflict possible)
-#   - nama_toko & alamat unik antar row supaya tidak ada duplicate identity
+# Identity customer = (branch, kode, kode_area) triple. Same kode di branch
+# berbeda atau di kode_area berbeda tetap dianggap customer berbeda. Dalam
+# file per branch ini, semua (kode, kode_area) unik supaya tidak ada
+# duplicate-identity di file.
 CUSTOMERS = {
     "BATULICIN": [
-        ("BL-C001", "Toko Sumber Rezeki",     "Jl. Lambung Mangkurat No.12, Batulicin", "MULIA2"),
-        ("BL-C002", "Warung Ibu Hj. Aminah",  "Jl. Dharma Praja No.45, Batulicin",     "MULIA1"),
-        ("BL-C003", "Toko Aneka Bumbu",       "Jl. Raya Batulicin RT 03/01",           "MULIA2"),
-        ("BL-C004", "Sembako Jaya Makmur",    "Jl. Veteran No.7, Batulicin",           "MULIA1"),
-        ("BL-C005", "Toko Hj. Halimah",       "Jl. Sulawesi No.23, Simpang Empat",     None),
-        (None,      "Toko Baru Tanpa Kode",   "Jl. Baru No.1, Batulicin",              "MULIA2"),
+        ("BL-C001", "Toko Sumber Rezeki",      "Jl. Lambung Mangkurat No.12, Batulicin", "MULIA2"),
+        ("BL-C002", "Warung Ibu Hj. Aminah",   "Jl. Dharma Praja No.45, Batulicin",     "MULIA1"),
+        ("BL-C003", "Toko Aneka Bumbu",        "Jl. Raya Batulicin RT 03/01",           "MULIA2"),
+        ("BL-C004", "Sembako Jaya Makmur",     "Jl. Veteran No.7, Batulicin",           "MULIA1"),
+        ("BL-C005", "Toko Hj. Halimah",        "Jl. Sulawesi No.23, Simpang Empat",     "MULIA3"),
+        ("BL-C006", "Toko Baru Batulicin",     "Jl. Baru No.1, Batulicin",              "MULIA2"),
     ],
     "BARABAI": [
-        ("BR-C001", "Toko Sinar Jaya",        "Jl. Murakata No.8, Barabai",            "HULU"),
-        ("BR-C002", "Warung Beras Mak Tiah",  "Jl. H. M. Syarkawi No.14, Barabai",     "HULU"),
-        ("BR-C003", "Toko Sumber Rezeki II",  "Jl. Pangeran Antasari No.5, Barabai",   "HILIR"),
-        ("BR-C004", "Sembako Pak Ahmad",      "Jl. Gardu Induk No.21, Barabai",        "HULU"),
-        (None,      "Toko Kelontong Madu",    "Jl. Veteran No.3, Barabai",             None),
+        ("BR-C001", "Toko Sinar Jaya",         "Jl. Murakata No.8, Barabai",            "HULU"),
+        ("BR-C002", "Warung Beras Mak Tiah",   "Jl. H. M. Syarkawi No.14, Barabai",     "HULU"),
+        ("BR-C003", "Toko Sumber Rezeki II",   "Jl. Pangeran Antasari No.5, Barabai",   "HILIR"),
+        ("BR-C004", "Sembako Pak Ahmad",       "Jl. Gardu Induk No.21, Barabai",        "HULU"),
+        ("BR-C005", "Toko Kelontong Madu",     "Jl. Veteran No.3, Barabai",             "HILIR"),
     ],
     "PALANGKARAYA": [
-        ("PK-C001", "Toko Borneo Mart",       "Jl. RTA. Milono Km.2, Palangkaraya",    "BUKIT"),
-        ("PK-C002", "Warung Sumber Hidup",    "Jl. Diponegoro No.45, Palangkaraya",    "BUKIT"),
-        ("PK-C003", "Toko Jaya Abadi",        "Jl. Ahmad Yani No.88, Palangkaraya",    "SEBANGAU"),
-        ("PK-C004", "Sembako Hj. Maryani",    "Jl. Tjilik Riwut Km.5, Palangkaraya",   "BUKIT"),
-        ("PK-C005", "Toko Rezeki Tiada Henti","Jl. Seth Adji No.12, Palangkaraya",     "SEBANGAU"),
-        ("PK-C006", "Warung Barokah",         "Jl. Imam Bonjol No.7, Palangkaraya",    "BUKIT"),
-        (None,      "Toko Aneka",             "Jl. Pelataran No.2, Palangkaraya",      "SEBANGAU"),
+        ("PK-C001", "Toko Borneo Mart",        "Jl. RTA. Milono Km.2, Palangkaraya",    "BUKIT"),
+        ("PK-C002", "Warung Sumber Hidup",     "Jl. Diponegoro No.45, Palangkaraya",    "BUKIT"),
+        ("PK-C003", "Toko Jaya Abadi",         "Jl. Ahmad Yani No.88, Palangkaraya",    "SEBANGAU"),
+        ("PK-C004", "Sembako Hj. Maryani",     "Jl. Tjilik Riwut Km.5, Palangkaraya",   "BUKIT"),
+        ("PK-C005", "Toko Rezeki Tiada Henti", "Jl. Seth Adji No.12, Palangkaraya",     "SEBANGAU"),
+        ("PK-C006", "Warung Barokah",          "Jl. Imam Bonjol No.7, Palangkaraya",    "BUKIT"),
+        ("PK-C007", "Toko Aneka",              "Jl. Pelataran No.2, Palangkaraya",      "SEBANGAU"),
     ],
     "SAMPIT": [
-        ("SP-C001", "Toko Sumber Jaya",       "Jl. MT. Haryono No.15, Sampit",         "KOTA"),
-        ("SP-C002", "Warung Pak Hadi",        "Jl. Jenderal Sudirman Km.3, Sampit",   "KOTA"),
-        ("SP-C003", "Sembako Nurul Iman",     "Jl. Cilik Riwut No.10, Sampit",         "MENTAWA"),
-        ("SP-C004", "Toko H. Basir",          "Jl. Samekto No.5, Sampit",             "KOTA"),
+        ("SP-C001", "Toko Sumber Jaya",        "Jl. MT. Haryono No.15, Sampit",         "KOTA"),
+        ("SP-C002", "Warung Pak Hadi",         "Jl. Jenderal Sudirman Km.3, Sampit",   "KOTA"),
+        ("SP-C003", "Sembako Nurul Iman",      "Jl. Cilik Riwut No.10, Sampit",         "MENTAWA"),
+        ("SP-C004", "Toko H. Basir",           "Jl. Samekto No.5, Sampit",              "KOTA"),
     ],
 }
 
@@ -197,6 +197,32 @@ def _make_customer_sheet(wb, branch_name, rows):
     ws.freeze_panes = "A2"
 
 
+def _atomic_save(wb, final_path: str) -> bool:
+    """Save workbook atomically: write to .tmp, then os.replace.
+
+    Returns True on success, False if final_path is locked (e.g. open in
+    Excel). Tolerates the locked case so the rest of the run (other files
+    + README) still completes.
+    """
+    os.makedirs(os.path.dirname(final_path), exist_ok=True)
+    tmp_dir = os.path.dirname(final_path) or "."
+    fd, tmp_path = tempfile.mkstemp(prefix=".tmp_", suffix=".xlsx", dir=tmp_dir)
+    os.close(fd)
+    try:
+        wb.save(tmp_path)
+        try:
+            os.replace(tmp_path, final_path)
+            return True
+        except PermissionError:
+            os.remove(tmp_path)
+            print(f"  [LOCKED] {final_path} — sedang dibuka Excel, skip. Tutup file, re-run script.")
+            return False
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -207,8 +233,8 @@ def main():
         wb.remove(wb.active)
         _make_product_sheet(wb, branch, rows)
         out_path = os.path.join(OUTPUT_DIR, f"test_import_{branch.lower()}.xlsx")
-        wb.save(out_path)
-        print(f"Generated: {out_path}")
+        if _atomic_save(wb, out_path):
+            print(f"Generated: {out_path}")
         product_total += len(rows)
         product_4p += sum(1 for r in rows if r[6] in SUPPLIERS_4P)
 
@@ -218,8 +244,8 @@ def main():
         wb.remove(wb.active)
         _make_customer_sheet(wb, branch, rows)
         out_path = os.path.join(OUTPUT_DIR, f"test_customers_{branch.lower()}.xlsx")
-        wb.save(out_path)
-        print(f"Generated: {out_path}")
+        if _atomic_save(wb, out_path):
+            print(f"Generated: {out_path}")
         customer_total += len(rows)
 
     print(
@@ -261,9 +287,13 @@ Total {customer_rows} rows. Backend identity: `(branch, kode, kode_area)`. Heade
 wajib persis: `kode, nama_toko, alamat, kode_area`. Lihat:
 `sales-app/backend/app/services/customer_sync.py:27`.
 
-`kode` dan `kode_area` opsional — kosong/None artinya insert baru tanpa
-identity conflict. `nama_toko` & `alamat` wajib non-empty (validator skip
-kalau kosong).
+**Semua 4 kolom wajib terisi** — fixture ini happy-path only, tidak cover
+case "kode kosong" / "kode_area kosong". Kalau mau test validasi field
+kosong, bikin file terpisah.
+
+`nama_toko` & `alamat` di backend wajib non-empty (validator skip kalau
+kosong, lihat `customer_sync.py:88-96`). `kode` & `kode_area` opsional
+nullable di DB, tapi fixture ini tetap mengisinya untuk konsistensi.
 
 ## Setup pakai
 

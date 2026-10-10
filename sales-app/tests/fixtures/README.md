@@ -28,9 +28,13 @@ Total 22 rows. Backend identity: `(branch, kode, kode_area)`. Header
 wajib persis: `kode, nama_toko, alamat, kode_area`. Lihat:
 `sales-app/backend/app/services/customer_sync.py:27`.
 
-`kode` dan `kode_area` opsional — kosong/None artinya insert baru tanpa
-identity conflict. `nama_toko` & `alamat` wajib non-empty (validator skip
-kalau kosong).
+**Semua 4 kolom wajib terisi** — fixture ini happy-path only, tidak cover
+case "kode kosong" / "kode_area kosong". Kalau mau test validasi field
+kosong, bikin file terpisah.
+
+`nama_toko` & `alamat` di backend wajib non-empty (validator skip kalau
+kosong, lihat `customer_sync.py:88-96`). `kode` & `kode_area` opsional
+nullable di DB, tapi fixture ini tetap mengisinya untuk konsistensi.
 
 ## Setup pakai
 
@@ -76,12 +80,15 @@ Total 4P items: 7.
 
 ## Catatan per-fitur
 
-**Customer bulk INSERT path** (`customer_sync.py:191-213`) — saat ini
-hanya set 4 kolom (`kode`, `nama_toko`, `alamat`, `kode_area`). Kalau
-ditemukan `customers.branch` tidak ter-tag dari JWT saat testing, fix
-dengan menambahkan `"branch": current_user.get("branch")` ke row dict
-yang di-INSERT, dan propagate `current_user` ke `_bulk_upsert_customers`
-(mirror pattern dari `sheets_sync.py:197,207,212`).
+**Customer import: branch dari JWT** — `customer_sync.py` sekarang propagate
+`current_user.get("branch")` ke `_bulk_upsert_customers`, dan kolom `branch`
+di-set di bulk INSERT row. Identity lookup + ON CONFLICT clause juga
+mengikuti unique constraint asli `(branch, kode, kode_area)`.
+
+**Error log truncate** — handler pakai `_safe_reason()` (clamp ke 240 char)
+sebelum tulis ke `sync_validation_errors.reason` (VARCHAR(255)). Sebelumnya
+psycopg dump SQL+params (>2K char) bikin `StringDataRightTruncation` → error
+log sendiri gagal → user lihat "Sync completed" padahal data tidak masuk.
 
 ## Cleanup
 Setelah selesai testing:
