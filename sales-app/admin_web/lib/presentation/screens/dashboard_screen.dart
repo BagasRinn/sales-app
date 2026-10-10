@@ -208,8 +208,8 @@ class _DashboardContentState extends State<_DashboardContent>
       if (!mounted) return;
       _adminProvider.loadAll();
       _adminProvider.startAutoRefresh();
-      // Load dashboard performance breakdown for MANAGER
-      if (widget.role == 'MANAGER') {
+      // Load dashboard performance breakdown for MANAGER & SUPERVISOR
+      if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') {
         _adminProvider.loadSalesPerformanceDashboard();
       }
       // Idle timer baru mulai setelah load pertama selesai — supaya
