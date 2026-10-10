@@ -76,7 +76,9 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
     """Return all distinct kode_area dengan sales yang di-assign.
     Areas tanpa assignment TETAP di-include (sales=[]), supaya manager bisa
     lihat area mana yang belum di-handle.
-    Branch-scoped: only returns areas from customers in the same branch."""
+    Branch-scoped: only returns areas from customers in the same branch,
+    dan hanya sales assignment di branch yang sama."""
+    user_branch = current_user.get("branch")
     # Subquery: distinct kode_area dari customer (exclude null), filtered by branch
     customer_areas_subq = (
         db.query(Customer.kode_area)
@@ -87,17 +89,22 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
     # Pakai select() explicit supaya tidak kena SAWarning "Coercing Subquery
     # object into a select()".
     from sqlalchemy import select
-    # LEFT JOIN ke area_assignments + User
-    rows = (
+    # LEFT JOIN ke area_assignments + User, FILTER BY BRANCH supaya area
+    # bernama sama di branch lain tidak ikut kelihatan (bug: sebelumnya
+    # `area_assignments` tidak punya kolom branch, jadi semua branch
+    # di-mix jadi satu. Migration `migrate_2026_10_10_06_area_assignments_branch`
+    # fix dengan composite PK).
+    aa_q = (
         db.query(AreaAssignment, User)
         .outerjoin(
             User,
             (User.id == AreaAssignment.sales_id) & (User.deleted_at.is_(None)),
         )
         .filter(AreaAssignment.kode_area.in_(select(customer_areas_subq.c.kode_area)))
-        .order_by(AreaAssignment.kode_area, User.username)
-        .all()
     )
+    if user_branch is not None:
+        aa_q = aa_q.filter(AreaAssignment.branch == user_branch)
+    rows = aa_q.order_by(AreaAssignment.kode_area, User.username).all()
     # Group by kode_area
     grouped: dict[str, List[SalesAssignmentItem]] = {}
     for ca, user in rows:
@@ -109,7 +116,7 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
                 assigned_at=ca.assigned_at,
             )
         )
-    # Include area tanpa assignment
+    # Include area tanpa assignment (filtered by customer branch via subquery)
     all_areas = [r[0] for r in db.query(customer_areas_subq.c.kode_area).all()]
     return [
         AreaAssignmentListItem(kode_area=area, sales=grouped.get(area, []))
@@ -123,7 +130,8 @@ def list_area_assignments(
     current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
     """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
-    Admin + supervisor only - untuk tab 'Penugasan Sales' sub-view 'Per Area'."""
+    Branch-scoped — hanya dari branch user yang login. MANAGER (branch=NULL)
+    lihat semua branch."""
     return _list_area_assignments(db, current_user)
 
 
@@ -131,19 +139,21 @@ def list_area_assignments(
 def list_area_assignment_detail(
     kode_area: str,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_admin_or_supervisor),
+    current_user: CurrentUser = Depends(require_admin_or_supervisor),
 ):
-    """List sales yang di-assign ke kode_area tertentu."""
-    rows = (
+    """List sales yang di-assign ke kode_area tertentu. Branch-scoped."""
+    user_branch = current_user.get("branch")
+    q = (
         db.query(AreaAssignment, User)
         .outerjoin(
             User,
             (User.id == AreaAssignment.sales_id) & (User.deleted_at.is_(None)),
         )
         .filter(AreaAssignment.kode_area == kode_area)
-        .order_by(User.username)
-        .all()
     )
+    if user_branch is not None:
+        q = q.filter(AreaAssignment.branch == user_branch)
+    rows = q.order_by(User.username).all()
     return [
         SalesAssignmentItem(
             sales_id=ca.sales_id,
@@ -164,7 +174,12 @@ def put_area_assignment(
 ):
     """Replace full set of sales assigned to kode_area. Idempotent.
     Empty sales_ids = unassign semua sales dari area ini (customer di area
-    kembali ke 'unassigned' state, visible to all sales)."""
+    kembali ke 'unassigned' state, visible to all sales).
+
+    Branch-scoped: assignment di-tag dengan current_user.branch (atau bypass
+    untuk MANAGER global). Hanya sales dalam branch user yang boleh di-assign.
+    """
+    user_branch = current_user.get("branch")
     # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted
     if body.sales_ids:
         valid = (
@@ -185,7 +200,6 @@ def put_area_assignment(
                 detail=f"Sales ID tidak valid: {invalid}",
             )
         # Branch validation: all sales must be in same branch as creator
-        user_branch = current_user.get("branch")
         if user_branch is not None:
             for u in valid:
                 if u.branch != user_branch:
@@ -194,16 +208,35 @@ def put_area_assignment(
                         detail=f"Sales '{u.username}' tidak berada di branch ini",
                     )
 
-    # Idempotent replace
-    db.query(AreaAssignment).filter(
-        AreaAssignment.kode_area == kode_area
-    ).delete()
+    # Idempotent replace — DELETE only untuk branch ini (untuk MANAGER branch
+    # NULL: hapus semua row karena global). Preserve rows di branch lain agar
+    # assignment tidak ikut ter-clear di tempat lain.
+    del_q = db.query(AreaAssignment).filter(
+        AreaAssignment.kode_area == kode_area,
+    )
+    if user_branch is not None:
+        del_q = del_q.filter(AreaAssignment.branch == user_branch)
+    del_q.delete(synchronize_session=False)
+
     actor_id = UUID(current_user["user_id"])
+    # Hanya insert kalau caller bukan MANAGER-guest (no-branch). Kalau user
+    # branch None, assignment tetap di-tag NULL (gagal NOT NULL constraint)
+    # — tolak awal dengan HTTPException.
+    if user_branch is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "MANAGER global tidak bisa assign area — area harus di-scope "
+                "ke branch tertentu. Login sebagai admin/supervisor branch "
+                "yang relevan."
+            ),
+        )
     for sales_id in body.sales_ids:
         db.add(AreaAssignment(
+            branch=user_branch,
             kode_area=kode_area,
             sales_id=sales_id,
             assigned_by=actor_id,
         ))
     db.commit()
-    return list_area_assignment_detail(kode_area, db)
+    return list_area_assignment_detail(kode_area, db, current_user)

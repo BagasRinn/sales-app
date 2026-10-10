@@ -163,6 +163,10 @@ class AreaAssignment(Base):
 
     kode_area adalah VARCHAR (bukan FK ke tabel area) — fleksibel, area bisa
     di-create on-the-fly via import excel atau manual edit.
+
+    Identity = (branch, kode_area, sales_id) — same pattern sebagai Product
+    (id, branch) dan Customer (branch, kode). Area bernama sama (mis. MULIA1)
+    BOLEH di branch berbeda karena PK composite mencakup branch.
     """
     __tablename__ = "area_assignments"
 
@@ -172,6 +176,8 @@ class AreaAssignment(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    # Branch wajib — di-tag dari JWT user saat assignment dibuat.
+    branch = Column(String(20), primary_key=True, nullable=False, index=True)
     assigned_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

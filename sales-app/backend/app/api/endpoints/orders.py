@@ -84,29 +84,39 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
             detail="Customer tidak di-assign ke sales ini",
         )
 
-    # 2. No direct assignment - check area coverage
+    # 2. No direct assignment - check area coverage.
+    # PENTING: AreaAssignment di-filter by customer's branch supaya area
+    # bernama sama di branch lain tidak salah dianggap "sudah dipegang
+    # orang lain" (false positive → false 403). Lihat migration
+    # `migrate_2026_10_10_06_area_assignments_branch` untuk schema.
     if customer.kode_area:
-        # Apakah kode_area ini di-assign ke siapapun (saya atau sales lain)?
+        # Apakah kode_area ini di-assign ke siapapun DI BRANCH CUSTOMER INI?
         area_assigned_to_anyone = (
             db.query(AreaAssignment)
-            .filter(AreaAssignment.kode_area == customer.kode_area)
+            .filter(
+                AreaAssignment.kode_area == customer.kode_area,
+                AreaAssignment.branch == customer.branch,
+            )
             .first()
         ) is not None
         if not area_assigned_to_anyone:
-            # Area exists tapi belum ada yang pegang → visible to all (backward-compat)
+            # Area exists tapi belum ada yang pegang di branch ini →
+            # visible to all (backward-compat).
             return customer
-        # Area di-assign ke seseorang. Cek apakah saya.
+        # Area di-assign ke seseorang di branch ini. Cek apakah saya.
         my_area = (
             db.query(AreaAssignment)
             .filter(
                 AreaAssignment.kode_area == customer.kode_area,
+                AreaAssignment.branch == customer.branch,
                 AreaAssignment.sales_id == sales_id,
             )
             .first()
         ) is not None
         if my_area:
             return customer
-        # Area di-assign ke sales lain, bukan saya - bukan visible di list
+        # Area di-assign ke sales lain di branch ini, bukan saya — bukan
+        # visible di list.
         raise HTTPException(
             status_code=403,
             detail="Customer tidak di-assign ke sales ini",
