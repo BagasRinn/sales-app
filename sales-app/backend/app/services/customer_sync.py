@@ -103,68 +103,85 @@ def _str_or_none(value: Any) -> str | None:
     return text if text else None
 
 
-def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int, int]:
+# sync_validation_errors.reason is VARCHAR(255) (see models.SyncValidationError).
+# SQLAlchemy/psycopg error dumps often exceed 2K chars (full SQL + parameters),
+# which would crash the error log itself with StringDataRightTruncation —
+# defeating the purpose of logging. Clamp to a safe size with a trailing
+# ellipsis so the user-visible error message stays intact.
+REASON_MAX_LEN = 240
+
+
+def _safe_reason(text: Any) -> str:
+    s = "" if text is None else str(text).strip()
+    if len(s) <= REASON_MAX_LEN:
+        return s
+    return s[: REASON_MAX_LEN - 3] + "..."
+
+
+def _bulk_upsert_customers(
+    db: Session,
+    rows: List[Dict[str, Any]],
+    branch: str | None = None,
+) -> tuple[int, int]:
     """
     Bulk upsert customers using PostgreSQL ON CONFLICT DO UPDATE.
-    Identity key: (kode, kode_area) komposit. Kode yang sama boleh di area
-    berbeda (mis. 'OUT001' di MULIA2 dan 'OUT001' di JAKARTA), tapi dalam satu
-    area harus unik. Customer dengan kode NULL atau kode_area NULL selalu
-    di-insert baru (non-partial UNIQUE index treat NULL as distinct).
+
+    Branch is taken from the caller (the JWT-authenticated user). The
+    Composite unique key (branch, kode, kode_area) means a customer
+    `OUT001/MULIA2` in BATULICIN is distinct from `OUT001/MULIA2` in
+    BANJARMASIN — cross-branch upserts are independent.
+
+    `branch` MUST be non-None for new inserts (customers.branch is NOT NULL).
+    Re-activation path (existing soft-deleted rows) is unaffected because
+    it loads the row first.
 
     Returns (inserted_count, updated_count).
-    Requires ix_customers_kode_area_unique non-partial unique index on
-    (kode, kode_area).
-
-    Flow:
-    - Lookup existing customers by (kode, kode_area) pair (only when both
-      non-null) → optimized query limited to pairs in import file
-    - For each row: if existing pair AND deleted → re-activate via separate
-      UPDATE; if existing pair AND active → ON CONFLICT DO UPDATE refreshes
-      other fields (nama_toko/alamat/kode_area) in case those changed
-    - Rows with NULL kode OR NULL kode_area → always insert (no conflict
-      possible)
-    - ON CONFLICT (kode, kode_area) DO UPDATE → re-activates deleted row
     """
     if not rows:
         return 0, 0
 
-    # Lookup existing customers by (kode, kode_area) pair. Hanya rows dengan
-    # keduanya non-null perlu dicek — null/null pairs selalu jadi insert baru.
-    # Optimized: query hanya pairs yang ada di import file (bukan semua customer).
-    pairs_in_file = sorted({
-        (r["kode"], r["kode_area"])
+    # Normalize: attach branch to every row so downstream code can use r["branch"].
+    if branch is not None:
+        for r in rows:
+            r["branch"] = branch
+
+    # Lookup existing customers by (branch, kode, kode_area) triple. Rows
+    # with NULL kode or NULL kode_area skip the lookup (non-partial UNIQUE
+    # index treats NULL as distinct → no conflict possible).
+    triples_in_file = sorted({
+        (r["branch"], r["kode"], r["kode_area"])
         for r in rows
-        if r.get("kode") and r.get("kode_area")
+        if r.get("kode") and r.get("kode_area") and r.get("branch")
     })
     from sqlalchemy import and_, or_
     existing_rows = []
-    if pairs_in_file:
-        if len(pairs_in_file) == 1:
-            k, a = pairs_in_file[0]
+    if triples_in_file:
+        if len(triples_in_file) == 1:
+            br, k, a = triples_in_file[0]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.deleted_at)
-                .filter(and_(Customer.kode == k, Customer.kode_area == a))
+                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.branch, Customer.deleted_at)
+                .filter(and_(Customer.branch == br, Customer.kode == k, Customer.kode_area == a))
                 .all()
             )
         else:
             conditions = [
-                and_(Customer.kode == k, Customer.kode_area == a)
-                for k, a in pairs_in_file
+                and_(Customer.branch == br, Customer.kode == k, Customer.kode_area == a)
+                for br, k, a in triples_in_file
             ]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.deleted_at)
+                db.query(Customer.id, Customer.kode, Customer.kode_area, Customer.branch, Customer.deleted_at)
                 .filter(or_(*conditions))
                 .all()
             )
-    # Build lookup: (kode, kode_area) -> (customer_id, is_deleted)
+    # Build lookup: (branch, kode, kode_area) -> (customer_id, is_deleted)
     existing_map: Dict[tuple, tuple] = {}
     for row in existing_rows:
-        if row.kode and row.kode_area:
-            existing_map[(row.kode, row.kode_area)] = (
+        if row.kode and row.kode_area and row.branch:
+            existing_map[(row.branch, row.kode, row.kode_area)] = (
                 str(row.id), row.deleted_at is not None
             )
 
-    to_insert = []   # new customers (no existing pair, or NULL kode/area)
+    to_insert = []   # new customers (no existing triple, or NULL kode/area)
     to_update = []  # re-activate deleted customers
 
     for r in rows:
@@ -174,7 +191,7 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
         if not kode or not kode_area:
             to_insert.append(r)
             continue
-        key = (kode, kode_area)
+        key = (r["branch"], kode, kode_area)
         if key in existing_map:
             cid, is_deleted = existing_map[key]
             if is_deleted:
@@ -190,6 +207,7 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
     if to_insert:
         stmt = insert(Customer).values([
             {
+                "branch": r["branch"],
                 "kode": r.get("kode"),
                 "nama_toko": r["nama_toko"],
                 "alamat": r["alamat"],
@@ -197,11 +215,12 @@ def _bulk_upsert_customers(db: Session, rows: List[Dict[str, Any]]) -> tuple[int
             }
             for r in to_insert
         ])
-        # ON CONFLICT (kode, kode_area): kalau pair sudah ada, update field
-        # lain. Rows dengan NULL kode atau NULL kode_area tidak akan conflict
-        # karena non-partial UNIQUE index excludes NULL di salah satu kolom.
+        # ON CONFLICT must match the actual unique constraint
+        # (branch, kode, kode_area) per models.Customer.__table_args__.
+        # NOT updating `branch` on conflict — if a customer already exists
+        # in this branch with same (kode, kode_area), keep its branch.
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Customer.kode, Customer.kode_area],
+            index_elements=[Customer.branch, Customer.kode, Customer.kode_area],
             set_={
                 "kode_area": stmt.excluded.kode_area,
                 "kode": stmt.excluded.kode,
@@ -261,11 +280,12 @@ def sync_customers_from_excel(
         raw_rows = _read_excel(file_bytes)
     except Exception as e:
         logger.error(f"Excel read failed: {e}")
+        reason_text = f"Gagal membaca file Excel: {str(e)}"
         db.add(SyncValidationError(
             import_log_id=import_log.id,
             row_number=0,
             sku="",
-            reason=f"Gagal membaca file Excel: {str(e)}",
+            reason=_safe_reason(reason_text),
         ))
         import_log.total_rows = 0
         import_log.skipped = 0
@@ -276,14 +296,14 @@ def sync_customers_from_excel(
             "inserted": 0,
             "updated": 0,
             "skipped": 0,
-            "errors": [{"row": 0, "sku": "", "reason": f"Gagal membaca file Excel: {str(e)}"}],
+            "errors": [{"row": 0, "sku": "", "reason": reason_text}],
             "needs_review": False,
         }
 
     total_rows = len(raw_rows)
-    # Identity customer = (kode, kode_area) komposit. SKU yang sama boleh di
-    # area berbeda (mis. 'OUT001' di MULIA2 dan 'OUT001' di JAKARTA), tapi dalam
-    # satu area harus unik. Null/null pairs di-skip dari unique check.
+    # Identity customer = (branch, kode, kode_area) triple. Same (kode, kode_area)
+    # boleh di branch berbeda; dalam satu branch harus unik per area.
+    # Null/null pairs di-skip dari unique check.
     seen_keys: set = set()
 
     for idx, row in enumerate(raw_rows, start=1):
@@ -328,17 +348,20 @@ def sync_customers_from_excel(
     inserted = updated = 0
     if validated_rows:
         try:
-            inserted, updated = _bulk_upsert_customers(db, validated_rows)
+            inserted, updated = _bulk_upsert_customers(
+                db, validated_rows, branch=current_user.get("branch"),
+            )
         except Exception as e:
             # PENTING: rollback dulu supaya session tidak tinggal di state aborted.
             # Kalau tidak, command berikutnya (db.add SyncValidationError, db.commit)
             # akan error "current transaction is aborted, commands ignored".
             db.rollback()
             logger.error(f"Bulk upsert failed: {e}")
+            reason_text = f"Gagal menyimpan ke database: {str(e)}"
             validation_errors.append({
                 "row": 0,
                 "sku": "",
-                "reason": f"Gagal menyimpan ke database: {str(e)}",
+                "reason": reason_text,
             })
             skipped = total_rows
             inserted = updated = 0
@@ -348,7 +371,9 @@ def sync_customers_from_excel(
             import_log_id=import_log.id,
             row_number=err["row"],
             sku=err["sku"],
-            reason=err["reason"],
+            # Clamp to fit VARCHAR(255) — full exception dumps easily exceed
+            # 2K chars and would crash the error log itself.
+            reason=_safe_reason(err["reason"]),
         ))
 
     import_log.total_rows = total_rows
