@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/datetime_utils.dart';
+import '../../core/responsive.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/sync_result.dart';
 
@@ -26,9 +27,12 @@ class _SyncTabState extends State<SyncTab> {
     final syncResult = provider.lastSyncResult;
     final isLoading = provider.isLoading;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(resp.contentPadding),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Main import card
@@ -122,6 +126,8 @@ class _SyncTabState extends State<SyncTab> {
           _SyncErrorsSection(readOnly: widget.readOnly),
         ],
       ),
+        );
+      },
     );
   }
 

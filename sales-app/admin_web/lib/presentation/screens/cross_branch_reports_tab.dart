@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/branch.dart';
+import '../../core/responsive.dart';
 import '../../data/models/branch_report.dart';
 import '../providers/admin_provider.dart';
 
@@ -79,35 +80,43 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: Colors.black87,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: const Color(0xFF2196F3),
-            tabs: const [
-              Tab(text: 'Penjualan'),
-              Tab(text: 'Stok'),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildSalesTab(),
-              _buildStockTab(),
-            ],
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return Column(
+          children: [
+            Container(
+              color: Colors.white,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: Colors.black87,
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: const Color(0xFF2196F3),
+                // Scrollable supaya tab "Penjualan/Stok" bisa discroll di
+                // layar sempit (untuk konsistensi dengan tab Pesanan).
+                isScrollable: resp.isCompact,
+                tabs: const [
+                  Tab(text: 'Penjualan'),
+                  Tab(text: 'Stok'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildSalesTab(resp),
+                  _buildStockTab(resp),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildSalesTab() {
+  Widget _buildSalesTab(Responsive resp) {
     if (_loadingSales) return const Center(child: CircularProgressIndicator());
     if (_salesSummaries.isEmpty) {
       return _buildEmpty('Belum ada data penjualan lintas cabang.');
@@ -138,7 +147,7 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
     );
   }
 
-  Widget _buildStockTab() {
+  Widget _buildStockTab(Responsive resp) {
     if (_loadingStock) return const Center(child: CircularProgressIndicator());
     if (_stockSummaries.isEmpty) {
       return _buildEmpty('Belum ada data stok lintas cabang.');

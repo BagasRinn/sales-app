@@ -132,35 +132,50 @@ class _UsersTabState extends State<UsersTab> {
               ),
             ),
             const Divider(height: 1),
-            _TableHeader(readOnly: widget.readOnly),
-            const Divider(height: 1),
+            // Bungkus tabel dalam horizontal scroll supaya pada layar sempit
+            // (mobile) kolom-kolom fixed-width (total ~600) bisa di-scroll
+            // horizontal. Pada desktop lebar (>600), scroll tidak aktif.
             Expanded(
-              child: isLoading && users.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : users.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.people_outline,
-                                  size: 48,
-                                  color:
-                                      AppColors.textMuted.withValues(alpha: 0.4)),
-                              const SizedBox(height: 16),
-                              Text(
-                                _searchQuery.isNotEmpty || _roleFilter != null
-                                    ? 'User tidak ditemukan'
-                                    : 'Belum ada user',
-                                style: AppTextStyles.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: users.length,
-                          itemBuilder: (ctx, index) =>
-                              _UserRow(user: users[index], readOnly: widget.readOnly),
-                        ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 720),
+                  child: Column(
+                    children: [
+                      _TableHeader(readOnly: widget.readOnly),
+                      const Divider(height: 1),
+                      Expanded(
+                        child: isLoading && users.isEmpty
+                            ? const Center(child: CircularProgressIndicator())
+                            : users.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.people_outline,
+                                            size: 48,
+                                            color: AppColors.textMuted
+                                                .withValues(alpha: 0.4)),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          _searchQuery.isNotEmpty || _roleFilter != null
+                                              ? 'User tidak ditemukan'
+                                              : 'Belum ada user',
+                                          style: AppTextStyles.bodyMedium,
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: users.length,
+                                    itemBuilder: (ctx, index) =>
+                                        _UserRow(user: users[index], readOnly: widget.readOnly),
+                                  ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),

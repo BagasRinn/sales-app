@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/bulletin.dart';
 import 'bulletin_pdf_picker_stub.dart'
@@ -48,32 +49,45 @@ class _BulletinsTabState extends State<BulletinsTab> {
       return _EmptyState(onCreate: () => _showFormDialog(context, null));
     }
 
-    return Stack(
-      children: [
-        ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-          itemCount: bulletins.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
-          itemBuilder: (context, i) {
-            return _BulletinCard(
-              bulletin: bulletins[i],
-              readOnly: widget.readOnly,
-              onEdit: () => _showFormDialog(context, bulletins[i]),
-              onDelete: () => _showDeleteDialog(context, bulletins[i]),
-            );
-          },
-        ),
-        if (!widget.readOnly)
-          Positioned(
-            right: 24,
-            bottom: 24,
-            child: FloatingActionButton.extended(
-              onPressed: () => _showFormDialog(context, null),
-              icon: const Icon(Icons.add),
-              label: const Text('Buat Bulletin'),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return Stack(
+          children: [
+            ListView.separated(
+              padding: EdgeInsets.fromLTRB(
+                  resp.contentPadding, 12, resp.contentPadding, 80),
+              itemCount: bulletins.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, i) {
+                return _BulletinCard(
+                  bulletin: bulletins[i],
+                  readOnly: widget.readOnly,
+                  onEdit: () => _showFormDialog(context, bulletins[i]),
+                  onDelete: () => _showDeleteDialog(context, bulletins[i]),
+                );
+              },
             ),
-          ),
-      ],
+            if (!widget.readOnly)
+              Positioned(
+                right: resp.contentPadding,
+                bottom: resp.contentPadding,
+                // Di layar sempit pakai FAB biasa (icon saja) supaya tidak
+                // overflow. Di desktop pakai extended (icon + label).
+                child: resp.isCompact
+                    ? FloatingActionButton(
+                        onPressed: () => _showFormDialog(context, null),
+                        child: const Icon(Icons.add),
+                      )
+                    : FloatingActionButton.extended(
+                        onPressed: () => _showFormDialog(context, null),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Buat Bulletin'),
+                      ),
+              ),
+          ],
+        );
+      },
     );
   }
 

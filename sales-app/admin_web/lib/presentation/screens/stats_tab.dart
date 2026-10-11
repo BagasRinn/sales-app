@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../core/web_download.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/order.dart';
@@ -279,9 +280,12 @@ class _StatsTabState extends State<StatsTab> {
     // setelah revisi sistem stok (stok_diterima pisah dari stok_booking).
     final needsReview = stats['needs_review'] ?? 0;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(resp.contentPadding),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Ringkasan Sistem', style: AppTextStyles.headlineLarge),
@@ -562,6 +566,8 @@ class _StatsTabState extends State<StatsTab> {
           ],
         ],
       ),
+      );
+      },
     );
   }
 }

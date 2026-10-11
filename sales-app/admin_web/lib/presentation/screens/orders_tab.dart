@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/order.dart';
 
@@ -169,11 +170,15 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     final provider = context.watch<AdminProvider>();
     final isLoading = provider.isLoading;
 
-    return Column(
-      children: [
-        Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return Column(
+          children: [
+            Container(
+              color: AppColors.surface,
+              padding: EdgeInsets.fromLTRB(
+                  resp.contentPadding, 12, resp.contentPadding, 0),
           child: Column(
             children: [
               // Search field
@@ -258,11 +263,13 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
             controller: _tabController,
             children: [
               _buildPendingOrders(provider, isLoading),
-              _buildAllOrders(provider, isLoading),
+              _buildAllOrders(provider, isLoading, resp),
             ],
           ),
         ),
       ],
+        );
+      },
     );
   }
 
@@ -310,7 +317,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildAllOrders(AdminProvider provider, bool isLoading) {
+  Widget _buildAllOrders(AdminProvider provider, bool isLoading, Responsive resp) {
     final orders = provider.allOrders;
     final total = provider.orderTotal;
     final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
@@ -322,7 +329,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(resp.contentPadding),
           color: AppColors.surface,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,14 +441,15 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(20),
+                      padding: EdgeInsets.all(resp.contentPadding),
                       itemCount: orders.length,
                       itemBuilder: (ctx, i) => _OrderCard(order: orders[i], readOnly: widget.readOnly),
                     ),
         ),
         if (total > 0)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: EdgeInsets.symmetric(
+                horizontal: resp.contentPadding, vertical: 10),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               border: Border(
@@ -463,7 +471,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 TextButton.icon(
                   onPressed: hasPrev ? () => _goToPage(_currentPage - 1) : null,
                   icon: const Icon(Icons.chevron_left, size: 18),
-                  label: const Text('Sebelumnya'),
+                  label: Text(resp.isMobile ? '' : 'Sebelumnya'),
                 ),
                 const SizedBox(width: 8),
                 Container(
@@ -485,7 +493,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 TextButton.icon(
                   onPressed: hasNext ? () => _goToPage(_currentPage + 1) : null,
                   icon: const Icon(Icons.chevron_right, size: 18),
-                  label: const Text('Selanjutnya'),
+                  label: Text(resp.isMobile ? '' : 'Selanjutnya'),
                 ),
               ],
             ),

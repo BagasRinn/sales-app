@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../providers/admin_provider.dart';
@@ -109,12 +110,15 @@ class _PerformanceTabState extends State<PerformanceTab> {
 
         final currentPeriod = '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}';
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Section: Period Filter + Sort
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final resp = Responsive.of(constraints.maxWidth);
+            return SingleChildScrollView(
+              padding: EdgeInsets.all(resp.contentPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Section: Period Filter + Sort
               _buildPeriodFilterSection(),
               const SizedBox(height: 24),
 
@@ -136,6 +140,8 @@ class _PerformanceTabState extends State<PerformanceTab> {
               _buildTargetSection(sorted, provider, currentPeriod, targetsLoading),
             ],
           ),
+            );
+          },
         );
       },
     );

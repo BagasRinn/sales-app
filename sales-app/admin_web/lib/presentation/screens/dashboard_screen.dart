@@ -7,6 +7,7 @@ import '../../core/branch.dart';
 import '../../core/design_system.dart';
 import '../../core/jwt_utils.dart';
 import '../../core/navigator_key.dart';
+import '../../core/responsive.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../data/repositories/api_service.dart';
 import '../providers/admin_provider.dart';
@@ -118,6 +119,7 @@ class _DashboardContentState extends State<_DashboardContent>
   int _selectedIndex = 0;
   late final AdminProvider _adminProvider;
   late final ApiService _apiService;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Track aktivitas user untuk idle auto-logout. Default 15 menit — standar
   // untuk aplikasi admin. Bisa diturunkan kalau perlu lebih ketat, atau
@@ -337,278 +339,402 @@ class _DashboardContentState extends State<_DashboardContent>
         if (event.buttons != 0) _recordActivity();
       },
       onPointerSignal: (_) => _recordActivity(), // wheel/trackpad
-      child: Scaffold(
-      backgroundColor: AppColors.background,
-      body: Row(
-        children: [
-          // Sidebar
-          Container(
-            width: 240,
-            color: AppColors.sidebarBg,
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final resp = Responsive.of(constraints.maxWidth);
+          return Scaffold(
+            key: _scaffoldKey,
+            backgroundColor: AppColors.background,
+            // Drawer hanya muncul saat compact (mobile/tablet). Desktop pakai
+            // sidebar 240px yang di-render langsung di body.
+            drawer: resp.isCompact ? _buildDrawer(context, resp) : null,
+            body: Row(
               children: [
-                // Sidebar header
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.local_shipping, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Sales Order',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            Text(
-                              widget.branchNama ?? BranchLabel.display(widget.branch) ?? 'Admin Panel',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Colors.white12, height: 1),
-                const SizedBox(height: 8),
-                // Nav items
+                if (resp.isDesktop) _buildSidebar(context),
                 Expanded(
-                  child: Consumer<AdminProvider>(
-                    builder: (context, provider, _) => ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: _navItems.length,
-                    itemBuilder: (context, i) {
-                      final item = _navItems[i];
-                      final selected = _selectedIndex == i;
-                      final showBadge = i == 1 && provider.hasNewPending;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Material(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () => _onNavTap(i),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? Colors.white.withValues(alpha: 0.15)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    selected ? item.selectedIcon : item.icon,
-                                    color: selected ? Colors.white : Colors.white60,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      item.label,
-                                      style: TextStyle(
-                                        color: selected ? Colors.white : Colors.white70,
-                                        fontFamily: AppTextStyles.fontFamily,
-                                        fontWeight:
-                                            selected ? FontWeight.w700 : FontWeight.w500,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                  if (showBadge) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFFF4757),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  ),
-                ),
-                // User section
-                const Divider(color: Colors.white12, height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Builder(builder: (_) {
-                            final display = widget.nama.isNotEmpty
-                                ? widget.nama
-                                : widget.username;
-                            return Text(
-                              display.isNotEmpty
-                                  ? display[0].toUpperCase()
-                                  : 'A',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            );
-                          }),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Builder(builder: (_) {
-                              final display = widget.nama.isNotEmpty
-                                  ? widget.nama
-                                  : widget.username;
-                              return Text(
-                                display,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: AppTextStyles.fontFamily,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            }),
-                            Text(
-                              widget.role == 'MANAGER' ? 'Manager' : 'Administrator',
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontFamily: AppTextStyles.fontFamily,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.lock_outline, color: Colors.white54, size: 20),
-                        tooltip: 'Ganti password',
-                        onPressed: () => ChangePasswordDialog.show(
-                          context,
-                          context.read<AdminProvider>().adminRepository,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.logout, color: Colors.white54, size: 20),
-                        tooltip: 'Keluar',
-                        onPressed: () async {
-                          await AuthStorage().clearTokens();
-                          if (!mounted) return;
-                          _pushLogin();
-                        },
-                      ),
+                      _buildTopBar(context, resp),
+                      Expanded(child: _buildBody()),
                     ],
                   ),
                 ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Sidebar 240px — versi desktop, tidak berubah dari versi lama.
+  Widget _buildSidebar(BuildContext context) {
+    return SizedBox(
+      width: 240,
+      child: _NavPanel(
+        items: _navItems,
+        selectedIndex: _selectedIndex,
+        hasNewPending: context.watch<AdminProvider>().hasNewPending,
+        onTap: _onNavTap,
+        userNama: widget.nama,
+        username: widget.username,
+        role: widget.role,
+        branch: widget.branch,
+        branchNama: widget.branchNama,
+      ),
+    );
+  }
+
+  /// Drawer untuk mode compact (mobile/tablet). Konten nav-nya sama dengan
+  /// sidebar, dibungkus [Drawer] supaya Flutter yang handle gesture buka-tutup.
+  Widget _buildDrawer(BuildContext context, Responsive resp) {
+    return Drawer(
+      backgroundColor: AppColors.sidebarBg,
+      // Tanpa elevation — sidebar polos supaya tidak ada shadow menumpuk.
+      elevation: 0,
+      child: SizedBox(
+        width: resp.isMobile ? 280 : 300,
+        child: _NavPanel(
+          items: _navItems,
+          selectedIndex: _selectedIndex,
+          hasNewPending: context.watch<AdminProvider>().hasNewPending,
+          onTap: (i) {
+            _onNavTap(i);
+            // Tutup drawer setelah nav dipilih supaya konten kelihatan.
+            Navigator.of(context).pop();
+          },
+          userNama: widget.nama,
+          username: widget.username,
+          role: widget.role,
+          branch: widget.branch,
+          branchNama: widget.branchNama,
+        ),
+      ),
+    );
+  }
+
+  /// Top bar — judul tab + refresh. Mode compact menambah hamburger di kiri
+  /// untuk membuka drawer.
+  Widget _buildTopBar(BuildContext context, Responsive resp) {
+    final showReadOnlyBadge = widget.role == 'MANAGER' &&
+        _selectedIndex < _navItems.length &&
+        _navItems[_selectedIndex].label == 'Pesanan';
+    return Container(
+      height: resp.topBarHeight,
+      padding: EdgeInsets.symmetric(horizontal: resp.contentPadding),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (resp.isCompact)
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.menu),
+                color: AppColors.textSecondary,
+                tooltip: 'Menu',
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+              ),
+            ),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    _titles[_selectedIndex],
+                    style: resp.isMobile
+                        ? AppTextStyles.headlineSmall
+                        : AppTextStyles.headlineMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (showReadOnlyBadge)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.infoBorder),
+                      ),
+                      child: const Text(
+                        'Read-only',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.info,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          // Main content
-          Expanded(
-            child: Column(
-              children: [
-                // Top bar
-                Container(
-                  height: 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    border: const Border(
-                      bottom: BorderSide(color: AppColors.border),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        _titles[_selectedIndex],
-                        style: AppTextStyles.headlineMedium,
-                      ),
-                      if (widget.role == 'MANAGER' &&
-                          _selectedIndex < _navItems.length &&
-                          _navItems[_selectedIndex].label == 'Pesanan')
-                        Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.infoBg,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.infoBorder),
-                            ),
-                            child: const Text(
-                              'Read-only',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.info,
-                              ),
-                            ),
-                          ),
-                        ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh',
-                        color: AppColors.textSecondary,
-                        onPressed: () {
-                          context.read<AdminProvider>().loadAll();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                // Page body
-                Expanded(child: _buildBody()),
-              ],
-            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            color: AppColors.textSecondary,
+            onPressed: () {
+              context.read<AdminProvider>().loadAll();
+            },
           ),
         ],
       ),
-    ),
+    );
+  }
+}
+
+/// Panel navigasi reusable — dipakai oleh sidebar (desktop) dan drawer
+/// (mobile/tablet). Visual sama persis dengan sidebar lama supaya tidak ada
+/// perubahan tampilan di desktop.
+class _NavPanel extends StatelessWidget {
+  final List<_NavItem> items;
+  final int selectedIndex;
+  final bool hasNewPending;
+  final ValueChanged<int> onTap;
+  final String userNama;
+  final String username;
+  final String role;
+  final String? branch;
+  final String? branchNama;
+
+  const _NavPanel({
+    required this.items,
+    required this.selectedIndex,
+    required this.hasNewPending,
+    required this.onTap,
+    required this.userNama,
+    required this.username,
+    required this.role,
+    this.branch,
+    this.branchNama,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.sidebarBg,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.local_shipping,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Sales Order',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        Text(
+                          branchNama ??
+                              BranchLabel.display(branch) ??
+                              'Admin Panel',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            const SizedBox(height: 8),
+            // Nav items
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: items.length,
+                itemBuilder: (context, i) {
+                  final item = items[i];
+                  final selected = selectedIndex == i;
+                  final showBadge = i == 1 && hasNewPending;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => onTap(i),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                selected ? item.selectedIcon : item.icon,
+                                color:
+                                    selected ? Colors.white : Colors.white60,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : Colors.white70,
+                                    fontFamily: AppTextStyles.fontFamily,
+                                    fontWeight: selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              if (showBadge) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFFF4757),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            // User section
+            const Divider(color: Colors.white12, height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Builder(builder: (_) {
+                        final display =
+                            userNama.isNotEmpty ? userNama : username;
+                        return Text(
+                          display.isNotEmpty
+                              ? display[0].toUpperCase()
+                              : 'A',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Builder(builder: (_) {
+                          final display =
+                              userNama.isNotEmpty ? userNama : username;
+                          return Text(
+                            display,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: AppTextStyles.fontFamily,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        }),
+                        Text(
+                          role == 'MANAGER' ? 'Manager' : 'Administrator',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontFamily: AppTextStyles.fontFamily,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.lock_outline,
+                        color: Colors.white54, size: 20),
+                    tooltip: 'Ganti password',
+                    onPressed: () => ChangePasswordDialog.show(
+                      context,
+                      context.read<AdminProvider>().adminRepository,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout,
+                        color: Colors.white54, size: 20),
+                    tooltip: 'Keluar',
+                    onPressed: () async {
+                      await AuthStorage().clearTokens();
+                      if (!context.mounted) return;
+                      // Pakai rootNavigatorKey langsung supaya drawer (kalau
+                      // terbuka) ikut ter-pop oleh pushAndRemoveUntil.
+                      rootNavigatorKey.currentState?.pushAndRemoveUntil(
+                        MaterialPageRoute(
+                            builder: (_) => const LoginScreen()),
+                        (_) => false,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

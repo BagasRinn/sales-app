@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/sales_user.dart';
 import '../../data/models/sales_assignment.dart';
@@ -99,74 +100,131 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          color: AppColors.surface,
-          child: Row(
-            children: [
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
-                  ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
-                  ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
-                ],
-                selected: {_subView},
-                onSelectionChanged: (s) => setState(() => _subView = s.first),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _search = v),
-                  decoration: InputDecoration(
-                    hintText: _subView == 0
-                        ? 'Cari area...'
-                        : _subView == 1
-                            ? 'Cari customer...'
-                            : 'Cari sales...',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    isDense: true,
-                    filled: true,
-                    fillColor: AppColors.background,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: _subView == 0
-              ? _PerAreaView(
-                  areas: _filteredAreaRows(),
-                  onChanged: _loadAll,
-                  allSalesUsers: _allSalesUsers,
-                  readOnly: widget.readOnly,
-                )
-              : _subView == 1
-                  ? _PerCustomerView(
-                      customers: _filteredCustomers,
-                      totalCount: _customerTotal ?? _allCustomers.length,
-                      allSalesUsers: _allSalesUsers,
-                      onChanged: _loadAll,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        return Column(
+          children: [
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                  resp.contentPadding, 12, resp.contentPadding, 12),
+              color: AppColors.surface,
+              // Pada layar sempit stack vertikal (segmented di atas, search di bawah).
+              // Pada desktop pakai Row horizontal.
+              child: resp.isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<int>(
+                            segments: const [
+                              ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
+                              ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
+                              ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
+                            ],
+                            selected: {_subView},
+                            onSelectionChanged: (s) =>
+                                setState(() => _subView = s.first),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _searchController,
+                          onChanged: (v) => setState(() => _search = v),
+                          decoration: InputDecoration(
+                            hintText: _subView == 0
+                                ? 'Cari area...'
+                                : _subView == 1
+                                    ? 'Cari customer...'
+                                    : 'Cari sales...',
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            isDense: true,
+                            filled: true,
+                            fillColor: AppColors.background,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.border),
+                            ),
+                          ),
+                        ),
+                      ],
                     )
-                  : _PerSalesView(
-                      salesUsers: _filteredSales,
-                      onChanged: _loadAll,
+                  : Row(
+                      children: [
+                        SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
+                            ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
+                            ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
+                          ],
+                          selected: {_subView},
+                          onSelectionChanged: (s) =>
+                              setState(() => _subView = s.first),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _search = v),
+                            decoration: InputDecoration(
+                              hintText: _subView == 0
+                                  ? 'Cari area...'
+                                  : _subView == 1
+                                      ? 'Cari customer...'
+                                      : 'Cari sales...',
+                              prefixIcon: const Icon(Icons.search, size: 18),
+                              isDense: true,
+                              filled: true,
+                              fillColor: AppColors.background,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-        ),
-      ],
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _subView == 0
+                  ? _PerAreaView(
+                      areas: _filteredAreaRows(),
+                      onChanged: _loadAll,
+                      allSalesUsers: _allSalesUsers,
+                      readOnly: widget.readOnly,
+                    )
+                  : _subView == 1
+                      ? _PerCustomerView(
+                          customers: _filteredCustomers,
+                          totalCount: _customerTotal ?? _allCustomers.length,
+                          allSalesUsers: _allSalesUsers,
+                          onChanged: _loadAll,
+                        )
+                      : _PerSalesView(
+                          salesUsers: _filteredSales,
+                          onChanged: _loadAll,
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 
