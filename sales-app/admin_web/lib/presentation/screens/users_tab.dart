@@ -55,78 +55,71 @@ class _UsersTabState extends State<UsersTab> {
         constraints: const BoxConstraints(maxWidth: 960),
         child: Column(
           children: [
-            // Search bar + role filter
+            // Search bar + filter chips role. Chips menggantikan dropdown
+            // — lebih visual dan satu tap, terutama untuk layar sempit.
             Container(
               padding: const EdgeInsets.all(12),
               color: AppColors.surface,
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Cari user (nama / username)...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                  provider.searchUsers('');
-                                },
-                              )
-                            : null,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Cari user (nama / username)...',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                      provider.searchUsers('');
+                                    },
+                                  )
+                                : null,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            isDense: true,
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onChanged: (v) {
+                            setState(() => _searchQuery = v);
+                            provider.searchUsers(v);
+                          },
+                        ),
                       ),
-                      onChanged: (v) {
-                        setState(() => _searchQuery = v);
-                        provider.searchUsers(v);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 150,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _roleFilter,
-                      decoration: InputDecoration(
-                        hintText: 'Role',
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(value: null, child: Text('Semua Role')),
-                        DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
-                        DropdownMenuItem(value: 'SUPERVISOR', child: Text('Supervisor')),
-                        DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
-                        DropdownMenuItem(value: 'SALES', child: Text('Sales')),
+                      if (!widget.readOnly) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: !widget.readOnly
+                              ? () => _openCreateDialog(context)
+                              : null,
+                          icon: const Icon(Icons.person_add, size: 18),
+                          label: const Text('Tambah'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 18),
+                          ),
+                        ),
                       ],
-                      onChanged: (v) {
-                        setState(() => _roleFilter = v);
-                        // Kirim '' (bukan null) untuk "Semua Role" karena loadUsers
-                        // skip update kalau role=null — kalau tidak, state internal
-                        // masih nyimpen role lama walaupun UI menampilkan "Semua Role".
-                        provider.loadUsers(role: v ?? '');
-                      },
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: !widget.readOnly ? () => _openCreateDialog(context) : null,
-                    icon: const Icon(Icons.person_add, size: 18),
-                    label: const Text('Tambah'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                    ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _roleChip(null, 'Semua'),
+                      _roleChip('ADMIN', 'Admin'),
+                      _roleChip('SUPERVISOR', 'Supervisor'),
+                      _roleChip('MANAGER', 'Manager'),
+                      _roleChip('SALES', 'Sales'),
+                    ],
                   ),
                 ],
               ),
@@ -188,10 +181,13 @@ class _UsersTabState extends State<UsersTab> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        for (final user in users) ...[
+                                        for (int i = 0;
+                                            i < users.length;
+                                            i++) ...[
                                           _UserRow(
-                                              user: user,
-                                              readOnly: widget.readOnly),
+                                              user: users[i],
+                                              readOnly: widget.readOnly,
+                                              isEven: i.isEven),
                                           const Divider(height: 1),
                                         ],
                                       ],
@@ -206,6 +202,29 @@ class _UsersTabState extends State<UsersTab> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _roleChip(String? role, String label) {
+    final selected = _roleFilter == role;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) {
+        setState(() => _roleFilter = role);
+        context.read<AdminProvider>().loadUsers(role: role ?? '');
+      },
+      selectedColor: AppColors.primaryLight.withValues(alpha: 0.15),
+      backgroundColor: AppColors.background,
+      side: BorderSide(
+        color: selected ? AppColors.primaryLight : AppColors.border,
+      ),
+      labelStyle: TextStyle(
+        color: selected ? AppColors.primaryLight : AppColors.textSecondary,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        fontSize: 12,
+      ),
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -225,17 +244,47 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      color: AppColors.surface,
+      height: 44,
+      color: AppColors.borderLight,
       child: Row(
         children: [
-          Expanded(child: Center(child: Text('NAMA', style: AppTextStyles.labelMedium))),
-          SizedBox(width: 140, child: Center(child: Text('USERNAME', style: AppTextStyles.labelMedium))),
-          SizedBox(width: 110, child: Center(child: Text('ROLE', style: AppTextStyles.labelMedium))),
-          SizedBox(width: 150, child: Center(child: Text('CABANG', style: AppTextStyles.labelMedium))),
-          SizedBox(width: 100, child: Center(child: Text('STATUS', style: AppTextStyles.labelMedium))),
-          if (!readOnly) SizedBox(width: 100, child: Center(child: Text('AKSI', style: AppTextStyles.labelMedium))),
+          // NAMA (flex)
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('NAMA',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                    )),
+              ),
+            ),
+          ),
+          _hCell('USERNAME', 130),
+          _hCell('ROLE', 100),
+          _hCell('CABANG', 140),
+          _hCell('STATUS', 90),
+          if (!readOnly) _hCell('AKSI', 60),
         ],
+      ),
+    );
+  }
+
+  Widget _hCell(String label, double width) {
+    return SizedBox(
+      width: width,
+      child: Center(
+        child: Text(label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            )),
       ),
     );
   }
@@ -244,87 +293,137 @@ class _TableHeader extends StatelessWidget {
 class _UserRow extends StatelessWidget {
   final UserItem user;
   final bool readOnly;
-  const _UserRow({required this.user, this.readOnly = false});
+  final bool isEven;
+  const _UserRow({
+    required this.user,
+    this.readOnly = false,
+    this.isEven = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final initial = user.displayName.isNotEmpty
+        ? user.displayName[0].toUpperCase()
+        : '?';
     return Container(
-      height: 60,
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-      ),
+      height: 56,
+      color: isEven
+          ? AppColors.surface
+          : AppColors.borderLight.withValues(alpha: 0.5),
       child: Row(
         children: [
+          // NAMA: avatar + nama + username sebagai sub-text
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                user.displayName,
-                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 140,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                user.username,
-                style: AppTextStyles.bodySmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 110,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _RoleBadge(role: user.role),
-            ),
-          ),
-          SizedBox(
-            width: 150,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                user.branchNama ?? user.branch ?? '-',
-                style: AppTextStyles.bodySmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 100,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _StatusBadge(active: user.isActive),
-            ),
-          ),
-          if (!readOnly)
-            SizedBox(
-              width: 100,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    onPressed: () => _openEditDialog(context),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    color: AppColors.primaryLight,
-                    tooltip: 'Edit user',
-                    constraints:
-                        const BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _avatarColor(user.role).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: _avatarColor(user.role),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        Text(
+                          '@${user.username}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textMuted,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          _bodyCell(130, child: Text(
+            user.username,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontFamily: 'monospace',
+            ),
+            overflow: TextOverflow.ellipsis,
+          )),
+          _bodyCell(100, child: _RoleBadge(role: user.role)),
+          _bodyCell(140, child: Text(
+            user.branchNama ?? user.branch ?? '-',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          )),
+          _bodyCell(90, child: _StatusBadge(active: user.isActive)),
+          if (!readOnly)
+            SizedBox(
+              width: 60,
+              child: Center(
+                child: IconButton(
+                  onPressed: () => _openEditDialog(context),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  color: AppColors.primaryLight,
+                  tooltip: 'Edit user',
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
+                  padding: EdgeInsets.zero,
+                ),
               ),
             ),
         ],
       ),
     );
+  }
+
+  Widget _bodyCell(double width, {required Widget child}) {
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Center(child: child),
+      ),
+    );
+  }
+
+  Color _avatarColor(String role) {
+    return switch (role) {
+      'ADMIN' => AppColors.error,
+      'SUPERVISOR' => AppColors.warning,
+      'MANAGER' => AppColors.info,
+      _ => AppColors.success,
+    };
   }
 
   Future<void> _openEditDialog(BuildContext context) async {
