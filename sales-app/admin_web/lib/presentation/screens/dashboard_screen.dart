@@ -291,12 +291,18 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
-    // Hanya ADMIN yang boleh write (approve/reject pesanan, edit master
-    // data). SUPERVISOR & MANAGER murni monitoring — backend endpoint
-    // /orders/{id}/approve pakai require_admin jadi keduanya akan di-tolak
-    // 403 kalau nyoba. UI sembunyikan tombol action supaya user tidak
-    // melihat tombol yang ujung-ujungnya gagal.
-    final readOnly = widget.role != 'ADMIN';
+    // Permission BEDA per fitur — bukan satu flag global. Backend endpoint
+    // masing-masing tab punya aturan sendiri, jadi UI harus match.
+    //
+    // Pesanan (orders):
+    //   - POST /orders/{id}/approve pakai require_admin → hanya ADMIN write.
+    //   - SUPERVISOR & MANAGER murni monitoring.
+    //
+    // Master data (Toko, Pengajuan Customer, Produk, User, Bulletin, Sync):
+    //   - Create/edit pakai require_supervisor_or_manager_global → ADMIN
+    //     justru yang read-only di sini. SUPERVISOR & MANAGER boleh write.
+    final orderReadOnly = widget.role != 'ADMIN';
+    final masterReadOnly = widget.role == 'ADMIN';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
     // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
@@ -306,23 +312,23 @@ class _DashboardContentState extends State<_DashboardContent>
       case 0:
         return StatsTab(role: widget.role);
       case 1:
-        return OrdersTab(readOnly: readOnly);
+        return OrdersTab(readOnly: orderReadOnly);
       case 2:
-        return CustomersTab(readOnly: readOnly);
+        return CustomersTab(readOnly: masterReadOnly);
       case 3:
-        return CustomerSubmissionsTab(readOnly: readOnly);
+        return CustomerSubmissionsTab(readOnly: masterReadOnly);
       case 4:
-        return ProductsTab(readOnly: readOnly);
+        return ProductsTab(readOnly: masterReadOnly);
       case 5:
-        return SyncTab(readOnly: readOnly);
+        return SyncTab(readOnly: masterReadOnly);
       case 6:
-        return UsersTab(readOnly: readOnly);
+        return UsersTab(readOnly: masterReadOnly);
       case 7:
         return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 8:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case 9:
-        return BulletinsTab(readOnly: readOnly); // MANAGER & SUPERVISOR
+        return BulletinsTab(readOnly: masterReadOnly); // MANAGER & SUPERVISOR
       case 10:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
