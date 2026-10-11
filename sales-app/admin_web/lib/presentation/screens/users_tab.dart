@@ -125,79 +125,43 @@ class _UsersTabState extends State<UsersTab> {
               ),
             ),
             const Divider(height: 1),
-            // Pola sama dengan customers_tab: header punya tinggi tetap
-            // (48), baris pakai nested vertical+horizontal scroll. Pakai pola
-            // ini (bukan Expanded di dalam SingleChildScrollView horizontal)
-            // supaya ListView di-expand dengan benar — kalau Column berisi
-            // Expanded dibungkus SingleChildScrollView horizontal, tinggi
-            // Column jadi 0 karena Expanded tidak punya referensi tinggi.
+            // Pakai DataTable Flutter — header dan rows otomatis align
+            // karena pakai layout intrinsic. Bungkus horizontal scroll supaya
+            // di mobile (atau tabel yang lebih lebar dari container) bisa
+            // digeser ke samping tanpa merusak alignment.
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 48,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 800),
-                        child: _TableHeader(readOnly: widget.readOnly),
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: isLoading && users.isEmpty
-                        ? const Center(child: CircularProgressIndicator())
-                        : users.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.people_outline,
-                                        size: 48,
-                                        color: AppColors.textMuted
-                                            .withValues(alpha: 0.4)),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      _searchQuery.isNotEmpty || _roleFilter != null
-                                          ? 'User tidak ditemukan'
-                                          : 'Belum ada user',
-                                      style: AppTextStyles.bodyMedium,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : SingleChildScrollView(
-                                // Outer: vertical scroll untuk banyak user.
-                                child: SingleChildScrollView(
-                                  // Inner: horizontal scroll pada layar sempit.
-                                  scrollDirection: Axis.horizontal,
-                                  child: ConstrainedBox(
-                                    constraints:
-                                        const BoxConstraints(minWidth: 800),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        for (int i = 0;
-                                            i < users.length;
-                                            i++) ...[
-                                          _UserRow(
-                                              user: users[i],
-                                              readOnly: widget.readOnly,
-                                              isEven: i.isEven),
-                                          const Divider(height: 1),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                ),
+              child: isLoading && users.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : users.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.people_outline,
+                                  size: 48,
+                                  color: AppColors.textMuted
+                                      .withValues(alpha: 0.4)),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchQuery.isNotEmpty || _roleFilter != null
+                                    ? 'User tidak ditemukan'
+                                    : 'Belum ada user',
+                                style: AppTextStyles.bodyMedium,
                               ),
-                  ),
-                ],
-              ),
+                            ],
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          // Vertical: scroll untuk banyak user.
+                          child: SingleChildScrollView(
+                            // Horizontal: scroll untuk layar sempit.
+                            scrollDirection: Axis.horizontal,
+                            child: _UserDataTable(
+                              users: users,
+                              readOnly: widget.readOnly,
+                            ),
+                          ),
+                        ),
             ),
           ],
         ),
@@ -237,224 +201,184 @@ class _UsersTabState extends State<UsersTab> {
   }
 }
 
-class _TableHeader extends StatelessWidget {
+class _UserDataTable extends StatelessWidget {
+  final List<UserItem> users;
   final bool readOnly;
-  const _TableHeader({this.readOnly = false});
+
+  const _UserDataTable({required this.users, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: const BoxDecoration(
-        color: AppColors.borderLight,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
-        ),
+    return DataTable(
+      headingRowColor: WidgetStateProperty.all(AppColors.borderLight),
+      headingTextStyle: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+        letterSpacing: 0.5,
       ),
-      child: Row(
-        children: [
-          // NAMA (flex)
-          const Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('NAMA',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                      letterSpacing: 0.5,
-                    )),
-              ),
+      dataRowColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.hovered)) {
+          return AppColors.background.withValues(alpha: 0.6);
+        }
+        return null;
+      }),
+      columnSpacing: 28,
+      horizontalMargin: 16,
+      showCheckboxColumn: false,
+      dividerThickness: 0.5,
+      columns: [
+        const DataColumn(label: Text('NAMA')),
+        const DataColumn(label: Text('USERNAME')),
+        const DataColumn(label: Text('ROLE')),
+        const DataColumn(label: Text('CABANG')),
+        const DataColumn(label: Text('STATUS')),
+        if (!readOnly) const DataColumn(label: Text('AKSI')),
+      ],
+      rows: [
+        for (int i = 0; i < users.length; i++)
+          DataRow(
+            color: WidgetStateProperty.all(
+              i.isEven
+                  ? AppColors.surface
+                  : AppColors.borderLight.withValues(alpha: 0.4),
             ),
+            cells: [
+              DataCell(
+                _NameCell(
+                  displayName: users[i].displayName,
+                  username: users[i].username,
+                  role: users[i].role,
+                ),
+              ),
+              DataCell(
+                Text(
+                  users[i].username,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              DataCell(_RoleBadge(role: users[i].role)),
+              DataCell(
+                Text(
+                  users[i].branchNama ?? users[i].branch ?? '-',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              DataCell(_StatusBadge(active: users[i].isActive)),
+              if (!readOnly)
+                DataCell(
+                  Center(
+                    child: IconButton(
+                      onPressed: () => _openEditDialog(context, users[i]),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      color: AppColors.primaryLight,
+                      tooltip: 'Edit user',
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          _hCell('USERNAME', 150),
-          _hCell('ROLE', 110),
-          _hCell('CABANG', 170),
-          _hCell('STATUS', 100),
-          if (!readOnly) _hCell('AKSI', 70),
-        ],
-      ),
+      ],
     );
   }
 
-  Widget _hCell(String label, double width) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Center(
-          child: Text(label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-                letterSpacing: 0.5,
-              )),
-        ),
-      ),
+  static Future<void> _openEditDialog(BuildContext context, UserItem user) {
+    final provider = context.read<AdminProvider>();
+    return showDialog(
+      context: context,
+      builder: (_) => _UserEditDialog(existing: user, provider: provider),
     );
   }
 }
 
-class _UserRow extends StatelessWidget {
-  final UserItem user;
-  final bool readOnly;
-  final bool isEven;
-  const _UserRow({
-    required this.user,
-    this.readOnly = false,
-    this.isEven = true,
+/// Cell khusus untuk kolom NAMA — avatar lingkaran + nama + @username.
+class _NameCell extends StatelessWidget {
+  final String displayName;
+  final String username;
+  final String role;
+
+  const _NameCell({
+    required this.displayName,
+    required this.username,
+    required this.role,
   });
 
   @override
   Widget build(BuildContext context) {
-    final initial = user.displayName.isNotEmpty
-        ? user.displayName[0].toUpperCase()
-        : '?';
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: isEven
-            ? AppColors.surface
-            : AppColors.borderLight.withValues(alpha: 0.4),
-        border: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 0.5),
-        ),
-      ),
-      child: Row(
-        children: [
-          // NAMA: avatar + nama + username sebagai sub-text
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: _avatarColor(user.role).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: TextStyle(
-                          color: _avatarColor(user.role),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.displayName,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '@${user.username}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          _bodyCell(150, align: Alignment.centerLeft, child: Text(
-            user.username,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              fontFamily: 'monospace',
-            ),
-            overflow: TextOverflow.ellipsis,
-          )),
-          _bodyCell(150, child: _RoleBadge(role: user.role)),
-          _bodyCell(170, align: Alignment.centerLeft, child: Text(
-            user.branchNama ?? user.branch ?? '-',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-            overflow: TextOverflow.ellipsis,
-          )),
-          _bodyCell(100, child: _StatusBadge(active: user.isActive)),
-          if (!readOnly)
-            SizedBox(
-              width: 70,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Center(
-                  child: IconButton(
-                    onPressed: () => _openEditDialog(context),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    color: AppColors.primaryLight,
-                    tooltip: 'Edit user',
-                    constraints:
-                        const BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bodyCell(double width, {required Widget child, Alignment align = Alignment.center}) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Align(alignment: align, child: child),
-      ),
-    );
-  }
-
-  Color _avatarColor(String role) {
-    return switch (role) {
+    final initial =
+        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final color = switch (role) {
       'ADMIN' => AppColors.error,
       'SUPERVISOR' => AppColors.warning,
       'MANAGER' => AppColors.info,
       _ => AppColors.success,
     };
-  }
-
-  Future<void> _openEditDialog(BuildContext context) async {
-    final provider = context.read<AdminProvider>();
-    await showDialog(
-      context: context,
-      builder: (_) => _UserEditDialog(existing: user, provider: provider),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Center(
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                displayName,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '@$username',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
-
-  // _confirmDelete dihapus — nonaktifkan user cukup lewat toggle is_active
-  // di dialog edit. Tidak ada 2 fitur dengan tujuan yang sama.
 }
-
 class _RoleBadge extends StatelessWidget {
   final String role;
   const _RoleBadge({required this.role});
