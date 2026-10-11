@@ -291,8 +291,12 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final items = _navItems;
     final i = _selectedIndex.clamp(0, items.length - 1);
-    // ADMIN is read-only; SUPERVISOR and MANAGER can write.
-    final readOnly = widget.role == 'ADMIN';
+    // Hanya ADMIN yang boleh write (approve/reject pesanan, edit master
+    // data). SUPERVISOR & MANAGER murni monitoring — backend endpoint
+    // /orders/{id}/approve pakai require_admin jadi keduanya akan di-tolak
+    // 403 kalau nyoba. UI sembunyikan tombol action supaya user tidak
+    // melihat tombol yang ujung-ujungnya gagal.
+    final readOnly = widget.role != 'ADMIN';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
     // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
@@ -416,9 +420,10 @@ class _DashboardContentState extends State<_DashboardContent>
   /// Top bar — judul tab + refresh. Mode compact menambah hamburger di kiri
   /// untuk membuka drawer.
   Widget _buildTopBar(BuildContext context, Responsive resp) {
-    final showReadOnlyBadge = widget.role == 'MANAGER' &&
-        _selectedIndex < _navItems.length &&
-        _navItems[_selectedIndex].label == 'Pesanan';
+    final showReadOnlyBadge =
+        widget.role != 'ADMIN' &&
+            _selectedIndex < _navItems.length &&
+            _navItems[_selectedIndex].label == 'Pesanan';
     return Container(
       height: resp.topBarHeight,
       padding: EdgeInsets.symmetric(horizontal: resp.contentPadding),

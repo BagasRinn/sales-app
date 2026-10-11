@@ -132,49 +132,75 @@ class _UsersTabState extends State<UsersTab> {
               ),
             ),
             const Divider(height: 1),
-            // Bungkus tabel dalam horizontal scroll supaya pada layar sempit
-            // (mobile) kolom-kolom fixed-width (total ~600) bisa di-scroll
-            // horizontal. Pada desktop lebar (>600), scroll tidak aktif.
+            // Pola sama dengan customers_tab: header punya tinggi tetap
+            // (48), baris pakai nested vertical+horizontal scroll. Pakai pola
+            // ini (bukan Expanded di dalam SingleChildScrollView horizontal)
+            // supaya ListView di-expand dengan benar — kalau Column berisi
+            // Expanded dibungkus SingleChildScrollView horizontal, tinggi
+            // Column jadi 0 karena Expanded tidak punya referensi tinggi.
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 720),
-                  child: Column(
-                    children: [
-                      _TableHeader(readOnly: widget.readOnly),
-                      const Divider(height: 1),
-                      Expanded(
-                        child: isLoading && users.isEmpty
-                            ? const Center(child: CircularProgressIndicator())
-                            : users.isEmpty
-                                ? Center(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 48,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 720),
+                        child: _TableHeader(readOnly: widget.readOnly),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: isLoading && users.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : users.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.people_outline,
+                                        size: 48,
+                                        color: AppColors.textMuted
+                                            .withValues(alpha: 0.4)),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _searchQuery.isNotEmpty || _roleFilter != null
+                                          ? 'User tidak ditemukan'
+                                          : 'Belum ada user',
+                                      style: AppTextStyles.bodyMedium,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : SingleChildScrollView(
+                                // Outer: vertical scroll untuk banyak user.
+                                child: SingleChildScrollView(
+                                  // Inner: horizontal scroll pada layar sempit.
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(minWidth: 720),
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        Icon(Icons.people_outline,
-                                            size: 48,
-                                            color: AppColors.textMuted
-                                                .withValues(alpha: 0.4)),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          _searchQuery.isNotEmpty || _roleFilter != null
-                                              ? 'User tidak ditemukan'
-                                              : 'Belum ada user',
-                                          style: AppTextStyles.bodyMedium,
-                                        ),
+                                        for (final user in users) ...[
+                                          _UserRow(
+                                              user: user,
+                                              readOnly: widget.readOnly),
+                                          const Divider(height: 1),
+                                        ],
                                       ],
                                     ),
-                                  )
-                                : ListView.builder(
-                                    itemCount: users.length,
-                                    itemBuilder: (ctx, index) =>
-                                        _UserRow(user: users[index], readOnly: widget.readOnly),
                                   ),
-                      ),
-                    ],
+                                ),
+                              ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
