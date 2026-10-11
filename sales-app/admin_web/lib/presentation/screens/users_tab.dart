@@ -141,7 +141,7 @@ class _UsersTabState extends State<UsersTab> {
                       scrollDirection: Axis.horizontal,
                       physics: const ClampingScrollPhysics(),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 720),
+                        constraints: const BoxConstraints(minWidth: 800),
                         child: _TableHeader(readOnly: widget.readOnly),
                       ),
                     ),
@@ -176,7 +176,7 @@ class _UsersTabState extends State<UsersTab> {
                                   scrollDirection: Axis.horizontal,
                                   child: ConstrainedBox(
                                     constraints:
-                                        const BoxConstraints(minWidth: 720),
+                                        const BoxConstraints(minWidth: 800),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
@@ -244,14 +244,19 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
-      color: AppColors.borderLight,
+      height: 48,
+      decoration: const BoxDecoration(
+        color: AppColors.borderLight,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border),
+        ),
+      ),
       child: Row(
         children: [
           // NAMA (flex)
           const Expanded(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text('NAMA',
@@ -264,11 +269,11 @@ class _TableHeader extends StatelessWidget {
               ),
             ),
           ),
-          _hCell('USERNAME', 130),
-          _hCell('ROLE', 100),
-          _hCell('CABANG', 140),
-          _hCell('STATUS', 90),
-          if (!readOnly) _hCell('AKSI', 60),
+          _hCell('USERNAME', 150),
+          _hCell('ROLE', 110),
+          _hCell('CABANG', 170),
+          _hCell('STATUS', 100),
+          if (!readOnly) _hCell('AKSI', 70),
         ],
       ),
     );
@@ -277,14 +282,17 @@ class _TableHeader extends StatelessWidget {
   Widget _hCell(String label, double width) {
     return SizedBox(
       width: width,
-      child: Center(
-        child: Text(label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 0.5,
-            )),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Center(
+          child: Text(label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.5,
+              )),
+        ),
       ),
     );
   }
@@ -306,24 +314,29 @@ class _UserRow extends StatelessWidget {
         ? user.displayName[0].toUpperCase()
         : '?';
     return Container(
-      height: 56,
-      color: isEven
-          ? AppColors.surface
-          : AppColors.borderLight.withValues(alpha: 0.5),
+      height: 64,
+      decoration: BoxDecoration(
+        color: isEven
+            ? AppColors.surface
+            : AppColors.borderLight.withValues(alpha: 0.4),
+        border: const Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
       child: Row(
         children: [
           // NAMA: avatar + nama + username sebagai sub-text
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: _avatarColor(user.role).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: Center(
                       child: Text(
@@ -331,12 +344,12 @@ class _UserRow extends StatelessWidget {
                         style: TextStyle(
                           color: _avatarColor(user.role),
                           fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          fontSize: 14,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -352,6 +365,7 @@ class _UserRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           '@${user.username}',
                           style: const TextStyle(
@@ -368,7 +382,7 @@ class _UserRow extends StatelessWidget {
               ),
             ),
           ),
-          _bodyCell(130, child: Text(
+          _bodyCell(150, align: Alignment.centerLeft, child: Text(
             user.username,
             style: const TextStyle(
               fontSize: 12,
@@ -377,8 +391,8 @@ class _UserRow extends StatelessWidget {
             ),
             overflow: TextOverflow.ellipsis,
           )),
-          _bodyCell(100, child: _RoleBadge(role: user.role)),
-          _bodyCell(140, child: Text(
+          _bodyCell(150, child: _RoleBadge(role: user.role)),
+          _bodyCell(170, align: Alignment.centerLeft, child: Text(
             user.branchNama ?? user.branch ?? '-',
             style: const TextStyle(
               fontSize: 12,
@@ -386,19 +400,22 @@ class _UserRow extends StatelessWidget {
             ),
             overflow: TextOverflow.ellipsis,
           )),
-          _bodyCell(90, child: _StatusBadge(active: user.isActive)),
+          _bodyCell(100, child: _StatusBadge(active: user.isActive)),
           if (!readOnly)
             SizedBox(
-              width: 60,
-              child: Center(
-                child: IconButton(
-                  onPressed: () => _openEditDialog(context),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  color: AppColors.primaryLight,
-                  tooltip: 'Edit user',
-                  constraints:
-                      const BoxConstraints(minWidth: 36, minHeight: 36),
-                  padding: EdgeInsets.zero,
+              width: 70,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  child: IconButton(
+                    onPressed: () => _openEditDialog(context),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: AppColors.primaryLight,
+                    tooltip: 'Edit user',
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ),
             ),
@@ -407,12 +424,12 @@ class _UserRow extends StatelessWidget {
     );
   }
 
-  Widget _bodyCell(double width, {required Widget child}) {
+  Widget _bodyCell(double width, {required Widget child, Alignment align = Alignment.center}) {
     return SizedBox(
       width: width,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Center(child: child),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Align(alignment: align, child: child),
       ),
     );
   }
