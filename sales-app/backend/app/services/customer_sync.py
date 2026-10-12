@@ -339,19 +339,23 @@ def sync_customers_from_excel(
             skipped += 1
             continue
 
-        # Cek duplikat (branch, kode) di dalam file ini. NULL kode skip —
-        # multiple NULLs diperbolehkan per branch oleh UNIQUE index.
+        # Cek duplikat (branch, kode, kode_area) di dalam file ini. NULL
+        # kode skip — multiple NULLs diperbolehkan per branch oleh UNIQUE
+        # index. kode_area empty string dianggap sebagai satu grup dengan
+        # kode_area kosong lain (NULLs treated as distinct, "" as same).
         kode_norm = _normalize(kode_raw)
+        kode_area_norm = _normalize(kode_area_raw)  # "" untuk None/empty
         if kode_norm:
-            key = (branch_norm, kode_norm)
+            key = (branch_norm, kode_norm, kode_area_norm)
             if key in seen_keys:
                 validation_errors.append({
                     "row": idx,
                     "sku": str(kode_raw),
                     "reason": (
                         f"Kode '{kode_raw}' muncul lebih dari sekali di branch "
-                        f"'{current_user.get('branch')}' di file ini. Kode yang sama "
-                        "boleh di branch berbeda, tapi dalam satu branch harus unik."
+                        f"'{current_user.get('branch')}' dengan kode_area "
+                        f"'{kode_area_raw or ''}' di file ini. Kombinasi "
+                        "(branch, kode, kode_area) harus unik."
                     ),
                 })
                 skipped += 1
