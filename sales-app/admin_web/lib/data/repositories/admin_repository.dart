@@ -547,6 +547,20 @@ class AdminRepository {
     await _api.delete('/products/import-errors');
   }
 
+  /// Per-product monthly 'terjual' stats.
+  /// [yearMonth] format: 'YYYY-MM' (e.g. '2026-10'). Null = current month (server-side).
+  /// Returns list of {product_id, branch, nama_barang, stok_sistem, nama_supplier, terjual}.
+  /// `terjual` = total qty approved (moved into stok_diterima) in the given month.
+  /// Survives product import — import resets are logged with negative delta and
+  /// excluded from the sum.
+  Future<List<Map<String, dynamic>>> getProductSalesStats({String? yearMonth}) async {
+    final qs = (yearMonth != null && yearMonth.isNotEmpty)
+        ? '?year_month=${Uri.encodeComponent(yearMonth)}'
+        : '';
+    final data = await _api.get('/products/sales-stats$qs');
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, int>> getDashboardStats({DateTime? date, CancelToken? cancelToken}) async {
     // Use the server-side /products/stats endpoint so the count is never
     // limited by a client-side 50-order window.

@@ -924,6 +924,30 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
+  // ===== Product Sales Stats (Performa Sales — KPI per Produk) =====
+  List<Map<String, dynamic>> _productSalesStats = [];
+  bool _productSalesStatsLoading = false;
+  String? _productSalesStatsYearMonth;
+
+  List<Map<String, dynamic>> get productSalesStats => _productSalesStats;
+  bool get productSalesStatsLoading => _productSalesStatsLoading;
+  String? get productSalesStatsYearMonth => _productSalesStatsYearMonth;
+
+  Future<void> loadProductSalesStats({String? yearMonth}) async {
+    _productSalesStatsLoading = true;
+    _productSalesStatsYearMonth = yearMonth;
+    notifyListeners();
+    try {
+      _productSalesStats = await _repo.getProductSalesStats(yearMonth: yearMonth);
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _productSalesStatsLoading = false;
+      notifyListeners();
+    }
+  }
+
   void clearError() {
     _errorMessage = null;
     notifyListeners();

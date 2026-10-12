@@ -18,7 +18,7 @@ from app.core.security import (
     require_admin_or_supervisor,
     require_admin,
     require_auth,
-    require_supervisor_or_manager_global,
+    require_write_access,
     get_password_hash,
     apply_branch_filter,
     CurrentUser,
@@ -85,7 +85,7 @@ def list_users(
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Buat user baru - admin + supervisor only.
 
@@ -153,7 +153,7 @@ def update_user(
     user_id: UUID,
     update: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Edit user - admin + supervisor only. Branch-scoped: ADMIN/SUPERVISOR
     can only edit users in their own branch. Global MANAGER can edit anyone."""
@@ -223,7 +223,7 @@ def update_user(
 def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    _current_user: CurrentUser = Depends(require_write_access),
 ):
     """Soft-delete user - DIHAPUS.
 

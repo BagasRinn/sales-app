@@ -40,6 +40,95 @@ def get_suppliers_4p(
     return _get_4p_suppliers()
 
 
+@router.get("/sales-stats")
+def get_product_sales_stats(
+    year_month: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_auth),
+):
+    """Per-product monthly 'terjual' (= approved order qty) stats.
+
+    'Terjual' = total qty yang masuk ke `stok_diterima` dalam bulan tertentu.
+    Sumber: StokLog entries dengan `sumber` APPROVE/APPROVE_BACKFILL,
+    `field_terdampak='stok_diterima'`, `delta > 0`. Import-reset di-log
+    sebagai `sumber=SYNC, delta<0` dan otomatis di-exclude dari sum.
+
+    Dengan begitu data historis (qty approved tiap bulan) tetap ada walau
+    admin melakukan import produk (yang reset `stok_diterima=0` di product row).
+    """
+    from app.models.models import StokLog
+    from datetime import datetime
+    from sqlalchemy import and_
+
+    if not year_month:
+        now = datetime.utcnow()
+        year_month = f"{now.year:04d}-{now.month:02d}"
+
+    try:
+        year, month = map(int, year_month.split("-"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="year_month must be YYYY-MM format"
+        )
+
+    month_start = datetime(year, month, 1)
+    if month == 12:
+        month_end = datetime(year + 1, 1, 1)
+    else:
+        month_end = datetime(year, month + 1, 1)
+
+    # Subquery: sum positive stok_diterima deltas per (product, branch) in the month.
+    log_subq = (
+        db.query(
+            StokLog.product_id,
+            StokLog.branch,
+            func.coalesce(func.sum(StokLog.delta), 0).label("terjual"),
+        )
+        .filter(
+            StokLog.field_terdampak == "stok_diterima",
+            StokLog.delta > 0,
+            StokLog.created_at >= month_start,
+            StokLog.created_at < month_end,
+        )
+        .group_by(StokLog.product_id, StokLog.branch)
+        .subquery()
+    )
+
+    # Main query: products LEFT JOIN with log aggregation, branch-scoped.
+    query = db.query(
+        Product.id,
+        Product.branch,
+        Product.nama_barang,
+        Product.stok_sistem,
+        Product.nama_supplier,
+        func.coalesce(log_subq.c.terjual, 0).label("terjual"),
+    ).outerjoin(
+        log_subq,
+        and_(
+            log_subq.c.product_id == Product.id,
+            log_subq.c.branch == Product.branch,
+        ),
+    )
+    query = apply_branch_filter(query, Product, current_user)
+
+    rows = query.order_by(
+        func.coalesce(log_subq.c.terjual, 0).desc(),
+        Product.nama_barang.asc(),
+    ).all()
+
+    return [
+        {
+            "product_id": r.id,
+            "branch": r.branch,
+            "nama_barang": r.nama_barang,
+            "stok_sistem": int(r.stok_sistem or 0),
+            "nama_supplier": r.nama_supplier,
+            "terjual": int(r.terjual or 0),
+        }
+        for r in rows
+    ]
+
+
 @router.get("", response_model=List[ProductResponse])
 def list_products(
     skip: int = 0,

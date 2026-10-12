@@ -42,11 +42,16 @@ class _PerformanceTabState extends State<PerformanceTab> {
 
   void _loadData() {
     final provider = context.read<AdminProvider>();
+    final ym = _yearMonth(_fromDate);
     provider.loadSalesPerformance(from: _fromDate, to: _toDate);
     provider.loadSalesTargets(
       period: '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}',
     );
+    provider.loadProductSalesStats(yearMonth: ym);
   }
+
+  String _yearMonth(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
   Future<void> _pickMonth() async {
     final picked = await showDatePicker(
@@ -122,10 +127,10 @@ class _PerformanceTabState extends State<PerformanceTab> {
               _buildPeriodFilterSection(),
               const SizedBox(height: 24),
 
-              // Section 1: KPI Cards
-              _buildSectionTitle('KPI per Sales'),
+              // Section 1: KPI Cards — per-product monthly 'terjual' stats
+              _buildSectionTitle('KPI per Produk'),
               const SizedBox(height: 12),
-              _buildKpiCards(sorted, provider, currentPeriod),
+              _buildProductKpiCards(provider),
               const SizedBox(height: 32),
 
               // Section 2: Leaderboard
@@ -194,12 +199,23 @@ class _PerformanceTabState extends State<PerformanceTab> {
     );
   }
 
-  Widget _buildKpiCards(
-    List<SalesPerformance> sorted,
-    AdminProvider provider,
-    String currentPeriod,
-  ) {
-    if (sorted.isEmpty) {
+  Widget _buildProductKpiCards(AdminProvider provider) {
+    final stats = provider.productSalesStats;
+    final loading = provider.productSalesStatsLoading;
+
+    if (loading && stats.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (stats.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -209,7 +225,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
         ),
         child: const Center(
           child: Text(
-            'Belum ada data performa untuk periode ini.',
+            'Belum ada data produk untuk periode ini.',
             style: TextStyle(color: AppColors.textMuted),
           ),
         ),
@@ -219,9 +235,10 @@ class _PerformanceTabState extends State<PerformanceTab> {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
-      children: sorted.map((perf) {
-        final target = provider.getTargetFor(perf.userId, currentPeriod);
-        final progress = _calcProgress(perf, target);
+      children: stats.map((stat) {
+        final nama = (stat['nama_barang'] as String?) ?? '-';
+        final stok = (stat['stok_sistem'] as int?) ?? 0;
+        final terjual = (stat['terjual'] as int?) ?? 0;
 
         return Container(
           width: 200,
@@ -238,13 +255,11 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    backgroundColor: AppColors.success.withValues(alpha: 0.1),
                     child: Text(
-                      perf.displayName.isNotEmpty
-                          ? perf.displayName[0].toUpperCase()
-                          : '?',
+                      nama.isNotEmpty ? nama[0].toUpperCase() : '?',
                       style: const TextStyle(
-                        color: AppColors.primary,
+                        color: AppColors.success,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -253,7 +268,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      perf.displayName,
+                      nama,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -266,29 +281,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 ],
               ),
               const SizedBox(height: 12),
-              _kpiRow(Icons.shopping_cart, 'Order', perf.orderCount.toString()),
+              _productKpiRow(Icons.inventory_2_outlined, 'Stok', stok.toString()),
               const SizedBox(height: 6),
-              _kpiRow(Icons.payments, 'Revenue', _fmt(perf.revenue)),
-              const SizedBox(height: 6),
-              _kpiRow(Icons.store, 'Submission', perf.submissionCount.toString()),
-              if (target != null) ...[
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  backgroundColor: AppColors.border,
-                  valueColor: AlwaysStoppedAnimation(
-                    progress >= 1.0 ? AppColors.success : AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${(progress * 100).toStringAsFixed(0)}% target',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: progress >= 1.0 ? AppColors.success : AppColors.textMuted,
-                  ),
-                ),
-              ],
+              _productKpiRow(Icons.shopping_cart_checkout, 'Terjual', terjual.toString()),
             ],
           ),
         );
@@ -296,7 +291,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
     );
   }
 
-  Widget _kpiRow(IconData icon, String label, String value) {
+  Widget _productKpiRow(IconData icon, String label, String value) {
     return Row(
       children: [
         Icon(icon, size: 14, color: AppColors.textMuted),
@@ -315,14 +310,6 @@ class _PerformanceTabState extends State<PerformanceTab> {
         ),
       ],
     );
-  }
-
-  double _calcProgress(SalesPerformance perf, SalesTarget? target) {
-    if (target == null || target.targetValue == 0) return 0.0;
-    if (target.isOrderCount) {
-      return perf.orderCount / target.targetValue;
-    }
-    return perf.revenue / target.targetValue;
   }
 
   Widget _buildLeaderboard(

@@ -19,7 +19,7 @@ from app.schemas.schemas import (
     CustomerResponse,
     SalesAssignmentItem,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -170,7 +170,7 @@ def put_area_assignment(
     kode_area: str,
     body: AreaAssignmentsPut,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Replace full set of sales assigned to kode_area. Idempotent.
     Empty sales_ids = unassign semua sales dari area ini (customer di area

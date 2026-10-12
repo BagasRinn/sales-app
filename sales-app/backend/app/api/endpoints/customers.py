@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     SalesAssignmentItem,
     SyncResultResponse,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
 from app.core.visibility import visible_customer_query
 from app.services.customer_sync import sync_customers_from_excel
@@ -196,7 +196,7 @@ def list_kode_areas(
 def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Identity toko = (nama_toko, alamat) - kedua kolom wajib dan dicocokkan
     case-insensitive. Boleh ada dua toko dengan nama sama selama alamatnya beda.
@@ -231,7 +231,7 @@ def update_customer(
     customer_id: UUID,
     update: CustomerUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
@@ -291,7 +291,7 @@ def put_customer_assignments(
     customer_id: UUID,
     body: CustomerAssignmentsPut,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Replace full set of sales assigned to a customer. Idempotent.
     Empty sales_ids = unassign everyone (customer jadi visible-to-all).
@@ -344,7 +344,7 @@ def put_customer_assignments(
 def delete_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     customer = _exclude_deleted(
         db.query(Customer).filter(Customer.id == customer_id)
@@ -364,7 +364,7 @@ def delete_customer(
 def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Format file harus .xlsx")

@@ -26,7 +26,7 @@ from app.schemas.schemas import (
     CancelItemsRequest,
     OrderReject,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
+from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
 from app.services.stock_logger import log_stock_change
 

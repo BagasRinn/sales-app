@@ -12,7 +12,7 @@ from app.schemas.schemas import (
     SalesTargetUpdate,
     SalesTargetResponse,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
+from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 
 router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 
@@ -46,7 +46,7 @@ def upsert_sales_target(
     user_id: UUID,
     payload: SalesTargetUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Set or update target + incentive for a sales user.
     Creates new record if none exists for (user_id, period), otherwise updates.
