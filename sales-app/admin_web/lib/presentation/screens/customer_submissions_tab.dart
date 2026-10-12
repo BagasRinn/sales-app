@@ -17,7 +17,16 @@ class CustomerSubmissionsTab extends StatefulWidget {
 
 class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
   String _filter = 'ALL'; // ALL | PENDING | APPROVED | REJECTED
-  bool _firstLoad = true;
+  // True selama API call sedang jalan. Pakai ini (bukan `_firstLoad` yang
+  // di-flip setelah frame pertama) supaya spinner tetap tampil sampai
+  // data betul-betul datang — user tidak lihat "Belum ada pengajuan"
+  // padahal loading masih jalan.
+  bool _loading = false;
+  // Client-side pagination: API balikin semua submission dalam 1 request,
+  // tapi UI cuma render N item pertama. Kurangi waktu build ListView saat
+  // dataset besar (nested order+items per submission).
+  static const int _pageSize = 20;
+  int _displayLimit = _pageSize;
 
   @override
   void initState() {
@@ -25,29 +34,50 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AdminProvider>();
       if (provider.customerSubmissions.isEmpty) {
-        provider.loadCustomerSubmissions();
+        setState(() => _loading = true);
+        provider.loadCustomerSubmissions().whenComplete(() {
+          if (mounted) setState(() => _loading = false);
+        });
       }
-      _firstLoad = false;
     });
   }
 
   void _changeFilter(String f) {
-    setState(() => _filter = f);
+    setState(() {
+      _filter = f;
+      // Tampil spinner hanya kalau list sedang kosong — kalau ada, biar
+      // user lihat data lama dulu sambil refresh (respons lebih terasa cepat).
+      _loading = _loading || _submissionsAreEmpty();
+      // Reset pagination saat ganti filter supaya hitungan "ditampilkan"
+      // konsisten dengan filter yang aktif.
+      _displayLimit = _pageSize;
+    });
     context.read<AdminProvider>().loadCustomerSubmissions(
           status: f == 'ALL' ? null : f,
-        );
+        ).whenComplete(() {
+          if (mounted) setState(() => _loading = false);
+        });
+  }
+
+  bool _submissionsAreEmpty() {
+    return context.read<AdminProvider>().customerSubmissions.isEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AdminProvider>();
-    final submissions = provider.customerSubmissions;
+    // Pakai context.select (bukan watch) supaya tab ini cuma rebuild kalau
+    // data yang dia pakai berubah. Watch = rebuild tiap notifyListeners()
+    // (mis. auto-refresh stats), bikin build sia-sia.
+    final submissions =
+        context.select<AdminProvider, List<CustomerSubmission>>(
+            (p) => p.customerSubmissions);
+    final pending =
+        context.select<AdminProvider, int>((p) => p.customerSubmissionsPendingCount);
     final total = submissions.length;
-    final pending = provider.customerSubmissionsPendingCount;
     final approved = submissions.where((s) => s.status == 'APPROVED').length;
     final rejected = submissions.where((s) => s.status == 'REJECTED').length;
 
-    if (_firstLoad && submissions.isEmpty) {
+    if (_loading && submissions.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -143,13 +173,14 @@ class _CustomerSubmissionsTabState extends State<CustomerSubmissionsTab> {
         Expanded(
           child: submissions.isEmpty
               ? _EmptyState()
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  itemCount: submissions.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    return _SubmissionCard(submission: submissions[i], readOnly: widget.readOnly);
-                  },
+              : _SubmissionsList(
+                  submissions: submissions,
+                  readOnly: widget.readOnly,
+                  displayLimit: _displayLimit,
+                  pageSize: _pageSize,
+                  onLoadMore: () => setState(() {
+                    _displayLimit += _pageSize;
+                  }),
                 ),
         ),
       ],
@@ -226,6 +257,60 @@ class _StatCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SubmissionsList extends StatelessWidget {
+  final List<CustomerSubmission> submissions;
+  final bool readOnly;
+  final int displayLimit;
+  final int pageSize;
+  final VoidCallback onLoadMore;
+
+  const _SubmissionsList({
+    required this.submissions,
+    required this.readOnly,
+    required this.displayLimit,
+    required this.pageSize,
+    required this.onLoadMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleCount =
+        submissions.length < displayLimit ? submissions.length : displayLimit;
+    final hasMore = visibleCount < submissions.length;
+    final remaining = submissions.length - visibleCount;
+    // Tambah 1 slot di akhir untuk tombol "Muat lagi" kalau masih ada sisa.
+    final itemCount = visibleCount + (hasMore ? 1 : 0);
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      itemCount: itemCount,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        if (i < visibleCount) {
+          return _SubmissionCard(
+            submission: submissions[i],
+            readOnly: readOnly,
+          );
+        }
+        // Footer: tombol "Muat lagi" — naikkan _displayLimit per pageSize.
+        final nextBatch = remaining < pageSize ? remaining : pageSize;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: OutlinedButton.icon(
+              onPressed: onLoadMore,
+              icon: const Icon(Icons.expand_more, size: 18),
+              label: Text(
+                'Muat $nextBatch lagi • $remaining tersisa',
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
