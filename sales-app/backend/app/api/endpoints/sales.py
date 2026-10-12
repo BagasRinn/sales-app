@@ -11,7 +11,6 @@ from app.models.models import (
     AreaAssignment,
     Customer,
     CustomerAssignment,
-    CustomerKodeArea,
     User,
 )
 from app.schemas.schemas import (
@@ -53,28 +52,21 @@ def list_sales_customers(
         .subquery()
     )
 
-    # kode_area dari junction table customer_kode_areas
-    my_cka_subq = (
-        db.query(CustomerKodeArea.customer_id)
-        .filter(CustomerKodeArea.kode_area.in_(my_areas_subq))
-        .subquery()
-    )
-
     rows = (
         db.query(Customer)
         .filter(
             Customer.deleted_at.is_(None),
         )
         .filter(
-            # Direct override ATAU area coverage via junction table.
-            # Exclude 'unassigned fallback' (kode_area null AND no direct).
+            # Direct override ATAU area coverage. Exclude 'unassigned fallback'
+            # (kode_area null AND no direct) - itu bukan assignment spesifik.
             (Customer.id.in_(my_direct_subq)) |
-            (Customer.id.in_(my_cka_subq))
+            (Customer.kode_area.in_(my_areas_subq))
         )
     )
     # Apply branch filter
     rows = apply_branch_filter(rows, Customer, current_user)
-    rows = rows.order_by(Customer.nama_toko).all()
+    rows = rows.order_by(Customer.kode_area, Customer.nama_toko).all()
     return rows
 
 
@@ -87,12 +79,12 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
     Branch-scoped: only returns areas from customers in the same branch,
     dan hanya sales assignment di branch yang sama."""
     user_branch = current_user.get("branch")
-    # Subquery: distinct kode_area dari customer_kode_areas junction table, filtered by branch
+    # Subquery: distinct kode_area dari customer (exclude null), filtered by branch
     customer_areas_subq = (
-        db.query(CustomerKodeArea.kode_area)
-        .filter(CustomerKodeArea.kode_area.isnot(None))
+        db.query(Customer.kode_area)
+        .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
     )
-    customer_areas_subq = apply_branch_filter(customer_areas_subq, CustomerKodeArea, current_user)
+    customer_areas_subq = apply_branch_filter(customer_areas_subq, Customer, current_user)
     customer_areas_subq = customer_areas_subq.distinct().subquery()
     # Pakai select() explicit supaya tidak kena SAWarning "Coercing Subquery
     # object into a select()".

@@ -92,9 +92,11 @@ class Product(Base):
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
-        # Customer identity = (branch, kode). Same pattern as Product (id, branch).
-        # kode may be NULL; multiple NULLs allowed by Postgres UNIQUE index.
-        UniqueConstraint("branch", "kode", name="uq_customers_branch_kode"),
+        # Customer identity = (branch, kode, kode_area). Same pattern as Product (id, branch).
+        # kode/kode_area may be NULL; multiple NULLs allowed by Postgres UNIQUE index.
+        # Satu kode boleh di branch + kode_area berbeda (mis. P0001 di
+        # BANJARMASIN/MULIA1 dan P0001 di BANJARMASIN/MULIA2 = 2 customer beda).
+        UniqueConstraint("branch", "kode", "kode_area", name="uq_customers_branch_kode_kode_area"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -103,13 +105,11 @@ class Customer(Base):
     kode = Column(String(50), nullable=True, index=True)
     nama_toko = Column(String(200), nullable=False, index=True)
     alamat = Column(String(500), nullable=True)
-    # DEPRECATED: kode_area dipindah ke junction table customer_kode_areas.
-    # Kolom ini保留 untuk backward compat — akan kosong untuk data baru.
-    # Gunakan relasi kode_areas untuk akses kode_area yang sebenarnya.
+    # Pengelompokan customer per area/rayon. Default assignment sales pakai
+    # kolom ini — manager assign 1 sales ke "MULIA2" → semua customer dengan
+    # kode_area='MULIA2' otomatis dapat coverage. Field deskriptif saja,
+    # bukan bagian dari identity (lihat UniqueConstraint di atas).
     kode_area = Column(String(50), nullable=True, index=True)
-    kode_areas = relationship(
-        "CustomerKodeArea", back_populates="customer", cascade="all, delete-orphan"
-    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -156,27 +156,6 @@ class CustomerAssignment(Base):
     sales = relationship(
         "User", back_populates="customer_assignments", foreign_keys=[sales_id]
     )
-
-
-class CustomerKodeArea(Base):
-    """Junction table: 1 customer bisa punya banyak kode_area.
-    Berguna untuk coverage sales per area dan future revenue per area.
-    Constraint UNIQUE(customer_id, kode_area) mencegah duplikat.
-    """
-    __tablename__ = "customer_kode_areas"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("customers.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    kode_area = Column(String(50), nullable=False)
-    branch = Column(String(20), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    __table_args__ = (
-        UniqueConstraint("customer_id", "kode_area", name="uq_customer_kode_area"),
-    )
-    customer = relationship("Customer", back_populates="kode_areas")
 
 
 class AreaAssignment(Base):

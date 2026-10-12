@@ -11,6 +11,7 @@ import logging
 from io import BytesIO
 from typing import List, Dict, Any
 from uuid import UUID
+import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
@@ -22,7 +23,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from app.models.models import Customer, CustomerKodeArea, SyncValidationError, ImportLog
+from app.models.models import Customer, SyncValidationError, ImportLog
 
 EXCEL_COLUMNS = ["kode", "nama_toko", "alamat", "kode_area"]
 
@@ -145,43 +146,52 @@ def _bulk_upsert_customers(
         for r in rows:
             r["branch"] = branch
 
-    # Lookup existing customers by (branch, kode) pair. Rows with NULL kode
-    # skip the lookup — non-partial UNIQUE index treats NULL as distinct,
-    # jadi multiple toko tanpa kode per branch tetap allowed.
-    pairs_in_file = sorted({
-        (r["branch"], r["kode"])
+    # Lookup existing customers by (branch, kode, kode_area) tuple.
+    # Rows dengan kode NULL di-skip dari lookup (multiple NULLs allowed
+    # per branch oleh UNIQUE index). Kalau kode_area kosong, kode_area
+    # jadi string kosong (juga distinct di UNIQUE index).
+    from sqlalchemy import and_, or_, tuple_
+    triples_in_file = sorted({
+        (r["branch"], r.get("kode") or "", r.get("kode_area") or "")
         for r in rows
         if r.get("kode") and r.get("branch")
     })
-    from sqlalchemy import and_, or_
     existing_rows = []
-    if pairs_in_file:
-        if len(pairs_in_file) == 1:
-            br, k = pairs_in_file[0]
+    if triples_in_file:
+        if len(triples_in_file) == 1:
+            br, k, ka = triples_in_file[0]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.branch, Customer.deleted_at)
-                .filter(and_(Customer.branch == br, Customer.kode == k))
+                db.query(Customer.id, Customer.kode, Customer.branch, Customer.kode_area, Customer.deleted_at)
+                .filter(and_(
+                    Customer.branch == br,
+                    Customer.kode == k,
+                    Customer.kode_area == ka,
+                ))
                 .all()
             )
         else:
             conditions = [
-                and_(Customer.branch == br, Customer.kode == k)
-                for br, k in pairs_in_file
+                and_(
+                    Customer.branch == br,
+                    Customer.kode == k,
+                    Customer.kode_area == ka,
+                )
+                for br, k, ka in triples_in_file
             ]
             existing_rows = (
-                db.query(Customer.id, Customer.kode, Customer.branch, Customer.deleted_at)
+                db.query(Customer.id, Customer.kode, Customer.branch, Customer.kode_area, Customer.deleted_at)
                 .filter(or_(*conditions))
                 .all()
             )
-    # Build lookup: (branch, kode) -> (customer_id, is_deleted)
+    # Build lookup: (branch, kode, kode_area) -> (customer_id, is_deleted)
     existing_map: Dict[tuple, tuple] = {}
     for row in existing_rows:
         if row.kode and row.branch:
-            existing_map[(row.branch, row.kode)] = (
+            existing_map[(row.branch, row.kode, row.kode_area or "")] = (
                 str(row.id), row.deleted_at is not None
             )
 
-    to_insert = []   # new customers (no existing pair, or NULL kode)
+    to_insert = []   # new customers (no existing triple, or NULL kode)
     to_update = []  # re-activate deleted customers
 
     for r in rows:
@@ -191,13 +201,13 @@ def _bulk_upsert_customers(
         if not kode:
             to_insert.append(r)
             continue
-        key = (r["branch"], kode)
+        key = (r["branch"], kode, r.get("kode_area") or "")
         if key in existing_map:
             cid, is_deleted = existing_map[key]
             if is_deleted:
                 to_update.append((cid, r))
             # else: active customer exists — ON CONFLICT DO UPDATE will refresh
-            # other fields (nama_toko/alamat/kode_area) below.
+            # other fields (nama_toko/alamat) below.
         else:
             to_insert.append(r)
 
@@ -210,22 +220,32 @@ def _bulk_upsert_customers(
                 "branch": r["branch"],
                 "kode": r.get("kode"),
                 "nama_toko": r["nama_toko"],
-                "alamat": r["alamat"],
+                "alamat": r.get("alamat"),
                 "kode_area": r.get("kode_area"),
             }
             for r in to_insert
         ])
-        # ON CONFLICT must match the actual unique constraint (branch, kode)
-        # per models.Customer.__table_args__. NOT updating `branch` on conflict
-        # — kalau ada existing customer di branch yang sama dengan kode sama,
-        # pertahankan branch-nya.
+        # ON CONFLICT must match the actual unique constraint
+        # (branch, kode, kode_area) per models.Customer.__table_args__.
+        # NOT updating `branch` on conflict — kalau ada existing customer
+        # di branch yang sama dengan kode + kode_area sama, pertahankan
+        # branch-nya.
+        #
+        # Untuk field opsional (alamat, kode_area): kalau field di Excel
+        # kosong/NULL, JANGAN overwrite data existing. Pakai COALESCE supaya
+        # nilai existing (EXCLUDED.<col>) hanya dipakai kalau input non-empty,
+        # jika tidak maka nilai lama (customers.<col>) dipertahankan.
+        # nama_toko wajib (sudah divalidasi), jadi boleh langsung di-overwrite.
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Customer.branch, Customer.kode],
+            index_elements=[Customer.branch, Customer.kode, Customer.kode_area],
             set_={
                 "kode": stmt.excluded.kode,
-                "nama_toko": stmt.excluded.nama_toko,
-                "alamat": stmt.excluded.alamat,
                 "kode_area": stmt.excluded.kode_area,
+                "nama_toko": stmt.excluded.nama_toko,
+                "alamat": sqlalchemy.func.coalesce(
+                    stmt.excluded.alamat,
+                    Customer.alamat,
+                ),
                 "deleted_at": None,
             },
         )
@@ -241,85 +261,12 @@ def _bulk_upsert_customers(
             if result:
                 if kode_val is not None:
                     result.kode = kode_val
+                if kode_area_val is not None:
+                    result.kode_area = kode_area_val
                 result.deleted_at = None
-                if kode_area_val:
-                    # Sync to junction table (replace existing entries)
-                    db.query(CustomerKodeArea).filter(
-                        CustomerKodeArea.customer_id == UUID(customer_id_str)
-                    ).delete()
-                    db.add(CustomerKodeArea(
-                        customer_id=UUID(customer_id_str),
-                        kode_area=kode_area_val,
-                        branch=result.branch,
-                    ))
         logger.info(f"[SYNC] Re-activated {len(to_update)} deleted customers")
 
     return inserted, updated
-
-
-def _sync_kode_areas_to_junction(
-    db: Session,
-    rows: List[Dict[str, Any]],
-    branch: str,
-) -> int:
-    """Sync kode_areas from validated rows into customer_kode_areas junction table.
-    Lookup customer IDs by (branch, kode) then bulk insert into junction table.
-    Returns number of kode_area entries inserted.
-    """
-    # Rows that have kode_area set
-    rows_with_area = [r for r in rows if r.get("kode_area")]
-    if not rows_with_area:
-        return 0
-
-    # Lookup customer IDs by (branch, kode)
-    from sqlalchemy import and_, or_
-    pairs = sorted({
-        (branch, r["kode"])
-        for r in rows_with_area
-        if r.get("kode")
-    })
-
-    if not pairs:
-        return 0
-
-    if len(pairs) == 1:
-        br, k = pairs[0]
-        existing = db.query(Customer.id).filter(
-            and_(Customer.branch == br, Customer.kode == k)
-        ).all()
-    else:
-        conditions = [and_(Customer.branch == br, Customer.kode == k) for br, k in pairs]
-        existing = db.query(Customer.id).filter(or_(*conditions)).all()
-
-    # Build mapping from (branch, kode) -> customer_id
-    # Query each pair individually since we can't easily correlate back
-    id_map: Dict[tuple, str] = {}
-    for br, k in pairs:
-        row = db.query(Customer.id).filter(
-            and_(Customer.branch == br, Customer.kode == k)
-        ).first()
-        if row:
-            id_map[(br, k)] = str(row.id)
-
-    # Build values for junction table insert
-    values = []
-    for r in rows_with_area:
-        key = (branch, r.get("kode"))
-        if key in id_map:
-            values.append({
-                "customer_id": id_map[key],
-                "kode_area": r["kode_area"],
-                "branch": branch,
-            })
-
-    if not values:
-        return 0
-
-    stmt = insert(CustomerKodeArea).values(values)
-    stmt = stmt.on_conflict_do_nothing(index_elements=["customer_id", "kode_area"])
-    db.execute(stmt)
-    logger.info(f"[SYNC] Synced {len(values)} kode_areas to junction table")
-    return len(values)
 
 
 def sync_customers_from_excel(
@@ -419,14 +366,9 @@ def sync_customers_from_excel(
         })
 
     inserted = updated = 0
-    kode_areas_synced = 0
     if validated_rows:
         try:
             inserted, updated = _bulk_upsert_customers(
-                db, validated_rows, branch=current_user.get("branch"),
-            )
-            # Sync kode_areas to junction table after customer upsert succeeds.
-            kode_areas_synced = _sync_kode_areas_to_junction(
                 db, validated_rows, branch=current_user.get("branch"),
             )
         except Exception as e:
@@ -479,7 +421,6 @@ def sync_customers_from_excel(
         "total_rows": total_rows,
         "inserted": inserted,
         "updated": updated,
-        "kode_areas_synced": kode_areas_synced,
         "skipped": skipped,
         "errors": validation_errors,
         "needs_review": len(validation_errors) > 0,

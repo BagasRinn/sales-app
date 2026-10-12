@@ -411,10 +411,8 @@ class CustomerResponse(CustomerBase):
     id: UUID
     branch: Optional[str] = None
     branch_nama: Optional[str] = None  # populated via JOIN
-    # DEPRECATED: kode_area di customers adalah legacy column (kosong untuk data baru).
-    # Gunakan kode_areas (list) sebagai gantinya.
+    # Pengelompokan per area/rayon. Optional — legacy customer bisa null.
     kode_area: Optional[str] = None
-    kode_areas: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None

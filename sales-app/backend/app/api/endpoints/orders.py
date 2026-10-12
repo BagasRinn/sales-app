@@ -54,11 +54,11 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
 
     Customer visible/orderable kalau salah satu cocok:
     - customer di-assign langsung ke sales ini (direct)
-    - customer punya row di customer_kode_areas junction table (area coverage)
-    - customer tanpa direct assignment DAN kode_area di junction table null OR area
+    - customer.kode_area di-assign ke sales ini (area coverage)
+    - customer tanpa direct assignment DAN (kode_area null OR area
       unassigned ke siapapun) - unassigned = visible to all, backward-compat
     """
-    from app.models.models import AreaAssignment, CustomerKodeArea
+    from app.models.models import AreaAssignment
     customer = _get_customer(customer_id, db)
 
     # 1. Direct assignment check
@@ -84,41 +84,39 @@ def _validate_customer_for_sales(customer_id, sales_id, db):
             detail="Customer tidak di-assign ke sales ini",
         )
 
-    # 2. No direct assignment - check area coverage via junction table.
-    # (customer.kode_area is deprecated; all new data is in customer_kode_areas)
-    cka_rows = (
-        db.query(CustomerKodeArea)
-        .filter(CustomerKodeArea.customer_id == customer.id)
-        .all()
-    )
-    if cka_rows:
-        kode_areas = [cka.kode_area for cka in cka_rows]
-        # Apakah salah satu kode_area di-assign ke siapapun DI BRANCH CUSTOMER INI?
-        any_assigned = (
+    # 2. No direct assignment - check area coverage.
+    # PENTING: AreaAssignment di-filter by customer's branch supaya area
+    # bernama sama di branch lain tidak salah dianggap "sudah dipegang
+    # orang lain" (false positive → false 403). Lihat migration
+    # `migrate_2026_10_10_06_area_assignments_branch` untuk schema.
+    if customer.kode_area:
+        # Apakah kode_area ini di-assign ke siapapun DI BRANCH CUSTOMER INI?
+        area_assigned_to_anyone = (
             db.query(AreaAssignment)
             .filter(
-                AreaAssignment.kode_area.in_(kode_areas),
+                AreaAssignment.kode_area == customer.kode_area,
                 AreaAssignment.branch == customer.branch,
             )
             .first()
         ) is not None
-        if not any_assigned:
+        if not area_assigned_to_anyone:
             # Area exists tapi belum ada yang pegang di branch ini →
             # visible to all (backward-compat).
             return customer
         # Area di-assign ke seseorang di branch ini. Cek apakah saya.
-        mine_area = (
+        my_area = (
             db.query(AreaAssignment)
             .filter(
-                AreaAssignment.kode_area.in_(kode_areas),
+                AreaAssignment.kode_area == customer.kode_area,
                 AreaAssignment.branch == customer.branch,
                 AreaAssignment.sales_id == sales_id,
             )
             .first()
         ) is not None
-        if mine_area:
+        if my_area:
             return customer
-        # Area di-assign ke sales lain di branch ini, bukan saya
+        # Area di-assign ke sales lain di branch ini, bukan saya — bukan
+        # visible di list.
         raise HTTPException(
             status_code=403,
             detail="Customer tidak di-assign ke sales ini",

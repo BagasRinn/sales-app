@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, select, or_
 
-from app.models.models import Customer, CustomerAssignment, AreaAssignment, CustomerKodeArea
+from app.models.models import Customer, CustomerAssignment, AreaAssignment
 from app.core.security import apply_branch_filter
 
 
@@ -54,22 +54,6 @@ def visible_customer_query(db: Session, current_user: dict):
         select(AreaAssignment.kode_area).subquery()
     )
 
-    # kode_area di customer.kode_area adalah deprecated column (kosong untuk data baru).
-    # Cek kode_area via junction table customer_kode_areas.
-    all_cka_subq = (
-        select(CustomerKodeArea.customer_id).subquery()
-    )
-    cka_in_my_areas_subq = (
-        select(CustomerKodeArea.customer_id)
-        .where(CustomerKodeArea.kode_area.in_(select(my_areas_subq.c.kode_area)))
-        .subquery()
-    )
-    cka_with_any_area = (
-        select(CustomerKodeArea.customer_id)
-        .where(CustomerKodeArea.kode_area.in_(select(all_areas.c.kode_area)))
-        .subquery()
-    )
-
     query = (
         db.query(CustomerModel)
         .filter(CustomerModel.deleted_at.is_(None))
@@ -77,18 +61,15 @@ def visible_customer_query(db: Session, current_user: dict):
             or_(
                 # Tier 1: direct assignment to me
                 CustomerModel.id.in_(select(mine_subq.c.customer_id)),
-                # Tier 2: customer is in a kode_area I cover (via junction table)
-                CustomerModel.id.in_(select(cka_in_my_areas_subq.c.customer_id)),
+                # Tier 2: customer is in a kode_area I cover
+                CustomerModel.kode_area.in_(select(my_areas_subq.c.kode_area)),
                 # Tier 3: unassigned — no direct assignment AND no area assignment
                 # (backward-compat for legacy customers)
                 and_(
                     ~CustomerModel.id.in_(select(all_direct.c.customer_id)),
                     or_(
-                        # customer tidak ada di junction table
-                        ~CustomerModel.id.in_(select(all_cka_subq.c.customer_id)),
-                        # atau customer ada di junction table tapi kode_area-nya
-                        # tidak di-assign ke siapa pun
-                        ~CustomerModel.id.in_(select(cka_with_any_area.c.customer_id)),
+                        CustomerModel.kode_area.is_(None),
+                        ~CustomerModel.kode_area.in_(select(all_areas.c.kode_area)),
                     ),
                 ),
             )
@@ -147,39 +128,29 @@ def validate_order_customer_for_sales(db: Session, current_user: dict, customer_
             detail="Customer tidak di-assign ke sales ini",
         )
 
-    # 2. No direct → check area coverage via junction table
-    # (customer.kode_area is deprecated; all new data is in customer_kode_areas)
-    cka_rows = (
-        db.query(CustomerKodeArea)
-        .filter(CustomerKodeArea.customer_id == customer.id)
-        .all()
-    )
-    if cka_rows:
-        # Customer punya satu atau lebih kode_area
-        kode_areas = [cka.kode_area for cka in cka_rows]
-        # Cek apakah salah satu kode_area di-assign ke siapa pun
-        any_assigned = (
+    # 2. No direct → check area coverage
+    if customer.kode_area:
+        area_assigned_to_anyone = (
             db.query(AreaAssignment)
-            .filter(AreaAssignment.kode_area.in_(kode_areas))
+            .filter(AreaAssignment.kode_area == customer.kode_area)
             .first()
         ) is not None
-        if not any_assigned:
+        if not area_assigned_to_anyone:
             return customer  # area unassigned → visible to all
-        # Cek apakah sales ini cover salah satu kode_area customer
-        mine_area = (
+        my_area = (
             db.query(AreaAssignment)
             .filter(
-                AreaAssignment.kode_area.in_(kode_areas),
+                AreaAssignment.kode_area == customer.kode_area,
                 AreaAssignment.sales_id == me_id,
             )
             .first()
         ) is not None
-        if mine_area:
+        if my_area:
             return customer
         raise HTTPException(
             status_code=403,
             detail="Customer tidak di-assign ke sales ini",
         )
 
-    # 3. No direct + no kode_area (legacy data, junction table empty) → visible to all
+    # 3. No direct + no kode_area (legacy) → visible to all
     return customer
