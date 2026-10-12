@@ -590,6 +590,7 @@ class AdminProvider extends ChangeNotifier {
     required String password,
     required String role,
     String? nama,
+    String? branch,
   }) async {
     _setLoading(true, 'Membuat user...');
     try {
@@ -598,6 +599,7 @@ class AdminProvider extends ChangeNotifier {
         password: password,
         role: role,
         nama: nama,
+        branch: branch,
       );
       _users = [..._users, newUser];
       _sortUsers();

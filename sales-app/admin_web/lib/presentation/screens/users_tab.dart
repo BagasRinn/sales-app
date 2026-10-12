@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/branch.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/user_item.dart';
 
 class UsersTab extends StatefulWidget {
   final bool readOnly;
-  const UsersTab({super.key, this.readOnly = false});
+  // Role/branch of the logged-in user. For SUPERVISOR, the branch dropdown
+  // in the create/edit dialog is locked to currentBranch. For MANAGER/ADMIN
+  // it's a functional dropdown across all branches.
+  final String? currentRole;
+  final String? currentBranch;
+  final String? currentBranchNama;
+  const UsersTab({
+    super.key,
+    this.readOnly = false,
+    this.currentRole,
+    this.currentBranch,
+    this.currentBranchNama,
+  });
 
   @override
   State<UsersTab> createState() => _UsersTabState();
@@ -159,6 +172,9 @@ class _UsersTabState extends State<UsersTab> {
                             child: _UserDataTable(
                               users: users,
                               readOnly: widget.readOnly,
+                              currentRole: widget.currentRole,
+                              currentBranch: widget.currentBranch,
+                              currentBranchNama: widget.currentBranchNama,
                             ),
                           ),
                         ),
@@ -196,7 +212,12 @@ class _UsersTabState extends State<UsersTab> {
     final provider = context.read<AdminProvider>();
     await showDialog(
       context: context,
-      builder: (_) => _UserEditDialog(provider: provider),
+      builder: (_) => _UserEditDialog(
+        provider: provider,
+        currentRole: widget.currentRole,
+        currentBranch: widget.currentBranch,
+        currentBranchNama: widget.currentBranchNama,
+      ),
     );
   }
 }
@@ -204,8 +225,17 @@ class _UsersTabState extends State<UsersTab> {
 class _UserDataTable extends StatelessWidget {
   final List<UserItem> users;
   final bool readOnly;
+  final String? currentRole;
+  final String? currentBranch;
+  final String? currentBranchNama;
 
-  const _UserDataTable({required this.users, this.readOnly = false});
+  const _UserDataTable({
+    required this.users,
+    this.readOnly = false,
+    this.currentRole,
+    this.currentBranch,
+    this.currentBranchNama,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -276,7 +306,13 @@ class _UserDataTable extends StatelessWidget {
                 DataCell(
                   Center(
                     child: IconButton(
-                      onPressed: () => _openEditDialog(context, users[i]),
+                      onPressed: () => _openEditDialog(
+                        context,
+                        users[i],
+                        currentRole,
+                        currentBranch,
+                        currentBranchNama,
+                      ),
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       color: AppColors.primaryLight,
                       tooltip: 'Edit user',
@@ -294,11 +330,23 @@ class _UserDataTable extends StatelessWidget {
     );
   }
 
-  static Future<void> _openEditDialog(BuildContext context, UserItem user) {
+  static Future<void> _openEditDialog(
+    BuildContext context,
+    UserItem user,
+    String? currentRole,
+    String? currentBranch,
+    String? currentBranchNama,
+  ) {
     final provider = context.read<AdminProvider>();
     return showDialog(
       context: context,
-      builder: (_) => _UserEditDialog(existing: user, provider: provider),
+      builder: (_) => _UserEditDialog(
+        existing: user,
+        provider: provider,
+        currentRole: currentRole,
+        currentBranch: currentBranch,
+        currentBranchNama: currentBranchNama,
+      ),
     );
   }
 }
@@ -440,7 +488,18 @@ class _StatusBadge extends StatelessWidget {
 class _UserEditDialog extends StatefulWidget {
   final UserItem? existing;
   final AdminProvider provider;
-  const _UserEditDialog({this.existing, required this.provider});
+  // Role/branch of the logged-in user. SUPERVISOR → dropdown is locked to
+  // currentBranch. MANAGER/ADMIN → dropdown is functional across all branches.
+  final String? currentRole;
+  final String? currentBranch;
+  final String? currentBranchNama;
+  const _UserEditDialog({
+    this.existing,
+    required this.provider,
+    this.currentRole,
+    this.currentBranch,
+    this.currentBranchNama,
+  });
 
   @override
   State<_UserEditDialog> createState() => _UserEditDialogState();
@@ -451,10 +510,12 @@ class _UserEditDialogState extends State<_UserEditDialog> {
   late TextEditingController _passwordC;
   late TextEditingController _namaC;
   String _role = 'SALES';
+  String? _branch;
   bool _isActive = true;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
+  bool get _isBranchLocked => widget.currentRole == 'SUPERVISOR';
 
   @override
   void initState() {
@@ -465,6 +526,13 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     _namaC = TextEditingController(text: e?.nama ?? '');
     _role = e?.role ?? 'SALES';
     _isActive = e?.isActive ?? true;
+    // Initial branch: existing user's branch wins; otherwise current user's
+    // branch (forced for SUPERVISOR); otherwise null until the user picks.
+    if (e?.branch != null && e!.branch!.isNotEmpty) {
+      _branch = e.branch;
+    } else if (_isBranchLocked && widget.currentBranch != null) {
+      _branch = widget.currentBranch;
+    }
   }
 
   @override
@@ -526,6 +594,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           'nama': nama.isEmpty ? null : nama,
           'role': _role,
           'is_active': _isActive,
+          'branch': _branch,
         };
         if (password.isNotEmpty) body['password'] = password;
         ok = await provider.updateUser(widget.existing!.id, body);
@@ -535,6 +604,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           password: password,
           role: _role,
           nama: nama.isEmpty ? null : nama,
+          branch: _branch,
         );
       }
     } catch (e) {
@@ -668,6 +738,31 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                   DropdownMenuItem(value: 'SALES', child: Text('Sales')),
                 ],
                 onChanged: (v) => setState(() => _role = v ?? 'SALES'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _branch,
+                decoration: InputDecoration(
+                  labelText: 'Cabang',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  helperText: _isBranchLocked
+                      ? 'Supervisor hanya bisa membuat user di cabang sendiri'
+                      : null,
+                  suffixIcon: _isBranchLocked
+                      ? const Icon(Icons.lock_outline, size: 18)
+                      : null,
+                ),
+                items: BranchCode.all
+                    .map((code) => DropdownMenuItem(
+                          value: code,
+                          child: Text(BranchLabel.display(code) ?? code),
+                        ))
+                    .toList(),
+                // onChanged: null → dropdown disabled (locked untuk SUPERVISOR).
+                onChanged: _isBranchLocked
+                    ? null
+                    : (v) => setState(() => _branch = v),
               ),
               const SizedBox(height: 12),
               if (_isEdit)

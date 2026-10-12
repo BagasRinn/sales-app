@@ -322,7 +322,12 @@ class _DashboardContentState extends State<_DashboardContent>
       case 5:
         return SyncTab(readOnly: masterReadOnly);
       case 6:
-        return UsersTab(readOnly: masterReadOnly);
+        return UsersTab(
+          readOnly: masterReadOnly,
+          currentRole: widget.role,
+          currentBranch: widget.branch,
+          currentBranchNama: widget.branchNama,
+        );
       case 7:
         return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 8:

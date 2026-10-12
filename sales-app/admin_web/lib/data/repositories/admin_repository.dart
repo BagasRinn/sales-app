@@ -498,12 +498,14 @@ class AdminRepository {
     required String password,
     required String role,
     String? nama,
+    String? branch,
   }) async {
     final data = await _api.post('/users', body: {
       'username': username,
       'password': password,
       'role': role,
       if (nama != null && nama.isNotEmpty) 'nama': nama,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
     });
     return UserItem.fromJson(data);
   }
