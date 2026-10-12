@@ -63,81 +63,80 @@ class _UsersTabState extends State<UsersTab> {
         return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
       });
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 960),
-        child: Column(
-          children: [
-            // Search bar + filter chips role. Chips menggantikan dropdown
-            // — lebih visual dan satu tap, terutama untuk layar sempit.
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.surface,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Cari user (nama / username)...',
-                            prefixIcon: const Icon(Icons.search, size: 20),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                      provider.searchUsers('');
-                                    },
-                                  )
-                                : null,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            isDense: true,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onChanged: (v) {
-                            setState(() => _searchQuery = v);
-                            provider.searchUsers(v);
-                          },
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1200),
+      child: Column(
+        children: [
+          // Search bar + filter chips role. Chips menggantikan dropdown
+          // — lebih visual dan satu tap, terutama untuk layar sempit.
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: AppColors.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Cari user (nama / username)...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                    provider.searchUsers('');
+                                  },
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onChanged: (v) {
+                          setState(() => _searchQuery = v);
+                          provider.searchUsers(v);
+                        },
+                      ),
+                    ),
+                    if (!widget.readOnly) ...[
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: !widget.readOnly
+                            ? () => _openCreateDialog(context)
+                            : null,
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('Tambah'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 18),
                         ),
                       ),
-                      if (!widget.readOnly) ...[
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: !widget.readOnly
-                              ? () => _openCreateDialog(context)
-                              : null,
-                          icon: const Icon(Icons.person_add, size: 18),
-                          label: const Text('Tambah'),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 18),
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _roleChip(null, 'Semua'),
-                      _roleChip('ADMIN', 'Admin'),
-                      _roleChip('SUPERVISOR', 'Supervisor'),
-                      _roleChip('MANAGER', 'Manager'),
-                      _roleChip('SALES', 'Sales'),
-                    ],
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _roleChip(null, 'Semua'),
+                    _roleChip('ADMIN', 'Admin'),
+                    _roleChip('SUPERVISOR', 'Supervisor'),
+                    _roleChip('MANAGER', 'Manager'),
+                    _roleChip('SALES', 'Sales'),
+                  ],
+                ),
+              ],
             ),
-            const Divider(height: 1),
+          ),
+          const Divider(height: 1),
             // Pakai DataTable Flutter — header dan rows otomatis align
             // karena pakai layout intrinsic. Bungkus horizontal scroll supaya
             // di mobile (atau tabel yang lebih lebar dari container) bisa
@@ -181,7 +180,6 @@ class _UsersTabState extends State<UsersTab> {
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -258,12 +256,12 @@ class _UserDataTable extends StatelessWidget {
       showCheckboxColumn: false,
       dividerThickness: 0.5,
       columns: [
-        const DataColumn(label: Text('NAMA')),
-        const DataColumn(label: Text('USERNAME')),
-        const DataColumn(label: Text('ROLE')),
-        const DataColumn(label: Text('CABANG')),
-        const DataColumn(label: Text('STATUS')),
-        if (!readOnly) const DataColumn(label: Text('AKSI')),
+        const DataColumn(label: Center(child: Text('NAMA'))),
+        const DataColumn(label: Center(child: Text('USERNAME'))),
+        const DataColumn(label: Center(child: Text('ROLE'))),
+        const DataColumn(label: Center(child: Text('CABANG'))),
+        const DataColumn(label: Center(child: Text('STATUS'))),
+        if (!readOnly) const DataColumn(label: Center(child: Text('AKSI'))),
       ],
       rows: [
         for (int i = 0; i < users.length; i++)
@@ -275,33 +273,39 @@ class _UserDataTable extends StatelessWidget {
             ),
             cells: [
               DataCell(
-                _NameCell(
-                  displayName: users[i].displayName,
-                  username: users[i].username,
-                  role: users[i].role,
-                ),
-              ),
-              DataCell(
-                Text(
-                  users[i].username,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontFamily: 'monospace',
+                Center(
+                  child: _NameCell(
+                    displayName: users[i].displayName,
+                    username: users[i].username,
+                    role: users[i].role,
                   ),
                 ),
               ),
-              DataCell(_RoleBadge(role: users[i].role)),
               DataCell(
-                Text(
-                  users[i].branchNama ?? users[i].branch ?? '-',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                Center(
+                  child: Text(
+                    users[i].username,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
               ),
-              DataCell(_StatusBadge(active: users[i].isActive)),
+              DataCell(Center(child: _RoleBadge(role: users[i].role))),
+              DataCell(
+                Center(
+                  child: Text(
+                    users[i].branchNama ?? users[i].branch ?? '-',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(Center(child: _StatusBadge(active: users[i].isActive))),
               if (!readOnly)
                 DataCell(
                   Center(
@@ -375,6 +379,7 @@ class _NameCell extends StatelessWidget {
     };
     return Row(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
           width: 32,
