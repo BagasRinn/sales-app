@@ -248,15 +248,15 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
     Returns (inserted_count, updated_count).
     Same SKU can exist in different branches.
     """
-    # Query existing products by (sku, branch)
+    # Query existing products by (sku, branch) — include stok_booking & stok_diterima
     skus = [r["sku"] for r in rows]
     branch_filter = branch if branch else ""
     existing = {
-        (p.id, p.branch): p.stok_sistem
+        (p.id, p.branch): {"stok_sistem": p.stok_sistem, "stok_booking": p.stok_booking, "stok_diterima": p.stok_diterima}
         for p in db.query(Product).filter(
             Product.id.in_(skus),
             Product.branch == branch_filter,
-        ).with_entities(Product.id, Product.branch, Product.stok_sistem).all()
+        ).with_entities(Product.id, Product.branch, Product.stok_sistem, Product.stok_booking, Product.stok_diterima).all()
     }
 
     to_insert = [r for r in rows if (r["sku"], branch_filter) not in existing]
@@ -279,14 +279,16 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
     if to_update:
         def _stock_changed(existing_val, excel_val):
             return (existing_val or 0) != (excel_val or 0)
-        changed = [r for r in to_update if _stock_changed(existing[(r["sku"], branch_filter)], r["stok"])]
-        unchanged = [r for r in to_update if not _stock_changed(existing[(r["sku"], branch_filter)], r["stok"])]
+        changed = [r for r in to_update if _stock_changed(existing[(r["sku"], branch_filter)]["stok_sistem"], r["stok"])]
+        unchanged = [r for r in to_update if not _stock_changed(existing[(r["sku"], branch_filter)]["stok_sistem"], r["stok"])]
 
         if changed:
+            # Preserve existing stok_booking (and stok_diterima) — don't reset during sync
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
                  "harga": r["harga"], "stok_sistem": r["stok"],
-                 "stok_booking": 0, "stok_diterima": 0,
+                 "stok_booking": existing[(r["sku"], branch_filter)]["stok_booking"],
+                 "stok_diterima": 0,  # reset — Excel GOOD sudah neto dari stok yang diterima
                  "kategori": r.get("kategori"), "satuan": r.get("satuan"),
                  "nama_supplier": r.get("nama_supplier"),
                  "order_type": r.get("order_type", "REGULER"),
@@ -298,8 +300,8 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                 set_={"nama_barang": stmt.excluded.nama_barang,
                       "harga": stmt.excluded.harga,
                       "stok_sistem": stmt.excluded.stok_sistem,
-                      "stok_booking": 0,  # reset saat sync Excel baru
-                      "stok_diterima": 0,  # reset saat sync Excel baru
+                      "stok_booking": stmt.excluded.stok_booking,
+                      "stok_diterima": 0,  # reset — Excel GOOD sudah neto dari stok yang diterima
                       "kategori": stmt.excluded.kategori,
                       "satuan": stmt.excluded.satuan,
                       "nama_supplier": stmt.excluded.nama_supplier,
@@ -308,14 +310,24 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
             )
             db.execute(stmt)
             for r in changed:
+                ex = existing[(r["sku"], branch_filter)]
                 log_stock_change(
                     db=db, product_id=r["sku"], sumber="SYNC",
                     field_terdampak="stok_sistem",
-                    delta=r["stok"] - existing[(r["sku"], branch_filter)],
-                    nilai_sebelum=existing[(r["sku"], branch_filter)], nilai_sesudah=r["stok"],
+                    delta=r["stok"] - ex["stok_sistem"],
+                    nilai_sebelum=ex["stok_sistem"], nilai_sesudah=r["stok"],
                     actor_id=None, order_id=None,
                     branch=branch,
                 )
+                if ex["stok_diterima"] > 0:
+                    log_stock_change(
+                        db=db, product_id=r["sku"], sumber="SYNC",
+                        field_terdampak="stok_diterima",
+                        delta=-ex["stok_diterima"],
+                        nilai_sebelum=ex["stok_diterima"], nilai_sesudah=0,
+                        actor_id=None, order_id=None,
+                        branch=branch,
+                    )
         if unchanged:
             stmt = insert(Product).values([
                 {"id": r["sku"], "nama_barang": r["nama_barang"],
