@@ -756,9 +756,12 @@ def update_draft_order(
             (item.discount2_type, item.discount2_percent, item.discount2_nominal),
             (item.discount3_type, item.discount3_percent, item.discount3_nominal),
         ]
+        # Pakai order.branch (bukan user_branch) supaya konsisten dengan
+        # validasi di loop sebelumnya — produk harus dari branch order yang
+        # sudah tersimpan.
         product = db.query(Product).filter(
             Product.id == item.product_id,
-            Product.branch == user_branch if user_branch else True,
+            Product.branch == order.branch,
         ).first()
         harga_satuan = (product.harga or 0) if product else 0
         raw_subtotal = harga_satuan * item.qty
