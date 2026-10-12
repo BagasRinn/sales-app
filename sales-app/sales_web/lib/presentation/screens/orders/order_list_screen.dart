@@ -313,6 +313,16 @@ class OrderDetailScreen extends StatelessWidget {
         parts.add('Diskon ${i + 1}: ${layer.value}%');
       }
     }
+    if (item.hasUpPrice) {
+      if (item.upPriceType.toUpperCase() == 'PERCENT') {
+        final label = item.upPricePercent == item.upPricePercent.roundToDouble()
+            ? '${item.upPricePercent.round()}%'
+            : '${item.upPricePercent}%';
+        parts.add('Up Price: $label');
+      } else {
+        parts.add('Up Price: Rp ${item.upPriceNominal}');
+      }
+    }
     return parts.join(' · ');
   }
 
@@ -687,6 +697,11 @@ class OrderDetailScreen extends StatelessWidget {
                       Text(
                         '- ${idr.format(order.totalDiscount)}',
                         style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success),
+                      ),
+                    if (order.totalUpPrice > 0)
+                      Text(
+                        '+ ${idr.format(order.totalUpPrice)}',
+                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning),
                       ),
                   ],
                 ),

@@ -141,8 +141,8 @@ class _OrderDetailContent extends StatelessWidget {
   final Order order;
   const _OrderDetailContent({required this.order});
 
-  /// Format ringkasan diskon 3 layer untuk 1 item.
-  /// Contoh: "Diskon 1: 10% · Diskon 2: Rp 2.000 · Diskon 3: 5%"
+  /// Format ringkasan diskon 3 layer + up price untuk 1 item.
+  /// Contoh: "Diskon 1: 10% · Up Price: 5% · Diskon 2: Rp 2.000"
   String _formatItemDiscounts(OrderItem item) {
     final parts = <String>[];
     for (var i = 1; i <= 3; i++) {
@@ -175,6 +175,16 @@ class _OrderDetailContent extends StatelessWidget {
             ? '${percent.round()}%'
             : '$percent%';
         parts.add('Diskon $i: $label');
+      }
+    }
+    if (item.hasUpPrice) {
+      if ((item.upPriceType).toUpperCase() == 'PERCENT') {
+        final label = (item.upPricePercent == item.upPricePercent.roundToDouble())
+            ? '${item.upPricePercent.round()}%'
+            : '${item.upPricePercent}%';
+        parts.add('Up Price: $label');
+      } else {
+        parts.add('Up Price: Rp ${item.upPriceNominal}');
       }
     }
     return parts.join(' · ');
@@ -442,6 +452,51 @@ class _OrderDetailContent extends StatelessWidget {
           ),
         ],
 
+        // Total — show diskon + up price + grand total (mirror review screen)
+        if (order.totalDiscount > 0 || order.totalUpPrice > 0) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderLight),
+            ),
+            child: Column(
+              children: [
+                if (order.totalDiscount > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Diskon', style: AppTextStyles.bodyMedium),
+                        Text(
+                          '- ${currency.format(order.totalDiscount)}',
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (order.totalUpPrice > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Up Price', style: AppTextStyles.bodyMedium),
+                        Text(
+                          '+ ${currency.format(order.totalUpPrice)}',
+                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+
         // Total
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -524,6 +579,7 @@ class _OrderDetailContent extends StatelessWidget {
           productId: item.productId,
           qty: item.qty,
           discount: ItemDiscount.fromOrderItem(item),
+          upPrice: ItemUpPrice.fromOrderItem(item),
         ));
         // Simpan harga ke cache supaya total di review step terhitung.
         if (item.hargaSatuan != null && item.hargaSatuan! > 0) {

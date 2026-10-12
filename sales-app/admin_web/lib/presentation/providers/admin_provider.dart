@@ -751,9 +751,16 @@ class AdminProvider extends ChangeNotifier {
       );
       _allOrders = result.orders;
       _orderTotal = result.total;
-      _errorMessage = null;
-    } catch (e) {
-      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
+      // Jangan reset _errorMessage di sini — kalau _loadStats sukses,
+      // _errorMessage sudah di-clear di sana. Kalau _loadOrders gagal,
+      // _loadStats berikutnya akan overwrite kalau dia juga tidak gagal.
+    } catch (e, st) {
+      if (!CancelToken.isCancel(e as DioException)) {
+        _errorMessage = e.toString();
+        // Print stack trace supaya debugging lebih mudah di Flutter web.
+        // ignore: avoid_print
+        print('[AdminProvider] _loadAllOrders failed: $e\n$st');
+      }
     }
   }
 

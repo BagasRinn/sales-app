@@ -1446,6 +1446,7 @@ class _OrderTotalCard extends StatelessWidget {
     final l1 = draft.discountLayer1Total;
     final l2 = draft.discountLayer2Total;
     final l3 = draft.discountLayer3Total;
+    final upTotal = draft.totalUpPrice;
 
     return Container(
       decoration: BoxDecoration(
@@ -1483,6 +1484,11 @@ class _OrderTotalCard extends StatelessWidget {
                 if (l3 > 0) ...[
                   const SizedBox(height: 4),
                   _discRow('Diskon 3', l3, idr),
+                ],
+                // Up Price row
+                if (upTotal > 0) ...[
+                  const SizedBox(height: 4),
+                  _upRow('Up Price', upTotal, idr),
                 ],
                 Container(height: 1, color: AppColors.border, margin: const EdgeInsets.symmetric(vertical: 10)),
                 // Grand Total
@@ -1524,6 +1530,17 @@ class _OrderTotalCard extends StatelessWidget {
       ),
     ],
   );
+
+  Widget _upRow(String label, int amount, NumberFormat idr) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning)),
+      Text(
+        '+ Rp ${idr.format(amount)}',
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
+      ),
+    ],
+  );
 }
 
 // ─── Line Row ─────────────────────────────────────────────────────────────
@@ -1542,10 +1559,17 @@ class _LineRow extends StatelessWidget {
     final price = product?.harga ?? line.hargaSatuan;
     final rawSubtotal = price * line.qty;
     final disc = line.discount;
+    final up = line.upPrice;
     final isFree = line.isFree;
 
+    // Up Price applied first (per-piece × qty ditambahkan ke base)
+    final upPerPiece = up != null
+        ? (up.type == 'PERCENT' ? (price * up.value / 100).round() : up.value.toInt())
+        : 0;
+    final base = rawSubtotal + upPerPiece * line.qty;
+
     // Calculate total cut
-    int running = rawSubtotal;
+    int running = base;
     int d1 = 0, d2 = 0, d3 = 0;
     if (disc.layer1 != null) { d1 = disc.layer1!.cutFrom(running); running -= d1; }
     if (disc.layer2 != null) { d2 = disc.layer2!.cutFrom(running); running -= d2; }
@@ -1641,6 +1665,10 @@ class _LineRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         _activeLayersSummary(disc, idr),
                       ],
+                      if (up != null) ...[
+                        const SizedBox(height: 2),
+                        _upPriceChip(up, idr),
+                      ],
                     ],
                   ),
                 ),
@@ -1661,6 +1689,12 @@ class _LineRow extends StatelessWidget {
                     icon: Icons.discount_outlined,
                     color: !disc.isEmpty ? AppColors.success : AppColors.textSecondary,
                     onTap: () => _showDiscountSheet(context, line, product),
+                  ),
+                  const SizedBox(width: 2),
+                  _iconBtn(
+                    icon: Icons.trending_up,
+                    color: up != null ? AppColors.warning : AppColors.textSecondary,
+                    onTap: () => _showUpPriceSheet(context, line, product),
                   ),
                   const SizedBox(width: 2),
                 ],
@@ -1708,12 +1742,33 @@ class _LineRow extends StatelessWidget {
     );
   }
 
+  Widget _upPriceChip(UpPriceLayer up, NumberFormat idr) {
+    final label = up.type == 'PERCENT'
+        ? (up.value == up.value.roundToDouble()
+            ? '${up.value.round()}%'
+            : '${up.value}%')
+        : 'Rp ${idr.format(up.value.round())}';
+    return Text(
+      'Up Price: $label',
+      style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w500),
+    );
+  }
+
   void _showDiscountSheet(BuildContext context, OrderLine line, Product? product) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _DiscountSheet(line: line, product: product),
+    );
+  }
+
+  void _showUpPriceSheet(BuildContext context, OrderLine line, Product? product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _UpPriceSheet(line: line, product: product),
     );
   }
 
@@ -2188,3 +2243,184 @@ Widget _iconBtn({required IconData icon, required Color color, required VoidCall
     child: SizedBox(width: 32, height: 32, child: Icon(icon, size: 16, color: color)),
   ),
 );
+
+/// Bottom sheet untuk set Up Price (1 layer, per-piece).
+class _UpPriceSheet extends StatefulWidget {
+  final OrderLine line;
+  final Product? product;
+
+  const _UpPriceSheet({required this.line, this.product});
+
+  @override
+  State<_UpPriceSheet> createState() => _UpPriceSheetState();
+}
+
+class _UpPriceSheetState extends State<_UpPriceSheet> {
+  late String _type;
+  late TextEditingController _ctrl;
+  late int _harga;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.line.upPrice?.type ?? 'NOMINAL';
+    final initial = _type == 'PERCENT'
+        ? (widget.line.upPrice?.value ?? 0)
+        : (widget.line.upPrice?.value ?? 0);
+    _ctrl = TextEditingController(
+      text: initial > 0
+          ? (initial == initial.roundToDouble()
+              ? '${initial.round()}'
+              : '$initial')
+          : '',
+    );
+    _harga = widget.product?.harga ?? widget.line.hargaSatuan;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  int get _valueInt {
+    final raw = _ctrl.text.replaceAll(',', '.');
+    return double.tryParse(raw)?.toInt() ?? 0;
+  }
+
+  double get _valueDouble {
+    final raw = _ctrl.text.replaceAll(',', '.');
+    return double.tryParse(raw) ?? 0.0;
+  }
+
+  int get _perPiece {
+    if (_type == 'PERCENT') {
+      return (_harga * _valueDouble / 100).round();
+    }
+    return _valueInt;
+  }
+
+  int get _total => _perPiece * widget.line.qty;
+
+  void _onSave() {
+    final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
+    context.read<DraftOrderProvider>().setUpPrice(
+          lineId: widget.line.id,
+          type: _type,
+          value: value,
+        );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final idr = NumberFormat('#,###', 'id');
+    final mediaQuery = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.cardSurface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4, margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Row(
+              children: [
+                Icon(Icons.trending_up, color: AppColors.warning, size: 20),
+                const SizedBox(width: 8),
+                const Text('Edit Up Price', style: AppTextStyles.headlineSmall),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Penambah per-piece (×${widget.line.qty}). Ditambahkan ke base sebelum diskon.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _typeChip('Rp', _type == 'NOMINAL'),
+                const SizedBox(width: 8),
+                _typeChip('%', _type == 'PERCENT'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+              decoration: InputDecoration(
+                labelText: _type == 'PERCENT' ? 'Persen (%)' : 'Nominal per-piece (Rp)',
+                hintText: _type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
+                prefixText: _type == 'PERCENT' ? null : 'Rp ',
+                border: const OutlineInputBorder(),
+                suffixIcon: _ctrl.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setState(() => _ctrl.clear()),
+                      ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Per-piece: Rp ${idr.format(_perPiece)}', style: AppTextStyles.bodySmall),
+                  Text(
+                    'Total: + Rp ${idr.format(_total)}',
+                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal'))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _onSave,
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+                    child: const Text('Simpan'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeChip(String label, bool selected) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => _type = label == '%' ? 'PERCENT' : 'NOMINAL'),
+      selectedColor: AppColors.warning.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: selected ? AppColors.warning : AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}

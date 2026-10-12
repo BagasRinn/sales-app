@@ -263,6 +263,11 @@ class OrderItem(Base):
     discount3_percent = Column(Numeric(10, 4), default=0, nullable=False)
     discount3_nominal = Column(Integer, default=0, nullable=False)
 
+    # --- Up Price (1 layer, per-piece, applied to base sebelum diskon) ---
+    up_price_type = Column(String(10), default='NOMINAL', nullable=False)  # 'PERCENT' atau 'NOMINAL'
+    up_price_percent = Column(Numeric(10, 4), default=0, nullable=False)  # 0-100 kalau PERCENT
+    up_price_nominal = Column(Integer, default=0, nullable=False)  # per-piece IDR kalau NOMINAL
+
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
 

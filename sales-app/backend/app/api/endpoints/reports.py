@@ -36,7 +36,7 @@ def _layer_cut_value(type_val: str, percent: int, nominal: int, running: int) ->
 def _three_layer_subtotal_expr():
     """SQL expression untuk hitung subtotal akhir setelah 3-layer diskon.
     Return (final_subtotal_expr, raw_subtotal_expr) sebagai SQLAlchemy expressions.
-    """
+    Up Price ditambahkan ke base sebelum 3 layer berjalan (mirror Python calc)."""
     from sqlalchemy import case
 
     def _cut_expr(type_col, percent_col, nominal_col, running):
@@ -49,9 +49,18 @@ def _three_layer_subtotal_expr():
     harga_qty = OrderItem.qty * Product.harga
     raw = func.coalesce(harga_qty, 0)
 
+    up_per_piece = case(
+        (
+            (OrderItem.up_price_type.is_(None) | (OrderItem.up_price_type == 'PERCENT')),
+            cast(func.coalesce(Product.harga, 0) * func.coalesce(OrderItem.up_price_percent, 0) / 100, Integer),
+        ),
+        else_=func.coalesce(OrderItem.up_price_nominal, 0),
+    )
+    base = raw + up_per_piece * func.coalesce(OrderItem.qty, 0)
+
     d1 = _cut_expr(OrderItem.discount_type, OrderItem.discount_percent,
-                    OrderItem.discount_nominal, raw)
-    after1 = raw - d1
+                    OrderItem.discount_nominal, base)
+    after1 = base - d1
 
     d2 = _cut_expr(OrderItem.discount2_type, OrderItem.discount2_percent,
                     OrderItem.discount2_nominal, after1)
@@ -64,19 +73,26 @@ def _three_layer_subtotal_expr():
     return final, raw
 
 
-def _three_layer_breakdown(item) -> tuple[int, int, int, int, int]:
-    """Hitung chain 3 layers sequential. Return (total_sebelum, layer1_cut, layer2_cut, layer3_cut, total_setelah)."""
+def _three_layer_breakdown(item) -> tuple[int, int, int, int, int, int]:
+    """Hitung chain 3 layers sequential. Return (total_sebelum, layer1_cut, layer2_cut, layer3_cut, total_setelah, up_price_total)."""
     harga_satuan = item.product.harga if item.product else 0
     qty = item.qty or 0
     raw = harga_satuan * qty
-    s = max(0, raw)
+    up_t = (item.up_price_type or 'NOMINAL').upper()
+    if up_t == 'PERCENT':
+        up_per_piece = int(round(max(0, harga_satuan) * max(0, float(item.up_price_percent or 0)) / 100))
+    else:
+        up_per_piece = int(max(0, item.up_price_nominal or 0))
+    up_total = up_per_piece * qty
+    base = raw + up_total
+    s = max(0, base)
     d1 = _layer_cut_value(item.discount_type, item.discount_percent, item.discount_nominal, s)
     s -= d1
     d2 = _layer_cut_value(item.discount2_type, item.discount2_percent, item.discount2_nominal, s)
     s -= d2
     d3 = _layer_cut_value(item.discount3_type, item.discount3_percent, item.discount3_nominal, s)
     s -= d3
-    return raw, d1, d2, d3, s
+    return raw, d1, d2, d3, s, up_total
 
 
 def _build_report(
@@ -102,6 +118,7 @@ def _build_report(
         "Diskon Layer 2",
         "Diskon Layer 3",
         "Total Diskon",
+        "Up Price",
         "Total Harga Setelah Diskon",
         "Tipe Order",
         "Nama Sales",
@@ -129,7 +146,7 @@ def _build_report(
             harga_satuan = product.harga if product else 0
             qty = item.qty
 
-            raw, d1, d2, d3, after = _three_layer_breakdown(item)
+            raw, d1, d2, d3, after, up_total = _three_layer_breakdown(item)
             total_diskon = d1 + d2 + d3
 
             ws.append([
@@ -147,6 +164,7 @@ def _build_report(
                 d2,
                 d3,
                 total_diskon,
+                up_total,
                 after,
                 order.order_type or 'REGULER',
                 sales_name,
@@ -155,7 +173,7 @@ def _build_report(
             total_rows += 1
 
     # Auto-width columns
-    widths = [14, 10, 16, 28, 14, 32, 6, 8, 14, 20, 14, 14, 14, 14, 20, 12, 20, 28]
+    widths = [14, 10, 16, 28, 14, 32, 6, 8, 14, 20, 14, 14, 14, 14, 14, 20, 12, 20, 28]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -381,7 +399,7 @@ def sales_performance_report(
         sid = order.sales_id
         order_revenue = 0
         for item in order.items:
-            raw, d1, d2, d3, after = _three_layer_breakdown(item)
+            raw, d1, d2, d3, after, _ = _three_layer_breakdown(item)
             order_revenue += after
         revenue_map[sid] = revenue_map.get(sid, 0) + max(0, order_revenue)
 
@@ -438,7 +456,7 @@ def sales_performance_dashboard(
     def _revenue_for_order(order: Order) -> int:
         total = 0
         for item in order.items:
-            _, _, _, _, after = _three_layer_breakdown(item)
+            _, _, _, _, after, _ = _three_layer_breakdown(item)
             total += after
         return max(0, total)
 

@@ -162,6 +162,15 @@ def _normalize_layer(type_val: str | None, percent: float | Decimal | None, nomi
     return t, float(percent or 0), nominal or 0
 
 
+def _up_price_per_piece(harga_satuan: int, up_price_type: str, up_price_percent: float | Decimal, up_price_nominal: int) -> int:
+    """Up Price per-piece (IDR). PERCENT: round(harga_satuan * percent/100). NOMINAL: nominal langsung.
+    Dipakai sebagai penambah sebelum 3-layer diskon berjalan."""
+    t = (up_price_type or "NOMINAL").upper()
+    if t == "PERCENT":
+        return int(round(max(0, harga_satuan) * max(0, float(up_price_percent or 0)) / 100))
+    return int(max(0, up_price_nominal or 0))
+
+
 def _layer_cut_sql(type_col, percent_col, nominal_col, base):
     """SQLAlchemy case expression: cut amount untuk 1 layer, di-clamp ke base.
     NOMINAL: min(nominal, base). PERCENT: round(base * percent / 100)."""
@@ -177,18 +186,27 @@ def _build_order_response(order: Order) -> dict:
     items_data = []
     total_amount = 0
     total_discount = 0
+    total_up_price = 0
 
     for item in order.items:
         harga_satuan = item.product.harga if item.product else 0
         qty = item.qty or 0
-        raw_subtotal = harga_satuan * qty
 
         l1 = _normalize_layer(item.discount_type, item.discount_percent, item.discount_nominal)
         l2 = _normalize_layer(item.discount2_type, item.discount2_percent, item.discount2_nominal)
         l3 = _normalize_layer(item.discount3_type, item.discount3_percent, item.discount3_nominal)
+        up_type = (item.up_price_type or 'NOMINAL').upper()
+        up_pct = float(item.up_price_percent or 0)
+        up_nom = int(item.up_price_nominal or 0)
+        up_per_piece = _up_price_per_piece(harga_satuan, up_type, up_pct, up_nom)
+        up_price_total = up_per_piece * qty
+
+        # Base untuk 3-layer diskon = harga_satuan*qty + up_price_per_piece*qty
+        # (up price diterapkan dulu, baru diskon memotong hasil).
+        base_subtotal = harga_satuan * qty + up_price_total
 
         subtotal, d1, d2, d3, _ = _apply_3_layers(
-            raw_subtotal,
+            base_subtotal,
             *l1, *l2, *l3,
         )
         harga_setelah = subtotal / qty if qty > 0 else 0
@@ -211,12 +229,17 @@ def _build_order_response(order: Order) -> dict:
             "discount3_type": l3[0],
             "discount3_percent": l3[1] if l3[0] == "PERCENT" else 0,
             "discount3_nominal": l3[2] if l3[0] == "NOMINAL" else 0,
+            # Up Price
+            "up_price_type": up_type,
+            "up_price_percent": up_pct if up_type == "PERCENT" else 0,
+            "up_price_nominal": up_nom if up_type == "NOMINAL" else 0,
             # Derived
             "harga_setelah_diskon": int(harga_setelah),
             "subtotal": subtotal,
         })
         total_amount += subtotal
         total_discount += d1 + d2 + d3
+        total_up_price += up_price_total
 
     return {
         "id": order.id,
@@ -236,6 +259,7 @@ def _build_order_response(order: Order) -> dict:
         "store_address": order.store_address,
         "total_amount": int(total_amount),
         "total_discount": int(total_discount),
+        "total_up_price": int(total_up_price),
         "order_type": order.order_type or 'REGULER',
         "cancelled_items": order.cancelled_items,
         "reject_reason": order.reject_reason,
@@ -506,6 +530,9 @@ def create_order(
                 )
 
         l1, l2, l3 = layers
+        up_t = (item.up_price_type or "NOMINAL").upper()
+        if up_t not in ("PERCENT", "NOMINAL"):
+            raise HTTPException(status_code=400, detail=f"up_price_type tidak valid: {item.up_price_type}")
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
@@ -524,6 +551,10 @@ def create_order(
             discount3_type=(l3[0] or "PERCENT").upper(),
             discount3_percent=l3[1] if (l3[0] or "PERCENT").upper() == "PERCENT" else 0,
             discount3_nominal=l3[2] if (l3[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            # Up Price
+            up_price_type=up_t,
+            up_price_percent=float(item.up_price_percent or 0) if up_t == "PERCENT" else 0,
+            up_price_nominal=int(item.up_price_nominal or 0) if up_t == "NOMINAL" else 0,
         ))
 
     # DRAFT sekarang langsung booking stok (sebelumnya: validation only, booking
@@ -573,12 +604,21 @@ def get_my_orders(
 
 def _three_layer_subtotal_expr():
     """SQL expression: (final_subtotal, total_discount) setelah chain 3 layer sequential.
-    Dipakai di omset aggregation supaya SQL match Python calculation di _apply_3_layers."""
+    Dipakai di omset aggregation supaya SQL match Python calculation di _apply_3_layers.
+    Up Price ditambahkan ke base sebelum 3 layer berjalan (mirror logika Python)."""
     raw = func.coalesce(OrderItem.qty, 0) * func.coalesce(Product.harga, 0)
-    d1 = _layer_cut_sql(
-        OrderItem.discount_type, OrderItem.discount_percent, OrderItem.discount_nominal, raw
+    up_per_piece = case(
+        (
+            (OrderItem.up_price_type.is_(None) | (OrderItem.up_price_type == "PERCENT")),
+            func.round(func.coalesce(Product.harga, 0) * func.coalesce(OrderItem.up_price_percent, 0) / 100),
+        ),
+        else_=func.coalesce(OrderItem.up_price_nominal, 0),
     )
-    after1 = raw - d1
+    base = raw + up_per_piece * func.coalesce(OrderItem.qty, 0)
+    d1 = _layer_cut_sql(
+        OrderItem.discount_type, OrderItem.discount_percent, OrderItem.discount_nominal, base
+    )
+    after1 = base - d1
     d2 = _layer_cut_sql(
         OrderItem.discount2_type, OrderItem.discount2_percent, OrderItem.discount2_nominal, after1
     )
@@ -778,6 +818,9 @@ def update_draft_order(
                 )
 
         l1, l2, l3 = layers
+        up_t = (item.up_price_type or "NOMINAL").upper()
+        if up_t not in ("PERCENT", "NOMINAL"):
+            raise HTTPException(status_code=400, detail=f"up_price_type tidak valid: {item.up_price_type}")
         db.add(OrderItem(
             id=uuid4(),
             order_id=order.id,
@@ -793,6 +836,10 @@ def update_draft_order(
             discount3_type=(l3[0] or "PERCENT").upper(),
             discount3_percent=l3[1] if (l3[0] or "PERCENT").upper() == "PERCENT" else 0,
             discount3_nominal=l3[2] if (l3[0] or "PERCENT").upper() == "NOMINAL" else 0,
+            # Up Price
+            up_price_type=up_t,
+            up_price_percent=float(item.up_price_percent or 0) if up_t == "PERCENT" else 0,
+            up_price_nominal=int(item.up_price_nominal or 0) if up_t == "NOMINAL" else 0,
         ))
 
     order.customer_id = customer.id
@@ -1195,17 +1242,25 @@ def update_discounts(
             )
 
         # Apply 3 layers sequential dengan cap di running residual.
-        # Layer 1 NOMINAL di-cap ke raw_subtotal; layer 2/3 ke running residual setelah layer sebelumnya.
+        # Layer 1 NOMINAL di-cap ke base (sudah termasuk up_price); layer 2/3 ke running residual setelah layer sebelumnya.
         harga_satuan = order_item.product.harga if order_item.product else 0
         qty = order_item.qty or 0
-        raw_subtotal = harga_satuan * qty
+
+        up_t = (update_item.up_price_type or "NOMINAL").upper()
+        if up_t not in ("PERCENT", "NOMINAL"):
+            raise HTTPException(status_code=400, detail="up_price_type tidak valid")
+        up_per_piece = _up_price_per_piece(
+            harga_satuan, up_t, update_item.up_price_percent, update_item.up_price_nominal
+        )
+        up_price_total = up_per_piece * qty
+        base_subtotal = harga_satuan * qty + up_price_total
 
         layers = [
             (update_item.discount_type, update_item.discount_percent, update_item.discount_nominal),
             (update_item.discount2_type, update_item.discount2_percent, update_item.discount2_nominal),
             (update_item.discount3_type, update_item.discount3_percent, update_item.discount3_nominal),
         ]
-        running = raw_subtotal
+        running = base_subtotal
         applied = []
         for dt, dp, dn in layers:
             dt = (dt or "PERCENT").upper()
@@ -1233,6 +1288,10 @@ def update_discounts(
         order_item.discount3_type = t3
         order_item.discount3_percent = p3
         order_item.discount3_nominal = n3
+        # Up Price
+        order_item.up_price_type = up_t
+        order_item.up_price_percent = float(update_item.up_price_percent or 0) if up_t == "PERCENT" else 0
+        order_item.up_price_nominal = int(update_item.up_price_nominal or 0) if up_t == "NOMINAL" else 0
 
     db.commit()
     db.refresh(order)

@@ -1268,6 +1268,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
     final totalDiscount = orders.fold<int>(0, (sum, o) => sum + o.totalDiscount);
+    final totalUpPrice = orders.fold<int>(0, (sum, o) => sum + o.totalUpPrice);
 
     return GestureDetector(
       onTap: () {
@@ -1396,6 +1397,21 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13,
                                         color: AppColors.success,
+                                      ),
+                                    ),
+                                  ],
+                                  if (totalUpPrice > 0) ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Total Up Price',
+                                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                    ),
+                                    Text(
+                                      '+Rp ${_fmt(totalUpPrice)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: AppColors.warning,
                                       ),
                                     ),
                                   ],
@@ -1708,6 +1724,15 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                           style: const TextStyle(
                                                             fontSize: 10,
                                                             color: AppColors.success,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      if (order.totalUpPrice > 0)
+                                                        Text(
+                                                          '+Rp ${_fmt(order.totalUpPrice)}',
+                                                          style: const TextStyle(
+                                                            fontSize: 10,
+                                                            color: AppColors.warning,
                                                             fontWeight: FontWeight.w600,
                                                           ),
                                                         ),
@@ -2196,15 +2221,29 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                     ),
                     textAlign: TextAlign.right,
                   )
-                : item.hasDiscount
-                ? Text(
-                    '-Rp ${_fmt(item.nominalDiskon)}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.right,
+                : item.hasDiscount || item.hasUpPrice
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (item.hasDiscount)
+                        Text(
+                          '-Rp ${_fmt(item.nominalDiskon)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (item.hasUpPrice)
+                        Text(
+                          '+Rp ${_fmt(item.nominalUpPrice)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
                   )
                     : const Text(
                         '—',

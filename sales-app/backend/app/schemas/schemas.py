@@ -197,6 +197,10 @@ class OrderItemCreate(BaseSchema):
     discount3_type: str = Field(default='PERCENT')
     discount3_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount3_nominal: int = Field(default=0, ge=0)
+    # --- Up Price (1 layer, per-piece, applied to base sebelum diskon) ---
+    up_price_type: str = Field(default='NOMINAL')  # 'PERCENT' atau 'NOMINAL'
+    up_price_percent: float = Field(default=0.0, ge=0.0)
+    up_price_nominal: int = Field(default=0, ge=0)
 
 
 class OrderCreate(BaseSchema):
@@ -228,6 +232,10 @@ class OrderItemResponse(BaseSchema):
     discount3_type: str = 'PERCENT'
     discount3_percent: float = 0.0
     discount3_nominal: int = 0
+    # --- Up Price (1 layer, per-piece) ---
+    up_price_type: str = 'NOMINAL'
+    up_price_percent: float = 0.0
+    up_price_nominal: int = 0
     # --- Derived ---
     harga_setelah_diskon: int = 0
     subtotal: Optional[int] = None
@@ -250,6 +258,10 @@ class OrderDiscountUpdateItem(BaseSchema):
     discount3_type: str = Field(default='PERCENT')
     discount3_percent: float = Field(default=0.0, ge=0.0, le=100.0)
     discount3_nominal: int = Field(default=0, ge=0)
+    # --- Up Price (1 layer, per-piece) ---
+    up_price_type: str = Field(default='NOMINAL')
+    up_price_percent: float = Field(default=0.0, ge=0.0)
+    up_price_nominal: int = Field(default=0, ge=0)
 
 
 class OrderDiscountUpdate(BaseSchema):
@@ -298,6 +310,7 @@ class OrderResponse(BaseSchema):
     store_address: Optional[str] = None
     total_amount: Optional[int] = None
     total_discount: Optional[int] = None
+    total_up_price: Optional[int] = None
     order_type: str = 'REGULER'
     cancelled_items: Optional[List[CancelledItemResponse]] = None
     reject_reason: Optional[str] = None

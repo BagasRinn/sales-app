@@ -846,6 +846,11 @@ class _OrderCardState extends State<_OrderCard> {
             'discount3_type': result.type3,
             'discount3_percent': result.type3 == 'PERCENT' ? result.value3 : 0,
             'discount3_nominal': result.type3 == 'NOMINAL' ? result.value3 : 0,
+            // Up Price — kirim nilai existing supaya tidak ter-reset ke default
+            // saat admin hanya edit diskon.
+            'up_price_type': item.upPriceType,
+            'up_price_percent': item.upPriceType.toUpperCase() == 'PERCENT' ? item.upPricePercent : 0,
+            'up_price_nominal': item.upPriceType.toUpperCase() == 'NOMINAL' ? item.upPriceNominal : 0,
           }
         ],
       );
@@ -863,6 +868,67 @@ class _OrderCardState extends State<_OrderCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal memperbarui diskon: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openItemUpPriceDialog(OrderItem item) async {
+    final result = await showDialog<_UpPriceEditResult>(
+      context: context,
+      builder: (_) => _UpPriceEditDialog(
+        namaBarang: item.namaBarang.isNotEmpty
+            ? item.namaBarang
+            : 'Produk ${item.productId}',
+        upPriceType: item.upPriceType,
+        upPricePercent: item.upPricePercent,
+        upPriceNominal: item.upPriceNominal,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    try {
+      final repo = context.read<AdminProvider>().adminRepository;
+      final updated = await repo.updateOrderDiscounts(
+        _order.id,
+        items: [
+          {
+            'item_id': item.id,
+            // Layer 1 — kirim nilai existing supaya tidak ter-reset
+            'discount_type': item.discountType,
+            'discount_percent': item.discountType == 'PERCENT' ? item.discountPercent : 0,
+            'discount_nominal': item.discountType == 'NOMINAL' ? item.discountNominal : 0,
+            // Layer 2
+            'discount2_type': item.discount2Type,
+            'discount2_percent': item.discount2Type == 'PERCENT' ? item.discount2Percent : 0,
+            'discount2_nominal': item.discount2Type == 'NOMINAL' ? item.discount2Nominal : 0,
+            // Layer 3
+            'discount3_type': item.discount3Type,
+            'discount3_percent': item.discount3Type == 'PERCENT' ? item.discount3Percent : 0,
+            'discount3_nominal': item.discount3Type == 'NOMINAL' ? item.discount3Nominal : 0,
+            // Up Price — yang baru
+            'up_price_type': result.type,
+            'up_price_percent': result.type == 'PERCENT' ? result.value : 0,
+            'up_price_nominal': result.type == 'NOMINAL' ? result.value.toInt() : 0,
+          }
+        ],
+      );
+      _onDiscountSaved(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Up price item diperbarui'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui up price: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1125,6 +1191,7 @@ class _OrderCardState extends State<_OrderCard> {
                         currencyFormat: currencyFormat,
                         canEdit: _order.status == 'PENDING' && !widget.readOnly,
                         onEdit: () => _openItemDiscountDialog(item),
+                        onEditUpPrice: () => _openItemUpPriceDialog(item),
                         onCancel: !widget.readOnly && widget.onCancelItem != null
                             ? () => widget.onCancelItem!(item)
                             : null,
@@ -1214,7 +1281,9 @@ class _OrderCardState extends State<_OrderCard> {
     final raw = _order.totalRaw;
     final amount = _order.totalAmount;
     final discount = _order.totalDiscount;
+    final upPrice = _order.totalUpPrice;
     final hasDiscount = discount > 0;
+    final hasUpPrice = upPrice > 0;
 
     return Column(
       children: [
@@ -1238,6 +1307,25 @@ class _OrderCardState extends State<_OrderCard> {
                 '- ${_fmt(discount)}',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.success,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
+        if (hasUpPrice) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Up Price',
+                style: AppTextStyles.bodySmall,
+              ),
+              SelectableText(
+                '+ ${_fmt(upPrice)}',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.warning,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1292,6 +1380,7 @@ class _OrderItemRow extends StatelessWidget {
   final NumberFormat currencyFormat;
   final bool canEdit;
   final VoidCallback? onEdit;
+  final VoidCallback? onEditUpPrice;
   final VoidCallback? onCancel;
 
   const _OrderItemRow({
@@ -1299,6 +1388,7 @@ class _OrderItemRow extends StatelessWidget {
     required this.currencyFormat,
     this.canEdit = false,
     this.onEdit,
+    this.onEditUpPrice,
     this.onCancel,
   });
 
@@ -1344,6 +1434,17 @@ class _OrderItemRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (item.hasUpPrice)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      _formatItemUpPrice(item),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1364,6 +1465,18 @@ class _OrderItemRow extends StatelessWidget {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             ),
+          if (canEdit && onEditUpPrice != null)
+            IconButton(
+              onPressed: onEditUpPrice,
+              icon: Icon(
+                item.hasUpPrice ? Icons.edit_outlined : Icons.trending_up,
+                size: 14,
+                color: item.hasUpPrice ? AppColors.warning : AppColors.textMuted,
+              ),
+              tooltip: item.hasUpPrice ? 'Edit up price' : 'Tambah up price',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            ),
           if (canEdit && onCancel != null)
             IconButton(
               onPressed: onCancel,
@@ -1377,7 +1490,7 @@ class _OrderItemRow extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             ),
           const SizedBox(width: 8),
-          if (item.hasDiscount)
+          if (item.hasDiscount || item.hasUpPrice)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -1392,7 +1505,7 @@ class _OrderItemRow extends StatelessWidget {
                   currencyFormat.format(item.subtotal),
                   style: AppTextStyles.labelLarge.copyWith(
                     fontSize: 13,
-                    color: AppColors.success,
+                    color: item.hasDiscount ? AppColors.success : AppColors.warning,
                   ),
                 ),
               ],
@@ -1445,6 +1558,18 @@ class _OrderItemRow extends StatelessWidget {
       }
     }
     return parts.join(' · ');
+  }
+
+  /// Format ringkasan up price untuk 1 item.
+  /// Contoh: "Up Price: 10%" atau "Up Price: Rp 1.000".
+  static String _formatItemUpPrice(OrderItem item) {
+    if ((item.upPriceType).toUpperCase() == 'PERCENT') {
+      final label = item.upPricePercent == item.upPricePercent.roundToDouble()
+          ? '${item.upPricePercent.round()}%'
+          : '${item.upPricePercent}%';
+      return 'Up Price: $label';
+    }
+    return 'Up Price: Rp ${item.upPriceNominal}';
   }
 }
 
@@ -1675,6 +1800,141 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           child: const Text('Simpan'),
         ),
       ],
+    );
+  }
+}
+
+class _UpPriceEditResult {
+  final String type; // 'PERCENT' or 'NOMINAL'
+  final double value; // percent (if PERCENT) or nominal IDR (if NOMINAL)
+
+  _UpPriceEditResult({required this.type, required this.value});
+}
+
+class _UpPriceEditDialog extends StatefulWidget {
+  final String namaBarang;
+  final String upPriceType;
+  final double upPricePercent;
+  final int upPriceNominal;
+
+  const _UpPriceEditDialog({
+    required this.namaBarang,
+    required this.upPriceType,
+    required this.upPricePercent,
+    required this.upPriceNominal,
+  });
+
+  @override
+  State<_UpPriceEditDialog> createState() => _UpPriceEditDialogState();
+}
+
+class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
+  late String _type;
+  late TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.upPriceType.toUpperCase();
+    final initial = _type == 'PERCENT' ? widget.upPricePercent : widget.upPriceNominal.toDouble();
+    _ctrl = TextEditingController(
+      text: initial > 0
+          ? (initial == initial.roundToDouble() ? '${initial.round()}' : '$initial')
+          : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onSave() {
+    final raw = _ctrl.text.replaceAll(',', '.');
+    final value = double.tryParse(raw) ?? 0.0;
+    if (value > 0) {
+      Navigator.pop(context, _UpPriceEditResult(type: _type, value: value));
+    } else {
+      // Kosongkan up price (kirim 0 NOMINAL).
+      Navigator.pop(context, _UpPriceEditResult(type: 'NOMINAL', value: 0));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          const Icon(Icons.trending_up, color: AppColors.warning, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Up Price: ${widget.namaBarang}')),
+        ],
+      ),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Penambah per-piece. Ditambahkan ke base sebelum diskon berjalan.',
+              style: AppTextStyles.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _typeChip('Rp', _type == 'NOMINAL'),
+                const SizedBox(width: 8),
+                _typeChip('%', _type == 'PERCENT'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: _type == 'PERCENT' ? 'Persen (%)' : 'Nominal per-piece (Rp)',
+                hintText: _type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
+                prefixText: _type == 'PERCENT' ? null : 'Rp ',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Isi 0 atau kosong untuk menghapus up price.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: _onSave,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+          child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
+
+  Widget _typeChip(String label, bool selected) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => _type = label == '%' ? 'PERCENT' : 'NOMINAL'),
+      selectedColor: AppColors.warning.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: selected ? AppColors.warning : AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }

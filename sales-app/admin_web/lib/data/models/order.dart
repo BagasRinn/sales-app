@@ -90,8 +90,14 @@ class Order {
   /// Total amount = jumlah subtotal setelah diskon (dari backend).
   int get totalAmount => items.fold(0, (sum, item) => sum + item.subtotal);
 
-  /// Total diskon = selisih totalRaw dan totalAmount.
-  int get totalDiscount => totalRaw - totalAmount;
+  /// Total diskon = nominal diskon saja (tidak termasuk up price).
+  /// raw - subtotal = disk - up, jadi kurangi up untuk dapat diskon saja.
+  int get totalDiscount {
+    return items.fold(0, (sum, item) => sum + item.nominalDiskon);
+  }
+
+  /// Total Up Price (semua item, IDR).
+  int get totalUpPrice => items.fold(0, (sum, item) => sum + item.nominalUpPrice);
 
   String get statusLabel {
     switch (status) {
@@ -131,6 +137,11 @@ class OrderItem {
   final double discount3Percent;
   final int discount3Nominal;
 
+  // --- Up Price (1 layer, per-piece) ---
+  final String upPriceType;
+  final double upPricePercent;
+  final int upPriceNominal;
+
   /// Harga per pcs setelah diskon — langsung dari backend (bukan dihitung client).
   /// Untuk NOMINAL: harga_satuan − (nominal / qty). Untuk PERCENT: sama.
   final int hargaSetelahDiskon;
@@ -152,6 +163,9 @@ class OrderItem {
     this.discount3Type = 'PERCENT',
     this.discount3Percent = 0.0,
     this.discount3Nominal = 0,
+    this.upPriceType = 'NOMINAL',
+    this.upPricePercent = 0.0,
+    this.upPriceNominal = 0,
     this.hargaSetelahDiskon = 0,
     this.subtotal = 0,
   });
@@ -178,14 +192,38 @@ class OrderItem {
       discount3Type: (json['discount3_type'] as String?) ?? 'PERCENT',
       discount3Percent: (json['discount3_percent'] as num?)?.toDouble() ?? 0.0,
       discount3Nominal: json['discount3_nominal'] as int? ?? 0,
+      upPriceType: (json['up_price_type'] as String?) ?? 'NOMINAL',
+      upPricePercent: (json['up_price_percent'] as num?)?.toDouble() ?? 0.0,
+      upPriceNominal: json['up_price_nominal'] as int? ?? 0,
       hargaSetelahDiskon: hargaStlhDiskon,
       subtotal: subtotal,
     );
   }
 
-  int get nominalDiskon => hargaSatuan * qty - subtotal;
+  /// Nominal diskon saja (tidak termasuk up price).
+  /// raw - subtotal = disk - up, jadi kurangi up untuk dapat diskon saja.
+  int get nominalDiskon => hargaSatuan * qty - subtotal - nominalUpPrice;
 
   bool get hasDiscount => nominalDiskon > 0;
+
+  /// Per-piece Up Price (IDR), dihitung sesuai type.
+  int get upPricePerPiece {
+    if (upPriceType.toUpperCase() == 'PERCENT') {
+      return (hargaSatuan * upPricePercent / 100).round();
+    }
+    return upPriceNominal;
+  }
+
+  /// Total Up Price (per-piece × qty).
+  int get nominalUpPrice => upPricePerPiece * qty;
+
+  /// True kalau Up Price aktif (nilai > 0 sesuai type).
+  bool get hasUpPrice {
+    if (upPriceType.toUpperCase() == 'PERCENT') {
+      return upPricePercent > 0;
+    }
+    return upPriceNominal > 0;
+  }
 
   /// True kalau item ada di order tapi bayar Rp 0 — mis. barang bonus promo
   /// "beli 5 gratis 1" atau diskon 100% dari sales. Ditandai dengan qty > 0

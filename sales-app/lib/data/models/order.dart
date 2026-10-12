@@ -22,6 +22,11 @@ class OrderItem {
   final double discount3Percent;
   final int discount3Nominal;
 
+  // --- Up Price (1 layer, per-piece, applied to base sebelum diskon) ---
+  final String upPriceType;
+  final double upPricePercent;
+  final int upPriceNominal;
+
   /// Harga per pcs setelah diskon — langsung dari backend (bukan dihitung client).
   /// Backend menghitung proporsional: diskon order di-distribusi ke tiap item
   /// berdasarkan proporsi harga item / total harga.
@@ -45,6 +50,9 @@ class OrderItem {
     this.discount3Type = 'PERCENT',
     this.discount3Percent = 0.0,
     this.discount3Nominal = 0,
+    this.upPriceType = 'NOMINAL',
+    this.upPricePercent = 0.0,
+    this.upPriceNominal = 0,
     this.hargaSetelahDiskon = 0,
     this.subtotal = 0,
   });
@@ -72,12 +80,18 @@ class OrderItem {
       discount3Type: (json['discount3_type'] as String?) ?? 'PERCENT',
       discount3Percent: (json['discount3_percent'] as num?)?.toDouble() ?? 0.0,
       discount3Nominal: json['discount3_nominal'] as int? ?? 0,
+      upPriceType: (json['up_price_type'] as String?) ?? 'NOMINAL',
+      upPricePercent: (json['up_price_percent'] as num?)?.toDouble() ?? 0.0,
+      upPriceNominal: json['up_price_nominal'] as int? ?? 0,
       hargaSetelahDiskon: hargaStlhDiskon,
       subtotal: subtotal,
     );
   }
 
-  int get nominalDiskon => (hargaSatuan ?? 0) * qty - subtotal;
+  int get nominalDiskon {
+    final raw = (hargaSatuan ?? 0) * qty;
+    return raw + nominalUpPrice - subtotal;
+  }
 
   /// True kalau ada diskon aktif (any layer punya value > 0).
   bool get hasDiscount {
@@ -86,6 +100,25 @@ class OrderItem {
     if (discount2Percent > 0 || discount2Nominal > 0) return true;
     if (discount3Percent > 0 || discount3Nominal > 0) return true;
     return false;
+  }
+
+  /// Per-piece Up Price (IDR), dihitung sesuai type.
+  int get upPricePerPiece {
+    if ((upPriceType).toUpperCase() == 'PERCENT') {
+      return ((hargaSatuan ?? 0) * upPricePercent / 100).round();
+    }
+    return upPriceNominal;
+  }
+
+  /// Total Up Price (per-piece × qty).
+  int get nominalUpPrice => upPricePerPiece * qty;
+
+  /// True kalau Up Price aktif (nilai > 0 sesuai type).
+  bool get hasUpPrice {
+    if ((upPriceType).toUpperCase() == 'PERCENT') {
+      return upPricePercent > 0;
+    }
+    return upPriceNominal > 0;
   }
 }
 
@@ -200,6 +233,12 @@ class Order {
     final list = items;
     if (list == null) return 0;
     return list.fold(0, (a, b) => a + b.nominalDiskon);
+  }
+
+  int get totalUpPrice {
+    final list = items;
+    if (list == null) return 0;
+    return list.fold(0, (a, b) => a + b.nominalUpPrice);
   }
 }
 

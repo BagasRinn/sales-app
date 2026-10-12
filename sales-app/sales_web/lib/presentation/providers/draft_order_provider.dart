@@ -10,6 +10,7 @@ class OrderLine {
   final int hargaSatuan;
   int qty;
   ItemDiscount discount;
+  UpPriceLayer? upPrice;
 
   OrderLine({
     required this.id,
@@ -18,10 +19,22 @@ class OrderLine {
     required this.hargaSatuan,
     this.qty = 1,
     ItemDiscount? discount,
+    this.upPrice,
   }) : discount = discount ?? ItemDiscount();
 
+  int get upPricePerPiece {
+    if (upPrice == null) return 0;
+    if (upPrice!.type == 'PERCENT') {
+      return (hargaSatuan * upPrice!.value / 100).round();
+    }
+    return upPrice!.value.toInt();
+  }
+
+  int get upPriceTotal => upPricePerPiece * qty;
+
   int get hargaSetelahDiskon {
-    int price = hargaSatuan;
+    // Up Price applied first (per-piece), lalu 3-layer diskon berjalan.
+    int price = hargaSatuan + upPricePerPiece;
     if (discount.layer1 != null) price -= discount.layer1!.cutFrom(price);
     if (discount.layer2 != null) price -= discount.layer2!.cutFrom(price);
     if (discount.layer3 != null) price -= discount.layer3!.cutFrom(price);
@@ -43,6 +56,16 @@ class DiscountLayer {
     if (type == 'PERCENT') return (price * value / 100).round();
     return value.toInt() > price ? price : value.toInt();
   }
+
+  Map<String, dynamic> toJson() => {'type': type, 'value': value};
+}
+
+/// Single-layer Up Price per item (per-piece, type PERCENT atau NOMINAL).
+class UpPriceLayer {
+  final String type; // 'PERCENT' or 'NOMINAL'
+  final double value;
+
+  UpPriceLayer({required this.type, required this.value});
 
   Map<String, dynamic> toJson() => {'type': type, 'value': value};
 }
@@ -91,7 +114,8 @@ class DraftOrderProvider with ChangeNotifier {
 
   int get totalRaw => _items.fold(0, (sum, item) => sum + (item.hargaSatuan * item.qty));
   int get totalPrice => _items.fold(0, (sum, item) => sum + item.subtotal);
-  int get totalDiscount => totalRaw - totalPrice;
+  int get totalDiscount => totalRaw - totalPrice - totalUpPrice;
+  int get totalUpPrice => _items.fold(0, (sum, item) => sum + item.upPriceTotal);
   int get totalQty => _items.fold(0, (sum, item) => sum + item.qty);
   int get totalItems => _items.fold(0, (sum, item) => sum + item.qty);
 
@@ -201,6 +225,18 @@ class DraftOrderProvider with ChangeNotifier {
     setDiscount(lineId, layer, type, value);
   }
 
+  void setUpPrice({required String lineId, required String type, required double value}) {
+    final item = _items.where((i) => i.id == lineId).toList();
+    if (item.isEmpty) return;
+    if (value <= 0) {
+      item.first.upPrice = null;
+    } else {
+      if (type == 'PERCENT' && value > 10000) value = 10000; // sanity cap
+      item.first.upPrice = UpPriceLayer(type: type, value: value);
+    }
+    notifyListeners();
+  }
+
   void removeLine(String lineId) => removeItem(lineId);
 
   OrderLine addLine(String productId, {int qty = 1}) {
@@ -230,6 +266,14 @@ class DraftOrderProvider with ChangeNotifier {
         namaBarang: item.namaBarang ?? '',
         hargaSatuan: item.hargaSatuan,
         qty: item.qty,
+        upPrice: item.hasUpPrice
+            ? UpPriceLayer(
+                type: item.upPriceType.toUpperCase(),
+                value: (item.upPriceType.toUpperCase() == 'PERCENT'
+                        ? item.upPricePercent
+                        : item.upPriceNominal.toDouble()),
+              )
+            : null,
       );
       // Copy discount from order item
       line.discount = ItemDiscount(
@@ -260,6 +304,7 @@ class DraftOrderProvider with ChangeNotifier {
   List<Map<String, dynamic>> buildItemsPayload() {
     return _items.map((item) {
       final d = item.discount;
+      final up = item.upPrice;
       return {
         'product_id': item.productId,
         'qty': item.qty,
@@ -272,6 +317,11 @@ class DraftOrderProvider with ChangeNotifier {
         'discount3_type': d.layer3?.type ?? 'PERCENT',
         'discount3_percent': d.layer3?.type == 'PERCENT' ? d.layer3!.value : 0.0,
         'discount3_nominal': d.layer3?.type == 'NOMINAL' ? d.layer3!.value.round() : 0,
+        if (up != null && (up.type == 'PERCENT' ? up.value > 0 : up.value > 0)) ...{
+          'up_price_type': up.type,
+          'up_price_percent': up.type == 'PERCENT' ? up.value : 0.0,
+          'up_price_nominal': up.type == 'NOMINAL' ? up.value.round() : 0,
+        },
       };
     }).toList();
   }

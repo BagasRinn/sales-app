@@ -78,6 +78,10 @@ class OrderItem {
   final ItemDiscount discount;
   final int hargaSetelahDiskon;
   final int subtotal;
+  // --- Up Price (1 layer, per-piece) ---
+  final String upPriceType;
+  final double upPricePercent;
+  final int upPriceNominal;
 
   OrderItem({
     required this.id,
@@ -88,10 +92,32 @@ class OrderItem {
     required this.discount,
     required this.hargaSetelahDiskon,
     required this.subtotal,
+    this.upPriceType = 'NOMINAL',
+    this.upPricePercent = 0.0,
+    this.upPriceNominal = 0,
   });
 
   int get nominalDiskon => (hargaSatuan - hargaSetelahDiskon) * qty;
   bool get hasDiscount => !discount.isEmpty;
+
+  /// Per-piece Up Price (IDR), dihitung sesuai type.
+  int get upPricePerPiece {
+    if (upPriceType.toUpperCase() == 'PERCENT') {
+      return (hargaSatuan * upPricePercent / 100).round();
+    }
+    return upPriceNominal;
+  }
+
+  /// Total Up Price (per-piece × qty).
+  int get nominalUpPrice => upPricePerPiece * qty;
+
+  /// True kalau Up Price aktif (nilai > 0 sesuai type).
+  bool get hasUpPrice {
+    if (upPriceType.toUpperCase() == 'PERCENT') {
+      return upPricePercent > 0;
+    }
+    return upPriceNominal > 0;
+  }
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     // Match the mobile app's OrderItem.fromJson (lib/data/models/order.dart):
@@ -134,6 +160,9 @@ class OrderItem {
       ),
       hargaSetelahDiskon: hargaSetelahDiskon,
       subtotal: subtotal,
+      upPriceType: (json['up_price_type'] as String?) ?? 'NOMINAL',
+      upPricePercent: (json['up_price_percent'] as num?)?.toDouble() ?? 0.0,
+      upPriceNominal: json['up_price_nominal'] as int? ?? 0,
     );
   }
 }
@@ -226,10 +255,14 @@ class Order {
 
   int get totalDiscount {
     return items.fold(0, (sum, item) {
-      int itemDiscount = (item.hargaSatuan * item.qty) - item.subtotal;
+      // Nominal diskon saja (tidak termasuk up price — lihat [totalUpPrice]).
+      // raw - subtotal = disk - up, jadi kurangi up untuk dapat diskon saja.
+      int itemDiscount = (item.hargaSatuan * item.qty) - item.subtotal - item.nominalUpPrice;
       return sum + itemDiscount;
     });
   }
+
+  int get totalUpPrice => items.fold(0, (sum, item) => sum + item.nominalUpPrice);
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(

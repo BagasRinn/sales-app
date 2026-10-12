@@ -47,12 +47,13 @@ class DraftOrderProvider extends ChangeNotifier {
   // -------------------------------------------------------------------------
 
   /// Tambah satu line baru. Append ke akhir list.
-  OrderLine addLine(String productId, {int qty = 1, ItemDiscount? discount}) {
+  OrderLine addLine(String productId, {int qty = 1, ItemDiscount? discount, ItemUpPrice? upPrice}) {
     final line = OrderLine(
       id: _generateId(),
       productId: productId,
       qty: qty,
       discount: discount,
+      upPrice: upPrice,
     );
     items = [...items, line];
     notifyListeners();
@@ -124,6 +125,49 @@ class DraftOrderProvider extends ChangeNotifier {
           line.copyWith(
             discount: newDiscount,
             clearDiscount: newDiscount == null,
+          )
+        else
+          items[i],
+    ];
+    notifyListeners();
+  }
+
+  /// Set Up Price untuk line by id. Single layer — type bisa 'PERCENT' atau 'NOMINAL'.
+  /// value adalah nominal IDR (kalau NOMINAL) atau percent 0-100 (kalau PERCENT).
+  void setUpPrice({
+    required String lineId,
+    required String type,
+    required double value,
+  }) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError(
+          'up_price type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    final lineIndex = items.indexWhere((l) => l.id == lineId);
+    if (lineIndex < 0) return;
+    final line = items[lineIndex];
+
+    ItemUpPrice? newUp;
+    if (value <= 0) {
+      newUp = null;
+    } else {
+      if (type == 'PERCENT') {
+        // Tidak ada cap keras (admin bisa set >100% untuk mark up besar), tapi
+        // warning lembut di UI. Sanity: tolak nilai absurd.
+        final pct = value > 10000 ? 10000.0 : value;
+        newUp = ItemUpPrice(type: type, percent: pct, nominal: 0);
+      } else {
+        // NOMINAL: tidak ada cap (bisa lebih besar dari harga barang).
+        newUp = ItemUpPrice(type: type, percent: 0, nominal: value.toInt());
+      }
+    }
+
+    items = [
+      for (int i = 0; i < items.length; i++)
+        if (i == lineIndex)
+          line.copyWith(
+            upPrice: newUp,
+            clearUpPrice: newUp == null,
           )
         else
           items[i],
@@ -218,13 +262,15 @@ class DraftOrderProvider extends ChangeNotifier {
     return (subtotal: s, d1: d1, d2: d2, d3: d3, total: d1 + d2 + d3);
   }
 
-  /// Total harga setelah 3-layer diskon sequential per-line.
+  /// Total harga setelah 3-layer diskon sequential per-line (up_price applied first, lalu diskon).
   int get totalPrice {
     int total = 0;
     for (final line in items) {
       final price = _priceCache[line.productId] ?? 0;
       final rawSubtotal = price * line.qty;
-      final r = _applyItemLayers(rawSubtotal, line.discount);
+      final upPerPiece = line.upPrice?.perPiece(price) ?? 0;
+      final base = rawSubtotal + upPerPiece * line.qty;
+      final r = _applyItemLayers(base, line.discount);
       total += r.subtotal;
     }
     return total;
@@ -234,7 +280,10 @@ class DraftOrderProvider extends ChangeNotifier {
     int total = 0;
     for (final line in items) {
       final price = _priceCache[line.productId] ?? 0;
-      final r = _applyItemLayers(price * line.qty, line.discount);
+      final rawSubtotal = price * line.qty;
+      final upPerPiece = line.upPrice?.perPiece(price) ?? 0;
+      final base = rawSubtotal + upPerPiece * line.qty;
+      final r = _applyItemLayers(base, line.discount);
       total += r.d1;
     }
     return total;
@@ -244,7 +293,10 @@ class DraftOrderProvider extends ChangeNotifier {
     int total = 0;
     for (final line in items) {
       final price = _priceCache[line.productId] ?? 0;
-      final r = _applyItemLayers(price * line.qty, line.discount);
+      final rawSubtotal = price * line.qty;
+      final upPerPiece = line.upPrice?.perPiece(price) ?? 0;
+      final base = rawSubtotal + upPerPiece * line.qty;
+      final r = _applyItemLayers(base, line.discount);
       total += r.d2;
     }
     return total;
@@ -254,14 +306,27 @@ class DraftOrderProvider extends ChangeNotifier {
     int total = 0;
     for (final line in items) {
       final price = _priceCache[line.productId] ?? 0;
-      final r = _applyItemLayers(price * line.qty, line.discount);
+      final rawSubtotal = price * line.qty;
+      final upPerPiece = line.upPrice?.perPiece(price) ?? 0;
+      final base = rawSubtotal + upPerPiece * line.qty;
+      final r = _applyItemLayers(base, line.discount);
       total += r.d3;
     }
     return total;
   }
 
+  /// Total Up Price (semua line, IDR).
+  int get totalUpPrice {
+    int total = 0;
+    for (final line in items) {
+      final price = _priceCache[line.productId] ?? 0;
+      total += line.upPrice?.totalFor(price, line.qty) ?? 0;
+    }
+    return total;
+  }
+
   /// Estimasi hemat — selisih totalRaw dan totalPrice.
-  int get totalDiscount => totalRaw - totalPrice;
+  int get totalDiscount => totalRaw - totalPrice - totalUpPrice;
 
   /// Jumlah line yang adalah "GRATIS" (layer1 >= 100%).
   int get freeItemsCount {
@@ -328,7 +393,7 @@ class DraftOrderProvider extends ChangeNotifier {
   // -------------------------------------------------------------------------
 
   /// Bangun payload items untuk submit ke backend.
-  /// Loop semua line, skip qty=0, build ItemDiscount.toJson per line.
+  /// Loop semua line, skip qty=0, build ItemDiscount.toJson + ItemUpPrice.toJson per line.
   List<Map<String, dynamic>> buildItemsPayload() {
     final result = <Map<String, dynamic>>[];
     for (final line in items) {
@@ -339,6 +404,9 @@ class DraftOrderProvider extends ChangeNotifier {
       };
       if (line.discount != null) {
         base.addAll(line.discount!.toJson());
+      }
+      if (line.upPrice != null && !line.upPrice!.isEmpty) {
+        base.addAll(line.upPrice!.toJson());
       }
       result.add(base);
     }
@@ -359,12 +427,14 @@ class OrderLine {
   final String productId;
   int qty;
   ItemDiscount? discount;
+  ItemUpPrice? upPrice;
 
   OrderLine({
     required this.id,
     required this.productId,
     required this.qty,
     this.discount,
+    this.upPrice,
   });
 
   /// Layer1 >= 100% PERCENT → label "GRATIS".
@@ -373,13 +443,63 @@ class OrderLine {
     return l1 != null && l1.type == 'PERCENT' && l1.value >= 100;
   }
 
-  OrderLine copyWith({int? qty, ItemDiscount? discount, bool clearDiscount = false}) {
+  OrderLine copyWith({
+    int? qty,
+    ItemDiscount? discount,
+    bool clearDiscount = false,
+    ItemUpPrice? upPrice,
+    bool clearUpPrice = false,
+  }) {
     return OrderLine(
       id: id,
       productId: productId,
       qty: qty ?? this.qty,
       discount: clearDiscount ? null : (discount ?? this.discount),
+      upPrice: clearUpPrice ? null : (upPrice ?? this.upPrice),
     );
+  }
+}
+
+/// Single-layer Up Price per item. Mirror `ItemDiscount` shape tapi tanpa `2`/`3`.
+class ItemUpPrice {
+  final String type; // 'PERCENT' atau 'NOMINAL'
+  final double percent;
+  final int nominal;
+
+  const ItemUpPrice({
+    this.type = 'NOMINAL',
+    this.percent = 0,
+    this.nominal = 0,
+  });
+
+  /// Per-piece Up Price (IDR). PERCENT: round(harga * percent/100). NOMINAL: nominal.
+  int perPiece(int hargaSatuan) {
+    if (type.toUpperCase() == 'PERCENT') {
+      return (hargaSatuan * percent / 100).round();
+    }
+    return nominal;
+  }
+
+  /// Total Up Price (per-piece × qty).
+  int totalFor(int hargaSatuan, int qty) => perPiece(hargaSatuan) * qty;
+
+  bool get isEmpty => (type.toUpperCase() == 'PERCENT' ? percent : nominal.toDouble()) <= 0;
+
+  Map<String, dynamic> toJson() => {
+        'up_price_type': type,
+        'up_price_percent': type.toUpperCase() == 'PERCENT' ? percent : 0,
+        'up_price_nominal': type.toUpperCase() == 'NOMINAL' ? nominal : 0,
+      };
+
+  factory ItemUpPrice.fromOrderItem(OrderItem item) {
+    final t = (item.upPriceType).toUpperCase();
+    if (t == 'PERCENT' && item.upPricePercent > 0) {
+      return ItemUpPrice(type: 'PERCENT', percent: item.upPricePercent);
+    }
+    if (t == 'NOMINAL' && item.upPriceNominal > 0) {
+      return ItemUpPrice(type: 'NOMINAL', nominal: item.upPriceNominal);
+    }
+    return const ItemUpPrice();
   }
 }
 
