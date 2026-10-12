@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 import logging
 
 from app.models.database import get_db
-from app.models.models import Customer, CustomerRegistrationSubmission, Order, OrderItem, Product, User, CustomerAssignment, StokLog
+from app.models.models import Customer, CustomerRegistrationSubmission, CustomerKodeArea, Order, OrderItem, Product, User, CustomerAssignment, StokLog
 from app.schemas.schemas import (
     CustomerSubmissionCreate,
     CustomerSubmissionResponse,
@@ -140,10 +140,12 @@ def submit_customer_registration(
             kode=None,  # admin assigns this on approve
             nama_toko=payload.nama_langganan,
             alamat=payload.alamat_kirim or payload.alamat_ktp or '',
-            kode_area=payload.kode_area,
             branch=current_user.get("branch"),
         )
         db.add(customer)
+        db.flush()
+        if payload.kode_area:
+            db.add(CustomerKodeArea(customer_id=customer_id, kode_area=payload.kode_area, branch=current_user.get("branch")))
 
         # Scope visibility: only the submitting sales sees this placeholder.
         assignment = CustomerAssignment(
@@ -331,10 +333,16 @@ def approve_submission(
         ).first()
         if existing_customer:
             existing_customer.kode = kode
-            # Copy kode_area from submission if set (do NOT override NULL - legacy
-            # placeholder may already have a value from create).
+            # Copy kode_area from submission to junction table if set.
             if submission.kode_area:
-                existing_customer.kode_area = submission.kode_area
+                db.query(CustomerKodeArea).filter(
+                    CustomerKodeArea.customer_id == submission.bareng_customer_id
+                ).delete()
+                db.add(CustomerKodeArea(
+                    customer_id=submission.bareng_customer_id,
+                    kode_area=submission.kode_area,
+                    branch=existing_customer.branch,
+                ))
             # Apply optional overrides from admin payload.
             if payload.nama_toko:
                 existing_customer.nama_toko = payload.nama_toko
@@ -379,10 +387,14 @@ def approve_submission(
         kode=kode,
         nama_toko=nama_toko,
         alamat=alamat if alamat else None,
-        kode_area=submission.kode_area,
+        branch=submission.branch,
     )
     db.add(customer)
     db.flush()  # dapet customer.id
+
+    # Sync kode_area to junction table
+    if submission.kode_area:
+        db.add(CustomerKodeArea(customer_id=customer.id, kode_area=submission.kode_area, branch=submission.branch))
 
     submission.approved_customer_id = customer.id
 

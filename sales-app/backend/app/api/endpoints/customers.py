@@ -12,6 +12,7 @@ from app.models.models import (
     AreaAssignment,
     Customer,
     CustomerAssignment,
+    CustomerKodeArea,
     ImportLog,
     User,
 )
@@ -44,6 +45,7 @@ def _customer_to_response(c: Customer) -> CustomerResponse:
         nama_toko=c.nama_toko,
         alamat=c.alamat,
         kode_area=c.kode_area,
+        kode_areas=[cka.kode_area for cka in c.kode_areas],
         created_at=c.created_at,
         updated_at=c.updated_at,
         deleted_at=c.deleted_at,
@@ -138,12 +140,15 @@ def list_my_customers(
 
     if search:
         pattern = f"%{search}%"
-        query = query.filter(
+        query = query.join(
+            CustomerKodeArea, CustomerKodeArea.customer_id == Customer.id, isouter=True
+        ).filter(
             or_(
                 Customer.nama_toko.ilike(pattern),
                 Customer.kode.ilike(pattern),
                 Customer.alamat.ilike(pattern),
                 Customer.kode_area.ilike(pattern),
+                CustomerKodeArea.kode_area.ilike(pattern),
             )
         )
     return [_customer_to_response(c) for c in query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()]
@@ -154,41 +159,38 @@ def list_kode_areas(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    """Distinct kode_area dari customers - sumber dropdown di mobile
-    submission form. Sales boleh membuat kode_area baru yang tidak ada
+    """Distinct kode_area dari customer_kode_areas junction table - sumber dropdown
+    di mobile submission form. Sales boleh membuat kode_area baru yang tidak ada
     di list (free-text fallback di form, tidak ada 409/422).
     Branch-scoped: ADMIN/SUPERVISOR sees only their branch's kode_areas.
-    SALES sees only their accessible areas (via visibility query).
+    SALES sees only their accessible areas (via visible customers).
     MANAGER sees all.
 
     Auth: require_auth (bukan require_manager) karena sales butuh akses
     untuk isi form pengajuan customer. Data yang dikembalikan (list of
-    strings) tidak sensitif - tidak ada info sales-roster.
+    strings) tidak sensitif.
     """
     if current_user["role"] in ("ADMIN", "SUPERVISOR", "MANAGER"):
         rows = (
-            db.query(Customer.kode_area)
-            .filter(Customer.deleted_at.is_(None), Customer.kode_area.isnot(None))
+            db.query(CustomerKodeArea.kode_area)
+            .filter(CustomerKodeArea.kode_area.isnot(None))
         )
-        rows = apply_branch_filter(rows, Customer, current_user)
-        rows = rows.distinct().order_by(Customer.kode_area).all()
+        rows = apply_branch_filter(rows, CustomerKodeArea, current_user)
+        rows = rows.distinct().order_by(CustomerKodeArea.kode_area).all()
     else:
-        # SALES: get kode_areas from visible customers
+        # SALES: get kode_areas from visible customers via junction table
         vis_q = visible_customer_query(db, current_user)
         vis_q = apply_branch_filter(vis_q, Customer, current_user)
+        vis_customer_ids = vis_q.with_entities(Customer.id).subquery()
         rows = (
-            vis_q.filter(Customer.kode_area.isnot(None))
-            .with_entities(Customer.kode_area)
+            db.query(CustomerKodeArea.kode_area)
+            .filter(CustomerKodeArea.customer_id.in_(vis_customer_ids))
+            .filter(CustomerKodeArea.kode_area.isnot(None))
             .distinct()
-            .order_by(Customer.kode_area)
+            .order_by(CustomerKodeArea.kode_area)
             .all()
         )
-    items = []
-    for r in rows:
-        val = r[0] if hasattr(r, '__getitem__') else r
-        if isinstance(val, tuple):
-            val = val[0]
-        items.append(val)
+    items = [r[0] if hasattr(r, '__getitem__') else r for r in rows]
     return KodeAreaListResponse(items=items)
 
 
@@ -219,8 +221,13 @@ def create_customer(
         )
 
     user_branch = current_user.get("branch")
-    new_customer = Customer(**customer.model_dump(), branch=user_branch)
+    kode_area_val = customer.kode_area
+    new_customer = Customer(**customer.model_dump(exclude={"kode_area"}), branch=user_branch)
     db.add(new_customer)
+    db.flush()
+    # Sync kode_area to junction table
+    if kode_area_val:
+        db.add(CustomerKodeArea(customer_id=new_customer.id, kode_area=kode_area_val, branch=user_branch))
     db.commit()
     db.refresh(new_customer)
     return _customer_to_response(new_customer)
@@ -244,8 +251,13 @@ def update_customer(
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
 
     data = update.model_dump(exclude_unset=True)
+    kode_area_val = data.pop("kode_area", None) if isinstance(data, dict) else None
     for field, value in data.items():
         setattr(customer, field, value)
+    # Sync kode_area to junction table: replace all existing entries
+    if kode_area_val:
+        db.query(CustomerKodeArea).filter(CustomerKodeArea.customer_id == customer.id).delete()
+        db.add(CustomerKodeArea(customer_id=customer.id, kode_area=kode_area_val, branch=customer.branch))
     db.commit()
     db.refresh(customer)
     return _customer_to_response(customer)

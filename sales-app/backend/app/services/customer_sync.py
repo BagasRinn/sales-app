@@ -22,7 +22,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from app.models.models import Customer, SyncValidationError, ImportLog
+from app.models.models import Customer, CustomerKodeArea, SyncValidationError, ImportLog
 
 EXCEL_COLUMNS = ["kode", "nama_toko", "alamat", "kode_area"]
 
@@ -241,12 +241,85 @@ def _bulk_upsert_customers(
             if result:
                 if kode_val is not None:
                     result.kode = kode_val
-                if kode_area_val is not None:
-                    result.kode_area = kode_area_val
                 result.deleted_at = None
+                if kode_area_val:
+                    # Sync to junction table (replace existing entries)
+                    db.query(CustomerKodeArea).filter(
+                        CustomerKodeArea.customer_id == UUID(customer_id_str)
+                    ).delete()
+                    db.add(CustomerKodeArea(
+                        customer_id=UUID(customer_id_str),
+                        kode_area=kode_area_val,
+                        branch=result.branch,
+                    ))
         logger.info(f"[SYNC] Re-activated {len(to_update)} deleted customers")
 
     return inserted, updated
+
+
+def _sync_kode_areas_to_junction(
+    db: Session,
+    rows: List[Dict[str, Any]],
+    branch: str,
+) -> int:
+    """Sync kode_areas from validated rows into customer_kode_areas junction table.
+    Lookup customer IDs by (branch, kode) then bulk insert into junction table.
+    Returns number of kode_area entries inserted.
+    """
+    # Rows that have kode_area set
+    rows_with_area = [r for r in rows if r.get("kode_area")]
+    if not rows_with_area:
+        return 0
+
+    # Lookup customer IDs by (branch, kode)
+    from sqlalchemy import and_, or_
+    pairs = sorted({
+        (branch, r["kode"])
+        for r in rows_with_area
+        if r.get("kode")
+    })
+
+    if not pairs:
+        return 0
+
+    if len(pairs) == 1:
+        br, k = pairs[0]
+        existing = db.query(Customer.id).filter(
+            and_(Customer.branch == br, Customer.kode == k)
+        ).all()
+    else:
+        conditions = [and_(Customer.branch == br, Customer.kode == k) for br, k in pairs]
+        existing = db.query(Customer.id).filter(or_(*conditions)).all()
+
+    # Build mapping from (branch, kode) -> customer_id
+    # Query each pair individually since we can't easily correlate back
+    id_map: Dict[tuple, str] = {}
+    for br, k in pairs:
+        row = db.query(Customer.id).filter(
+            and_(Customer.branch == br, Customer.kode == k)
+        ).first()
+        if row:
+            id_map[(br, k)] = str(row.id)
+
+    # Build values for junction table insert
+    values = []
+    for r in rows_with_area:
+        key = (branch, r.get("kode"))
+        if key in id_map:
+            values.append({
+                "customer_id": id_map[key],
+                "kode_area": r["kode_area"],
+                "branch": branch,
+            })
+
+    if not values:
+        return 0
+
+    stmt = insert(CustomerKodeArea).values(values)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["customer_id", "kode_area"])
+    db.execute(stmt)
+    logger.info(f"[SYNC] Synced {len(values)} kode_areas to junction table")
+    return len(values)
 
 
 def sync_customers_from_excel(
@@ -346,9 +419,14 @@ def sync_customers_from_excel(
         })
 
     inserted = updated = 0
+    kode_areas_synced = 0
     if validated_rows:
         try:
             inserted, updated = _bulk_upsert_customers(
+                db, validated_rows, branch=current_user.get("branch"),
+            )
+            # Sync kode_areas to junction table after customer upsert succeeds.
+            kode_areas_synced = _sync_kode_areas_to_junction(
                 db, validated_rows, branch=current_user.get("branch"),
             )
         except Exception as e:
@@ -401,6 +479,7 @@ def sync_customers_from_excel(
         "total_rows": total_rows,
         "inserted": inserted,
         "updated": updated,
+        "kode_areas_synced": kode_areas_synced,
         "skipped": skipped,
         "errors": validation_errors,
         "needs_review": len(validation_errors) > 0,
