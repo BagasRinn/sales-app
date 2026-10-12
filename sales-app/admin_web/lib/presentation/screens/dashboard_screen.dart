@@ -297,11 +297,13 @@ class _DashboardContentState extends State<_DashboardContent>
     // Pesanan (orders):
     //   - POST /orders/{id}/approve pakai require_admin → hanya ADMIN write.
     //   - SUPERVISOR & MANAGER murni monitoring.
-    //
-    // Master data (Toko, Pengajuan Customer, Produk, User, Bulletin, Sync):
-    //   - Create/edit pakai require_supervisor_or_manager_global → ADMIN
-    //     justru yang read-only di sini. SUPERVISOR & MANAGER boleh write.
+    // Master data (Toko, Pengajuan Customer, Produk, Bulletin, Sync):
+    //   read-only untuk semua role (ADMIN/SUPERVISOR/MANAGER memantau).
+    //   Create/edit di backend pakai require_supervisor_or_manager_global →
+    //   ADMIN, SUPERVISOR & MANAGER boleh write.
     final orderReadOnly = widget.role != 'ADMIN';
+    // Users tab: ADMIN, SUPERVISOR, MANAGER boleh add/edit user.
+    final usersReadOnly = widget.role == 'SALES';
     final masterReadOnly = widget.role != 'ADMIN';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
@@ -323,7 +325,7 @@ class _DashboardContentState extends State<_DashboardContent>
         return SyncTab(readOnly: masterReadOnly);
       case 6:
         return UsersTab(
-          readOnly: masterReadOnly,
+          readOnly: usersReadOnly,
           currentRole: widget.role,
           currentBranch: widget.branch,
           currentBranchNama: widget.branchNama,
