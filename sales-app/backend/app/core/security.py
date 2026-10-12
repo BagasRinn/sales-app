@@ -204,6 +204,18 @@ def require_supervisor_or_manager_global(current_user: dict = Depends(get_curren
     )
 
 
+def require_write_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """ADMIN (branch-scoped), SUPERVISOR (branch-scoped), or MANAGER (global).
+    Allows all write-capable roles. SALES excluded."""
+    role = current_user.get("role")
+    if role in ("ADMIN", "SUPERVISOR", "MANAGER"):
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Akses ditolak. Hanya admin, supervisor, atau manager yang dapat mengakses endpoint ini.",
+    )
+
+
 def apply_branch_filter(query, model, current_user: dict):
     """Apply branch filter to a query based on the current user.
 

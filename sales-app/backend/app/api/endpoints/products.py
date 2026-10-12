@@ -15,7 +15,7 @@ from app.schemas.schemas import (
     SyncResultResponse,
     ImportLogResponse,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_supervisor_or_manager_global, apply_branch_filter, CurrentUser
+from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
@@ -167,7 +167,7 @@ def get_supplier_list(
 @router.post("/sync", response_model=SyncResultResponse)
 def sync_products(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     sync_result = sync_products_from_excel(None, db, current_user={
         "user_id": current_user["user_id"],
@@ -192,7 +192,7 @@ def sync_products(
 def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """
     Upload file Excel (.xlsx) untuk import / update data produk.
@@ -459,7 +459,7 @@ def update_product(
     payload: ProductUpdate,
     branch: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Partial update untuk produk - admin/supervisor. Field yang None di-skip.
     order_type hanya menerima 'REGULER' atau '4P'."""
@@ -550,7 +550,7 @@ def update_product_stock(
     stock_update: ProductUpdateStock,
     branch: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     query = db.query(Product).filter(Product.id == product_id)
     lookup_branch = branch or current_user.get("branch")

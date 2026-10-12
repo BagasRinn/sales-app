@@ -272,60 +272,46 @@ class _UserDataTable extends StatelessWidget {
                   : AppColors.borderLight.withValues(alpha: 0.4),
             ),
             cells: [
-              DataCell(
-                Center(
-                  child: _NameCell(
-                    displayName: users[i].displayName,
-                    username: users[i].username,
-                    role: users[i].role,
-                  ),
+              DataCell(_NameCell(
+                displayName: users[i].displayName,
+                username: users[i].username,
+                role: users[i].role,
+              )),
+              DataCell(Center(child: Text(
+                users[i].username,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontFamily: 'monospace',
                 ),
-              ),
-              DataCell(
-                Center(
-                  child: Text(
-                    users[i].username,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ),
+              ))),
               DataCell(Center(child: _RoleBadge(role: users[i].role))),
-              DataCell(
-                Center(
-                  child: Text(
-                    users[i].branchNama ?? users[i].branch ?? '-',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
+              DataCell(Center(child: Text(
+                users[i].branchNama ?? users[i].branch ?? '-',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
                 ),
-              ),
+              ))),
               DataCell(Center(child: _StatusBadge(active: users[i].isActive))),
               if (!readOnly)
                 DataCell(
-                  Center(
-                    child: IconButton(
-                      onPressed: () => _openEditDialog(
-                        context,
-                        users[i],
-                        currentRole,
-                        currentBranch,
-                        currentBranchNama,
-                      ),
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      color: AppColors.primaryLight,
-                      tooltip: 'Edit user',
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
-                      ),
-                      padding: EdgeInsets.zero,
+                  IconButton(
+                    onPressed: () => _openEditDialog(
+                      context,
+                      users[i],
+                      currentRole,
+                      currentBranch,
+                      currentBranchNama,
                     ),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: AppColors.primaryLight,
+                    tooltip: 'Edit user',
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    padding: EdgeInsets.zero,
                   ),
                 ),
             ],
@@ -379,7 +365,6 @@ class _NameCell extends StatelessWidget {
     };
     return Row(
       mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
           width: 32,
