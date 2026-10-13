@@ -9,7 +9,7 @@ import 'package:admin_web/presentation/providers/admin_provider.dart';
 import 'package:admin_web/presentation/widgets/supplier_target_edit_dialog.dart';
 import 'package:dio/dio.dart';
 
-class _FakeApi extends ApiService {
+class FakeApi extends ApiService {
   dynamic getResponse;
   dynamic putResponse;
   Object? putError;
@@ -32,18 +32,18 @@ class _FakeApi extends ApiService {
   }
 }
 
-class _TestEnv {
-  final _FakeApi api;
+class TestEnv {
+  final FakeApi api;
   final AdminProvider provider;
-  _TestEnv(this.api, this.provider);
+  TestEnv(this.api, this.provider);
 }
 
-Future<_TestEnv> openDialog(
+Future<TestEnv> openDialog(
   WidgetTester tester, {
   required List<SupplierPerformanceRow> rows,
   required String branch,
 }) async {
-  final fake = _FakeApi();
+  final fake = FakeApi();
   fake.getResponse = rows
       .map((r) => {
             'supplier_name': r.supplierName,
@@ -81,7 +81,7 @@ Future<_TestEnv> openDialog(
   );
   await tester.tap(find.text('Open'));
   await tester.pumpAndSettle();
-  return _TestEnv(fake, provider);
+  return TestEnv(fake, provider);
 }
 
 void main() {

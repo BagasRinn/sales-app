@@ -13,7 +13,6 @@ import '../../data/models/user_item.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
-import '../../data/models/supplier_target.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../core/api_exception.dart';
 
