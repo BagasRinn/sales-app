@@ -13,6 +13,8 @@ import '../../data/models/user_item.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
+import '../../data/models/supplier_target.dart';
+import '../../data/models/supplier_performance.dart';
 import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
@@ -951,6 +953,31 @@ class AdminProvider extends ChangeNotifier {
       _errorMessage = e is ApiException ? e.message : e.toString();
     } finally {
       _productSalesStatsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ===== Supplier Performance (Performa Sales — KPI per Supplier) =====
+  List<SupplierPerformanceRow> _supplierPerformance = [];
+  bool _supplierPerformanceLoading = false;
+  String? _supplierPerformanceYearMonth;
+
+  List<SupplierPerformanceRow> get supplierPerformance => _supplierPerformance;
+  bool get supplierPerformanceLoading => _supplierPerformanceLoading;
+  String? get supplierPerformanceYearMonth => _supplierPerformanceYearMonth;
+
+  Future<void> loadSupplierPerformance({String? yearMonth}) async {
+    _supplierPerformanceLoading = true;
+    _supplierPerformanceYearMonth = yearMonth;
+    notifyListeners();
+    try {
+      _supplierPerformance =
+          await _repo.getSupplierPerformance(yearMonth: yearMonth);
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _supplierPerformanceLoading = false;
       notifyListeners();
     }
   }
