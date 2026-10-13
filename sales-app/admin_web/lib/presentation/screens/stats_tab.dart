@@ -2550,13 +2550,67 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: orders.length,
-      itemBuilder: (ctx, i) => _buildOrderCard(orders[i]),
+      itemBuilder: (ctx, i) => _buildOrderCard(orders[i], compact: widget.compact),
     );
   }
 
-  Widget _buildOrderCard(Order order) {
+  Widget _buildOrderCard(Order order, {bool compact = false}) {
     final statusColor = _statusColor(order.status);
     final isExpanded = _expandedOrderId == order.id;
+    final amountBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Rp ${_fmt(order.totalAmount)}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            color: AppColors.primary,
+          ),
+        ),
+        if (order.totalDiscount > 0)
+          Text(
+            '-Rp ${_fmt(order.totalDiscount)}',
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.success,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        if (order.totalUpPrice > 0)
+          Text(
+            '+Rp ${_fmt(order.totalUpPrice)}',
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.warning,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
+    );
+    final statusBadge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        _statusLabel(order.status),
+        style: TextStyle(
+          color: statusColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+    final expandIcon = Icon(
+      isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+      size: 18,
+      color: isExpanded ? AppColors.primary : AppColors.textMuted,
+    );
+
     return Column(
       children: [
         GestureDetector(
@@ -2578,21 +2632,35 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                     : AppColors.border,
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
+            child: compact
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        order.storeName ?? 'Toko Tidak Diketahui',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
+                      // Baris 1: nama toko + status + arrow
                       Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              order.storeName ?? 'Toko Tidak Diketahui',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          statusBadge,
+                          const SizedBox(width: 4),
+                          expandIcon,
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // Baris 2: meta info (id, items, date) — wrap kalau sempit
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
                             '#${order.id.substring(0, 8)}',
@@ -2601,111 +2669,122 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                               fontSize: 11,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.inventory_2_outlined,
-                            size: 11,
-                            color: AppColors.textMuted,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 11,
+                                color: AppColors.textMuted,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${order.items.length} item',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${order.items.length} item',
-                            style: const TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 11,
-                            color: AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            _formatDate(order.createdAt),
-                            style: const TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 11,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 11,
+                                color: AppColors.textMuted,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatDate(order.createdAt),
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
+                      const SizedBox(height: 6),
+                      // Baris 3: amount + discount + upPrice (right-aligned)
+                      Align(alignment: Alignment.centerRight, child: amountBlock),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.storeName ?? 'Toko Tidak Diketahui',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text(
+                                  '#${order.id.substring(0, 8)}',
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 11,
+                                  color: AppColors.textMuted,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${order.items.length} item',
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 11,
+                                  color: AppColors.textMuted,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  _formatDate(order.createdAt),
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      amountBlock,
+                      const SizedBox(width: 8),
+                      statusBadge,
+                      const SizedBox(width: 6),
+                      expandIcon,
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Rp ${_fmt(order.totalAmount)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    if (order.totalDiscount > 0)
-                      Text(
-                        '-Rp ${_fmt(order.totalDiscount)}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    if (order.totalUpPrice > 0)
-                      Text(
-                        '+Rp ${_fmt(order.totalUpPrice)}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.warning,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: statusColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Text(
-                    _statusLabel(order.status),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  isExpanded
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  size: 18,
-                  color: isExpanded ? AppColors.primary : AppColors.textMuted,
-                ),
-              ],
-            ),
           ),
         ),
-        if (isExpanded) _buildOrderExpandedDetail(order),
+        if (isExpanded) _buildOrderExpandedDetail(order, compact: compact),
       ],
     );
   }
 
-  Widget _buildOrderExpandedDetail(Order order) {
+  Widget _buildOrderExpandedDetail(Order order, {bool compact = false}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 4, bottom: 8),
@@ -2780,103 +2859,128 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             ),
           ),
           const SizedBox(height: 6),
-          // Items table header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: const Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Produk',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 50,
-                  child: Text(
-                    'Qty',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 70,
-                  child: Text(
-                    'Harga',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 75,
-                  child: Text(
-                    'Diskon',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 75,
-                  child: Text(
-                    'Up Price',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 80,
-                  child: Text(
-                    'Subtotal',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          ...order.items.map((item) => _itemRow(item)),
-          if (order.cancelledItems.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Item Dibatalkan',
+          // Items table — di compact mode (mobile), wrap dengan horizontal
+          // scroll supaya kolom tabel tidak overflow layar sempit.
+          // Lebar minimum table: 100 (produk flex:2) + 50 + 70 + 75 + 75 + 80
+          // + 16 padding = 466px. Layar 360-414px harus scroll horizontal.
+          _buildItemTable(order, compact: compact),
+        ],
+      ),
+    );
+  }
+
+  /// Render item table (header + items + cancelled items) di dalam
+  /// horizontal scroll kalau compact, atau pas-lebar kalau desktop.
+  Widget _buildItemTable(Order order, {bool compact = false}) {
+    final header = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Produk',
               style: TextStyle(
+                fontSize: 10,
                 fontWeight: FontWeight.w700,
-                fontSize: 11,
-                color: AppColors.error,
+                color: AppColors.textMuted,
               ),
             ),
-            const SizedBox(height: 4),
-            ...order.cancelledItems.map((ci) => _cancelledItemRow(ci)),
-          ],
+          ),
+          SizedBox(
+            width: 50,
+            child: Text(
+              'Qty',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 70,
+            child: Text(
+              'Harga',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 75,
+            child: Text(
+              'Diskon',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 75,
+            child: Text(
+              'Up Price',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 80,
+            child: Text(
+              'Subtotal',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+    final rows = <Widget>[
+      header,
+      const SizedBox(height: 4),
+      ...order.items.map((item) => _itemRow(item)),
+      if (order.cancelledItems.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        const Text(
+          'Item Dibatalkan',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+            color: AppColors.error,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...order.cancelledItems.map((ci) => _cancelledItemRow(ci)),
+      ],
+    ];
+    if (!compact) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
+    }
+    // Compact: inner Column dibungkus SizedBox min-width 466px, di-scroll
+    // horizontal. Lebar Expanded(flex:2) jadi 100px min — yang sebenarnya
+    // bisa lebih kalau user scroll.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 466),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
       ),
     );
   }
