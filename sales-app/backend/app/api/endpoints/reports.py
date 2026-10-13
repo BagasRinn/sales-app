@@ -13,7 +13,7 @@ from sqlalchemy.types import Integer
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission
+from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget
 from app.core.security import require_admin_or_supervisor, require_manager_global, require_auth, apply_branch_filter
 from app.core import branch as branch_constants
 from app.schemas.schemas import (
@@ -21,6 +21,7 @@ from app.schemas.schemas import (
     SalesPerformanceItem,
     SalesPerformanceDashboardItem,
     SalesPerformanceDashboardResponse,
+    SupplierPerformanceRow,
 )
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -669,3 +670,119 @@ def cross_branch_stock_summary(
         })
 
     return {"branches": summary}
+
+
+@router.get("/supplier-performance", response_model=List[SupplierPerformanceRow])
+def get_supplier_performance(
+    year_month: str = Query(..., description="YYYY-MM"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Per-supplier monthly performance: revenue vs target (with auto-rollover).
+
+    Revenue = sum of approved-order final subtotals (qty*harga + up_price - 3
+    sequential discounts) for products with `nama_supplier` = the supplier,
+    in the requested month, in the user's branch.
+
+    Target resolution:
+      1. Look up `supplier_targets` for (branch, supplier, year_month).
+      2. If none, look up the most recent prior period for the same
+         (branch, supplier) — this is the auto-rollover carry-over.
+      3. If still none, has_target=false and pencapaian is null.
+    """
+    year, month = map(int, year_month.split("-"))
+    month_start = datetime(year, month, 1)
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    # 1. Distinct supplier names from products in user's branch.
+    #    (Product table has no soft-delete column — products are hard-deleted
+    #    on import or via admin tools. Filter empty/null suppliers only.)
+    product_query = db.query(Product.nama_supplier).filter(
+        Product.nama_supplier.isnot(None),
+        Product.nama_supplier != "",
+    )
+    product_query = apply_branch_filter(product_query, Product, current_user)
+    product_suppliers = {row[0] for row in product_query.distinct().all()}
+
+    # 2. Distinct supplier names that have any target row in the user's branch.
+    target_branch_q = db.query(SupplierTarget.supplier_name)
+    if current_user.get("branch"):
+        target_branch_q = target_branch_q.filter(
+            SupplierTarget.branch == current_user["branch"]
+        )
+    target_suppliers = {row[0] for row in target_branch_q.distinct().all()}
+
+    all_suppliers = sorted(product_suppliers | target_suppliers)
+
+    # 3. Target resolution per supplier (current → carry-over → none).
+    def resolve_target(name: str) -> tuple[int, bool]:
+        branch_filter = [
+            SupplierTarget.branch == current_user["branch"]
+        ] if current_user.get("branch") else []
+        current = (
+            db.query(SupplierTarget.target_value)
+            .filter(
+                SupplierTarget.supplier_name == name,
+                SupplierTarget.period == year_month,
+                *branch_filter,
+            )
+            .first()
+        )
+        if current is not None:
+            return int(current[0]), True
+        prior = (
+            db.query(SupplierTarget.target_value)
+            .filter(
+                SupplierTarget.supplier_name == name,
+                SupplierTarget.period < year_month,
+                *branch_filter,
+            )
+            .order_by(SupplierTarget.period.desc())
+            .first()
+        )
+        if prior is not None:
+            return int(prior[0]), True
+        return 0, False
+
+    # 4. Revenue per supplier using _three_layer_breakdown (Python iteration
+    #    matches the rest of the app and avoids duplicating the SQL expression).
+    orders_with_items = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(
+            Order.status == "APPROVED",
+            Order.created_at >= month_start,
+            Order.created_at < month_end,
+        )
+    )
+    orders_with_items = apply_branch_filter(orders_with_items, Order, current_user)
+    orders_with_items = orders_with_items.all()
+
+    revenue_map: dict = {}
+    for order in orders_with_items:
+        for item in order.items:
+            sup = (item.product.nama_supplier or "").strip() if item.product else ""
+            if not sup:
+                continue
+            raw, d1, d2, d3, after, _ = _three_layer_breakdown(item)
+            revenue_map[sup] = revenue_map.get(sup, 0) + max(0, after)
+
+    rows: list[SupplierPerformanceRow] = []
+    for name in all_suppliers:
+        value = revenue_map.get(name, 0)
+        target, has_target = resolve_target(name)
+        if has_target and target > 0:
+            pencapaian = round((value / target) * 100, 1)
+        else:
+            # No target (or target=0) → no percentage to render.
+            pencapaian = None
+        rows.append(SupplierPerformanceRow(
+            supplier_name=name,
+            target=target,
+            has_target=has_target,
+            value=value,
+            pencapaian=pencapaian,
+        ))
+
+    rows.sort(key=lambda r: (-r.value, r.supplier_name))
+    return rows

@@ -832,3 +832,26 @@ class BranchStatsResponse(BaseSchema):
     product_count: int = 0
     customer_count: int = 0
     sales_count: int = 0
+
+
+class SupplierPerformanceRow(BaseModel):
+    """One row in the KPI per Supplier table."""
+    supplier_name: str
+    target: int
+    has_target: bool
+    value: int
+    pencapaian: Optional[float] = None
+
+
+class SupplierTargetUpdate(BaseModel):
+    target_value: int = Field(..., ge=0)
+
+
+class SupplierTargetResponse(BaseModel):
+    id: UUID
+    branch: str
+    supplier_name: str
+    period: str
+    target_value: int
+    class Config:
+        from_attributes = True
