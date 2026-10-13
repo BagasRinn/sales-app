@@ -362,14 +362,20 @@ def clear_import_errors(
     Branch-scoped: ADMIN hanya hapus error di branch-nya. MANAGER (global)
     hapus semua.
     """
-    from sqlalchemy import or_
+    from sqlalchemy import or_, select
     scope = _import_logs_branch_scope(current_user)
-    q = db.query(SyncValidationError).join(
-        ImportLog, SyncValidationError.import_log_id == ImportLog.id
-    )
+    # SQLAlchemy forbids Query.delete() when .join() has been applied, so we
+    # build the list of import_log ids as a subquery and delete matching
+    # SyncValidationError rows by id. Inner-join semantics preserved: errors
+    # with NULL import_log_id are skipped, matching the pre-fix behavior.
+    log_ids_stmt = select(ImportLog.id)
     if scope is not None:
-        q = q.filter(or_(ImportLog.branch == scope, ImportLog.branch.is_(None)))
-    q.delete(synchronize_session=False)
+        log_ids_stmt = log_ids_stmt.where(
+            or_(ImportLog.branch == scope, ImportLog.branch.is_(None))
+        )
+    db.query(SyncValidationError).filter(
+        SyncValidationError.import_log_id.in_(log_ids_stmt.scalar_subquery())
+    ).delete(synchronize_session=False)
     db.commit()
 
 

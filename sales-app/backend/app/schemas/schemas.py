@@ -704,6 +704,9 @@ class SalesPerformanceDashboardItem(BaseSchema):
     user_id: UUID
     username: str
     nama: Optional[str] = None
+    # Branch code of the sales (string like 'BTL', 'BJM', etc).
+    # Nullable for safety — older rows may predate the field.
+    branch: Optional[str] = None
     # APPROVED — MTD (month-to-date) + Today
     approved_mtd_count: int = 0
     approved_mtd_revenue: int = 0

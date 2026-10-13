@@ -88,8 +88,11 @@ class AdminRepository {
   /// Ambil semua order untuk sales tertentu (untuk popup detail di dashboard).
   /// [salesId] nullable — kalau null, tidak filter per sales (dipakai oleh
   /// "Total Semua Sales" card untuk lihat gabungan semua sales dalam branch).
+  /// [branch] nullable — kalau di-set, hanya return order dari branch tsb
+  /// (dipakai oleh "Masing-masing Cabang" card untuk MANAGER drill-down).
   Future<List<Order>> getOrdersBySales({
     String? salesId,
+    String? branch,
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
@@ -102,6 +105,7 @@ class AdminRepository {
       'limit': limit.toString(),
     };
     if (salesId != null && salesId.isNotEmpty) params['sales_id'] = salesId;
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (dateFrom != null) {
       params['date_from'] =

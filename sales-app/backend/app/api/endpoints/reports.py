@@ -530,6 +530,7 @@ def sales_performance_dashboard(
             user_id=uid,
             username=u.username or "",
             nama=u.nama,
+            branch=u.branch,
             approved_mtd_count=approved_mtd_count.get(uid, 0),
             approved_mtd_revenue=approved_mtd_rev.get(uid, 0),
             approved_today_count=approved_today_count.get(uid, 0),

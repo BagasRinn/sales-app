@@ -36,6 +36,9 @@ class SalesPerformanceDashboardItem {
   final String userId;
   final String username;
   final String? nama;
+  /// Kode branch (mis. 'BTL', 'BJM') tempat sales bernaung.
+  /// Null untuk aman (response field baru — older rows mungkin tidak punya).
+  final String? branch;
   // APPROVED
   final int approvedMtdCount;
   final int approvedMtdRevenue;
@@ -56,6 +59,7 @@ class SalesPerformanceDashboardItem {
     required this.userId,
     required this.username,
     this.nama,
+    this.branch,
     this.approvedMtdCount = 0,
     this.approvedMtdRevenue = 0,
     this.approvedTodayCount = 0,
@@ -75,6 +79,7 @@ class SalesPerformanceDashboardItem {
       userId: json['user_id'] ?? '',
       username: json['username'] ?? '',
       nama: json['nama'],
+      branch: json['branch'],
       approvedMtdCount: json['approved_mtd_count'] ?? 0,
       approvedMtdRevenue: json['approved_mtd_revenue'] ?? 0,
       approvedTodayCount: json['approved_today_count'] ?? 0,

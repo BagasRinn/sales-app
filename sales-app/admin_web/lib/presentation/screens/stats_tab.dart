@@ -14,6 +14,25 @@ import '../providers/admin_provider.dart';
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
 
+/// Group per-sales performance items by branch code.
+/// Urutan key mengikuti urutan pertama kali branch muncul di list
+/// (preserved order — penting untuk konsistensi UI di section
+/// "Masing-masing Cabang" di mana user lihat branches dalam urutan yang
+/// stabil antar render).
+/// Items dengan branch null dikumpulkan di bucket "" (string kosong) supaya
+/// tidak hilang saat iteration.
+Map<String, List<SalesPerformanceDashboardItem>>
+    groupDashboardPerformanceByBranch(
+  List<SalesPerformanceDashboardItem> items,
+) {
+  final result = <String, List<SalesPerformanceDashboardItem>>{};
+  for (final item in items) {
+    final key = item.branch ?? '';
+    result.putIfAbsent(key, () => []).add(item);
+  }
+  return result;
+}
+
 /// Aggregate per-sales performance items into a single total item.
 /// Dipakai oleh card "Total Semua Sales" di section Performa Cabang.
 /// Returns null kalau list kosong (card disembunyikan di kasus ini).
@@ -274,11 +293,65 @@ class _StatsTabState extends State<StatsTab> {
     final aggregate = aggregateDashboardPerformance(sales)!;
     return _BranchPerformanceCard(
       total: aggregate,
-      onTapSection: (status) => _openBranchDetail(provider, initialStatus: status),
+      onTapSection: (status) => _openTotalDetail(provider, initialStatus: status),
     );
   }
 
-  void _openBranchDetail(
+  /// Section "Masing-masing Cabang" — MANAGER only. Satu card per branch,
+  /// masing-masing = aggregate sales di branch tsb. Klik → popup per-branch.
+  /// Untuk SUPERVISOR/ADMIN, section ini kosong (mereka cuma punya 1 branch
+  /// yang sudah terwakili oleh Performa Cabang di atas).
+  Widget _buildPerBranchSection(AdminProvider provider) {
+    final loading = provider.dashboardPerformanceLoading;
+    final sales = provider.dashboardPerformance;
+
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (sales.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final groups = groupDashboardPerformanceByBranch(sales);
+    // Skip branch kosong (item dengan branch null) untuk section ini — bukan
+    // branch yang valid untuk di-tampilkan.
+    final branchEntries = groups.entries.where((e) => e.key.isNotEmpty).toList();
+    if (branchEntries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: branchEntries.map((entry) {
+        final aggregate = aggregateDashboardPerformance(entry.value)!;
+        return SizedBox(
+          width: 360,
+          child: _BranchPerformanceCard(
+            total: aggregate,
+            title: 'Cabang ${entry.key}',
+            subtitle: 'Total ${entry.value.length} sales di cabang ini',
+            headerIcon: Icons.business_outlined,
+            headerIconColor: AppColors.info,
+            fullWidth: false,
+            onTapSection: (status) => _openBranchDetail(
+              provider,
+              entry.key,
+              initialStatus: status,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _openTotalDetail(
     AdminProvider provider, {
     String? initialStatus,
   }) {
@@ -291,9 +364,34 @@ class _StatsTabState extends State<StatsTab> {
         insetPadding: const EdgeInsets.all(32),
         child: _SalesOverlayDialog(
           provider: provider,
-          // null = mode "Total Semua Sales" — popup akan expose filter
-          // per sales di sidebar.
+          // sales: null, branch: null → mode "Total Semua Sales" (popup
+          // expose filter per sales & per branch di sidebar).
+          initialStatus: initialStatus,
+          onClose: () {
+            provider.clearSalesDetailOrders();
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openBranchDetail(
+    AdminProvider provider,
+    String branch, {
+    String? initialStatus,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(32),
+        child: _SalesOverlayDialog(
+          provider: provider,
           sales: null,
+          branch: branch,
           initialStatus: initialStatus,
           onClose: () {
             provider.clearSalesDetailOrders();
@@ -520,14 +618,30 @@ class _StatsTabState extends State<StatsTab> {
               ],
             ),
 
-            // MANAGER & SUPERVISOR: Performa Cabang (aggregate) + Performa Sales
+            // MANAGER & SUPERVISOR: ringkasan performa
             if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') ...[
               const SizedBox(height: 24),
               const Padding(
                 padding: EdgeInsets.only(bottom: 12, left: 4),
-                child: Text('Performa Cabang', style: AppTextStyles.labelLarge),
+                child: Text(
+                  'Total Semua Cabang',
+                  style: AppTextStyles.labelLarge,
+                ),
               ),
               _buildBranchPerformanceSection(provider),
+              // MANAGER (global) saja — lihat per-cabang karena lihat semua
+              // branch. SUPERVISOR cuma 1 branch jadi tidak ada gunanya.
+              if (widget.role == 'MANAGER') ...[
+                const SizedBox(height: 20),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12, left: 4),
+                  child: Text(
+                    'Masing-masing Cabang',
+                    style: AppTextStyles.labelLarge,
+                  ),
+                ),
+                _buildPerBranchSection(provider),
+              ],
               const SizedBox(height: 20),
               const Padding(
                 padding: EdgeInsets.only(bottom: 12, left: 4),
@@ -1226,25 +1340,43 @@ class _SalesPerformanceCard extends StatelessWidget {
   }
 }
 
-// ===== Card untuk "Performa Cabang" (total aggregate) =====
+// ===== Card untuk "Performa Cabang" / "Masing-masing Cabang" =====
 // Bentuknya mengikuti _SalesPerformanceCard tapi:
-//   - Lebar membentang 1 baris (Wrap / ListView akan full-width)
-//   - Tanpa avatar individu — pakai icon grup
-//   - Judul "Total Semua Sales"
-//   - Klik membuka popup dengan filter per sales
+//   - Lebar membentang 1 baris (Wrap / ListView akan full-width) secara default
+//   - Tanpa avatar individu — pakai icon grup / business (branch)
+//   - Judul & subjudul configurable
+//   - Klik membuka popup dengan filter per sales / per branch
 class _BranchPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem total;
   /// Sama semantics dengan _SalesPerformanceCard: null = semua status.
   final ValueChanged<String?> onTapSection;
+  final String title;
+  final String subtitle;
+  /// Icon untuk header. Default = grup (untuk total semua cabang / sales).
+  /// Untuk per-branch, override jadi business_outlined.
+  final IconData headerIcon;
+  final Color headerIconColor;
+  /// true = card full-width 1 baris (untuk Total Semua Cabang).
+  /// false = card size ke konten / parent constraint (untuk per-branch card
+  /// di dalam Wrap, biar bisa side-by-side).
+  final bool fullWidth;
 
-  const _BranchPerformanceCard({required this.total, required this.onTapSection});
+  const _BranchPerformanceCard({
+    required this.total,
+    required this.onTapSection,
+    this.title = 'Total Semua Sales',
+    this.subtitle = 'Agregat seluruh sales di branch ini',
+    this.headerIcon = Icons.groups_outlined,
+    this.headerIconColor = AppColors.primary,
+    this.fullWidth = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: Container(
-        width: double.infinity,
+        width: fullWidth ? double.infinity : null,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -1290,7 +1422,7 @@ class _BranchPerformanceCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header — icon grup + judul + total seluruh MTD
+                // Header — icon + judul + total
                 GestureDetector(
                   onTap: () => onTapSection(null),
                   behavior: HitTestBehavior.opaque,
@@ -1302,12 +1434,12 @@ class _BranchPerformanceCard extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
+                            color: headerIconColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(
-                            Icons.groups_outlined,
-                            color: AppColors.primary,
+                          child: Icon(
+                            headerIcon,
+                            color: headerIconColor,
                             size: 18,
                           ),
                         ),
@@ -1315,18 +1447,18 @@ class _BranchPerformanceCard extends StatelessWidget {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
-                                'Total Semua Sales',
-                                style: TextStyle(
+                                title,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                'Agregat seluruh sales di branch ini',
-                                style: TextStyle(
+                                subtitle,
+                                style: const TextStyle(
                                   fontSize: 11,
                                   color: AppColors.textMuted,
                                 ),
@@ -1482,17 +1614,21 @@ class _BranchPerformanceCard extends StatelessWidget {
 }
 
 // ===== Popup detail order untuk sales performance card =====
-// sales nullable: null = mode "Total Semua Sales" (popup dari card Performa
-// Cabang). Saat null, sidebar punya tambahan dropdown filter per sales.
+// Dua mode pre-filter:
+//   - sales: !null → mode per-sales (sales filter hidden di sidebar)
+//   - branch: !null → mode per-branch (branch filter hidden di sidebar)
+// Keduanya null → mode "Total Semua Cabang" (kedua filter visible).
 class _SalesOverlayDialog extends StatelessWidget {
   final AdminProvider provider;
   final SalesPerformanceDashboardItem? sales;
+  final String? branch;
   final VoidCallback onClose;
   final String? initialStatus;
 
   const _SalesOverlayDialog({
     required this.provider,
-    required this.sales,
+    this.sales,
+    this.branch,
     required this.onClose,
     this.initialStatus,
   });
@@ -1512,6 +1648,7 @@ class _SalesOverlayDialog extends StatelessWidget {
           child: _SalesDetailDialogBody(
             provider: provider,
             sales: sales,
+            branch: branch,
             onClose: onClose,
             initialStatus: initialStatus,
           ),
@@ -1526,6 +1663,10 @@ class _SalesDetailDialogBody extends StatefulWidget {
   /// Null = mode "Total Semua Sales" (popup dari card Performa Cabang).
   /// Saat null, user bisa filter per sales via dropdown di sidebar.
   final SalesPerformanceDashboardItem? sales;
+  /// Null = no branch pre-filter. Saat di-set (mode per-branch dari
+  /// "Masing-masing Cabang" card), orders di-filter ke branch tsb dan
+  /// dropdown Branch di sidebar di-hide.
+  final String? branch;
   final VoidCallback onClose;
   /// Status pre-applied saat dialog pertama dibuka. Null = tampilkan semua
   /// status ("Semua"). Dipakai untuk deep-link dari klik salah satu section
@@ -1534,7 +1675,8 @@ class _SalesDetailDialogBody extends StatefulWidget {
 
   const _SalesDetailDialogBody({
     required this.provider,
-    required this.sales,
+    this.sales,
+    this.branch,
     required this.onClose,
     this.initialStatus,
   });
@@ -1545,11 +1687,13 @@ class _SalesDetailDialogBody extends StatefulWidget {
 
 class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   String? _statusFilter;
-  String? _salesFilter; // null = "Semua Sales"; only used in total mode
+  String? _salesFilter; // null = "Semua Sales"; only used in total/branch mode
+  String? _branchFilter; // null = "Semua Cabang"; only used in total/sales mode
   DateTime? _dateFrom;
   DateTime? _dateTo;
   bool _showStatusMenu = false;
   bool _showSalesMenu = false;
+  bool _showBranchMenu = false;
   bool _showDateFromPicker = false;
   bool _showDateToPicker = false;
   String? _expandedOrderId;
@@ -1573,14 +1717,17 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   }
 
   void _applyFilters() {
-    // Saat mode sales tertentu (widget.sales != null), abaikan _salesFilter
-    // dan pakai userId sales tersebut. Saat mode total (widget.sales == null),
-    // _salesFilter mengontrol filter per sales.
+    // Prioritas: widget.sales / widget.branch (mode drill-down) > filter
+    // user (mode total / per-axis). Saat widget.sales != null, salesId
+    // dipaksa ke sales tsb; saat widget.branch != null, branch dipaksa
+    // ke branch tsb.
     final String? effectiveSalesId = widget.sales != null
         ? widget.sales!.userId
         : _salesFilter;
+    final String? effectiveBranch = widget.branch ?? _branchFilter;
     widget.provider.loadSalesDetailOrders(
       salesId: effectiveSalesId,
+      branch: effectiveBranch,
       status: _statusFilter,
       dateFrom: _dateFrom,
       dateTo: _dateTo,
@@ -1624,6 +1771,11 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     return match.first.displayName;
   }
 
+  String _currentBranchLabel(List<SalesPerformanceDashboardItem> branchList) {
+    if (_branchFilter == null) return 'Semua Cabang';
+    return _branchFilter!;
+  }
+
   void _selectStatus(String? v) {
     setState(() {
       _statusFilter = v;
@@ -1636,6 +1788,14 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     setState(() {
       _salesFilter = v;
       _showSalesMenu = false;
+    });
+    _applyFilters();
+  }
+
+  void _selectBranch(String? v) {
+    setState(() {
+      _branchFilter = v;
+      _showBranchMenu = false;
     });
     _applyFilters();
   }
@@ -1671,6 +1831,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final salesList = widget.sales == null
         ? provider.dashboardPerformance
         : const <SalesPerformanceDashboardItem>[];
+    final branchList = widget.branch == null
+        ? provider.dashboardPerformance
+        : const <SalesPerformanceDashboardItem>[];
 
     return GestureDetector(
       onTap: () {
@@ -1678,6 +1841,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
         setState(() {
           _showStatusMenu = false;
           _showSalesMenu = false;
+          _showBranchMenu = false;
           _showDateFromPicker = false;
           _showDateToPicker = false;
         });
@@ -1721,6 +1885,36 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                           ),
                           Text(
                             '@${widget.sales!.username}',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (widget.branch != null) ...[
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.business_outlined,
+                        color: AppColors.info,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cabang ${widget.branch}',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          Text(
+                            'Pesanan dari seluruh sales di cabang ini',
                             style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
@@ -1892,7 +2086,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                 ),
                               ),
                             ),
-                            // Sales filter — hanya muncul di mode "Total Semua Sales"
+                            // Sales filter — hanya muncul di mode total / per-branch
                             if (widget.sales == null) ...[
                               const SizedBox(height: 10),
                               GestureDetector(
@@ -1900,6 +2094,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   setState(() {
                                     _showSalesMenu = !_showSalesMenu;
                                     _showStatusMenu = false;
+                                    _showBranchMenu = false;
                                     _showDateFromPicker = false;
                                     _showDateToPicker = false;
                                   });
@@ -1925,6 +2120,40 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                 ),
                               ),
                             ],
+                            // Branch filter — hanya muncul di mode total
+                            if (widget.branch == null) ...[
+                              const SizedBox(height: 10),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _showBranchMenu = !_showBranchMenu;
+                                    _showStatusMenu = false;
+                                    _showSalesMenu = false;
+                                    _showDateFromPicker = false;
+                                    _showDateToPicker = false;
+                                  });
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: AppColors.border),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        _currentBranchLabel(branchList),
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.arrow_drop_down, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             // Date from button
                             GestureDetector(
@@ -1934,6 +2163,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   _showDateToPicker = false;
                                   _showStatusMenu = false;
                                   _showSalesMenu = false;
+                                  _showBranchMenu = false;
                                 });
                               },
                               child: Container(
@@ -1964,6 +2194,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   _showDateFromPicker = false;
                                   _showStatusMenu = false;
                                   _showSalesMenu = false;
+                                  _showBranchMenu = false;
                                 });
                               },
                               child: Container(
@@ -2031,7 +2262,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                               ),
                             ),
                           ),
-                        // Sales dropdown menu (hanya di mode total)
+                        // Sales dropdown menu (hanya di mode total/branch)
                         if (_showSalesMenu)
                           Positioned(
                             top: 0,
@@ -2054,6 +2285,31 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                       _salesMenuItem(null, 'Semua Sales'),
                                       ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
                                     ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Branch dropdown menu (hanya di mode total)
+                        if (_showBranchMenu)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(6),
+                              color: AppColors.surface,
+                              child: Container(
+                                constraints: const BoxConstraints(maxHeight: 240),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: _branchMenuItems(branchList),
                                   ),
                                 ),
                               ),
@@ -2490,6 +2746,46 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final isSelected = _salesFilter == value;
     return GestureDetector(
       onTap: () => _selectSales(value),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? AppColors.primary : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Bangun list menu item untuk Branch dropdown. Extract unique branch codes
+  /// dari items (preserve first-seen order). Item dengan branch null
+  /// ditampilkan sebagai "Tanpa branch".
+  List<Widget> _branchMenuItems(List<SalesPerformanceDashboardItem> items) {
+    final branches = <String>[];
+    final seen = <String>{};
+    for (final s in items) {
+      final key = s.branch ?? '';
+      if (!seen.contains(key)) {
+        seen.add(key);
+        branches.add(key);
+      }
+    }
+    return [
+      _branchMenuItem(null, 'Semua Cabang'),
+      ...branches.map((b) => _branchMenuItem(b, b.isEmpty ? 'Tanpa branch' : b)),
+    ];
+  }
+
+  Widget _branchMenuItem(String? value, String label) {
+    final isSelected = _branchFilter == value;
+    return GestureDetector(
+      onTap: () => _selectBranch(value),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

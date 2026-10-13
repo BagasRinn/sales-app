@@ -1092,6 +1092,14 @@ def list_all_orders(
         None,
         description="Filter pesanan oleh sales tertentu (UUID). Dipakai oleh dashboard popup.",
     ),
+    branch: Optional[str] = Query(
+        None,
+        description=(
+            "Filter pesanan ke branch tertentu (kode cabang seperti 'BTL', 'BJM'). "
+            "Dipakai oleh dashboard popup per-branch untuk MANAGER. "
+            "Branch-scoped user yang minta branch berbeda dari branch-nya sendiri akan dapat 403."
+        ),
+    ),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -1120,6 +1128,19 @@ def list_all_orders(
             raise HTTPException(status_code=400, detail="sales_id harus UUID valid")
         query = query.filter(Order.sales_id == sales_uuid)
         count_query = count_query.filter(Order.sales_id == sales_uuid)
+
+    if branch is not None:
+        # Branch-scoped user yang minta branch berbeda = tolak. Global MANAGER
+        # boleh minta branch apapun.
+        user_role = current_user.get("role")
+        user_branch = current_user.get("branch")
+        if user_role != "MANAGER" and user_branch is not None and user_branch != branch:
+            raise HTTPException(
+                status_code=403,
+                detail="Tidak boleh query branch lain dari branch sendiri",
+            )
+        query = query.filter(Order.branch == branch)
+        count_query = count_query.filter(Order.branch == branch)
 
     if date_from or date_to:
         # WITA timezone biar konsisten dengan sales app

@@ -1067,6 +1067,7 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> loadSalesDetailOrders({
     String? salesId,
+    String? branch,
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
@@ -1080,6 +1081,7 @@ class AdminProvider extends ChangeNotifier {
     try {
       _salesDetailOrders = await _repo.getOrdersBySales(
         salesId: salesId,
+        branch: branch,
         status: status,
         dateFrom: dateFrom,
         dateTo: dateTo,
