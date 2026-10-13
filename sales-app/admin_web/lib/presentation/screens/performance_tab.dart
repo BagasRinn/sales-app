@@ -216,6 +216,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
 
     final rows = provider.supplierPerformance;
     if (rows.isEmpty) {
+      final err = provider.errorMessage;
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -223,10 +224,15 @@ class _PerformanceTabState extends State<PerformanceTab> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.border),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
-            'Belum ada data supplier untuk periode ini.',
-            style: TextStyle(color: AppColors.textMuted),
+            err != null
+                ? 'Gagal memuat data supplier: $err'
+                : 'Belum ada data supplier untuk periode ini.',
+            style: TextStyle(
+              color: err != null ? AppColors.error : AppColors.textMuted,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
       );

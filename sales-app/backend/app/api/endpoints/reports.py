@@ -715,35 +715,29 @@ def get_supplier_performance(
 
     all_suppliers = sorted(product_suppliers | target_suppliers)
 
-    # 3. Target resolution per supplier (current → carry-over → none).
+    # 3. Target resolution — batched to avoid N+1 queries. For each
+    #    supplier, we want the most recent target with period <= year_month.
+    #    One query returns all candidates; the per-supplier pick is in Python.
+    target_by_supplier: dict = {}
+    if all_suppliers:
+        target_query = db.query(SupplierTarget).filter(
+            SupplierTarget.supplier_name.in_(all_suppliers),
+            SupplierTarget.period <= year_month,
+        )
+        if current_user.get("branch"):
+            target_query = target_query.filter(
+                SupplierTarget.branch == current_user["branch"]
+            )
+        for t in target_query.all():
+            existing = target_by_supplier.get(t.supplier_name)
+            if existing is None or t.period > existing.period:
+                target_by_supplier[t.supplier_name] = t
+
     def resolve_target(name: str) -> tuple[int, bool]:
-        branch_filter = [
-            SupplierTarget.branch == current_user["branch"]
-        ] if current_user.get("branch") else []
-        current = (
-            db.query(SupplierTarget.target_value)
-            .filter(
-                SupplierTarget.supplier_name == name,
-                SupplierTarget.period == year_month,
-                *branch_filter,
-            )
-            .first()
-        )
-        if current is not None:
-            return int(current[0]), True
-        prior = (
-            db.query(SupplierTarget.target_value)
-            .filter(
-                SupplierTarget.supplier_name == name,
-                SupplierTarget.period < year_month,
-                *branch_filter,
-            )
-            .order_by(SupplierTarget.period.desc())
-            .first()
-        )
-        if prior is not None:
-            return int(prior[0]), True
-        return 0, False
+        t = target_by_supplier.get(name)
+        if t is None:
+            return 0, False
+        return int(t.target_value), True
 
     # 4. Revenue per supplier using _three_layer_breakdown (Python iteration
     #    matches the rest of the app and avoids duplicating the SQL expression).

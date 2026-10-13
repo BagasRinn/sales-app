@@ -721,11 +721,16 @@ class AdminRepository {
   // ===== Supplier Performance (KPI per Supplier — Performa Sales) =====
   /// Monthly KPI per supplier: revenue vs target, with auto-rollover on
   /// the backend. [yearMonth] = 'YYYY-MM'. Null = current month (server).
+  /// The endpoint batches target lookups but can still take a few seconds
+  /// on a remote DB, so use a 60s receive timeout (vs the default 10s).
   Future<List<SupplierPerformanceRow>> getSupplierPerformance({String? yearMonth}) async {
     final qs = (yearMonth != null && yearMonth.isNotEmpty)
         ? '?year_month=${Uri.encodeComponent(yearMonth)}'
         : '';
-    final data = await _api.get('/reports/supplier-performance$qs');
+    final data = await _api.get(
+      '/reports/supplier-performance$qs',
+      receiveTimeout: const Duration(seconds: 60),
+    );
     return (data as List)
         .cast<Map<String, dynamic>>()
         .map(SupplierPerformanceRow.fromJson)
