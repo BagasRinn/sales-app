@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/order.dart';
 
@@ -534,52 +535,48 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   Future<void> _approveOrder(String orderId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.successBg,
-                    shape: BoxShape.circle,
+      builder: (ctx) => ResponsiveDialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.successBg,
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    const Icon(Icons.check_circle, size: 40, color: AppColors.success),
+              ),
+              const SizedBox(height: 20),
+              const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 8),
+              const Text(
+                'Stok sistem akan dikurangi sesuai jumlah pesanan.',
+                style: AppTextStyles.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Batal'),
+                    ),
                   ),
-                  child:
-                      const Icon(Icons.check_circle, size: 40, color: AppColors.success),
-                ),
-                const SizedBox(height: 20),
-                const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 8),
-                const Text(
-                  'Stok sistem akan dikurangi sesuai jumlah pesanan.',
-                  style: AppTextStyles.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Batal'),
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Setujui'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Setujui'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -618,64 +615,60 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.errorBg,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
+      builder: (ctx) => ResponsiveDialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.errorBg,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 20),
-                const Text('Tolak Pesanan', style: AppTextStyles.headlineSmall),
-                const SizedBox(height: 8),
-                const Text(
-                  'Stok booking akan dikembalikan. Alasan opsional — akan ditampilkan ke sales.',
-                  style: AppTextStyles.bodyMedium,
-                  textAlign: TextAlign.center,
+                child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
+              ),
+              const SizedBox(height: 20),
+              const Text('Tolak Pesanan', style: AppTextStyles.headlineSmall),
+              const SizedBox(height: 8),
+              const Text(
+                'Stok booking akan dikembalikan. Alasan opsional — akan ditampilkan ke sales.',
+                style: AppTextStyles.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Alasan penolakan (opsional)',
+                  hintText: 'Contoh: Data tidak valid, duplikat order, dll.',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Alasan penolakan (opsional)',
-                    hintText: 'Contoh: Data tidak valid, duplikat order, dll.',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Batal'),
-                      ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Batal'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.error,
-                        ),
-                        child: const Text('Tolak'),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.error,
                       ),
+                      child: const Text('Tolak'),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -1737,57 +1730,53 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return ResponsiveAlertDialog(
       title: Text(
         'Diskon: ${widget.namaBarang}',
         style: AppTextStyles.headlineSmall,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Subtotal: Rp ${widget.maxNominal}',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Layer diskon dipotong berurutan dari sisa subtotal.',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 16),
-              _LayerField(
-                label: 'Diskon 1',
-                type: _type1,
-                controller: _ctrl1,
-                maxRunning: widget.maxNominal,
-                onTypeChanged: (t) => _switchType(0, t),
-              ),
-              const SizedBox(height: 12),
-              _LayerField(
-                label: 'Diskon 2',
-                type: _type2,
-                controller: _ctrl2,
-                maxRunning: _runningAfter(1),
-                onTypeChanged: (t) => _switchType(1, t),
-              ),
-              const SizedBox(height: 12),
-              _LayerField(
-                label: 'Diskon 3',
-                type: _type3,
-                controller: _ctrl3,
-                maxRunning: _runningAfter(2),
-                onTypeChanged: (t) => _switchType(2, t),
-              ),
-            ],
-          ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Subtotal: Rp ${widget.maxNominal}',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Layer diskon dipotong berurutan dari sisa subtotal.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 16),
+            _LayerField(
+              label: 'Diskon 1',
+              type: _type1,
+              controller: _ctrl1,
+              maxRunning: widget.maxNominal,
+              onTypeChanged: (t) => _switchType(0, t),
+            ),
+            const SizedBox(height: 12),
+            _LayerField(
+              label: 'Diskon 2',
+              type: _type2,
+              controller: _ctrl2,
+              maxRunning: _runningAfter(1),
+              onTypeChanged: (t) => _switchType(1, t),
+            ),
+            const SizedBox(height: 12),
+            _LayerField(
+              label: 'Diskon 3',
+              type: _type3,
+              controller: _ctrl3,
+              maxRunning: _runningAfter(2),
+              onTypeChanged: (t) => _switchType(2, t),
+            ),
+          ],
         ),
       ),
       actions: [
@@ -1863,17 +1852,20 @@ class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return ResponsiveAlertDialog(
       title: Row(
         children: [
           const Icon(Icons.trending_up, color: AppColors.warning, size: 20),
           const SizedBox(width: 8),
-          Expanded(child: Text('Up Price: ${widget.namaBarang}')),
+          Expanded(
+            child: Text(
+              'Up Price: ${widget.namaBarang}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
-      content: SizedBox(
-        width: 360,
+      content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1986,11 +1978,9 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return ResponsiveAlertDialog(
       title: const Text('Batalkan Item'),
-      content: SizedBox(
-        width: 360,
+      content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

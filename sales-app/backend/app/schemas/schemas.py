@@ -360,6 +360,7 @@ class OrderListWithItemsResponse(BaseSchema):
     total_discount: Optional[int] = None
     order_type: str = 'REGULER'
     invoice_number: Optional[str] = None
+    reject_reason: Optional[str] = None
 
     class Config:
         from_attributes = True

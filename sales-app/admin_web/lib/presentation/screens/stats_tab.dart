@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../../core/web_download.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/order.dart';
@@ -1635,36 +1636,17 @@ class _SalesOverlayDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.zero,
+    return ResponsiveDialog(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final resp = Responsive.of(constraints.maxWidth);
-          // Mobile: full-viewport sheet (jangan fixed 960×600, kalau tidak overflow).
-          // Tablet: 90% viewport, max 960. Desktop: 960×600.
-          final width = resp.isMobile
-              ? constraints.maxWidth
-              : (constraints.maxWidth * 0.94).toDouble().clamp(0.0, 960.0);
-          final height = resp.isMobile
-              ? constraints.maxHeight
-              : (constraints.maxHeight * 0.9).toDouble().clamp(0.0, 600.0);
-          return Material(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(resp.isMobile ? 0 : 16),
-            elevation: 8,
-            child: SizedBox(
-              width: width,
-              height: height,
-              child: _SalesDetailDialogBody(
-                provider: provider,
-                sales: sales,
-                branch: branch,
-                onClose: onClose,
-                initialStatus: initialStatus,
-                compact: resp.isMobile,
-              ),
-            ),
+          return _SalesDetailDialogBody(
+            provider: provider,
+            sales: sales,
+            branch: branch,
+            onClose: onClose,
+            initialStatus: initialStatus,
+            compact: resp.isMobile,
           );
         },
       ),

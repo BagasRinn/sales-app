@@ -56,3 +56,15 @@ class Responsive {
   /// Tinggi top bar. Mobile lebih pendek supaya tidak makan ruang layar kecil.
   double get topBarHeight => isMobile ? 56 : 64;
 }
+
+/// Spacing helpers that adapt to device class.
+extension ResponsiveSpacing on Responsive {
+  /// Standard gap between elements. Mobile 12px, desktop 16px.
+  double get gap => isMobile ? 12 : 16;
+
+  /// Standard gap between sections. Mobile 16px, desktop 24px.
+  double get sectionGap => isMobile ? 16 : 24;
+
+  /// Page-level horizontal padding (alias of contentPadding for clarity).
+  double get pagePadding => contentPadding;
+}
