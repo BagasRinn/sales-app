@@ -14,6 +14,51 @@ import '../providers/admin_provider.dart';
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
 
+/// Aggregate per-sales performance items into a single total item.
+/// Dipakai oleh card "Total Semua Sales" di section Performa Cabang.
+/// Returns null kalau list kosong (card disembunyikan di kasus ini).
+SalesPerformanceDashboardItem? aggregateDashboardPerformance(
+  List<SalesPerformanceDashboardItem> items,
+) {
+  if (items.isEmpty) return null;
+  int approvedMtdCount = 0, approvedMtdRevenue = 0;
+  int pendingMtdCount = 0, pendingMtdRevenue = 0;
+  int rejectedMtdCount = 0, rejectedMtdRevenue = 0;
+  int approvedTodayCount = 0, approvedTodayRevenue = 0;
+  int pendingTodayCount = 0, pendingTodayRevenue = 0;
+  int rejectedTodayCount = 0, rejectedTodayRevenue = 0;
+  for (final s in items) {
+    approvedMtdCount += s.approvedMtdCount;
+    approvedMtdRevenue += s.approvedMtdRevenue;
+    pendingMtdCount += s.pendingMtdCount;
+    pendingMtdRevenue += s.pendingMtdRevenue;
+    rejectedMtdCount += s.rejectedMtdCount;
+    rejectedMtdRevenue += s.rejectedMtdRevenue;
+    approvedTodayCount += s.approvedTodayCount;
+    approvedTodayRevenue += s.approvedTodayRevenue;
+    pendingTodayCount += s.pendingTodayCount;
+    pendingTodayRevenue += s.pendingTodayRevenue;
+    rejectedTodayCount += s.rejectedTodayCount;
+    rejectedTodayRevenue += s.rejectedTodayRevenue;
+  }
+  return SalesPerformanceDashboardItem(
+    userId: '',
+    username: '',
+    approvedMtdCount: approvedMtdCount,
+    approvedMtdRevenue: approvedMtdRevenue,
+    pendingMtdCount: pendingMtdCount,
+    pendingMtdRevenue: pendingMtdRevenue,
+    rejectedMtdCount: rejectedMtdCount,
+    rejectedMtdRevenue: rejectedMtdRevenue,
+    approvedTodayCount: approvedTodayCount,
+    approvedTodayRevenue: approvedTodayRevenue,
+    pendingTodayCount: pendingTodayCount,
+    pendingTodayRevenue: pendingTodayRevenue,
+    rejectedTodayCount: rejectedTodayCount,
+    rejectedTodayRevenue: rejectedTodayRevenue,
+  );
+}
+
 class StatsTab extends StatefulWidget {
   final String role;
 
@@ -192,6 +237,71 @@ class _StatsTabState extends State<StatsTab> {
     if (kIsWeb) {
       triggerBrowserDownload(bytes, filename);
     }
+  }
+
+  Widget _buildBranchPerformanceSection(AdminProvider provider) {
+    final loading = provider.dashboardPerformanceLoading;
+    final sales = provider.dashboardPerformance;
+
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (sales.isEmpty) {
+      // Tanpa data sales, tidak ada yang bisa diagregasi — section kosong
+      // supaya tidak misleading.
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Text(
+            'Belum ada data performa cabang.',
+            style: TextStyle(color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    final aggregate = aggregateDashboardPerformance(sales)!;
+    return _BranchPerformanceCard(
+      total: aggregate,
+      onTapSection: (status) => _openBranchDetail(provider, initialStatus: status),
+    );
+  }
+
+  void _openBranchDetail(
+    AdminProvider provider, {
+    String? initialStatus,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(32),
+        child: _SalesOverlayDialog(
+          provider: provider,
+          // null = mode "Total Semua Sales" — popup akan expose filter
+          // per sales di sidebar.
+          sales: null,
+          initialStatus: initialStatus,
+          onClose: () {
+            provider.clearSalesDetailOrders();
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildSalesPerformanceSection(AdminProvider provider) {
@@ -410,9 +520,15 @@ class _StatsTabState extends State<StatsTab> {
               ],
             ),
 
-            // MANAGER & SUPERVISOR: Performa Sales quick summary
+            // MANAGER & SUPERVISOR: Performa Cabang (aggregate) + Performa Sales
             if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') ...[
               const SizedBox(height: 24),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12, left: 4),
+                child: Text('Performa Cabang', style: AppTextStyles.labelLarge),
+              ),
+              _buildBranchPerformanceSection(provider),
+              const SizedBox(height: 20),
               const Padding(
                 padding: EdgeInsets.only(bottom: 12, left: 4),
                 child: Text('Performa Sales', style: AppTextStyles.labelLarge),
@@ -1110,10 +1226,267 @@ class _SalesPerformanceCard extends StatelessWidget {
   }
 }
 
+// ===== Card untuk "Performa Cabang" (total aggregate) =====
+// Bentuknya mengikuti _SalesPerformanceCard tapi:
+//   - Lebar membentang 1 baris (Wrap / ListView akan full-width)
+//   - Tanpa avatar individu — pakai icon grup
+//   - Judul "Total Semua Sales"
+//   - Klik membuka popup dengan filter per sales
+class _BranchPerformanceCard extends StatelessWidget {
+  final SalesPerformanceDashboardItem total;
+  /// Sama semantics dengan _SalesPerformanceCard: null = semua status.
+  final ValueChanged<String?> onTapSection;
+
+  const _BranchPerformanceCard({required this.total, required this.onTapSection});
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.35),
+            width: 1.5,
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 600;
+            final statusSections = <Widget>[
+              _buildStatusSection(
+                label: 'Disetujui',
+                mtdCount: total.approvedMtdCount,
+                mtdRevenue: total.approvedMtdRevenue,
+                todayCount: total.approvedTodayCount,
+                todayRevenue: total.approvedTodayRevenue,
+                color: AppColors.success,
+                onTap: () => onTapSection('APPROVED'),
+              ),
+              _buildStatusSection(
+                label: 'Menunggu',
+                mtdCount: total.pendingMtdCount,
+                mtdRevenue: total.pendingMtdRevenue,
+                todayCount: total.pendingTodayCount,
+                todayRevenue: total.pendingTodayRevenue,
+                color: AppColors.warning,
+                onTap: () => onTapSection('PENDING'),
+              ),
+              _buildStatusSection(
+                label: 'Ditolak',
+                mtdCount: total.rejectedMtdCount,
+                mtdRevenue: total.rejectedMtdRevenue,
+                todayCount: total.rejectedTodayCount,
+                todayRevenue: total.rejectedTodayRevenue,
+                color: AppColors.error,
+                onTap: () => onTapSection('REJECTED'),
+              ),
+            ];
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header — icon grup + judul + total seluruh MTD
+                GestureDetector(
+                  onTap: () => onTapSection(null),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.groups_outlined,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Total Semua Sales',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'Agregat seluruh sales di branch ini',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textMuted,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.textMuted,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Status breakdown — full row di desktop, stack di mobile
+                if (isNarrow)
+                  Column(
+                    children: [
+                      for (int i = 0; i < statusSections.length; i++) ...[
+                        statusSections[i],
+                        if (i < statusSections.length - 1)
+                          const Divider(height: 20),
+                      ],
+                    ],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (int i = 0; i < statusSections.length; i++) ...[
+                        Expanded(child: statusSections[i]),
+                        if (i < statusSections.length - 1)
+                          Container(
+                            width: 1,
+                            height: 60,
+                            color: AppColors.border,
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                      ],
+                    ],
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusSection({
+    required String label,
+    required int mtdCount,
+    required int mtdRevenue,
+    required int todayCount,
+    required int todayRevenue,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MTD',
+                      style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$mtdCount order',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Rp ${_fmt(mtdRevenue)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Hari ini',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$todayCount order',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Rp ${_fmt(todayRevenue)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ===== Popup detail order untuk sales performance card =====
+// sales nullable: null = mode "Total Semua Sales" (popup dari card Performa
+// Cabang). Saat null, sidebar punya tambahan dropdown filter per sales.
 class _SalesOverlayDialog extends StatelessWidget {
   final AdminProvider provider;
-  final SalesPerformanceDashboardItem sales;
+  final SalesPerformanceDashboardItem? sales;
   final VoidCallback onClose;
   final String? initialStatus;
 
@@ -1150,7 +1523,9 @@ class _SalesOverlayDialog extends StatelessWidget {
 
 class _SalesDetailDialogBody extends StatefulWidget {
   final AdminProvider provider;
-  final SalesPerformanceDashboardItem sales;
+  /// Null = mode "Total Semua Sales" (popup dari card Performa Cabang).
+  /// Saat null, user bisa filter per sales via dropdown di sidebar.
+  final SalesPerformanceDashboardItem? sales;
   final VoidCallback onClose;
   /// Status pre-applied saat dialog pertama dibuka. Null = tampilkan semua
   /// status ("Semua"). Dipakai untuk deep-link dari klik salah satu section
@@ -1170,9 +1545,11 @@ class _SalesDetailDialogBody extends StatefulWidget {
 
 class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   String? _statusFilter;
+  String? _salesFilter; // null = "Semua Sales"; only used in total mode
   DateTime? _dateFrom;
   DateTime? _dateTo;
   bool _showStatusMenu = false;
+  bool _showSalesMenu = false;
   bool _showDateFromPicker = false;
   bool _showDateToPicker = false;
   String? _expandedOrderId;
@@ -1196,8 +1573,14 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   }
 
   void _applyFilters() {
+    // Saat mode sales tertentu (widget.sales != null), abaikan _salesFilter
+    // dan pakai userId sales tersebut. Saat mode total (widget.sales == null),
+    // _salesFilter mengontrol filter per sales.
+    final String? effectiveSalesId = widget.sales != null
+        ? widget.sales!.userId
+        : _salesFilter;
     widget.provider.loadSalesDetailOrders(
-      salesId: widget.sales.userId,
+      salesId: effectiveSalesId,
       status: _statusFilter,
       dateFrom: _dateFrom,
       dateTo: _dateTo,
@@ -1234,10 +1617,25 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     return _statusLabel(_statusFilter!);
   }
 
+  String _currentSalesLabel(List<SalesPerformanceDashboardItem> salesList) {
+    if (_salesFilter == null) return 'Semua Sales';
+    final match = salesList.where((s) => s.userId == _salesFilter).toList();
+    if (match.isEmpty) return 'Semua Sales';
+    return match.first.displayName;
+  }
+
   void _selectStatus(String? v) {
     setState(() {
       _statusFilter = v;
       _showStatusMenu = false;
+    });
+    _applyFilters();
+  }
+
+  void _selectSales(String? v) {
+    setState(() {
+      _salesFilter = v;
+      _showSalesMenu = false;
     });
     _applyFilters();
   }
@@ -1270,11 +1668,16 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final totalDiscount = orders.fold<int>(0, (sum, o) => sum + o.totalDiscount);
     final totalUpPrice = orders.fold<int>(0, (sum, o) => sum + o.totalUpPrice);
 
+    final salesList = widget.sales == null
+        ? provider.dashboardPerformance
+        : const <SalesPerformanceDashboardItem>[];
+
     return GestureDetector(
       onTap: () {
         // Close any open picker menus
         setState(() {
           _showStatusMenu = false;
+          _showSalesMenu = false;
           _showDateFromPicker = false;
           _showDateToPicker = false;
         });
@@ -1292,36 +1695,68 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                    child: Text(
-                      widget.sales.displayName.isNotEmpty
-                          ? widget.sales.displayName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                  if (widget.sales != null) ...[
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        widget.sales!.displayName.isNotEmpty
+                            ? widget.sales!.displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.sales.displayName,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                        ),
-                        Text(
-                          '@${widget.sales.username}',
-                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.sales!.displayName,
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          Text(
+                            '@${widget.sales!.username}',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.groups_outlined,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Total Semua Sales',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          Text(
+                            'Pesanan dari seluruh sales di branch ini',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: widget.onClose,
@@ -1433,6 +1868,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                               onTap: () {
                                 setState(() {
                                   _showStatusMenu = !_showStatusMenu;
+                                  _showSalesMenu = false;
                                   _showDateFromPicker = false;
                                   _showDateToPicker = false;
                                 });
@@ -1456,6 +1892,39 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                 ),
                               ),
                             ),
+                            // Sales filter — hanya muncul di mode "Total Semua Sales"
+                            if (widget.sales == null) ...[
+                              const SizedBox(height: 10),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _showSalesMenu = !_showSalesMenu;
+                                    _showStatusMenu = false;
+                                    _showDateFromPicker = false;
+                                    _showDateToPicker = false;
+                                  });
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: AppColors.border),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        _currentSalesLabel(salesList),
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.arrow_drop_down, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             // Date from button
                             GestureDetector(
@@ -1464,6 +1933,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   _showDateFromPicker = !_showDateFromPicker;
                                   _showDateToPicker = false;
                                   _showStatusMenu = false;
+                                  _showSalesMenu = false;
                                 });
                               },
                               child: Container(
@@ -1493,6 +1963,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                   _showDateToPicker = !_showDateToPicker;
                                   _showDateFromPicker = false;
                                   _showStatusMenu = false;
+                                  _showSalesMenu = false;
                                 });
                               },
                               child: Container(
@@ -1556,6 +2027,34 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                     _statusMenuItem('REJECTED', 'Ditolak'),
                                     _statusMenuItem('CANCELLED', 'Dibatalkan'),
                                   ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Sales dropdown menu (hanya di mode total)
+                        if (_showSalesMenu)
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(6),
+                              color: AppColors.surface,
+                              child: Container(
+                                constraints: const BoxConstraints(maxHeight: 280),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _salesMenuItem(null, 'Semua Sales'),
+                                      ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1977,6 +2476,27 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
         color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
         child: Text(
           label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? AppColors.primary : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _salesMenuItem(String? value, String label) {
+    final isSelected = _salesFilter == value;
+    return GestureDetector(
+      onTap: () => _selectSales(value),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,

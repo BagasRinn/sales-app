@@ -1066,7 +1066,7 @@ class AdminProvider extends ChangeNotifier {
   DateTime? get salesDetailDateTo => _salesDetailDateTo;
 
   Future<void> loadSalesDetailOrders({
-    required String salesId,
+    String? salesId,
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
