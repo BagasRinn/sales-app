@@ -989,6 +989,28 @@ class AdminProvider extends ChangeNotifier {
     }
   }
 
+  /// Upsert a supplier's monthly target. Backend: ADMIN/SUPERVISOR only.
+  /// Throws on failure (caller shows SnackBar).
+  Future<void> updateSupplierTarget({
+    required String branch,
+    required String supplierName,
+    required String period,
+    required int targetValue,
+  }) async {
+    try {
+      await _repo.updateSupplierTarget(
+        branch: branch,
+        supplierName: supplierName,
+        period: period,
+        targetValue: targetValue,
+      );
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   void clearError() {
     _errorMessage = null;
     notifyListeners();

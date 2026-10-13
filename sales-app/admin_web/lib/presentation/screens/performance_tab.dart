@@ -9,6 +9,7 @@ import '../../data/models/sales_target.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../data/models/supplier_target.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/supplier_target_edit_dialog.dart';
 
 String _fmt(int amount) =>
     NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
@@ -304,7 +305,13 @@ class _PerformanceTabState extends State<PerformanceTab> {
     AdminProvider provider,
     SupplierPerformanceRow row,
   ) async {
-    // Implemented in Task 8.
+    final ym = _yearMonth(_fromDate);
+    await showSupplierTargetEditDialog(
+      context,
+      provider,
+      supplierName: row.supplierName,
+      period: ym,
+    );
   }
 
   Widget _buildLeaderboard(
