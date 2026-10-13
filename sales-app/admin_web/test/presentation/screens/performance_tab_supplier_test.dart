@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:admin_web/data/repositories/api_service.dart';
 import 'package:admin_web/data/repositories/admin_repository.dart';
+import 'package:admin_web/core/design_system.dart';
 import 'package:admin_web/presentation/providers/admin_provider.dart';
 import 'package:admin_web/presentation/screens/performance_tab.dart';
 import 'package:dio/dio.dart';
@@ -98,6 +99,64 @@ void main() {
     await tester.pumpWidget(wrap(provider));
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
     expect(find.text('100%'), findsOneWidget);
+    // Verify the color is green (success) and font is bold.
+    final textWidget = tester.widget<Text>(find.text('100%'));
+    expect(textWidget.style?.color, AppColors.success);
+    expect(textWidget.style?.fontWeight, FontWeight.bold);
+  });
+
+  testWidgets('renders 81% in warning (yellow) color', (tester) async {
+    final fake = _FakeApi();
+    fake.getResponse = [
+      {
+        'supplier_name': 'PT A',
+        'target': 1000,
+        'has_target': true,
+        'value': 810,
+        'pencapaian': 81.0,
+      },
+    ];
+    final provider = AdminProvider(AdminRepository(fake));
+    await tester.pumpWidget(wrap(provider));
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    final textWidget = tester.widget<Text>(find.text('81%'));
+    expect(textWidget.style?.color, AppColors.warning);
+  });
+
+  testWidgets('renders 80% in error (red) color (boundary)', (tester) async {
+    final fake = _FakeApi();
+    fake.getResponse = [
+      {
+        'supplier_name': 'PT B',
+        'target': 1000,
+        'has_target': true,
+        'value': 800,
+        'pencapaian': 80.0,
+      },
+    ];
+    final provider = AdminProvider(AdminRepository(fake));
+    await tester.pumpWidget(wrap(provider));
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    final textWidget = tester.widget<Text>(find.text('80%'));
+    expect(textWidget.style?.color, AppColors.error);
+  });
+
+  testWidgets('renders 0% in error (red) color', (tester) async {
+    final fake = _FakeApi();
+    fake.getResponse = [
+      {
+        'supplier_name': 'PT C',
+        'target': 1000,
+        'has_target': true,
+        'value': 0,
+        'pencapaian': 0.0,
+      },
+    ];
+    final provider = AdminProvider(AdminRepository(fake));
+    await tester.pumpWidget(wrap(provider));
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    final textWidget = tester.widget<Text>(find.text('0%'));
+    expect(textWidget.style?.color, AppColors.error);
   });
 
   testWidgets('renders "—" when hasTarget is false', (tester) async {

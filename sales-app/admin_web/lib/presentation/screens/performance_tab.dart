@@ -275,11 +275,14 @@ class _PerformanceTabState extends State<PerformanceTab> {
             FontWeight pencapaianWeight = FontWeight.normal;
             if (row.pencapaian != null) {
               if (row.pencapaian! >= 100) {
+                // 100%+ → hijau (target tercapai)
                 pencapaianColor = AppColors.success;
                 pencapaianWeight = FontWeight.bold;
-              } else if (row.pencapaian! >= 50) {
+              } else if (row.pencapaian! >= 81) {
+                // 81% - 99% → kuning (mendekati target)
                 pencapaianColor = AppColors.warning;
               } else {
+                // 0% - 80% → merah (jauh dari target)
                 pencapaianColor = AppColors.error;
               }
             }
