@@ -13,6 +13,8 @@ import '../models/sales_performance.dart';
 import '../models/sales_target.dart';
 import '../models/bulletin.dart';
 import '../models/branch_report.dart';
+import '../models/supplier_target.dart';
+import '../models/supplier_performance.dart';
 
 class AdminRepository {
   final ApiService _api;
@@ -708,5 +710,48 @@ class AdminRepository {
     return list
         .map((e) => BranchStockSummary.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ===== Supplier Performance (KPI per Supplier — Performa Sales) =====
+  /// Monthly KPI per supplier: revenue vs target, with auto-rollover on
+  /// the backend. [yearMonth] = 'YYYY-MM'. Null = current month (server).
+  Future<List<SupplierPerformanceRow>> getSupplierPerformance({String? yearMonth}) async {
+    final qs = (yearMonth != null && yearMonth.isNotEmpty)
+        ? '?year_month=${Uri.encodeComponent(yearMonth)}'
+        : '';
+    final data = await _api.get('/reports/supplier-performance$qs');
+    return (data as List)
+        .cast<Map<String, dynamic>>()
+        .map(SupplierPerformanceRow.fromJson)
+        .toList();
+  }
+
+  /// List all supplier targets for the user's branch, optionally filtered
+  /// by period ('YYYY-MM').
+  Future<List<SupplierTarget>> getSupplierTargets({String? period}) async {
+    final qs = (period != null && period.isNotEmpty)
+        ? '?period=${Uri.encodeComponent(period)}'
+        : '';
+    final data = await _api.get('/supplier-targets$qs');
+    return (data as List)
+        .cast<Map<String, dynamic>>()
+        .map(SupplierTarget.fromJson)
+        .toList();
+  }
+
+  /// Upsert the target value for a (branch, supplier, period) triple.
+  /// Restricted to ADMIN/SUPERVISOR on the backend.
+  Future<SupplierTarget> updateSupplierTarget({
+    required String branch,
+    required String supplierName,
+    required String period,
+    required int targetValue,
+  }) async {
+    final path = '/supplier-targets/'
+        '${Uri.encodeComponent(branch)}/'
+        '${Uri.encodeComponent(supplierName)}/'
+        '${Uri.encodeComponent(period)}';
+    final data = await _api.put(path, body: {'target_value': targetValue});
+    return SupplierTarget.fromJson(data as Map<String, dynamic>);
   }
 }

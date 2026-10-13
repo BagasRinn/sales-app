@@ -389,9 +389,15 @@ class CustomerCreate(CustomerBase):
 
 
 class CustomerUpdate(BaseSchema):
-    nama_toko: Optional[str] = None
-    alamat: Optional[str] = None
-    kode_area: Optional[str] = None
+    # nama_toko + alamat adalah identity toko (lihat CustomerBase.comment)
+    # — wajib non-empty seperti di CustomerCreate. Sebelumnya field ini
+    # hanya `Optional[str] = None` tanpa min_length, sehingga PUT body
+    # `{"alamat": ""}` lolos schema, tersimpan di DB, lalu GET berikutnya
+    # crash dengan Pydantic ValidationError. Min_length=1 di sini menutup
+    # celah input.
+    nama_toko: Optional[str] = Field(None, min_length=1, max_length=200)
+    alamat: Optional[str] = Field(None, min_length=1, max_length=500)
+    kode_area: Optional[str] = None  # deskriptif, bukan identity
 
 
 class CustomerAssignmentsPut(BaseSchema):
