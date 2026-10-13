@@ -206,6 +206,7 @@ class _DashboardContentState extends State<_DashboardContent>
     // loadAll + auto-refresh dijalankan SETELAH frame pertama selesai — supaya
     // notifyListeners tidak terjadi di tengah build phase (yang bisa trigger _dirty).
     _adminProvider.setUserRole(widget.role);
+    _adminProvider.setUserBranch(widget.branch);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _adminProvider.loadAll();

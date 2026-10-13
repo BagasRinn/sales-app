@@ -166,10 +166,17 @@ class AdminProvider extends ChangeNotifier {
   bool get isManager => _userRole == 'MANAGER';
   bool get isSupervisor => _userRole == 'SUPERVISOR';
 
+  String? _userBranch;
+  String? get userBranch => _userBranch;
+
   void setUserRole(String role) {
     // Tidak notifyListeners: _userRole cuma dipakai loadAll() untuk skip endpoint
     // admin-only. UI pakai widget.role langsung dari DashboardScreen.
     _userRole = role;
+  }
+
+  void setUserBranch(String? branch) {
+    _userBranch = branch;
   }
 
   /// Start auto-refresh. Call from dashboard initState.

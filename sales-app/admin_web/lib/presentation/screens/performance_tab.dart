@@ -6,6 +6,8 @@ import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
+import '../../data/models/supplier_performance.dart';
+import '../../data/models/supplier_target.dart';
 import '../providers/admin_provider.dart';
 
 String _fmt(int amount) =>
@@ -47,7 +49,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
     provider.loadSalesTargets(
       period: '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}',
     );
-    provider.loadProductSalesStats(yearMonth: ym);
+    provider.loadSupplierPerformance(yearMonth: ym);
   }
 
   String _yearMonth(DateTime d) =>
@@ -127,10 +129,10 @@ class _PerformanceTabState extends State<PerformanceTab> {
               _buildPeriodFilterSection(),
               const SizedBox(height: 24),
 
-              // Section 1: KPI Cards — per-product monthly 'terjual' stats
-              _buildSectionTitle('KPI per Produk'),
+              // Section 1: KPI per Supplier — revenue & target with auto-rollover
+              _buildSectionTitle('KPI per Supplier'),
               const SizedBox(height: 12),
-              _buildProductKpiCards(provider),
+              _buildSupplierPerformanceTable(provider),
               const SizedBox(height: 32),
 
               // Section 2: Leaderboard
@@ -199,11 +201,8 @@ class _PerformanceTabState extends State<PerformanceTab> {
     );
   }
 
-  Widget _buildProductKpiCards(AdminProvider provider) {
-    final stats = provider.productSalesStats;
-    final loading = provider.productSalesStatsLoading;
-
-    if (loading && stats.isEmpty) {
+  Widget _buildSupplierPerformanceTable(AdminProvider provider) {
+    if (provider.supplierPerformanceLoading) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -215,7 +214,8 @@ class _PerformanceTabState extends State<PerformanceTab> {
       );
     }
 
-    if (stats.isEmpty) {
+    final rows = provider.supplierPerformance;
+    if (rows.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -225,91 +225,86 @@ class _PerformanceTabState extends State<PerformanceTab> {
         ),
         child: const Center(
           child: Text(
-            'Belum ada data produk untuk periode ini.',
+            'Belum ada data supplier untuk periode ini.',
             style: TextStyle(color: AppColors.textMuted),
           ),
         ),
       );
     }
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: stats.map((stat) {
-        final nama = (stat['nama_barang'] as String?) ?? '-';
-        final stok = (stat['stok_sistem'] as int?) ?? 0;
-        final terjual = (stat['terjual'] as int?) ?? 0;
+    final canEdit = provider.isAdmin || provider.isSupervisor;
 
-        return Container(
-          width: 200,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppColors.success.withValues(alpha: 0.1),
-                    child: Text(
-                      nama.isNotEmpty ? nama[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      nama,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 24,
+          headingRowHeight: 44,
+          dataRowMinHeight: 44,
+          dataRowMaxHeight: 56,
+          columns: const [
+            DataColumn(label: Text('Supplier')),
+            DataColumn(label: Text('Target'), numeric: true),
+            DataColumn(label: Text('Value'), numeric: true),
+            DataColumn(label: Text('Pencapaian'), numeric: true),
+            DataColumn(label: Text('')),
+          ],
+          rows: rows.map((row) {
+            final pencapaianText = row.pencapaian == null
+                ? '—'
+                : '${row.pencapaian!.toStringAsFixed(0)}%';
+            Color pencapaianColor = AppColors.textMuted;
+            FontWeight pencapaianWeight = FontWeight.normal;
+            if (row.pencapaian != null) {
+              if (row.pencapaian! >= 100) {
+                pencapaianColor = AppColors.success;
+                pencapaianWeight = FontWeight.bold;
+              } else if (row.pencapaian! >= 50) {
+                pencapaianColor = AppColors.warning;
+              } else {
+                pencapaianColor = AppColors.error;
+              }
+            }
+            return DataRow(cells: [
+              DataCell(Text(
+                row.supplierName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              )),
+              DataCell(Text('Rp ${_fmt(row.target)}')),
+              DataCell(Text('Rp ${_fmt(row.value)}')),
+              DataCell(Text(
+                pencapaianText,
+                style: TextStyle(
+                  color: pencapaianColor,
+                  fontWeight: pencapaianWeight,
+                ),
+              )),
+              DataCell(
+                canEdit
+                    ? IconButton(
+                        icon: const Icon(Icons.edit, size: 18),
+                        tooltip: 'Edit target',
+                        onPressed: () => _openTargetDialog(provider, row),
+                      )
+                    : const SizedBox.shrink(),
               ),
-              const SizedBox(height: 12),
-              _productKpiRow(Icons.inventory_2_outlined, 'Stok', stok.toString()),
-              const SizedBox(height: 6),
-              _productKpiRow(Icons.shopping_cart_checkout, 'Terjual', terjual.toString()),
-            ],
-          ),
-        );
-      }).toList(),
+            ]);
+          }).toList(),
+        ),
+      ),
     );
   }
 
-  Widget _productKpiRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: AppColors.textMuted),
-        const SizedBox(width: 4),
-        Text(
-          '$label: ',
-          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
-    );
+  Future<void> _openTargetDialog(
+    AdminProvider provider,
+    SupplierPerformanceRow row,
+  ) async {
+    // Implemented in Task 8.
   }
 
   Widget _buildLeaderboard(
