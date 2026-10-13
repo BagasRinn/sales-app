@@ -405,6 +405,36 @@ class SalesTarget(Base):
     user = relationship("User")
 
 
+class SupplierTarget(Base):
+    """Target penjualan per supplier per periode (bulanan).
+
+    Supplier di sini adalah free-text `Product.nama_supplier` (VARCHAR, bukan FK).
+    Carry-over dari bulan sebelumnya di-handle di read-time di endpoint, bukan
+    via trigger — supaya satu source of truth (row eksplisit saja di tabel).
+    """
+    __tablename__ = "supplier_targets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch = Column(String(20), nullable=False, index=True)
+    supplier_name = Column(String, nullable=False)
+    period = Column(String(7), nullable=False, index=True)
+    target_value = Column(BigInteger, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "branch",
+            "supplier_name",
+            "period",
+            name="uq_supplier_targets_branch_supplier_period",
+        ),
+        Index("ix_supplier_targets_branch_period", "branch", "period"),
+    )
+
+
 class Bulletin(Base):
     __tablename__ = "bulletins"
     __table_args__ = (
