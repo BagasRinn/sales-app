@@ -1,69 +1,140 @@
-# Sales App — Project Magang
+# Sales Order App
 
-Aplikasi sales internal: mobile app (sales), admin web panel, dan backend API.
+Aplikasi manajemen order sales berbasis offline-sync. Ada tiga komponen utama:
 
-> Lihat [`PRD.md`](PRD.md) dan [`PRD-rev.md`](PRD-rev.md) untuk requirements lengkap.
+| Komponen | Stack | Port Default |
+|----------|-------|-------------|
+| Mobile (sales) | Flutter | - |
+| Admin Web | Flutter Web | 8080 |
+| Backend API | Python FastAPI | 8000 |
 
-## Struktur Repo
+## Arsitektur Singkat
+
+Sales di lapangan pakai mobile app untuk lihat katalog, cek stok, dan bikin order. Admin manage semuanya dari web — approve order, sinkronisasi stok dari Google Sheets, tracking performa sales, dll.
+
+Stok itu shared resource antara sales dan admin. Ada mekanisme `stok_booking` supaya race condition dihindari: saat sales checkout, stok langsung di-booking. Admin approve = stok dikurangi permanen; reject/cancel/expiry = stok booking dibebaskan.
+
+Sinkronisasi dari Google Sheets memastikan stok_terakhir selalu sinkron dengan data master.
+
+## Struktur Folder
 
 ```
 .
-├── PRD.md / PRD-rev.md
-└── sales-app/
-    ├── lib/
-    ├── android/  ios/
-    ├── admin_web/
-    │   └── lib/
-    └── backend/
-        ├── app/
-        ├── requirements.txt
-        └── .env     
+├── sales-app/
+│   ├── lib/                    # Mobile (sales)
+│   ├── admin_web/lib/           # Admin web panel
+│   └── backend/
+│       ├── app/
+│       │   ├── api/endpoints/  # Route handlers
+│       │   ├── core/           # Auth, security, utils
+│       │   ├── models/         # SQLAlchemy models
+│       │   ├── schemas/        # Pydantic schemas
+│       │   └── services/       # Business logic (sync, storage, etc.)
+│       ├── requirements.txt
+│       └── .env
 ```
 
-## Komponen
+## Setup Dev
 
-| Komponen    | Stack        | Lokasi                          |
-|-------------|--------------|---------------------------------|
-| Mobile      | Flutter      | `sales-app/`                    |
-| Admin Web   | Flutter Web  | `sales-app/admin_web/`          |
-| Backend API | Python       | `sales-app/backend/`            |
+### Backend
 
-## Quick Start (dev lokal)
-
-### 1. Backend (Python)
 ```bash
 cd sales-app/backend
 python -m venv venv
-source venv/bin/activate          
+# Windows:
+.\venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
 pip install -r requirements.txt
-cp .env.example .env              
-python -m app                     
+cp .env.example .env
+# Edit .env sesuai environment lo
+
+python -m app
 ```
 
-### 2. Admin Web (Flutter)
+API jalan di `http://localhost:8000`. Docs Swagger ada di `/docs`.
+
+### Admin Web
+
 ```bash
 cd sales-app/admin_web
 flutter pub get
 flutter run -d chrome
 ```
 
-### 3. Mobile (Flutter)
+### Mobile
+
 ```bash
 cd sales-app
 flutter pub get
-flutter run                       # pilih device Android/iOS
+flutter run
 ```
 
-## Secrets & Credentials
+Pilih device yang mau dipake (emulator atau fisik via USB debugging).
 
-⚠️ **Jangan pernah commit:**
-- `sales-app/credentials.json` — service account key
-- `sales-app/backend/.env` — environment variables
-- File `*.pem`, `*.key`, `*.service-account.json`
+## Variabel Environment (.env)
 
-Semua sudah masuk `.gitignore`. Kalau pernah terlanjur ke-push, **rotate credentials segera** dan hapus dari history Git (lihat `git filter-repo` / BFG).
+```
+# Database (Supabase PostgreSQL)
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
-## Catatan
+# JWT secrets
+JWT_SECRET_KEY=...
+JWT_REFRESH_SECRET_KEY=...
 
-- `pubspec.lock` **di-commit** agar build reproducible antar mesin.
-- Folder `build/`, `.dart_tool/`, `venv/`, `__pycache__/` di-ignore.
+# Google Sheets (untuk sync stok)
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+SHEETS_SPREADSHEET_ID=...
+
+# Supabase (storage + auth)
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+
+# Opt-in demo user seeding
+SEED_DEMO_USERS=false
+RUN_SCHEDULER=true
+```
+
+## Roles & Permission
+
+| Role | Akses |
+|------|-------|
+| ADMIN | Full write: approve/reject order, edit produk/toko/user, sync Sheets |
+| SUPERVISOR | Read + approve/reject. Bisa manage user dan bulletin di cabangnya |
+| MANAGER | Read-only monitoring semua cabang. Bisa generate laporan lintas cabang |
+| SALES | Buat order, lihat katalog & stok, cancel order sendiri |
+
+## Endpoint API Utama
+
+```
+POST   /api/v1/auth/login
+POST   /api/v1/auth/refresh
+GET    /api/v1/products
+POST   /api/v1/orders
+GET    /api/v1/orders/{id}
+POST   /api/v1/orders/{id}/approve   (ADMIN only)
+POST   /api/v1/orders/{id}/reject    (ADMIN only)
+POST   /api/v1/sync/stok             (ADMIN only)
+GET    /api/v1/reports/performance
+```
+
+Lihat `/docs` untuk daftar lengkap.
+
+## Catatan Deployment
+
+- `pubspec.lock` di-commit — Flutter build jadi deterministic antar mesin.
+- Folder `build/`, `venv/`, `__pycache__/` di-gitignore.
+- Credential files (`credentials.json`, `*.pem`, `*.key`, `.env`) jangan di-commit.
+- Web production build: `cd sales-app/admin_web && flutter build web`
+
+## Troubleshooting
+
+**CORS error setelah login di web**
+→ Set `CORS_ORIGINS` di `.env` ke URL web app lo, contoh: `http://localhost:8080`
+
+**Sync Sheets gagal**
+→ Cek `GOOGLE_SERVICE_ACCOUNT_JSON` dan `SHEETS_SPREADSHEET_ID`. Service account harus punya akses Viewer ke spreadsheet.
+
+**Stok minus / overselling**
+→ Ini seharusnya tidak terjadi kalau mekanismenya bener. Cek apakah ada proses manual yang bypass aplikasi dan langsung nge-hit database.
