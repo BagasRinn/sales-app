@@ -1638,21 +1638,35 @@ class _SalesOverlayDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.zero,
-      child: Material(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 8,
-        child: SizedBox(
-          width: 960,
-          height: 600,
-          child: _SalesDetailDialogBody(
-            provider: provider,
-            sales: sales,
-            branch: branch,
-            onClose: onClose,
-            initialStatus: initialStatus,
-          ),
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final resp = Responsive.of(constraints.maxWidth);
+          // Mobile: full-viewport sheet (jangan fixed 960×600, kalau tidak overflow).
+          // Tablet: 90% viewport, max 960. Desktop: 960×600.
+          final width = resp.isMobile
+              ? constraints.maxWidth
+              : (constraints.maxWidth * 0.94).toDouble().clamp(0.0, 960.0);
+          final height = resp.isMobile
+              ? constraints.maxHeight
+              : (constraints.maxHeight * 0.9).toDouble().clamp(0.0, 600.0);
+          return Material(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(resp.isMobile ? 0 : 16),
+            elevation: 8,
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: _SalesDetailDialogBody(
+                provider: provider,
+                sales: sales,
+                branch: branch,
+                onClose: onClose,
+                initialStatus: initialStatus,
+                compact: resp.isMobile,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1672,6 +1686,9 @@ class _SalesDetailDialogBody extends StatefulWidget {
   /// status ("Semua"). Dipakai untuk deep-link dari klik salah satu section
   /// di dashboard card (Disetujui/Menunggu/Ditolak → APPROVED/PENDING/REJECTED).
   final String? initialStatus;
+  /// true = layout mobile (sidebar stack di atas, full-width).
+  /// false = layout desktop (sidebar 220px di kiri, orders di kanan).
+  final bool compact;
 
   const _SalesDetailDialogBody({
     required this.provider,
@@ -1679,6 +1696,7 @@ class _SalesDetailDialogBody extends StatefulWidget {
     this.branch,
     required this.onClose,
     this.initialStatus,
+    this.compact = false,
   });
 
   @override
@@ -1960,776 +1978,905 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             ),
             // Body: horizontal split
             Expanded(
-              child: Row(
-                children: [
-                  // Left sidebar: summary + filters
-                  Container(
-                    width: 240,
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      color: AppColors.surface,
-                      border: Border(right: BorderSide(color: AppColors.border)),
-                    ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
+              child: widget.compact
+                  ? Column(
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Summary
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Total Order',
-                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                  ),
-                                  Text(
-                                    '$totalOrders',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 22,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Total Revenue',
-                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                  ),
-                                  Text(
-                                    'Rp ${_fmt(totalRevenue)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  if (totalDiscount > 0) ...[
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Total Diskon',
-                                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                    ),
-                                    Text(
-                                      '-Rp ${_fmt(totalDiscount)}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                        color: AppColors.success,
-                                      ),
-                                    ),
-                                  ],
-                                  if (totalUpPrice > 0) ...[
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Total Up Price',
-                                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                    ),
-                                    Text(
-                                      '+Rp ${_fmt(totalUpPrice)}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                        color: AppColors.warning,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Filter',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            // Status filter button
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _showStatusMenu = !_showStatusMenu;
-                                  _showSalesMenu = false;
-                                  _showDateFromPicker = false;
-                                  _showDateToPicker = false;
-                                });
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      _currentStatusLabel(),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    const Spacer(),
-                                    const Icon(Icons.arrow_drop_down, size: 18),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Sales filter — hanya muncul di mode total / per-branch
-                            if (widget.sales == null) ...[
-                              const SizedBox(height: 10),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _showSalesMenu = !_showSalesMenu;
-                                    _showStatusMenu = false;
-                                    _showBranchMenu = false;
-                                    _showDateFromPicker = false;
-                                    _showDateToPicker = false;
-                                  });
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: AppColors.border),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        _currentSalesLabel(salesList),
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const Spacer(),
-                                      const Icon(Icons.arrow_drop_down, size: 18),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                            // Branch filter — hanya muncul di mode total
-                            if (widget.branch == null) ...[
-                              const SizedBox(height: 10),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _showBranchMenu = !_showBranchMenu;
-                                    _showStatusMenu = false;
-                                    _showSalesMenu = false;
-                                    _showDateFromPicker = false;
-                                    _showDateToPicker = false;
-                                  });
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: AppColors.border),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        _currentBranchLabel(branchList),
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const Spacer(),
-                                      const Icon(Icons.arrow_drop_down, size: 18),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 10),
-                            // Date from button
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _showDateFromPicker = !_showDateFromPicker;
-                                  _showDateToPicker = false;
-                                  _showStatusMenu = false;
-                                  _showSalesMenu = false;
-                                  _showBranchMenu = false;
-                                });
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today, size: 13, color: AppColors.textMuted),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
-                                      style: const TextStyle(fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            // Date to button
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _showDateToPicker = !_showDateToPicker;
-                                  _showDateFromPicker = false;
-                                  _showStatusMenu = false;
-                                  _showSalesMenu = false;
-                                  _showBranchMenu = false;
-                                });
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today, size: 13, color: AppColors.textMuted),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
-                                      style: const TextStyle(fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            if (_dateFrom != null || _dateTo != null) ...[
-                              const SizedBox(height: 6),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _dateFrom = null;
-                                    _dateTo = null;
-                                  });
-                                  _applyFilters();
-                                },
-                                child: const Text(
-                                  'Reset tanggal',
-                                  style: TextStyle(fontSize: 11, color: AppColors.info),
-                                ),
-                              ),
-                            ],
-                          ],
+                        _buildCompactSidebar(
+                          totalOrders: totalOrders,
+                          totalRevenue: totalRevenue,
+                          totalDiscount: totalDiscount,
+                          totalUpPrice: totalUpPrice,
+                          salesList: salesList,
+                          branchList: branchList,
                         ),
-                        // Status dropdown menu (inline, not overlay)
-                        if (_showStatusMenu)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(6),
-                              color: AppColors.surface,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _statusMenuItem(null, 'Semua'),
-                                    _statusMenuItem('APPROVED', 'Disetujui'),
-                                    _statusMenuItem('PENDING', 'Menunggu'),
-                                    _statusMenuItem('REJECTED', 'Ditolak'),
-                                    _statusMenuItem('CANCELLED', 'Dibatalkan'),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Sales dropdown menu (hanya di mode total/branch)
-                        if (_showSalesMenu)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(6),
-                              color: AppColors.surface,
-                              child: Container(
-                                constraints: const BoxConstraints(maxHeight: 280),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _salesMenuItem(null, 'Semua Sales'),
-                                      ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Branch dropdown menu (hanya di mode total)
-                        if (_showBranchMenu)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(6),
-                              color: AppColors.surface,
-                              child: Container(
-                                constraints: const BoxConstraints(maxHeight: 240),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.border),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: _branchMenuItems(branchList),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Date from picker
-                        if (_showDateFromPicker)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: _buildDatePicker(
-                              initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
-                              onSelect: _selectDateFrom,
-                              onClose: () => setState(() => _showDateFromPicker = false),
-                            ),
-                          ),
-                        // Date to picker
-                        if (_showDateToPicker)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: _buildDatePicker(
-                              initial: _dateTo ?? DateTime.now(),
-                              onSelect: _selectDateTo,
-                              onClose: () => setState(() => _showDateToPicker = false),
-                            ),
-                          ),
+                        const Divider(height: 1, color: AppColors.border),
+                        Expanded(child: _buildOrderList(orders, loading, error)),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        _buildDesktopSidebar(
+                          totalOrders: totalOrders,
+                          totalRevenue: totalRevenue,
+                          totalDiscount: totalDiscount,
+                          totalUpPrice: totalUpPrice,
+                          salesList: salesList,
+                          branchList: branchList,
+                        ),
+                        Expanded(child: _buildOrderList(orders, loading, error)),
                       ],
                     ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===== Helpers: sidebar (summary + filters) =====
+  //
+  // Pakai 2 varian:
+  // - _buildDesktopSidebar: lebar tetap 240px, border kanan, konten scroll vertikal.
+  // - _buildCompactSidebar: full-width di top, scroll horizontal untuk filter chips,
+  //   tinggi dibatasi supaya tidak makan ruang order list.
+  //
+  // Keduanya share inner content (summary box + filter buttons) yang dibungkus
+  // helper _buildSidebarInner — supaya tidak duplikasi.
+  Widget _buildDesktopSidebar({
+    required int totalOrders,
+    required int totalRevenue,
+    required int totalDiscount,
+    required int totalUpPrice,
+    required List<SalesPerformanceDashboardItem> salesList,
+    required List<SalesPerformanceDashboardItem> branchList,
+  }) {
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.border)),
+      ),
+      child: SingleChildScrollView(
+        child: _buildSidebarInner(
+          totalOrders: totalOrders,
+          totalRevenue: totalRevenue,
+          totalDiscount: totalDiscount,
+          totalUpPrice: totalUpPrice,
+          salesList: salesList,
+          branchList: branchList,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactSidebar({
+    required int totalOrders,
+    required int totalRevenue,
+    required int totalDiscount,
+    required int totalUpPrice,
+    required List<SalesPerformanceDashboardItem> salesList,
+    required List<SalesPerformanceDashboardItem> branchList,
+  }) {
+    // Kompak: summary box di atas (3 angka horizontal), filter chips di bawah.
+    // Tinggi dibatasi max 200px supaya area order list dapat ruang.
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      color: AppColors.surface,
+      child: _buildSidebarInner(
+        totalOrders: totalOrders,
+        totalRevenue: totalRevenue,
+        totalDiscount: totalDiscount,
+        totalUpPrice: totalUpPrice,
+        salesList: salesList,
+        branchList: branchList,
+        compact: true,
+      ),
+    );
+  }
+
+  Widget _buildSidebarInner({
+    required int totalOrders,
+    required int totalRevenue,
+    required int totalDiscount,
+    required int totalUpPrice,
+    required List<SalesPerformanceDashboardItem> salesList,
+    required List<SalesPerformanceDashboardItem> branchList,
+    bool compact = false,
+  }) {
+    final summaryBox = Container(
+      padding: EdgeInsets.all(compact ? 10 : 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.15),
+        ),
+      ),
+      child: compact
+          ? Row(
+              children: [
+                _buildSummaryStat(
+                  label: 'Order',
+                  value: '$totalOrders',
+                  color: AppColors.primary,
+                  isLarge: true,
+                ),
+                const SizedBox(width: 12),
+                _buildSummaryStat(
+                  label: 'Revenue',
+                  value: 'Rp ${_fmt(totalRevenue)}',
+                  color: AppColors.primary,
+                  isLarge: true,
+                ),
+                if (totalUpPrice > 0) ...[
+                  const SizedBox(width: 12),
+                  _buildSummaryStat(
+                    label: 'Up Price',
+                    value: '+Rp ${_fmt(totalUpPrice)}',
+                    color: AppColors.warning,
                   ),
-                  // Right: order list
+                ],
+                if (totalDiscount > 0) ...[
+                  const SizedBox(width: 12),
+                  _buildSummaryStat(
+                    label: 'Diskon',
+                    value: '-Rp ${_fmt(totalDiscount)}',
+                    color: AppColors.success,
+                  ),
+                ],
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Total Order',
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+                Text(
+                  '$totalOrders',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Total Revenue',
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+                Text(
+                  'Rp ${_fmt(totalRevenue)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (totalDiscount > 0) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Total Diskon',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                  Text(
+                    '-Rp ${_fmt(totalDiscount)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
+                if (totalUpPrice > 0) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Total Up Price',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                  Text(
+                    '+Rp ${_fmt(totalUpPrice)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+    );
+
+    final filterButtons = <Widget>[
+      _buildFilterDropdown(
+        label: _currentStatusLabel(),
+        onTap: () {
+          setState(() {
+            _showStatusMenu = !_showStatusMenu;
+            _showSalesMenu = false;
+            _showBranchMenu = false;
+            _showDateFromPicker = false;
+            _showDateToPicker = false;
+          });
+        },
+      ),
+      if (widget.sales == null)
+        _buildFilterDropdown(
+          label: _currentSalesLabel(salesList),
+          onTap: () {
+            setState(() {
+              _showSalesMenu = !_showSalesMenu;
+              _showStatusMenu = false;
+              _showBranchMenu = false;
+              _showDateFromPicker = false;
+              _showDateToPicker = false;
+            });
+          },
+        ),
+      if (widget.branch == null)
+        _buildFilterDropdown(
+          label: _currentBranchLabel(branchList),
+          onTap: () {
+            setState(() {
+              _showBranchMenu = !_showBranchMenu;
+              _showStatusMenu = false;
+              _showSalesMenu = false;
+              _showDateFromPicker = false;
+              _showDateToPicker = false;
+            });
+          },
+        ),
+      _buildFilterDropdown(
+        label: _dateFrom != null ? _formatDate(_dateFrom!) : 'Dari tanggal',
+        leadingIcon: Icons.calendar_today,
+        onTap: () {
+          setState(() {
+            _showDateFromPicker = !_showDateFromPicker;
+            _showDateToPicker = false;
+            _showStatusMenu = false;
+            _showSalesMenu = false;
+            _showBranchMenu = false;
+          });
+        },
+      ),
+      _buildFilterDropdown(
+        label: _dateTo != null ? _formatDate(_dateTo!) : 'Sampai tanggal',
+        leadingIcon: Icons.calendar_today,
+        onTap: () {
+          setState(() {
+            _showDateToPicker = !_showDateToPicker;
+            _showDateFromPicker = false;
+            _showStatusMenu = false;
+            _showSalesMenu = false;
+            _showBranchMenu = false;
+          });
+        },
+      ),
+      if (_dateFrom != null || _dateTo != null)
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _dateFrom = null;
+              _dateTo = null;
+            });
+            _applyFilters();
+          },
+          child: const Text(
+            'Reset tanggal',
+            style: TextStyle(fontSize: 11, color: AppColors.info),
+          ),
+        ),
+    ];
+
+    if (compact) {
+      // Compact: summary + filter chips horizontal scroll, dengan overlay
+      // menus yang diposisikan relatif ke Stack.
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                summaryBox,
+                const SizedBox(width: 10),
+                ...filterButtons.map((b) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: b,
+                    )),
+              ],
+            ),
+          ),
+          // Dropdown overlays (sama dengan desktop)
+          if (_showStatusMenu)
+            _buildOverlayMenu(
+              children: [
+                _statusMenuItem(null, 'Semua'),
+                _statusMenuItem('APPROVED', 'Disetujui'),
+                _statusMenuItem('PENDING', 'Menunggu'),
+                _statusMenuItem('REJECTED', 'Ditolak'),
+                _statusMenuItem('CANCELLED', 'Dibatalkan'),
+              ],
+            ),
+          if (_showSalesMenu)
+            _buildOverlayMenu(
+              maxHeight: 280,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _salesMenuItem(null, 'Semua Sales'),
+                    ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
+                  ],
+                ),
+              ),
+            ),
+          if (_showBranchMenu)
+            _buildOverlayMenu(
+              maxHeight: 240,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _branchMenuItems(branchList),
+                ),
+              ),
+            ),
+          if (_showDateFromPicker)
+            _buildDatePicker(
+              initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+              onSelect: _selectDateFrom,
+              onClose: () => setState(() => _showDateFromPicker = false),
+            ),
+          if (_showDateToPicker)
+            _buildDatePicker(
+              initial: _dateTo ?? DateTime.now(),
+              onSelect: _selectDateTo,
+              onClose: () => setState(() => _showDateToPicker = false),
+            ),
+        ],
+      );
+    }
+
+    // Desktop: stacked vertically dengan menu overlay relatif ke summary box.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            summaryBox,
+            const SizedBox(height: 16),
+            const Text(
+              'Filter',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (int i = 0; i < filterButtons.length; i++) ...[
+              filterButtons[i],
+              if (i < filterButtons.length - 1) const SizedBox(height: 10),
+            ],
+          ],
+        ),
+        if (_showStatusMenu)
+          _buildOverlayMenu(
+            top: 100, // approx. di bawah summary box
+            children: [
+              _statusMenuItem(null, 'Semua'),
+              _statusMenuItem('APPROVED', 'Disetujui'),
+              _statusMenuItem('PENDING', 'Menunggu'),
+              _statusMenuItem('REJECTED', 'Ditolak'),
+              _statusMenuItem('CANCELLED', 'Dibatalkan'),
+            ],
+          ),
+        if (_showSalesMenu)
+          _buildOverlayMenu(
+            top: 100,
+            maxHeight: 280,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _salesMenuItem(null, 'Semua Sales'),
+                  ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
+                ],
+              ),
+            ),
+          ),
+        if (_showBranchMenu)
+          _buildOverlayMenu(
+            top: 100,
+            maxHeight: 240,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _branchMenuItems(branchList),
+              ),
+            ),
+          ),
+        if (_showDateFromPicker)
+          _buildDatePicker(
+            initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+            onSelect: _selectDateFrom,
+            onClose: () => setState(() => _showDateFromPicker = false),
+          ),
+        if (_showDateToPicker)
+          _buildDatePicker(
+            initial: _dateTo ?? DateTime.now(),
+            onSelect: _selectDateTo,
+            onClose: () => setState(() => _showDateToPicker = false),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryStat({
+    required String label,
+    required String value,
+    required Color color,
+    bool isLarge = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: isLarge ? 13 : 12,
+            color: color,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterDropdown({
+    required String label,
+    required VoidCallback onTap,
+    IconData? leadingIcon,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 140, // fixed width di compact untuk scroll horizontal
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            if (leadingIcon != null) ...[
+              Icon(leadingIcon, size: 13, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverlayMenu({
+    double? top,
+    double? maxHeight,
+    List<Widget> children = const [],
+    Widget? child,
+  }) {
+    return Positioned(
+      top: top ?? 0,
+      left: 0,
+      right: 0,
+      child: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(6),
+        color: AppColors.surface,
+        child: Container(
+          constraints: maxHeight != null
+              ? BoxConstraints(maxHeight: maxHeight)
+              : null,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: child ??
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
+        ),
+      ),
+    );
+  }
+
+  // ===== Order list (loading/error/empty/list) =====
+  Widget _buildOrderList(List<Order> orders, bool loading, String? error) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+            const SizedBox(height: 8),
+            Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _applyFilters,
+              child: const Text('Coba lagi'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (orders.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
+            SizedBox(height: 8),
+            Text(
+              'Tidak ada pesanan.',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: orders.length,
+      itemBuilder: (ctx, i) => _buildOrderCard(orders[i]),
+    );
+  }
+
+  Widget _buildOrderCard(Order order) {
+    final statusColor = _statusColor(order.status);
+    final isExpanded = _expandedOrderId == order.id;
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _expandedOrderId = isExpanded ? null : order.id;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isExpanded
+                  ? AppColors.primary.withValues(alpha: 0.04)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isExpanded
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColors.border,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.storeName ?? 'Toko Tidak Diketahui',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            '#${order.id.substring(0, 8)}',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.inventory_2_outlined,
+                            size: 11,
+                            color: AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${order.items.length} item',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 11,
+                            color: AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            _formatDate(order.createdAt),
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Rp ${_fmt(order.totalAmount)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    if (order.totalDiscount > 0)
+                      Text(
+                        '-Rp ${_fmt(order.totalDiscount)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (order.totalUpPrice > 0)
+                      Text(
+                        '+Rp ${_fmt(order.totalUpPrice)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    _statusLabel(order.status),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: isExpanded ? AppColors.primary : AppColors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (isExpanded) _buildOrderExpandedDetail(order),
+      ],
+    );
+  }
+
+  Widget _buildOrderExpandedDetail(Order order) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (order.customerName != null)
+            _detailRow('Customer', order.customerName!),
+          if (order.storeContact != null)
+            _detailRow('Kontak', order.storeContact!),
+          if (order.storeAddress != null)
+            _detailRow('Alamat', order.storeAddress!),
+          if (order.invoiceNumber != null)
+            _detailRow('Invoice', order.invoiceNumber!),
+          if (order.notes != null && order.notes!.isNotEmpty)
+            _detailRow('Catatan', order.notes!),
+          if (order.rejectReason != null && order.rejectReason!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 14, color: AppColors.error),
+                  const SizedBox(width: 6),
                   Expanded(
-                    child: loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : error != null
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.error_outline, color: AppColors.error, size: 36),
-                                    const SizedBox(height: 8),
-                                    Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
-                                    const SizedBox(height: 12),
-                                    TextButton(
-                                      onPressed: _applyFilters,
-                                      child: const Text('Coba lagi'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : orders.isEmpty
-                                ? const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.inbox_outlined, color: AppColors.textMuted, size: 36),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          'Tidak ada pesanan.',
-                                          style: TextStyle(color: AppColors.textMuted),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(12),
-                                    itemCount: orders.length,
-                                    itemBuilder: (ctx, i) {
-                                      final order = orders[i];
-                                      final statusColor = _statusColor(order.status);
-                                      final isExpanded = _expandedOrderId == order.id;
-                                      return Column(
-                                        children: [
-                                          // Main order row — clickable to expand
-                                          GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                _expandedOrderId = isExpanded ? null : order.id;
-                                              });
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: isExpanded
-                                                    ? AppColors.primary.withValues(alpha: 0.04)
-                                                    : AppColors.surface,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(
-                                                  color: isExpanded
-                                                      ? AppColors.primary.withValues(alpha: 0.3)
-                                                      : AppColors.border,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text(
-                                                          order.storeName ?? 'Toko Tidak Diketahui',
-                                                          style: const TextStyle(
-                                                            fontWeight: FontWeight.w600,
-                                                            fontSize: 13,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 2),
-                                                        Row(
-                                                          children: [
-                                                            Text(
-                                                              '#${order.id.substring(0, 8)}',
-                                                              style: const TextStyle(
-                                                                color: AppColors.textMuted,
-                                                                fontSize: 11,
-                                                              ),
-                                                            ),
-                                                            const SizedBox(width: 8),
-                                                            const Icon(
-                                                              Icons.inventory_2_outlined,
-                                                              size: 11,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                            const SizedBox(width: 2),
-                                                            Text(
-                                                              '${order.items.length} item',
-                                                              style: const TextStyle(
-                                                                color: AppColors.textMuted,
-                                                                fontSize: 11,
-                                                              ),
-                                                            ),
-                                                            const SizedBox(width: 8),
-                                                            const Icon(
-                                                              Icons.calendar_today_outlined,
-                                                              size: 11,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                            const SizedBox(width: 2),
-                                                            Text(
-                                                              _formatDate(order.createdAt),
-                                                              style: const TextStyle(
-                                                                color: AppColors.textMuted,
-                                                                fontSize: 11,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                                    children: [
-                                                      Text(
-                                                        'Rp ${_fmt(order.totalAmount)}',
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.w700,
-                                                          fontSize: 13,
-                                                          color: AppColors.primary,
-                                                        ),
-                                                      ),
-                                                      if (order.totalDiscount > 0)
-                                                        Text(
-                                                          '-Rp ${_fmt(order.totalDiscount)}',
-                                                          style: const TextStyle(
-                                                            fontSize: 10,
-                                                            color: AppColors.success,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      if (order.totalUpPrice > 0)
-                                                        Text(
-                                                          '+Rp ${_fmt(order.totalUpPrice)}',
-                                                          style: const TextStyle(
-                                                            fontSize: 10,
-                                                            color: AppColors.warning,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 3,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: statusColor.withValues(alpha: 0.1),
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      border: Border.all(
-                                                        color: statusColor.withValues(alpha: 0.3),
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      _statusLabel(order.status),
-                                                      style: TextStyle(
-                                                        color: statusColor,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.w700,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Icon(
-                                                    isExpanded
-                                                        ? Icons.keyboard_arrow_up
-                                                        : Icons.keyboard_arrow_down,
-                                                    size: 18,
-                                                    color: isExpanded
-                                                        ? AppColors.primary
-                                                        : AppColors.textMuted,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                          // Expanded detail
-                                          if (isExpanded) ...[
-                                            Container(
-                                              width: double.infinity,
-                                              margin: const EdgeInsets.only(top: 4, bottom: 8),
-                                              padding: const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.surface,
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: AppColors.border),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  // Customer info
-                                                  if (order.customerName != null) ...[
-                                                    _detailRow('Customer', order.customerName!),
-                                                  ],
-                                                  if (order.storeContact != null) ...[
-                                                    _detailRow('Kontak', order.storeContact!),
-                                                  ],
-                                                  if (order.storeAddress != null) ...[
-                                                    _detailRow('Alamat', order.storeAddress!),
-                                                  ],
-                                                  if (order.invoiceNumber != null) ...[
-                                                    _detailRow('Invoice', order.invoiceNumber!),
-                                                  ],
-                                                  if (order.notes != null && order.notes!.isNotEmpty) ...[
-                                                    _detailRow('Catatan', order.notes!),
-                                                  ],
-                                                  if (order.rejectReason != null && order.rejectReason!.isNotEmpty) ...[
-                                                    Container(
-                                                      margin: const EdgeInsets.only(top: 8),
-                                                      padding: const EdgeInsets.all(8),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors.error.withValues(alpha: 0.06),
-                                                        borderRadius: BorderRadius.circular(6),
-                                                        border: Border.all(
-                                                          color: AppColors.error.withValues(alpha: 0.2),
-                                                        ),
-                                                      ),
-                                                      child: Row(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          const Icon(
-                                                            Icons.info_outline,
-                                                            size: 14,
-                                                            color: AppColors.error,
-                                                          ),
-                                                          const SizedBox(width: 6),
-                                                          Expanded(
-                                                            child: Column(
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                                              children: [
-                                                                const Text(
-                                                                  'Alasan Penolakan',
-                                                                  style: TextStyle(
-                                                                    fontSize: 10,
-                                                                    fontWeight: FontWeight.w700,
-                                                                    color: AppColors.error,
-                                                                  ),
-                                                                ),
-                                                                const SizedBox(height: 2),
-                                                                Text(
-                                                                  order.rejectReason!,
-                                                                  style: const TextStyle(
-                                                                    fontSize: 12,
-                                                                    color: AppColors.error,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                  const SizedBox(height: 10),
-                                                  const Text(
-                                                    'Item Pesanan',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.w700,
-                                                      fontSize: 11,
-                                                      color: AppColors.textSecondary,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  // Items table header
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 5,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: AppColors.background,
-                                                      borderRadius: BorderRadius.circular(4),
-                                                    ),
-                                                    child: const Row(
-                                                      children: [
-                                                        Expanded(
-                                                          flex: 2,
-                                                          child: Text(
-                                                            'Produk',
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 50,
-                                                          child: Text(
-                                                            'Qty',
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 70,
-                                                          child: Text(
-                                                            'Harga',
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 75,
-                                                          child: Text(
-                                                            'Diskon',
-                                                            textAlign: TextAlign.right,
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 75,
-                                                          child: Text(
-                                                            'Up Price',
-                                                            textAlign: TextAlign.right,
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 80,
-                                                          child: Text(
-                                                            'Subtotal',
-                                                            textAlign: TextAlign.right,
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight: FontWeight.w700,
-                                                              color: AppColors.textMuted,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  ...order.items.map((item) => _itemRow(item)),
-                                                  // Cancelled items
-                                                  if (order.cancelledItems.isNotEmpty) ...[
-                                                    const SizedBox(height: 8),
-                                                    const Text(
-                                                      'Item Dibatalkan',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.w700,
-                                                        fontSize: 11,
-                                                        color: AppColors.error,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    ...order.cancelledItems.map((ci) => _cancelledItemRow(ci)),
-                                                  ],
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      );
-                                    },
-                                  ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Alasan Penolakan',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.error,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          order.rejectReason!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
+          const SizedBox(height: 10),
+          const Text(
+            'Item Pesanan',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Items table header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Produk',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    'Qty',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 70,
+                  child: Text(
+                    'Harga',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 75,
+                  child: Text(
+                    'Diskon',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 75,
+                  child: Text(
+                    'Up Price',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: Text(
+                    'Subtotal',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          ...order.items.map((item) => _itemRow(item)),
+          if (order.cancelledItems.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Item Dibatalkan',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                color: AppColors.error,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...order.cancelledItems.map((ci) => _cancelledItemRow(ci)),
           ],
-        ),
+        ],
       ),
     );
   }
