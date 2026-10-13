@@ -240,21 +240,34 @@ class _PerformanceTabState extends State<PerformanceTab> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 24,
-          headingRowHeight: 44,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 56,
-          columns: const [
-            DataColumn(label: Text('Supplier')),
-            DataColumn(label: Text('Target'), numeric: true),
-            DataColumn(label: Text('Value'), numeric: true),
-            DataColumn(label: Text('Pencapaian'), numeric: true),
-            DataColumn(label: Text('')),
-          ],
-          rows: rows.map((row) {
+      // Use Table (not DataTable) so columns stretch to fill the parent
+      // width via FlexColumnWidth — DataTable sizes each column to its
+      // content and leaves white space on the right on wide screens.
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(3), // Supplier (long text)
+          1: FlexColumnWidth(2), // Target
+          2: FlexColumnWidth(2), // Value
+          3: FlexColumnWidth(1.5), // Pencapaian
+          4: FixedColumnWidth(56), // Edit icon
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          TableRow(
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.border, width: 1),
+              ),
+            ),
+            children: [
+              const _TableHeaderCell('Supplier', align: TextAlign.left),
+              const _TableHeaderCell('Target', align: TextAlign.right),
+              const _TableHeaderCell('Value', align: TextAlign.right),
+              const _TableHeaderCell('Pencapaian', align: TextAlign.right),
+              const _TableHeaderCell(''),
+            ],
+          ),
+          ...rows.map((row) {
             final pencapaianText = row.pencapaian == null
                 ? '—'
                 : '${row.pencapaian!.toStringAsFixed(0)}%';
@@ -270,32 +283,47 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 pencapaianColor = AppColors.error;
               }
             }
-            return DataRow(cells: [
-              DataCell(Text(
-                row.supplierName,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              )),
-              DataCell(Text('Rp ${_fmt(row.target)}')),
-              DataCell(Text('Rp ${_fmt(row.value)}')),
-              DataCell(Text(
-                pencapaianText,
-                style: TextStyle(
-                  color: pencapaianColor,
-                  fontWeight: pencapaianWeight,
+            return TableRow(
+              children: [
+                _TableBodyCell(
+                  Text(
+                    row.supplierName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  align: TextAlign.left,
                 ),
-              )),
-              DataCell(
-                canEdit
-                    ? IconButton(
-                        icon: const Icon(Icons.edit, size: 18),
-                        tooltip: 'Edit target',
-                        onPressed: () => _openTargetDialog(provider, row),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ]);
-          }).toList(),
-        ),
+                _TableBodyCell(
+                  Text('Rp ${_fmt(row.target)}'),
+                  align: TextAlign.right,
+                ),
+                _TableBodyCell(
+                  Text('Rp ${_fmt(row.value)}'),
+                  align: TextAlign.right,
+                ),
+                _TableBodyCell(
+                  Text(
+                    pencapaianText,
+                    style: TextStyle(
+                      color: pencapaianColor,
+                      fontWeight: pencapaianWeight,
+                    ),
+                  ),
+                  align: TextAlign.right,
+                ),
+                _TableBodyCell(
+                  canEdit
+                      ? IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          tooltip: 'Edit target',
+                          onPressed: () => _openTargetDialog(provider, row),
+                        )
+                      : const SizedBox.shrink(),
+                  align: TextAlign.center,
+                ),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
@@ -747,5 +775,52 @@ class _PerformanceTabState extends State<PerformanceTab> {
         );
       }
     }
+  }
+}
+
+/// Header cell for the per-supplier performance Table. Pads and aligns its
+/// label; bold font matches the original DataTable heading style.
+class _TableHeaderCell extends StatelessWidget {
+  final String text;
+  final TextAlign align;
+  const _TableHeaderCell(this.text, {this.align = TextAlign.left});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Text(
+        text,
+        textAlign: align,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+/// Body cell for the per-supplier performance Table. Pads the child and
+/// aligns it. Keeps default row height consistent.
+class _TableBodyCell extends StatelessWidget {
+  final Widget child;
+  final TextAlign align;
+  const _TableBodyCell(this.child, {this.align = TextAlign.left});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Align(
+        alignment: align == TextAlign.right
+            ? Alignment.centerRight
+            : align == TextAlign.center
+                ? Alignment.center
+                : Alignment.centerLeft,
+        child: child,
+      ),
+    );
   }
 }
