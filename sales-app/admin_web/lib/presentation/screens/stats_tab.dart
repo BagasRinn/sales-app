@@ -332,7 +332,7 @@ class _StatsTabState extends State<StatsTab> {
       children: branchEntries.map((entry) {
         final aggregate = aggregateDashboardPerformance(entry.value)!;
         return SizedBox(
-          width: 360,
+          width: 420,
           child: _BranchPerformanceCard(
             total: aggregate,
             title: 'Cabang ${entry.key}',
@@ -1179,8 +1179,8 @@ class _SalesPerformanceCard extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: Container(
-        width: 300,
-        padding: const EdgeInsets.all(16),
+        width: 340,
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
@@ -1198,22 +1198,22 @@ class _SalesPerformanceCard extends StatelessWidget {
                 child: Row(
                   children: [
                     CircleAvatar(
-                      radius: 16,
+                      radius: 18,
                       backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                       child: Text(
                         s.displayName.isNotEmpty ? s.displayName[0].toUpperCase() : '?',
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         s.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -1221,7 +1221,7 @@ class _SalesPerformanceCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             // Disetujui — klik → APPROVED
             GestureDetector(
               onTap: () => onTapSection('APPROVED'),
@@ -1235,7 +1235,7 @@ class _SalesPerformanceCard extends StatelessWidget {
                 color: AppColors.success,
               ),
             ),
-            const Divider(height: 20),
+            const Divider(height: 22),
             // Menunggu — klik → PENDING
             GestureDetector(
               onTap: () => onTapSection('PENDING'),
@@ -1249,7 +1249,7 @@ class _SalesPerformanceCard extends StatelessWidget {
                 color: AppColors.warning,
               ),
             ),
-            const Divider(height: 20),
+            const Divider(height: 22),
             // Ditolak — klik → REJECTED
             GestureDetector(
               onTap: () => onTapSection('REJECTED'),
@@ -1283,18 +1283,18 @@ class _SalesPerformanceCard extends StatelessWidget {
         Row(
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 9,
+              height: 9,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 7),
             Text(
               label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1302,33 +1302,33 @@ class _SalesPerformanceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('MTD', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
-                  const SizedBox(height: 2),
+                  const Text('MTD', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                  const SizedBox(height: 3),
                   Text(
                     '$mtdCount order',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     'Rp ${_fmt(mtdRevenue)}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Hari ini', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
-                  const SizedBox(height: 2),
+                  const Text('Hari ini', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                  const SizedBox(height: 3),
                   Text(
                     '$todayCount order',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     'Rp ${_fmt(todayRevenue)}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -1377,7 +1377,7 @@ class _BranchPerformanceCard extends StatelessWidget {
       cursor: SystemMouseCursors.click,
       child: Container(
         width: fullWidth ? double.infinity : null,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
@@ -1530,22 +1530,22 @@ class _BranchPerformanceCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: color,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1555,27 +1555,27 @@ class _BranchPerformanceCard extends StatelessWidget {
                   children: [
                     const Text(
                       'MTD',
-                      style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       '$mtdCount order',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
                       'Rp ${_fmt(mtdRevenue)}',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1583,22 +1583,22 @@ class _BranchPerformanceCard extends StatelessWidget {
                     const Text(
                       'Hari ini',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 11,
                         color: AppColors.textMuted,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       '$todayCount order',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
                       'Rp ${_fmt(todayRevenue)}',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1643,8 +1643,8 @@ class _SalesOverlayDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         elevation: 8,
         child: SizedBox(
-          width: 800,
-          height: 520,
+          width: 960,
+          height: 600,
           child: _SalesDetailDialogBody(
             provider: provider,
             sales: sales,
@@ -1847,8 +1847,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
         });
       },
       child: SizedBox(
-        width: 800,
-        height: 520,
+        width: 960,
+        height: 600,
         child: Column(
           children: [
             // Header
@@ -1964,7 +1964,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                 children: [
                   // Left sidebar: summary + filters
                   Container(
-                    width: 220,
+                    width: 240,
                     padding: const EdgeInsets.all(16),
                     decoration: const BoxDecoration(
                       color: AppColors.surface,
@@ -2629,7 +2629,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                     child: const Row(
                                                       children: [
                                                         Expanded(
-                                                          flex: 3,
+                                                          flex: 2,
                                                           child: Text(
                                                             'Produk',
                                                             style: TextStyle(
@@ -2662,9 +2662,21 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                                                           ),
                                                         ),
                                                         SizedBox(
-                                                          width: 70,
+                                                          width: 75,
                                                           child: Text(
                                                             'Diskon',
+                                                            textAlign: TextAlign.right,
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w700,
+                                                              color: AppColors.textMuted,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          width: 75,
+                                                          child: Text(
+                                                            'Up Price',
                                                             textAlign: TextAlign.right,
                                                             style: TextStyle(
                                                               fontSize: 10,
@@ -2969,7 +2981,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Row(
               children: [
                 Expanded(
@@ -3026,7 +3038,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                   ),
           ),
           SizedBox(
-            width: 70,
+            width: 75,
             child: item.isFree
                 ? Text(
                     '-Rp ${_fmt(item.nominalDiskon)}',
@@ -3037,35 +3049,39 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                     ),
                     textAlign: TextAlign.right,
                   )
-                : item.hasDiscount || item.hasUpPrice
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (item.hasDiscount)
-                        Text(
-                          '-Rp ${_fmt(item.nominalDiskon)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w600,
-                          ),
+                : item.hasDiscount
+                    ? Text(
+                        '-Rp ${_fmt(item.nominalDiskon)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w600,
                         ),
-                      if (item.hasUpPrice)
-                        Text(
-                          '+Rp ${_fmt(item.nominalUpPrice)}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.warning,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                    ],
-                  )
+                        textAlign: TextAlign.right,
+                      )
                     : const Text(
                         '—',
                         style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                         textAlign: TextAlign.right,
                       ),
+          ),
+          SizedBox(
+            width: 75,
+            child: item.hasUpPrice
+                ? Text(
+                    '+Rp ${_fmt(item.nominalUpPrice)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.right,
+                  )
+                : const Text(
+                    '—',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    textAlign: TextAlign.right,
+                  ),
           ),
           SizedBox(
             width: 80,
@@ -3102,7 +3118,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
           const Icon(Icons.cancel_outlined, size: 12, color: AppColors.error),
           const SizedBox(width: 6),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               ci.namaBarang ?? ci.productId,
               style: const TextStyle(fontSize: 11, color: AppColors.error),
@@ -3118,12 +3134,14 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             ),
           ),
           SizedBox(
-            width: 80,
+            width: 70,
             child: Text(
               'Rp ${_fmt(ci.hargaSatuan ?? 0)}',
               style: const TextStyle(fontSize: 11, color: AppColors.error),
             ),
           ),
+          const SizedBox(width: 75),
+          const SizedBox(width: 75),
           SizedBox(
             width: 80,
             child: Text(
