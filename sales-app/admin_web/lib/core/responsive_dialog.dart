@@ -84,7 +84,7 @@ class ResponsiveAlertDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return ResponsiveDialog(
       maxWidth: 640,
-      maxHeight: 480,
+      maxHeight: 600,
       child: LayoutBuilder(
         builder: (ctx, constraints) {
           final resp = Responsive.of(constraints.maxWidth);
