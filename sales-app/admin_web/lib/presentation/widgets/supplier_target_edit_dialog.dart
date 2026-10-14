@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:admin_web/presentation/providers/admin_provider.dart';
 import 'package:admin_web/data/models/supplier_performance.dart';
+import 'package:admin_web/core/responsive_dialog.dart';
 
 /// Opens the target-edit dialog for a (supplier, period) row in the
 /// supplier performance table. The row's `target` is used as the prefill
@@ -94,7 +95,7 @@ class _SupplierTargetEditDialogState extends State<_SupplierTargetEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return ResponsiveAlertDialog(
       title: const Text('Edit Target'),
       content: Form(
         key: _formKey,
