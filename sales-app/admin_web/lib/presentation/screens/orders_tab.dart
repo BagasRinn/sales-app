@@ -1176,19 +1176,24 @@ class _OrderCardState extends State<_OrderCard> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                ..._order.items.map((item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: _OrderItemRow(
-                        item: item,
-                        currencyFormat: currencyFormat,
-                        canEdit: _order.status == 'PENDING' && !widget.readOnly,
-                        onEdit: () => _openItemDiscountDialog(item),
-                        onEditUpPrice: () => _openItemUpPriceDialog(item),
-                        onCancel: !widget.readOnly && widget.onCancelItem != null
-                            ? () => widget.onCancelItem!(item)
-                            : null,
-                      ),
-                    )),
+                ..._order.items.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: _OrderItemRow(
+                      index: index + 1,
+                      item: item,
+                      currencyFormat: currencyFormat,
+                      canEdit: _order.status == 'PENDING' && !widget.readOnly,
+                      onEdit: () => _openItemDiscountDialog(item),
+                      onEditUpPrice: () => _openItemUpPriceDialog(item),
+                      onCancel: !widget.readOnly && widget.onCancelItem != null
+                          ? () => widget.onCancelItem!(item)
+                          : null,
+                    ),
+                  );
+                }),
                 // Cancelled items
                 if (_order.cancelledItems.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -1369,6 +1374,7 @@ class _OrderCardState extends State<_OrderCard> {
 
 /// Baris item di pesanan — display plus tombol edit diskon per item.
 class _OrderItemRow extends StatelessWidget {
+  final int index;
   final OrderItem item;
   final NumberFormat currencyFormat;
   final bool canEdit;
@@ -1377,6 +1383,7 @@ class _OrderItemRow extends StatelessWidget {
   final VoidCallback? onCancel;
 
   const _OrderItemRow({
+    required this.index,
     required this.item,
     required this.currencyFormat,
     this.canEdit = false,
@@ -1396,6 +1403,15 @@ class _OrderItemRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Numbering
+          SizedBox(
+            width: 24,
+            child: Text(
+              '$index.',
+              style: AppTextStyles.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             flex: 2,
             child: Column(
