@@ -7,6 +7,7 @@ import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/responsive_action_menu.dart';
 import '../../data/models/order.dart';
 
 String _fmt(int amount) =>
@@ -134,22 +135,23 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       initialDateRange: initial,
       helpText: 'Pilih rentang tanggal',
       builder: (context, child) {
+        // Pakai persentase dari viewport supaya di HP kecil picker tidak
+        // dipaksa 620px dan bikin halaman scroll horizontal. Tetap dibatasi
+        // ke 620px di tablet/desktop supaya tidak terlalu lebar.
+        final size = MediaQuery.of(context).size;
+        final maxW = size.width * 0.94;
         return Theme(
           data: Theme.of(context).copyWith(
             dialogTheme: DialogThemeData(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              constraints: const BoxConstraints(
-                maxWidth: 620,
-                maxHeight: 520,
-              ),
             ),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 620,
-              maxHeight: 520,
+            constraints: BoxConstraints(
+              maxWidth: maxW.clamp(280.0, 620.0),
+              maxHeight: size.height * 0.9,
             ),
             child: child,
           ),
@@ -230,7 +232,13 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SelectableText('Menunggu Persetujuan'),
+                    Flexible(
+                      child: Text(
+                        'Menunggu Persetujuan',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     if (provider.pendingOrders.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -535,9 +543,13 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   Future<void> _approveOrder(String orderId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => ResponsiveDialog(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      builder: (ctx) => ResponsiveAlertDialog(
+        title: const Text('Setujui Pesanan?'),
+        // Bungkus content dengan SingleChildScrollView — saat keyboard mobile
+        // naik atau di layar sangat pendek, dialog harus tetap bisa di-scroll
+        // agar tombol Setujui/Batal tidak terpotong. Pola ini konsisten dengan
+        // _rejectOrder, _DiscountEditDialog, dan _UserEditDialog.
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -550,35 +562,25 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 child:
                     const Icon(Icons.check_circle, size: 40, color: AppColors.success),
               ),
-              const SizedBox(height: 20),
-              const Text('Setujui Pesanan?', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               const Text(
                 'Stok sistem akan dikurangi sesuai jumlah pesanan.',
                 style: AppTextStyles.bodyMedium,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Setujui'),
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Setujui'),
+          ),
+        ],
       ),
     );
 
@@ -615,11 +617,16 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => ResponsiveDialog(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      builder: (ctx) => ResponsiveAlertDialog(
+        title: const Text('Tolak Pesanan'),
+        // Bungkus content dengan SingleChildScrollView. TextField(maxLines: 3)
+        // + body text + icon di HP pendek (mis. iPhone SE 320×568) bisa
+        // melebihi tinggi dialog. Konsisten dengan _approveOrder di atas
+        // dan _DiscountEditDialog/_UserEditDialog di file lain.
+        content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
@@ -629,9 +636,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 ),
                 child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
               ),
-              const SizedBox(height: 20),
-              const Text('Tolak Pesanan', style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               const Text(
                 'Stok booking akan dikembalikan. Alasan opsional — akan ditampilkan ke sales.',
                 style: AppTextStyles.bodyMedium,
@@ -647,30 +652,22 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                      ),
-                      child: const Text('Tolak'),
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Tolak'),
+          ),
+        ],
       ),
     );
 
@@ -996,34 +993,27 @@ class _OrderCardState extends State<_OrderCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             OrderStatusChip(status: _order.status),
-            if (_order.status == 'PENDING' && widget.onApprove != null && !widget.readOnly) ...[
+            if (_order.status == 'PENDING' &&
+                (widget.onApprove != null || widget.onReject != null) &&
+                !widget.readOnly) ...[
               const SizedBox(width: 8),
-              SizedBox(
-                height: 36,
-                child: IconButton(
-                  icon: const Icon(Icons.check_circle, color: AppColors.success),
-                  tooltip: 'Setujui',
-                  onPressed: widget.onApprove,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.successBg,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              SizedBox(
-                height: 36,
-                child: IconButton(
-                  icon: const Icon(Icons.cancel, color: AppColors.error),
-                  tooltip: 'Tolak',
-                  onPressed: widget.onReject,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.errorBg,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+              ResponsiveActionMenu(
+                tooltip: 'Aksi pesanan',
+                actions: [
+                  if (widget.onApprove != null)
+                    MenuAction(
+                      label: 'Setujui',
+                      icon: Icons.check_circle,
+                      onTap: () => widget.onApprove!(),
+                    ),
+                  if (widget.onReject != null)
+                    MenuAction(
+                      label: 'Tolak',
+                      icon: Icons.cancel,
+                      onTap: () => widget.onReject!(),
+                      destructive: true,
+                    ),
+                ],
               ),
             ],
             const SizedBox(width: 8),
@@ -1033,11 +1023,17 @@ class _OrderCardState extends State<_OrderCard> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(),
-                const SizedBox(height: 8),
+            // Bungkus detail order dalam SingleChildScrollView supaya pada
+            // pesanan panjang di HP pendek, seluruh konten (metadata + tabel
+            // item) ikut scroll, tidak terpotong/overflow di tengah kartu.
+            // Parent ListView masih bisa scroll halaman seperti biasa; scroll
+            // inner ini hanya aktif kalau konten melebihi tinggi yang tersedia.
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(),
+                  const SizedBox(height: 8),
                 // Info toko
                 if (_order.storeName != null ||
                     _order.storeContact != null ||
@@ -1067,6 +1063,9 @@ class _OrderCardState extends State<_OrderCard> {
                           ],
                         ),
                         const SizedBox(height: 10),
+                        if (_order.customerKode != null &&
+                            _order.customerKode!.isNotEmpty)
+                          _infoRow(Icons.tag, 'Kode Toko', _order.customerKode!),
                         if (_order.storeName != null &&
                             _order.storeName!.isNotEmpty)
                           _infoRow(Icons.business, 'Nama Toko', _order.storeName!),
@@ -1262,7 +1261,8 @@ class _OrderCardState extends State<_OrderCard> {
 
                 // Ringkasan harga
                 _buildPriceSummary(),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -1410,7 +1410,7 @@ class _OrderItemRow extends StatelessWidget {
                     fontSize: 11,
                   ),
                 ),
-                Text(
+                SelectableText(
                   '× ${item.qty}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.textSecondary,
@@ -1419,7 +1419,7 @@ class _OrderItemRow extends StatelessWidget {
                 if (item.hasDiscount)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(
+                    child: SelectableText(
                       _formatItemDiscounts(item),
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.success,
@@ -1446,41 +1446,35 @@ class _OrderItemRow extends StatelessWidget {
             style: AppTextStyles.bodySmall,
           ),
           const SizedBox(width: 8),
-          if (canEdit && onEdit != null)
-            IconButton(
-              onPressed: onEdit,
-              icon: Icon(
-                item.hasDiscount ? Icons.edit_outlined : Icons.discount_outlined,
-                size: 14,
-                color: item.hasDiscount ? AppColors.success : AppColors.primaryLight,
-              ),
-              tooltip: item.hasDiscount ? 'Edit diskon' : 'Tambah diskon',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            ),
-          if (canEdit && onEditUpPrice != null)
-            IconButton(
-              onPressed: onEditUpPrice,
-              icon: Icon(
-                item.hasUpPrice ? Icons.edit_outlined : Icons.trending_up,
-                size: 14,
-                color: item.hasUpPrice ? AppColors.warning : AppColors.textMuted,
-              ),
-              tooltip: item.hasUpPrice ? 'Edit up price' : 'Tambah up price',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            ),
-          if (canEdit && onCancel != null)
-            IconButton(
-              onPressed: onCancel,
-              icon: const Icon(
-                Icons.delete_outline,
-                size: 14,
-                color: AppColors.error,
-              ),
-              tooltip: 'Batalkan item',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          if (canEdit &&
+              (onEdit != null || onEditUpPrice != null || onCancel != null))
+            ResponsiveActionMenu(
+              tooltip: 'Aksi item',
+              actions: [
+                if (onEdit != null)
+                  MenuAction(
+                    label: item.hasDiscount ? 'Edit diskon' : 'Tambah diskon',
+                    icon: item.hasDiscount
+                        ? Icons.edit_outlined
+                        : Icons.discount_outlined,
+                    onTap: () => onEdit!(),
+                  ),
+                if (onEditUpPrice != null)
+                  MenuAction(
+                    label: item.hasUpPrice ? 'Edit up price' : 'Tambah up price',
+                    icon: item.hasUpPrice
+                        ? Icons.edit_outlined
+                        : Icons.trending_up,
+                    onTap: () => onEditUpPrice!(),
+                  ),
+                if (onCancel != null)
+                  MenuAction(
+                    label: 'Batalkan item',
+                    icon: Icons.delete_outline,
+                    onTap: () => onCancel!(),
+                    destructive: true,
+                  ),
+              ],
             ),
           const SizedBox(width: 8),
           if (item.hasDiscount || item.hasUpPrice)

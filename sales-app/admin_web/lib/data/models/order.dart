@@ -19,6 +19,10 @@ class Order {
   /// yang merupakan denormalized name per-order: kalau customer di-rename
   /// setelah order dibuat, [customerName] ikut update, [storeName] tidak.
   final String? customerName;
+  /// Snapshot kode customer (mis. "P0501") dari tabel customers. Nullable
+  /// untuk order legacy / customer yang dihapus. Backend supply via
+  /// `customer_kode` di response order.
+  final String? customerKode;
   final List<CancelledItem> cancelledItems;
   final String? rejectReason;
   final String? invoiceNumber;
@@ -42,6 +46,7 @@ class Order {
     this.storeAddress,
     this.customerId,
     this.customerName,
+    this.customerKode,
     this.cancelledItems = const [],
     this.rejectReason,
     this.invoiceNumber,
@@ -64,6 +69,7 @@ class Order {
       storeAddress: json['store_address'],
       customerId: json['customer_id'] as String?,
       customerName: json['customer_name'] as String?,
+      customerKode: json['customer_kode'] as String?,
       cancelledItems: (json['cancelled_items'] as List?)
               ?.map((e) => CancelledItem.fromJson(e))
               .toList() ??
