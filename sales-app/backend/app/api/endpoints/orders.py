@@ -250,6 +250,7 @@ def _build_order_response(order: Order) -> dict:
         "sales_nama": order.sales.nama if order.sales else None,
         "customer_id": order.customer_id,
         "customer_name": order.customer.nama_toko if order.customer else None,
+        "customer_kode": order.customer.kode if order.customer else None,
         "status": order.status,
         "notes": order.notes,
         "created_at": order.created_at,
