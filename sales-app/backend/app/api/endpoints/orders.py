@@ -866,7 +866,15 @@ def update_draft_order(
         )
 
     db.commit()
-    db.refresh(order)
+    # db.refresh(order) above only refreshes the order's own columns.
+    # The relationships (customer, items, sales) still point to the OLD
+    # in-memory state from the original query — the FK change to customer
+    # isn't reflected in `order.customer`, and the bulk delete + add on
+    # items leaves `order.items` pointing to the OLD (deleted) rows.
+    # Without this, _build_order_response returns stale customer_name /
+    # customer_kode and OLD item data — and the NEW items the caller just
+    # sent are silently dropped from the response.
+    db.refresh(order, attribute_names=["customer", "items", "sales"])
     return _build_order_response(order)
 
 
