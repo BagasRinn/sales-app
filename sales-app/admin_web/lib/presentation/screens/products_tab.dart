@@ -30,6 +30,11 @@ class _ProductsTabState extends State<ProductsTab> {
     {'value': 'habis', 'label': 'Stok Habis'},
   ];
 
+  static const _orderTypeOptions = [
+    {'value': 'REGULER', 'label': 'Reguler'},
+    {'value': '4P', 'label': '4P'},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +73,9 @@ class _ProductsTabState extends State<ProductsTab> {
     );
     final selectedStatus = context.select<AdminProvider, String?>(
       (p) => p.selectedStatus,
+    );
+    final selectedOrderType = context.select<AdminProvider, String?>(
+      (p) => p.selectedOrderType,
     );
     final provider = context.read<AdminProvider>();
 
@@ -135,14 +143,14 @@ class _ProductsTabState extends State<ProductsTab> {
                   if (isNarrow) {
                     return Column(
                       children: [
-                        _buildFilterDropdowns(provider, selectedSupplier, selectedStatus),
+                        _buildFilterDropdowns(provider, selectedSupplier, selectedStatus, selectedOrderType),
                       ],
                     );
                   }
-                  return _buildFilterDropdowns(provider, selectedSupplier, selectedStatus);
+                  return _buildFilterDropdowns(provider, selectedSupplier, selectedStatus, selectedOrderType);
                 },
               ),
-              if (selectedSupplier != null || selectedStatus != null) ...[
+              if (selectedSupplier != null || selectedStatus != null || selectedOrderType != null) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
@@ -157,6 +165,11 @@ class _ProductsTabState extends State<ProductsTab> {
                         label: _statusOptions.firstWhere(
                             (s) => s['value'] == selectedStatus)['label']!,
                         onClear: () => provider.setStatusFilter(null),
+                      ),
+                    if (selectedOrderType != null)
+                      _FilterChip(
+                        label: 'Tipe: $selectedOrderType',
+                        onClear: () => provider.setOrderTypeFilter(null),
                       ),
                   ],
                 ),
@@ -234,6 +247,7 @@ class _ProductsTabState extends State<ProductsTab> {
     AdminProvider provider,
     String? selectedSupplier,
     String? selectedStatus,
+    String? selectedOrderType,
   ) {
     return Row(
       children: [
@@ -286,6 +300,32 @@ class _ProductsTabState extends State<ProductsTab> {
                   )),
             ],
             onChanged: (v) => provider.setStatusFilter(v),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 130,
+          child: DropdownButtonFormField<String>(
+            initialValue: selectedOrderType,
+            decoration: InputDecoration(
+              hintText: 'Tipe Order',
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem(
+                  value: null, child: Text('Semua Tipe')),
+              ..._orderTypeOptions.map((s) => DropdownMenuItem(
+                    value: s['value'],
+                    child: Text(s['label']!),
+                  )),
+            ],
+            onChanged: (v) => provider.setOrderTypeFilter(v),
           ),
         ),
       ],
@@ -399,35 +439,36 @@ class _ProductsTabState extends State<ProductsTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availW = constraints.maxWidth;
-        // Kolom: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
-        // fixedW tanpa aksi = [sku, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang]
-        const fixedW = [140.0, 120.0, 100.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
+        // Kolom: SKU | Nama | Kategori | Tipe | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
+        // fixedW tanpa aksi = [sku, ktgr, tipe, harga, stok, stok, stok, stok, sat, supp, cabang]
+        const fixedW = [140.0, 120.0, 80.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
         // Total fixed tanpa aksi
-        const fixedTotal = 1340.0; // sum of first 10 items
+        const fixedTotal = 1420.0; // sum of first 11 items
         const aksiWidth = 90.0;
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         // totalW: exclude aksi column if readOnly
         final totalW = widget.readOnly
             ? fixedTotal - aksiWidth + namaW
             : fixedTotal + namaW;
-        // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
+        // Urutan col: [sku, nama, ktgr, tipe, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
         final colW = <double>[
           fixedW[0], // SKU
           namaW, // Nama
           fixedW[1], // Kategori
-          fixedW[2], // Harga
-          fixedW[3], // Stok Sistem
-          fixedW[4], // Stok Booking
-          fixedW[5], // Stok Diterima
-          fixedW[6], // Stok Tersedia
-          fixedW[7], // Satuan
+          fixedW[2], // Tipe Order
+          fixedW[3], // Harga
+          fixedW[4], // Stok Sistem
+          fixedW[5], // Stok Booking
+          fixedW[6], // Stok Diterima
+          fixedW[7], // Stok Tersedia
+          fixedW[8], // Satuan
         ];
         if (widget.readOnly) {
-          colW.add(fixedW[8]); // Supplier
-          colW.add(fixedW[9]); // Cabang
+          colW.add(fixedW[9]); // Supplier
+          colW.add(fixedW[10]); // Cabang
         } else {
-          colW.add(fixedW[8]); // Supplier
-          colW.add(fixedW[9]); // Aksi
+          colW.add(fixedW[9]); // Supplier
+          colW.add(fixedW[10]); // Aksi
         }
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
@@ -853,8 +894,8 @@ class _TableHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
     final labels = readOnly
-        ? ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang']
-        : ['SKU', 'Nama', 'Kategori', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
+        ? ['SKU', 'Nama', 'Kategori', 'Tipe', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang']
+        : ['SKU', 'Nama', 'Kategori', 'Tipe', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
     final colsToRender = readOnly ? colW.length - 1 : colW.length;
     return SizedBox(
       width: totalW,
@@ -933,65 +974,94 @@ class _DataRow extends StatelessWidget {
           child: Text(product.kategori ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
         ),
       ),
-      // 3: Harga
+      // 3: Tipe Order (REGULER / 4P)
       SizedBox(
         width: colW[3],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: (product.orderType == '4P'
+                        ? AppColors.info
+                        : AppColors.textMuted)
+                    .withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                product.orderType,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: product.orderType == '4P'
+                      ? AppColors.info
+                      : AppColors.textMuted,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      // 4: Harga
+      SizedBox(
+        width: colW[4],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Text(fmtCurrency.format(product.harga), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
         ),
       ),
-      // 4: Stok Sistem
+      // 5: Stok Sistem
       SizedBox(
-        width: colW[4],
+        width: colW[5],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text('${product.stokSistem}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: product.stokSistem < (product.stokBooking + product.stokDiterima) ? AppColors.error : null), maxLines: 2),
         ),
       ),
-      // 5: Stok Booking
+      // 6: Stok Booking
       SizedBox(
-        width: colW[5],
+        width: colW[6],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
         ),
       ),
-      // 6: Stok Diterima
+      // 7: Stok Diterima
       SizedBox(
-        width: colW[6],
+        width: colW[7],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text('${product.stokDiterima}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
         ),
       ),
-      // 7: Stok Tersedia
+      // 8: Stok Tersedia
       SizedBox(
-        width: colW[7],
+        width: colW[8],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text('${product.stokTersedia}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
         ),
       ),
-      // 8: Satuan
+      // 9: Satuan
       SizedBox(
-        width: colW[8],
+        width: colW[9],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
         ),
       ),
-      // 9: Supplier
+      // 10: Supplier
       SizedBox(
-        width: colW[9],
+        width: colW[10],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
         ),
       ),
-      // 10: Cabang
+      // 11: Cabang
       SizedBox(
-        width: colW[10],
+        width: colW[11],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Text(product.branchNama ?? product.branch ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 3, overflow: TextOverflow.ellipsis),

@@ -54,6 +54,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Filters
   String? _selectedSupplier;
   String? _selectedStatus;
+  String? _selectedOrderType; // filter produk by order_type (REGULER / 4P)
   String? _orderFilter; // persists filter across approve/reject actions
   DateTime? _orderDateFrom;
   DateTime? _orderDateTo;
@@ -176,6 +177,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String get productSearch => _productSearch;
   String? get selectedSupplier => _selectedSupplier;
   String? get selectedStatus => _selectedStatus;
+  String? get selectedOrderType => _selectedOrderType;
   String? get orderFilter => _orderFilter;
   DateTime? get orderDateFrom => _orderDateFrom;
   DateTime? get orderDateTo => _orderDateTo;
@@ -360,11 +362,13 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          orderType: _selectedOrderType,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          orderType: _selectedOrderType,
         ),
       ]);
       _products = results[0] as List<Product>;
@@ -388,9 +392,16 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     await loadProducts();
   }
 
+  Future<void> setOrderTypeFilter(String? orderType) async {
+    _selectedOrderType = orderType;
+    _productPage = 0;
+    await loadProducts();
+  }
+
   Future<void> clearAllFilters() async {
     _selectedSupplier = null;
     _selectedStatus = null;
+    _selectedOrderType = null;
     _productSearch = '';
     _productPage = 0;
     _searchDebounceTimer?.cancel();
@@ -845,12 +856,14 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          orderType: _selectedOrderType,
           cancelToken: cancelToken,
         ),
         _repo.getProductCount(
           search: _productSearch.isEmpty ? null : _productSearch,
           supplier: _selectedSupplier,
           status: _selectedStatus,
+          orderType: _selectedOrderType,
           cancelToken: cancelToken,
         ),
       ]);
