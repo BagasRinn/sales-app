@@ -122,38 +122,54 @@ class DataCard extends StatelessWidget {
   }
 
   Widget _buildFields() {
-    // 2-col grid using Wrap. Each field gets ~half the card width. flex is
-    // currently fixed to 1 here because Wrap distributes children into rows
-    // of equal slots — the prop is kept on [DataField] so callers can build
-    // their own layouts later if needed.
-    return Wrap(
-      spacing: 12,
-      runSpacing: 8,
-      children: fields.map((f) => _buildField(f)).toList(),
+    // 1 field: spread across the full card width with a Row (label left,
+    // value right) so the right side isn't dead space. 2+ fields: keep the
+    // 2-column Wrap from before, with field width derived from the card
+    // width so narrow cards don't overflow.
+    if (fields.length == 1) {
+      return _buildField(fields.first, horizontal: true);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fieldWidth = (constraints.maxWidth - 12) / 2;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: fields
+              .map((f) => SizedBox(
+                    width: fieldWidth,
+                    child: _buildField(f, horizontal: false),
+                  ))
+              .toList(),
+        );
+      },
     );
   }
 
-  Widget _buildField(DataField field) {
-    return SizedBox(
-      width: _fieldWidth,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildField(DataField field, {required bool horizontal}) {
+    final labelStyle = AppTextStyles.labelMedium.copyWith(color: AppColors.textMuted);
+    final valueStyle = AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary);
+    final valueContent = field.valueWidget ??
+        (field.value != null ? Text(field.value!, style: valueStyle) : null);
+
+    if (horizontal) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            field.label,
-            style: AppTextStyles.labelMedium.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 2),
-          if (field.valueWidget != null)
-            field.valueWidget!
-          else if (field.value != null)
-            Text(
-              field.value!,
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
-            ),
+          Flexible(child: Text(field.label, style: labelStyle)),
+          ?valueContent,
         ],
-      ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(field.label, style: labelStyle),
+        const SizedBox(height: 2),
+        ?valueContent,
+      ],
     );
   }
 
@@ -171,9 +187,4 @@ class DataCard extends StatelessWidget {
       ],
     );
   }
-
-  // Half the card width (minus the 12px gap) so two fields fit per row when
-  // the card is given a sensible width. Caller can adjust the card's
-  // overall width via the parent [Wrap].
-  static const double _fieldWidth = 200;
 }

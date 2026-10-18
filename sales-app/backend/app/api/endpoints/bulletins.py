@@ -1,5 +1,5 @@
 """Bulletin API endpoints -- CRUD + dismiss + PDF upload."""
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, exists
 from uuid import UUID
@@ -33,11 +33,16 @@ def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
 
 @router.get("", response_model=List[BulletinResponse])
 def list_bulletins(
+    response: Response,
     include_read: bool = Query(
         False,
         alias="include_read",
         description="Jika true, include bulletins yang sudah di-dismiss oleh user ini",
     ),
+    # Additive pagination — tanpa param ini response 100% sama seperti sebelumnya.
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    offset: int = Query(0, ge=0),
+    include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -75,8 +80,12 @@ def list_bulletins(
         *base_filters,
     )
 
-    results = query.order_by(Bulletin.created_at.desc()).all()
-    return [_build_bulletin_response(b, bool(is_read)) for b, is_read in results]
+    results = query.order_by(Bulletin.created_at.desc())
+    if include_total:
+        response.headers["X-Total-Count"] = str(results.order_by(None).count())
+    if limit is not None or offset:
+        results = results.limit(limit).offset(offset)
+    return [_build_bulletin_response(b, bool(is_read)) for b, is_read in results.all()]
 
 
 @router.post("", response_model=BulletinResponse)

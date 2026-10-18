@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../data/models/order.dart';
 import '../../data/models/product.dart';
@@ -14,11 +14,12 @@ import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
 import '../../data/models/supplier_performance.dart';
+import '../../data/models/supplier.dart';
 import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
 
-class AdminProvider extends ChangeNotifier {
+class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   final AdminRepository _repo;
 
   AdminRepository get repository => _repo;
@@ -101,6 +102,51 @@ class AdminProvider extends ChangeNotifier {
   List<Bulletin> _bulletins = [];
   bool _bulletinsLoading = false;
 
+  // ===== Supplier management =====
+  List<Supplier> _suppliers = [];
+  bool _suppliersLoading = false;
+  String? _suppliersError;
+
+  List<Supplier> get suppliers => _suppliers;
+  bool get suppliersLoading => _suppliersLoading;
+  String? get suppliersError => _suppliersError;
+
+  Future<void> loadSuppliers({bool? active}) async {
+    _suppliersLoading = true;
+    _suppliersError = null;
+    notifyListeners();
+    try {
+      _suppliers = await _repo.getSuppliers(active: active);
+    } catch (e) {
+      _suppliersError = e.toString();
+    } finally {
+      _suppliersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createSupplier(String name, {String orderType = 'REGULER'}) async {
+    await _repo.createSupplier(name, orderType: orderType);
+    await loadSuppliers();
+  }
+
+  Future<void> toggleSupplierActive(Supplier s) async {
+    await _repo.updateSupplierActive(s.name, !s.isActive);
+    await loadSuppliers();
+  }
+
+  /// Update order_type supplier (REGULER/4P). Backend cascade ke products.
+  /// Update local state optimistically supaya UI tidak flash kosong saat
+  /// loadSuppliers() berjalan.
+  Future<void> updateSupplierOrderType(Supplier s, String orderType) async {
+    if (s.orderType == orderType) return;
+    final updated = await _repo.updateSupplierOrderType(s.name, orderType);
+    _suppliers = _suppliers.map((row) {
+      return row.name == updated.name ? updated : row;
+    }).toList();
+    notifyListeners();
+  }
+
   AdminProvider(this._repo);
 
   /// Expose repo untuk widget yang butuh akses langsung (mis. download file).
@@ -181,6 +227,7 @@ class AdminProvider extends ChangeNotifier {
   /// Start auto-refresh. Call from dashboard initState.
   void startAutoRefresh({Duration interval = const Duration(seconds: 30)}) {
     stopAutoRefresh();
+    WidgetsBinding.instance.addObserver(this);
     _autoRefreshTimer = Timer.periodic(interval, (_) => _autoRefresh());
   }
 
@@ -188,6 +235,21 @@ class AdminProvider extends ChangeNotifier {
   void stopAutoRefresh() {
     _autoRefreshTimer?.cancel();
     _autoRefreshTimer = null;
+    WidgetsBinding.instance.removeObserver(this);
+  }
+
+  /// Track app lifecycle — skip auto-refresh kalau tab/background, immediate
+  /// refresh saat balik ke foreground supaya data tidak stale.
+  bool _isVisible = true;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final wasVisible = _isVisible;
+    _isVisible = state == AppLifecycleState.resumed;
+    // Saat balik ke foreground, fire 1 immediate refresh supaya data up-to-date.
+    if (!wasVisible && _isVisible && _autoRefreshTimer != null) {
+      _autoRefresh();
+    }
   }
 
   /// Clear the "new pending" badge after user sees it.
@@ -198,6 +260,8 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _autoRefresh() async {
     if (_state == AdminState.loading) return; // skip if user-initiated load is active
+    // Skip kalau app/tab tidak visible — tidak ada user yang lihat anyway.
+    if (!_isVisible) return;
     try {
       final prevLength = _pendingOrders.length;
       final prevStats = Map<String, int>.from(_stats);
@@ -802,7 +866,20 @@ class AdminProvider extends ChangeNotifier {
     _setLoading(true, 'Menyetujui pesanan...');
     try {
       await _repo.approveOrder(orderId);
-      await loadAll();
+      // Local state update — TIDAK panggil loadAll() (5 query paralel).
+      // Update order di _allOrders, hapus dari _pendingOrders, decrement pending count.
+      _allOrders = _allOrders.map((o) {
+        if (o.id != orderId) return o;
+        return o.copyWith(status: 'APPROVED');
+      }).toList();
+      _pendingOrders = _pendingOrders.where((o) => o.id != orderId).toList();
+      if (_stats.isNotEmpty && _stats['pending_orders'] != null) {
+        _stats = Map<String, int>.from(_stats);
+        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
+        _stats['approved_orders'] = (_stats['approved_orders'] ?? 0) + 1;
+      }
+      _setLoading(false);
+      notifyListeners();
       return true;
     } catch (e) {
       _setLoading(false);
@@ -816,7 +893,18 @@ class AdminProvider extends ChangeNotifier {
     _setLoading(true, 'Menolak pesanan...');
     try {
       await _repo.rejectOrder(orderId, rejectReason: rejectReason);
-      await loadAll();
+      _allOrders = _allOrders.map((o) {
+        if (o.id != orderId) return o;
+        return o.copyWith(status: 'REJECTED', rejectReason: rejectReason);
+      }).toList();
+      _pendingOrders = _pendingOrders.where((o) => o.id != orderId).toList();
+      if (_stats.isNotEmpty && _stats['pending_orders'] != null) {
+        _stats = Map<String, int>.from(_stats);
+        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
+        _stats['rejected_orders'] = (_stats['rejected_orders'] ?? 0) + 1;
+      }
+      _setLoading(false);
+      notifyListeners();
       return true;
     } catch (e) {
       _setLoading(false);
@@ -832,7 +920,17 @@ class AdminProvider extends ChangeNotifier {
       await _repo.cancelOrderItems(orderId, items: [
         {'item_id': itemId, 'qty': qty, 'reason': reason},
       ]);
-      await loadAll();
+      // Local state update — tambahkan entry ke cancelledItems di order tsb.
+      _allOrders = _allOrders.map((o) {
+        if (o.id != orderId) return o;
+        final newCancelled = [
+          ...o.cancelledItems,
+          CancelledItem(productId: itemId, qty: qty, reason: reason),
+        ];
+        return o.copyWith(cancelledItems: newCancelled);
+      }).toList();
+      _setLoading(false);
+      notifyListeners();
       return true;
     } catch (e) {
       _setLoading(false);

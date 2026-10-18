@@ -95,6 +95,43 @@ class _StatsTabState extends State<StatsTab> {
   String _statusFilter = 'APPROVED';
   bool _downloading = false;
   bool _downloadingPeriod = false;
+  Map<String, dynamic>? _summary;
+  bool _summaryLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load summary untuk periode default. Defer ke post-frame supaya provider
+    // sudah siap di-decode.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadReportSummary();
+    });
+  }
+
+  Future<void> _loadReportSummary() async {
+    if (_periodEnd.isBefore(_periodStart)) return;
+    setState(() => _summaryLoading = true);
+    try {
+      final repo = context.read<AdminProvider>().adminRepository;
+      final data = await repo.getReportSummary(
+        startDate: _periodStart,
+        endDate: _periodEnd,
+      );
+      if (mounted) setState(() => _summary = data);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _summary = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memuat ringkasan: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _summaryLoading = false);
+    }
+  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -172,6 +209,7 @@ class _StatsTabState extends State<StatsTab> {
     );
     if (picked != null) {
       setState(() => _periodStart = picked);
+      _loadReportSummary();
     }
   }
 
@@ -185,6 +223,7 @@ class _StatsTabState extends State<StatsTab> {
     );
     if (picked != null) {
       setState(() => _periodEnd = picked);
+      _loadReportSummary();
     }
   }
 
@@ -531,6 +570,70 @@ class _StatsTabState extends State<StatsTab> {
             ),
           ],
 
+          // Section: Ringkasan Laporan (agregat via /reports/summary — pure SQL,
+          // TIDAK load row order). Default display = summary, user klik tombol
+          // "Download XLSX" untuk opt-in detail.
+          if (_summaryLoading) ...[
+            const SizedBox(height: 16),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ] else if (_summary != null) ...[
+            const SizedBox(height: 20),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12, left: 4),
+              child: Text(
+                'Ringkasan Laporan (Periode Dipilih)',
+                style: AppTextStyles.labelLarge,
+              ),
+            ),
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                _StatCard(
+                  title: 'Total Pesanan',
+                  value: '${_summary!['total_orders'] ?? 0}',
+                  icon: Icons.assessment,
+                  color: AppColors.info,
+                ),
+                _StatCard(
+                  title: 'Item Terjual',
+                  value: '${_summary!['total_items_sold'] ?? 0}',
+                  icon: Icons.inventory_2,
+                  color: AppColors.success,
+                ),
+                _StatCard(
+                  title: 'Pendapatan (Raw)',
+                  value: _fmt((_summary!['raw_revenue'] ?? 0) as int),
+                  icon: Icons.payments,
+                  color: AppColors.warning,
+                ),
+              ],
+            ),
+            if ((_summary!['by_status'] as List?)?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in (_summary!['by_status'] as List))
+                      Chip(
+                        label: Text('${s['status']}: ${s['count']}'),
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(color: AppColors.border),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+
           if (isLoading && stats.isEmpty && pending.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
@@ -829,10 +932,9 @@ class _StatCard extends StatelessWidget {
             : 200.0;
         return SizedBox(
           width: cardWidth,
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(compact ? 14 : 20),
-              child: Column(
+          child: AppCard(
+            padding: EdgeInsets.all(compact ? 14 : 20),
+            child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
@@ -867,8 +969,7 @@ class _StatCard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        );
+          );
       },
     );
   }
@@ -900,10 +1001,9 @@ class _PeriodReportCard extends StatelessWidget {
     final startLabel = DateFormat('dd MMM yyyy', 'id_ID').format(periodStart);
     final endLabel = DateFormat('dd MMM yyyy', 'id_ID').format(periodEnd);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -1024,12 +1124,11 @@ class _PeriodReportCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
-class _ReportDownloadCard extends StatelessWidget {
+  class _ReportDownloadCard extends StatelessWidget {
   final DateTime selectedDate;
   final String statusFilter;
   final bool downloading;
@@ -1050,10 +1149,9 @@ class _ReportDownloadCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = DateFormat('dd MMM yyyy', 'id_ID').format(selectedDate);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+    return AppCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -1161,12 +1259,11 @@ class _ReportDownloadCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
-class _SalesPerformanceCard extends StatelessWidget {
+  class _SalesPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem s;
   /// Callback untuk klik pada bagian card. Status null = "Semua"
   /// (klik nama atau area kosong), 'APPROVED'/'PENDING'/'REJECTED' = klik
@@ -1376,17 +1473,8 @@ class _BranchPerformanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: Container(
-        width: fullWidth ? double.infinity : null,
+      child: AppCard(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.35),
-            width: 1.5,
-          ),
-        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < 600;
@@ -1703,7 +1791,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     super.initState();
     _statusFilter = widget.initialStatus;
     widget.provider.addListener(_onProviderUpdate);
-    _applyFilters();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyFilters();
+    });
   }
 
   @override

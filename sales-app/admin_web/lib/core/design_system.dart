@@ -429,3 +429,48 @@ class OrderStatusChip extends StatelessWidget {
     );
   }
 }
+
+/// Reusable card widget with subtle gray border
+class AppCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final Color? color;
+  final double? elevation;
+
+  const AppCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.margin,
+    this.color,
+    this.elevation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        color: color ?? AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.border.withValues(alpha: 0.5),
+          width: 1,
+        ),
+        boxShadow: elevation != null && elevation! > 0
+            ? [
+                BoxShadow(
+                  color: AppColors.textMuted.withValues(alpha: 0.08),
+                  blurRadius: elevation!,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      child: padding != null
+          ? Padding(padding: padding!, child: child)
+          : child,
+    );
+  }
+}

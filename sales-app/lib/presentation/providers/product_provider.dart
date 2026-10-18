@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/models/product.dart';
 import '../../data/repositories/product_repository.dart';
 import '../../core/api_exception.dart';
+import '../../core/debouncer.dart';
 import '../../core/design_system.dart';
 
 enum ProductStatusFilter { all, available, low, outOfStock }
@@ -28,7 +29,16 @@ class ProductProvider extends ChangeNotifier {
   final List<String> _suppliers4p = [];
   bool _suppliers4pLoaded = false;
 
+  /// Debounce ketikan search supaya 1 request per jeda typing, bukan 1/karakter.
+  final _searchDebouncer = Debouncer(delay: const Duration(milliseconds: 350));
+
   ProductProvider(this._productRepo);
+
+  @override
+  void dispose() {
+    _searchDebouncer.dispose();
+    super.dispose();
+  }
 
   List<Product> get products {
     return _allProducts.where((p) {
@@ -197,11 +207,14 @@ class ProductProvider extends ChangeNotifier {
   }
 
   void search(String query) {
+    if (query == _searchQuery) return;
     _searchQuery = query;
-    loadProducts();
+    _searchDebouncer(loadProducts);
   }
 
   void clearSearch() {
+    _searchDebouncer.cancel();
+    if (_searchQuery.isEmpty) return;
     _searchQuery = '';
     loadProducts();
   }
@@ -209,28 +222,26 @@ class ProductProvider extends ChangeNotifier {
   void setStatusFilter(ProductStatusFilter filter) {
     if (_statusFilter == filter) return;
     _statusFilter = filter;
-    _resetPagination();
-    loadProducts();
+    notifyListeners();
   }
 
   void setCategoryFilter(String? category) {
     if (_categoryFilter == category) return;
     _categoryFilter = category;
-    _resetPagination();
-    loadProducts();
+    notifyListeners();
   }
 
   void clearFilters() {
+    if (!hasActiveFilters && _searchQuery.isEmpty) return;
     _statusFilter = ProductStatusFilter.all;
     _categoryFilter = null;
-    _searchQuery = '';
-    _resetPagination();
-    loadProducts();
-  }
-
-  void _resetPagination() {
-    _allProducts = [];
-    _hasMore = true;
+    if (_searchQuery.isNotEmpty) {
+      _searchQuery = '';
+      _searchDebouncer.cancel();
+      loadProducts();
+    } else {
+      notifyListeners();
+    }
   }
 
   bool get hasActiveFilters =>

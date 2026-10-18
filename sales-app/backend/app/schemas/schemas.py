@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from uuid import UUID
 from typing import List, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from enum import Enum
 
 
@@ -865,3 +865,67 @@ class SupplierTargetResponse(BaseModel):
     target_value: int
     class Config:
         from_attributes = True
+
+
+# ==================== REPORTS SUMMARY ====================
+
+class ReportSummaryByStatus(BaseModel):
+    status: str
+    count: int
+
+
+class ReportSummaryByProduct(BaseModel):
+    product_id: str
+    product_name: str
+    qty_sold: int
+    # raw revenue (qty * harga) sebelum 3-layer diskon; cukup untuk dashboard
+    raw_revenue: int
+
+
+class ReportSummaryBySales(BaseModel):
+    user_id: UUID
+    username: str
+    nama: Optional[str] = None
+    order_count: int
+    raw_revenue: int
+
+
+class ReportSummaryByBranch(BaseModel):
+    branch: str
+    order_count: int
+    item_count: int
+    raw_revenue: int
+
+
+class ReportSummaryResponse(BaseModel):
+    period_start: date
+    period_end: date
+    total_orders: int
+    total_items_sold: int
+    raw_revenue: int
+    by_status: List[ReportSummaryByStatus]
+    by_product: List[ReportSummaryByProduct]   # top 20 by raw_revenue desc
+    by_sales: List[ReportSummaryBySales]       # top 20 by order_count desc
+    by_branch: List[ReportSummaryByBranch]
+
+
+class SupplierCreate(BaseSchema):
+    name: str = Field(..., min_length=1, max_length=200)
+    order_type: str = Field(default="REGULER")
+
+
+class SupplierActiveUpdate(BaseSchema):
+    is_active: bool
+
+
+class SupplierOrderTypeUpdate(BaseSchema):
+    order_type: str = Field(..., description="'REGULER' atau '4P'")
+
+
+class SupplierResponse(BaseSchema):
+    name: str
+    is_active: bool
+    order_type: str = "REGULER"
+    product_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

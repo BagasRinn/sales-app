@@ -60,8 +60,9 @@ class OrderProvider extends ChangeNotifier {
       _hasMore = newOrders.length >= _pageSize;
     } on ApiException catch (e) {
       _errorMessage = e.message;
-    } catch (e) {
-      _errorMessage = 'Gagal memuat daftar pesanan';
+    } catch (e, st) {
+      debugPrint('loadOrders failed: $e\n$st');
+      _errorMessage = 'Gagal memuat daftar pesanan (${e.runtimeType})';
     }
 
     _isLoading = false;
@@ -137,8 +138,9 @@ class OrderProvider extends ChangeNotifier {
       _errorMessage = e.message;
       notifyListeners();
       return null;
-    } catch (e) {
-      _errorMessage = 'Gagal membuat order';
+    } catch (e, st) {
+      debugPrint('createOrder failed: $e\n$st');
+      _errorMessage = 'Gagal membuat order (${e.runtimeType})';
       notifyListeners();
       return null;
     }
@@ -169,8 +171,14 @@ class OrderProvider extends ChangeNotifier {
       _errorMessage = e.message;
       notifyListeners();
       return null;
-    } catch (e) {
-      _errorMessage = 'Gagal menyimpan draft';
+    } catch (e, st) {
+      // Generic fallback fires for non-API exceptions (e.g. Order.fromJson
+      // TypeError when backend response shape is unexpected). Surface the
+      // exception class in the message so the user/developer can tell at
+      // a glance whether it's a TypeError / FormatException / etc., and
+      // dump the full trace to debugPrint for the next investigation.
+      debugPrint('updateDraftOrder failed: $e\n$st');
+      _errorMessage = 'Gagal menyimpan draft (${e.runtimeType})';
       notifyListeners();
       return null;
     }
@@ -188,8 +196,9 @@ class OrderProvider extends ChangeNotifier {
       _errorMessage = e.message;
       notifyListeners();
       return false;
-    } catch (e) {
-      _errorMessage = 'Gagal mengirim order';
+    } catch (e, st) {
+      debugPrint('submitOrder failed: $e\n$st');
+      _errorMessage = 'Gagal mengirim order (${e.runtimeType})';
       notifyListeners();
       return false;
     }
@@ -207,8 +216,9 @@ class OrderProvider extends ChangeNotifier {
       _errorMessage = e.message;
       notifyListeners();
       return false;
-    } catch (e) {
-      _errorMessage = 'Gagal menghapus draft';
+    } catch (e, st) {
+      debugPrint('deleteOrder failed: $e\n$st');
+      _errorMessage = 'Gagal menghapus draft (${e.runtimeType})';
       notifyListeners();
       return false;
     }

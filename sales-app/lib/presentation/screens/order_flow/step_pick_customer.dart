@@ -81,15 +81,11 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _search = '');
-                        _load();
                       },
                     )
                   : null,
             ),
-            onChanged: (v) {
-              setState(() => _search = v);
-              _load();
-            },
+            onChanged: (v) => setState(() => _search = v),
           ),
         ),
         Padding(

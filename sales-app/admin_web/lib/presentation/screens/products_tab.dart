@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/data_card.dart';
+import '../widgets/responsive_action_menu.dart';
 import '../../data/models/product.dart';
 
 class ProductsTab extends StatefulWidget {
@@ -77,6 +80,7 @@ class _ProductsTabState extends State<ProductsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Search bar
               Row(
                 children: [
                   Expanded(
@@ -109,62 +113,8 @@ class _ProductsTabState extends State<ProductsTab> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 160,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedSupplier,
-                      decoration: InputDecoration(
-                        hintText: 'Supplier',
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      isExpanded: true,
-                      items: [
-                        const DropdownMenuItem(
-                            value: null, child: Text('Semua Supplier')),
-                        ..._supplierList.map((s) => DropdownMenuItem(
-                              value: s,
-                              child:
-                                  Text(s, overflow: TextOverflow.ellipsis),
-                            )),
-                      ],
-                      onChanged: (v) => provider.setSupplierFilter(v),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 140,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: selectedStatus,
-                      decoration: InputDecoration(
-                        hintText: 'Status',
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      isExpanded: true,
-                      items: [
-                        const DropdownMenuItem(
-                            value: null, child: Text('Semua Status')),
-                        ..._statusOptions.map((s) => DropdownMenuItem(
-                              value: s['value'],
-                              child: Text(s['label']!),
-                            )),
-                      ],
-                      onChanged: (v) => provider.setStatusFilter(v),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
@@ -175,13 +125,22 @@ class _ProductsTabState extends State<ProductsTab> {
                       style: AppTextStyles.bodySmall,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: 'Refresh stok',
-                    onPressed: () => provider.loadProducts(),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              // Filter row
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 400;
+                  if (isNarrow) {
+                    return Column(
+                      children: [
+                        _buildFilterDropdowns(provider, selectedSupplier, selectedStatus),
+                      ],
+                    );
+                  }
+                  return _buildFilterDropdowns(provider, selectedSupplier, selectedStatus);
+                },
               ),
               if (selectedSupplier != null || selectedStatus != null) ...[
                 const SizedBox(height: 8),
@@ -228,7 +187,14 @@ class _ProductsTabState extends State<ProductsTab> {
                         ],
                       ),
                     )
-                  : _buildTable(products),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final resp = Responsive.of(constraints.maxWidth);
+                        return resp.isMobile
+                            ? _buildCardList(products)
+                            : _buildTable(products);
+                      },
+                    ),
         ),
         // Pagination
         Container(
@@ -264,6 +230,171 @@ class _ProductsTabState extends State<ProductsTab> {
     );
   }
 
+  Widget _buildFilterDropdowns(
+    AdminProvider provider,
+    String? selectedSupplier,
+    String? selectedStatus,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 160,
+          child: DropdownButtonFormField<String>(
+            initialValue: selectedSupplier,
+            decoration: InputDecoration(
+              hintText: 'Supplier',
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem(
+                  value: null, child: Text('Semua Supplier')),
+              ..._supplierList.map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s, overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) => provider.setSupplierFilter(v),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 140,
+          child: DropdownButtonFormField<String>(
+            initialValue: selectedStatus,
+            decoration: InputDecoration(
+              hintText: 'Status',
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem(
+                  value: null, child: Text('Semua Status')),
+              ..._statusOptions.map((s) => DropdownMenuItem(
+                    value: s['value'],
+                    child: Text(s['label']!),
+                  )),
+            ],
+            onChanged: (v) => provider.setStatusFilter(v),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _buildCardList(List<Product> products) {
+    final fmtCurrency = NumberFormat.currency(
+        locale: 'id_ID', symbol: '', decimalDigits: 0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        // 1 kolom di compact, 2 di medium, 3 di expanded.
+        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        const gap = 12.0;
+        const hPadding = 12.0;
+        final cardWidth =
+            (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
+                columns;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(hPadding),
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final p in products)
+                SizedBox(
+                  width: cardWidth,
+                  child: _buildProductCard(p, fmtCurrency),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductCard(Product p, NumberFormat fmtCurrency) {
+    final status = stockStatusFromValue(p.stokTersedia);
+    final statusColor = stockStatusColor(status);
+    return DataCard(
+      title: p.namaBarang,
+      subtitle: 'Kategori: ${p.kategori ?? '-'}',
+      badges: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            status == 'habis'
+                ? 'Habis'
+                : status == 'rendah'
+                    ? 'Rendah'
+                    : 'Tersedia',
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+      fields: [
+        DataField(
+          label: 'Harga',
+          value: 'Rp ${fmtCurrency.format(p.harga)}',
+        ),
+        DataField(
+          label: 'Stok Tersedia',
+          value: '${p.stokTersedia}',
+        ),
+        DataField(
+          label: 'Supplier',
+          value: (p.namaSupplier != null && p.namaSupplier!.isNotEmpty)
+              ? p.namaSupplier
+              : '-',
+        ),
+      ],
+      actions: widget.readOnly
+          ? null
+          : [
+              ResponsiveActionMenu(
+                actions: [
+                  MenuAction(
+                    label: 'Ubah',
+                    icon: Icons.swap_horiz,
+                    onTap: () => _showStockDialog(context, p),
+                  ),
+                  MenuAction(
+                    label: 'Edit',
+                    icon: Icons.edit,
+                    onTap: () => _showEditDialog(context, p),
+                  ),
+                  MenuAction(
+                    label: 'Hapus',
+                    icon: Icons.delete_outline,
+                    onTap: () => _confirmDelete(context, p),
+                    destructive: true,
+                  ),
+                ],
+              ),
+            ],
+    );
+  }
+
   Widget _buildTable(List<Product> products) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -277,8 +408,8 @@ class _ProductsTabState extends State<ProductsTab> {
         final namaW = (availW - fixedTotal).clamp(150.0, 450.0);
         // totalW: exclude aksi column if readOnly
         final totalW = widget.readOnly
-            ? namaW + fixedTotal
-            : namaW + fixedTotal + aksiWidth;
+            ? fixedTotal - aksiWidth + namaW
+            : fixedTotal + namaW;
         // Urutan col: [sku, nama, ktgr, harga, stok, stok, stok, stok, sat, supp, cabang, aksi]
         final colW = <double>[
           fixedW[0], // SKU
@@ -290,10 +421,14 @@ class _ProductsTabState extends State<ProductsTab> {
           fixedW[5], // Stok Diterima
           fixedW[6], // Stok Tersedia
           fixedW[7], // Satuan
-          fixedW[8], // Supplier
-          fixedW[9], // Cabang
         ];
-        if (!widget.readOnly) colW.add(fixedW[10]); // Aksi
+        if (widget.readOnly) {
+          colW.add(fixedW[8]); // Supplier
+          colW.add(fixedW[9]); // Cabang
+        } else {
+          colW.add(fixedW[8]); // Supplier
+          colW.add(fixedW[9]); // Aksi
+        }
 
         // Horizontal scroll on outer so the wide table can scroll left-right.
         return SingleChildScrollView(
@@ -332,118 +467,114 @@ class _ProductsTabState extends State<ProductsTab> {
 
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => Dialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: SizedBox(
-          width: 480,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      builder: (ctx) => ResponsiveDialog(
+        showCloseButton: true,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.infoBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.edit, color: AppColors.info),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Ubah Stok Sistem',
+                            style: AppTextStyles.headlineSmall),
+                        Text('Manual override stok produk',
+                            style: AppTextStyles.bodySmall),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.infoBg,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.edit, color: AppColors.info),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Ubah Stok Sistem',
-                              style: AppTextStyles.headlineSmall),
-                          Text('Manual override stok produk',
-                              style: AppTextStyles.bodySmall),
-                        ],
-                      ),
-                    ),
+                    Text(product.namaBarang, style: AppTextStyles.labelLarge),
+                    const SizedBox(height: 4),
+                    Text('SKU: ${product.id}', style: AppTextStyles.mono),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(product.namaBarang, style: AppTextStyles.labelLarge),
-                      const SizedBox(height: 4),
-                      Text('SKU: ${product.id}', style: AppTextStyles.mono),
-                    ],
-                  ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Stok Sistem Baru',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Stok Sistem Baru',
-                    border: OutlineInputBorder(),
-                  ),
-                  autofocus: true,
+                autofocus: true,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.infoBg,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.infoBg,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      _infoPill(
-                          'Booking', '${product.stokBooking}', AppColors.info),
-                      const SizedBox(width: 8),
-                      _infoPill('Diterima',
-                          '${product.stokDiterima}', AppColors.info),
-                      const SizedBox(width: 8),
-                      _infoPill('Tersedia',
-                          '${product.stokTersedia}', AppColors.warning),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
+                child: Row(
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Batal'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {
-                          final value = int.tryParse(controller.text);
-                          if (value == null || value < 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Masukkan angka yang valid')),
-                            );
-                            return;
-                          }
-                          Navigator.pop(ctx, value);
-                        },
-                        child: const Text('Simpan'),
-                      ),
-                    ),
+                    _infoPill(
+                        'Booking', '${product.stokBooking}', AppColors.info),
+                    const SizedBox(width: 8),
+                    _infoPill('Diterima',
+                        '${product.stokDiterima}', AppColors.info),
+                    const SizedBox(width: 8),
+                    _infoPill('Tersedia',
+                        '${product.stokTersedia}', AppColors.warning),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Batal'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        final value = int.tryParse(controller.text);
+                        if (value == null || value < 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Masukkan angka yang valid')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx, value);
+                      },
+                      child: const Text('Simpan'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -479,120 +610,114 @@ class _ProductsTabState extends State<ProductsTab> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: SizedBox(
-            width: 480,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (ctx, setState) => ResponsiveDialog(
+          showCloseButton: true,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.infoBg,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.edit_outlined,
-                              color: AppColors.info),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Edit Produk',
-                                  style: AppTextStyles.headlineSmall),
-                              Text(
-                                '${product.namaBarang} (SKU: ${product.id})',
-                                style: AppTextStyles.bodySmall,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: kategoriCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Kategori',
-                        border: OutlineInputBorder(),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBg,
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      child: const Icon(Icons.edit_outlined,
+                          color: AppColors.info),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: satuanCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Satuan',
-                        border: OutlineInputBorder(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Edit Produk',
+                              style: AppTextStyles.headlineSmall),
+                          Text(
+                            '${product.namaBarang} (SKU: ${product.id})',
+                            style: AppTextStyles.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: supplierCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Supplier',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Tipe Order',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary)),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('REGULER'),
-                            selected: orderType == 'REGULER',
-                            onSelected: (sel) {
-                              if (sel) setState(() => orderType = 'REGULER');
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ChoiceChip(
-                            label: const Text('4P'),
-                            selected: orderType == '4P',
-                            onSelected: (sel) {
-                              if (sel) setState(() => orderType = '4P');
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Batal'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Simpan'),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: kategoriCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Kategori',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: satuanCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Satuan',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: supplierCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Supplier',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Tipe Order',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('REGULER'),
+                        selected: orderType == 'REGULER',
+                        onSelected: (sel) {
+                          if (sel) setState(() => orderType = 'REGULER');
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('4P'),
+                        selected: orderType == '4P',
+                        onSelected: (sel) {
+                          if (sel) setState(() => orderType = '4P');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Batal'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Simpan'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -643,9 +768,7 @@ class _ProductsTabState extends State<ProductsTab> {
   Future<void> _confirmDelete(BuildContext context, Product product) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (ctx) => ResponsiveAlertDialog(
         title: const Text('Hapus Produk'),
         content: Text(
           'Yakin ingin menghapus "${product.namaBarang}" (${product.id})?\n\nTindakan ini tidak dapat dibatalkan.',
@@ -884,24 +1007,23 @@ class _DataRow extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextButton(
-                    onPressed: () => onShowStock(product),
-                    child: const Text('Ubah'),
+              child: ResponsiveActionMenu(
+                actions: [
+                  MenuAction(
+                    label: 'Ubah',
+                    icon: Icons.swap_horiz,
+                    onTap: () => onShowStock(product),
                   ),
-                  TextButton(
-                    onPressed: () => onShowEdit(product),
-                    child: const Text('Edit'),
+                  MenuAction(
+                    label: 'Edit',
+                    icon: Icons.edit,
+                    onTap: () => onShowEdit(product),
                   ),
-                  IconButton(
-                    onPressed: () => onConfirmDelete(product),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    color: AppColors.error,
-                    tooltip: 'Hapus',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                  MenuAction(
+                    label: 'Hapus',
+                    icon: Icons.delete_outline,
+                    onTap: () => onConfirmDelete(product),
+                    destructive: true,
                   ),
                 ],
               ),
@@ -912,7 +1034,7 @@ class _DataRow extends StatelessWidget {
     }
 
     return SizedBox(
-      width: isReadOnly ? totalW - colW[11] : totalW,
+      width: isReadOnly ? totalW - 90.0 : totalW,
       height: 60,
       child: Row(children: cells),
     );

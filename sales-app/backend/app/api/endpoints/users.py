@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -61,8 +61,12 @@ def list_sales_users(
 
 @router.get("", response_model=List[UserResponse])
 def list_users(
+    response: Response,
     role: Optional[str] = None,
     search: Optional[str] = None,
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    offset: int = Query(0, ge=0),
+    include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -78,7 +82,12 @@ def list_users(
         query = query.filter(
             (User.username.ilike(like)) | (User.nama.ilike(like))
         )
-    return [_user_to_response(u) for u in query.order_by(User.role, User.username).all()]
+    query = query.order_by(User.role, User.username)
+    if include_total:
+        response.headers["X-Total-Count"] = str(query.order_by(None).count())
+    if limit is not None or offset:
+        query = query.limit(limit).offset(offset)
+    return [_user_to_response(u) for u in query.all()]
 
 
 @router.post("", response_model=UserResponse, status_code=201)

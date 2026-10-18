@@ -4,7 +4,7 @@ Sales submit pengajuan customer baru → admin/manager review → approve (bikin
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import text, or_, func
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
@@ -191,6 +191,10 @@ def submit_customer_registration(
 
 @router.get("/my", response_model=List[CustomerSubmissionResponse])
 def list_my_submissions(
+    response: Response,
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    offset: int = Query(0, ge=0),
+    include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -201,8 +205,12 @@ def list_my_submissions(
         .filter(CustomerRegistrationSubmission.sales_id == sales_id)
     )
     submissions = apply_branch_filter(submissions, CustomerRegistrationSubmission, current_user)
-    submissions = submissions.order_by(CustomerRegistrationSubmission.created_at.desc()).all()
-    return [_serialize(s, db) for s in submissions]
+    submissions = submissions.order_by(CustomerRegistrationSubmission.created_at.desc())
+    if include_total:
+        response.headers["X-Total-Count"] = str(submissions.order_by(None).count())
+    if limit is not None or offset:
+        submissions = submissions.limit(limit).offset(offset)
+    return [_serialize(s, db) for s in submissions.all()]
 
 
 @router.get("/check-duplicate")
@@ -240,7 +248,11 @@ def check_duplicate_customer(
 
 @router.get("", response_model=List[CustomerSubmissionResponse])
 def list_submissions(
+    response: Response,
     status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
+    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    offset: int = Query(0, ge=0),
+    include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -249,8 +261,12 @@ def list_submissions(
     query = apply_branch_filter(query, CustomerRegistrationSubmission, current_user)
     if status:
         query = query.filter(CustomerRegistrationSubmission.status == status.upper())
-    submissions = query.order_by(CustomerRegistrationSubmission.created_at.desc()).all()
-    return [_serialize(s, db) for s in submissions]
+    submissions = query.order_by(CustomerRegistrationSubmission.created_at.desc())
+    if include_total:
+        response.headers["X-Total-Count"] = str(submissions.order_by(None).count())
+    if limit is not None or offset:
+        submissions = submissions.limit(limit).offset(offset)
+    return [_serialize(s, db) for s in submissions.all()]
 
 
 @router.get("/{submission_id}", response_model=CustomerSubmissionResponse)

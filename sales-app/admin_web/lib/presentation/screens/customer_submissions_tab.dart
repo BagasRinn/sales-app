@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/customer_submission.dart';
 
@@ -893,46 +894,47 @@ class _SubmissionDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          return ResponsiveAlertDialog(
             title: const Text('Setujui Pengajuan'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Customer "${s.namaLangganan}" akan dibuat dengan kode di bawah.',
-                  style: AppTextStyles.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: kodeCtl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Kode Langganan *',
-                    hintText: 'C-0001',
-                    border: OutlineInputBorder(),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Customer "${s.namaLangganan}" akan dibuat dengan kode di bawah.',
+                    style: AppTextStyles.bodyMedium,
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: namaCtl,
-                  decoration: InputDecoration(
-                    labelText: 'Nama Toko (override)',
-                    border: const OutlineInputBorder(),
-                    helperText: 'Default: dari submission. Edit kalau perlu.',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: kodeCtl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kode Langganan *',
+                      hintText: 'C-0001',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: alamatCtl,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: 'Alamat (override)',
-                    border: const OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: namaCtl,
+                    decoration: InputDecoration(
+                      labelText: 'Nama Toko (override)',
+                      border: const OutlineInputBorder(),
+                      helperText: 'Default: dari submission. Edit kalau perlu.',
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: alamatCtl,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'Alamat (override)',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -995,33 +997,34 @@ class _SubmissionDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          return ResponsiveAlertDialog(
             title: const Text('Tolak Pengajuan'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tolak pengajuan "${s.namaLangganan}"?',
-                  style: AppTextStyles.bodyMedium,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Alasan penolakan (opsional, akan ditampilkan ke sales).',
-                  style: AppTextStyles.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: reasonCtl,
-                  maxLines: 3,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Misal: Data tidak valid, duplikat, dll.',
-                    border: OutlineInputBorder(),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tolak pengajuan "${s.namaLangganan}"?',
+                    style: AppTextStyles.bodyMedium,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Alasan penolakan (opsional, akan ditampilkan ke sales).',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonCtl,
+                    maxLines: 3,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Misal: Data tidak valid, duplikat, dll.',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(

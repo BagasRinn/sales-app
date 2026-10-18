@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/data_card.dart';
 import '../../data/models/customer.dart';
 
 class CustomersTab extends StatefulWidget {
@@ -133,7 +135,14 @@ class _CustomersTabState extends State<CustomersTab> {
                         ],
                       ),
                     )
-                  : _buildTable(customers),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final resp = Responsive.of(constraints.maxWidth);
+                        return resp.isMobile
+                            ? _buildCardList(customers)
+                            : _buildTable(customers);
+                      },
+                    ),
         ),
         // Pagination
         Container(
@@ -165,6 +174,70 @@ class _CustomersTabState extends State<CustomersTab> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCardList(List<Customer> customers) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        // 1 kolom di compact, 2 di medium, 3 di expanded — biar whitespace
+        // di landscape phone / tablet / desktop tidak nganggur.
+        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        const gap = 12.0;
+        const hPadding = 12.0;
+        final cardWidth =
+            (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
+                columns;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(hPadding),
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final c in customers)
+                SizedBox(
+                  width: cardWidth,
+                  child: DataCard(
+                    title: c.namaToko,
+                    subtitle:
+                        'Kode: ${c.kode ?? '-'} • Area: ${c.kodeArea ?? '-'}',
+                    fields: [
+                      DataField(
+                        label: 'Alamat',
+                        value: (c.alamat != null && c.alamat!.isNotEmpty)
+                            ? c.alamat
+                            : '-',
+                      ),
+                    ],
+                    actions: [
+                      OutlinedButton.icon(
+                        onPressed: () => _openDetail(c),
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        label: const Text('Detail'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                          foregroundColor: AppColors.primaryLight,
+                        ),
+                      ),
+                      if (!widget.readOnly)
+                        OutlinedButton.icon(
+                          onPressed: () => _confirmDelete(c),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Hapus'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                            foregroundColor: AppColors.error,
+                            side: const BorderSide(color: AppColors.error),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -330,8 +403,7 @@ class _CustomersTabState extends State<CustomersTab> {
   Future<void> _confirmDelete(Customer c) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (ctx) => ResponsiveAlertDialog(
         title: const Text('Hapus Toko'),
         content: Text(
           'Yakin ingin menghapus "${c.namaToko}"?\n\n'
@@ -492,27 +564,23 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: 720,
-        height: 480,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const Divider(height: 1),
-            Expanded(
-              child: _loadingDetail
-                  ? const Center(child: CircularProgressIndicator())
-                  : _loadError != null
-                      ? _buildError()
-                      : _buildForm(),
-            ),
-            const Divider(height: 1),
-            _buildFooter(),
-          ],
-        ),
+    return ResponsiveDialog(
+      showCloseButton: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          const Divider(height: 1),
+          Expanded(
+            child: _loadingDetail
+                ? const Center(child: CircularProgressIndicator())
+                : _loadError != null
+                    ? _buildError()
+                    : _buildForm(),
+          ),
+          const Divider(height: 1),
+          _buildFooter(),
+        ],
       ),
     );
   }
@@ -586,46 +654,52 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
   }
 
   Widget _buildForm() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final r = Responsive.of(constraints.maxWidth);
+        final pad = r.isCompact ? 16.0 : 24.0;
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(pad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _Field(
-                  label: 'Kode',
-                  controller: _kodeC,
-                  hint: 'cth: OUT001',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Field(
+                      label: 'Kode',
+                      controller: _kodeC,
+                      hint: 'cth: OUT001',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: _Field(
+                      label: 'Nama Toko *',
+                      controller: _namaC,
+                      hint: 'cth: Toko Maju Jaya',
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: _Field(
-                  label: 'Nama Toko *',
-                  controller: _namaC,
-                  hint: 'cth: Toko Maju Jaya',
-                ),
+              const SizedBox(height: 12),
+              _Field(
+                label: 'Alamat',
+                controller: _alamatC,
+                hint: 'cth: Jl. Sudirman No. 12',
+                maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              _Field(
+                label: 'Kode Area',
+                controller: _kodeAreaC,
+                hint: 'cth: MULIA2',
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _Field(
-            label: 'Alamat',
-            controller: _alamatC,
-            hint: 'cth: Jl. Sudirman No. 12',
-            maxLines: 2,
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            label: 'Kode Area',
-            controller: _kodeAreaC,
-            hint: 'cth: MULIA2',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

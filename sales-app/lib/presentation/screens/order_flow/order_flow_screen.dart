@@ -149,13 +149,28 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       final draft = context.read<DraftOrderProvider>();
       if (draft.customerId == null) return;
 
-      _showLoading('Menyimpan draft...');
-      final result = await context.read<OrderProvider>().createOrder(
-            customerId: draft.customerId!,
-            items: draft.buildItemsPayload(),
-            notes: draft.notes,
-            orderType: draft.orderType,
-          );
+      final orderProvider = context.read<OrderProvider>();
+      final isEditing = draft.isEditing && draft.editingOrderId != null;
+
+      _showLoading(isEditing ? 'Memperbarui draft...' : 'Menyimpan draft...');
+      // Mirrors _submitToPENDING: when editing, route to updateDraftOrder so
+      // the existing DRAFT row gets its items/notes/customer updated. Calling
+      // createOrder here would silently spawn a duplicate DRAFT every time the
+      // user clicks "Simpan Draft" on an existing draft.
+      final Order? result = isEditing
+          ? await orderProvider.updateDraftOrder(
+              orderId: draft.editingOrderId!,
+              customerId: draft.customerId!,
+              items: draft.buildItemsPayload(),
+              notes: draft.notes,
+              orderType: draft.orderType,
+            )
+          : await orderProvider.createOrder(
+              customerId: draft.customerId!,
+              items: draft.buildItemsPayload(),
+              notes: draft.notes,
+              orderType: draft.orderType,
+            );
       _hideLoading();
 
       if (!mounted) return;
@@ -163,14 +178,14 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       if (result != null) {
         context.read<DraftOrderProvider>().reset();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Draft disimpan'),
+          SnackBar(
+            content: Text(isEditing ? 'Draft diperbarui' : 'Draft disimpan'),
             backgroundColor: AppColors.success,
           ),
         );
         Navigator.pop(context);
       } else {
-        final err = context.read<OrderProvider>().errorMessage ?? 'Gagal menyimpan draft';
+        final err = orderProvider.errorMessage ?? 'Gagal menyimpan draft';
         _showError(err);
       }
     } finally {

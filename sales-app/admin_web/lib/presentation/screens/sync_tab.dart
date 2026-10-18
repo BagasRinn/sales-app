@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/datetime_utils.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/sync_result.dart';
 
@@ -370,40 +371,51 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  isEmpty ? Icons.check_circle : Icons.error_outline,
-                  size: 20,
-                  color: isEmpty ? AppColors.success : AppColors.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isEmpty
-                        ? 'Tidak ada import bermasalah'
-                        : '${errors.length} baris bermasalah dari '
-                            '${errors.map((e) => e.fileName ?? '-').toSet().length} file',
-                    style: AppTextStyles.bodyMedium,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      isEmpty ? Icons.check_circle : Icons.error_outline,
+                      size: 20,
+                      color: isEmpty ? AppColors.success : AppColors.textMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isEmpty
+                            ? 'Tidak ada import bermasalah'
+                            : '${errors.length} baris bermasalah dari '
+                                '${errors.map((e) => e.fileName ?? '-').toSet().length} file',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ),
+                  ],
                 ),
                 if (!isEmpty) ...[
-                  OutlinedButton.icon(
-                    onPressed: () => _showErrorsDialog(context, errors),
-                    icon: const Icon(Icons.open_in_new, size: 16),
-                    label: const Text('Lihat Detail'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: widget.readOnly
-                        ? null
-                        : () => _clearErrors(context),
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Bersihkan'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
-                    ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => _showErrorsDialog(context, errors),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: const Text('Lihat Detail'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: widget.readOnly
+                            ? null
+                            : () => _clearErrors(context),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Bersihkan'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -417,8 +429,7 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
   Future<void> _clearErrors(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (ctx) => ResponsiveAlertDialog(
         title: const Text('Bersihkan Error?'),
         content: const Text(
           'Semua record error import akan dihapus dari database. Tindakan ini tidak dapat dibatalkan.',
@@ -468,12 +479,9 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     await showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: SizedBox(
-          width: 640,
-          height: 520,
-          child: Column(
+      builder: (ctx) => ResponsiveDialog(
+        showCloseButton: true,
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
@@ -558,7 +566,6 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -750,119 +757,130 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
           );
         }
 
-        final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row — fixed column widths
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: const [
-                      _HeaderCell(label: 'Waktu', width: _kColWaktu),
-                      _HeaderCell(label: 'User', width: _kColUser),
-                      _HeaderCell(label: 'Baru', width: _kColBaru, align: TextAlign.right),
-                      _HeaderCell(label: 'Update', width: _kColUpdate, align: TextAlign.right),
-                      _HeaderCell(label: 'Tipe', width: _kColTipe),
-                      _HeaderCell(label: 'Error', width: _kColError, align: TextAlign.right),
-                    ],
-                  ),
+        return LayoutBuilder(
+          builder: (ctx, constraints) {
+            final resp = Responsive.of(constraints.maxWidth);
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    resp.isDesktop
+                        ? _buildDesktopTable(logs)
+                        : _buildMobileList(logs),
+                    const SizedBox(height: 12),
+                    _paginationBar(total: allLogs.length, page: page, totalPages: totalPages),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                ...logs.map((log) => _ImportLogRow(log: log, dateFormat: dateFormat)),
-                const SizedBox(height: 12),
-                _paginationBar(total: allLogs.length, page: page, totalPages: totalPages),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildDesktopTable(List<Map<String, dynamic>> logs) {
+    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header row
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(flex: 3, child: _FlexHeaderCell(label: 'Waktu')),
+              Expanded(flex: 2, child: _FlexHeaderCell(label: 'User')),
+              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Baru', align: TextAlign.right)),
+              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Update', align: TextAlign.right)),
+              Expanded(flex: 2, child: _FlexHeaderCell(label: 'Tipe', align: TextAlign.center)),
+              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Error', align: TextAlign.right)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...logs.map((log) => _FlexImportLogRow(log: log, dateFormat: dateFormat)),
+      ],
+    );
+  }
+
+  Widget _buildMobileList(List<Map<String, dynamic>> logs) {
+    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+    return Column(
+      children: logs.map((log) => _ImportLogCard(log: log, dateFormat: dateFormat)).toList(),
     );
   }
 
   Widget _paginationBar({required int total, required int page, required int totalPages}) {
     final canPrev = page > 1;
     final canNext = page < totalPages;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          'Total: $total histori',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-        ),
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: canPrev ? () => setState(() => _currentPage = page - 1) : null,
-              icon: const Icon(Icons.chevron_left, size: 16),
-              label: const Text('Sebelumnya'),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Halaman $page dari $totalPages',
-              style: AppTextStyles.bodySmall,
-            ),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: canNext ? () => setState(() => _currentPage = page + 1) : null,
-              icon: const Icon(Icons.chevron_right, size: 16),
-              label: const Text('Selanjutnya'),
-              iconAlignment: IconAlignment.end,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-const double _kColWaktu = 180;
-const double _kColUser = 150;
-const double _kColBaru = 80;
-const double _kColUpdate = 100;
-const double _kColTipe = 110;
-const double _kColError = 80;
-
-class _HeaderCell extends StatelessWidget {
-  final String label;
-  final double width;
-  final TextAlign align;
-
-  const _HeaderCell({
-    required this.label,
-    required this.width,
-    this.align = TextAlign.left,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      child: Text(
-        label,
-        textAlign: align,
-        style: AppTextStyles.bodySmall.copyWith(
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Total: $total histori',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton(
+                onPressed: canPrev ? () => setState(() => _currentPage = page - 1) : null,
+                child: const Icon(Icons.chevron_left),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Halaman $page dari $totalPages',
+                style: AppTextStyles.bodySmall,
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: canNext ? () => setState(() => _currentPage = page + 1) : null,
+                child: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ImportLogRow extends StatelessWidget {
+class _FlexHeaderCell extends StatelessWidget {
+  final String label;
+  final TextAlign align;
+
+  const _FlexHeaderCell({
+    required this.label,
+    this.align = TextAlign.left,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      textAlign: align,
+      style: AppTextStyles.bodySmall.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+}
+
+class _FlexImportLogRow extends StatelessWidget {
   final Map<String, dynamic> log;
   final DateFormat dateFormat;
 
-  const _ImportLogRow({required this.log, required this.dateFormat});
+  const _FlexImportLogRow({required this.log, required this.dateFormat});
 
   @override
   Widget build(BuildContext context) {
@@ -870,6 +888,7 @@ class _ImportLogRow extends StatelessWidget {
         ? DateTime.tryParse(log['created_at'].toString())
         : null;
     final skipped = log['skipped'] as int? ?? 0;
+    final type = log['import_type']?.toString() ?? 'PRODUCT';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -881,44 +900,59 @@ class _ImportLogRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: _kColWaktu,
+          Expanded(
+            flex: 3,
             child: Text(
               createdAt != null ? dateFormat.format(createdAt.toWita()) : '-',
               style: AppTextStyles.mono.copyWith(fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          SizedBox(
-            width: _kColUser,
+          Expanded(
+            flex: 2,
             child: Text(
               log['nama']?.toString() ?? 'Admin',
               style: AppTextStyles.bodySmall,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          SizedBox(
-            width: _kColBaru,
+          Expanded(
+            flex: 1,
             child: Text(
               '${log['inserted'] ?? 0}',
               textAlign: TextAlign.right,
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
             ),
           ),
-          SizedBox(
-            width: _kColUpdate,
+          Expanded(
+            flex: 1,
             child: Text(
               '${log['updated'] ?? 0}',
               textAlign: TextAlign.right,
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryLight),
             ),
           ),
-          SizedBox(
-            width: _kColTipe,
-            child: _ImportTypeChip(type: log['import_type']?.toString() ?? 'PRODUCT'),
+          Expanded(
+            flex: 2,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: type == 'PRODUCT' ? AppColors.infoBg : AppColors.successBg,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  type == 'PRODUCT' ? 'Produk' : 'Toko',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: type == 'PRODUCT' ? AppColors.info : AppColors.success,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
           ),
-          SizedBox(
-            width: _kColError,
+          Expanded(
+            flex: 1,
             child: Text(
               '$skipped',
               textAlign: TextAlign.right,
@@ -934,17 +968,125 @@ class _ImportLogRow extends StatelessWidget {
   }
 }
 
+class _ImportLogCard extends StatelessWidget {
+  final Map<String, dynamic> log;
+  final DateFormat dateFormat;
 
-class _ImportTypeChip extends StatelessWidget {
-  final String type;
-
-  const _ImportTypeChip({required this.type});
+  const _ImportLogCard({required this.log, required this.dateFormat});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      type == 'PRODUCT' ? 'Produk' : 'Toko',
-      style: AppTextStyles.bodySmall,
+    final createdAt = log['created_at'] != null
+        ? DateTime.tryParse(log['created_at'].toString())
+        : null;
+    final skipped = log['skipped'] as int? ?? 0;
+    final type = log['import_type']?.toString() ?? 'PRODUCT';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: skipped > 0 ? AppColors.errorBg.withValues(alpha: 0.3) : AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: skipped > 0 ? AppColors.error.withValues(alpha: 0.3) : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      createdAt != null ? dateFormat.format(createdAt.toWita()) : '-',
+                      style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      log['nama']?.toString() ?? 'Admin',
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: type == 'PRODUCT' ? AppColors.infoBg : AppColors.successBg,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  type == 'PRODUCT' ? 'Produk' : 'Toko',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: type == 'PRODUCT' ? AppColors.info : AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatItem(
+                  label: 'Baru',
+                  value: '${log['inserted'] ?? 0}',
+                  color: AppColors.success,
+                ),
+              ),
+              Expanded(
+                child: _StatItem(
+                  label: 'Update',
+                  value: '${log['updated'] ?? 0}',
+                  color: AppColors.primaryLight,
+                ),
+              ),
+              Expanded(
+                child: _StatItem(
+                  label: 'Error',
+                  value: '$skipped',
+                  color: skipped > 0 ? AppColors.error : AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatItem({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

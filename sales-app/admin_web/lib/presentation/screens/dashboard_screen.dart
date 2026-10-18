@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +25,7 @@ import 'penugasan_sales_tab.dart';
 import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
 import 'cross_branch_reports_tab.dart';
+import 'suppliers_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
@@ -140,6 +142,7 @@ class _DashboardContentState extends State<_DashboardContent>
       const _NavItem(icon: Icons.store_outlined, selectedIcon: Icons.store, label: 'Toko'),
       const _NavItem(icon: Icons.person_add_alt_1_outlined, selectedIcon: Icons.person_add_alt_1, label: 'Pengajuan Customer'),
       const _NavItem(icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2, label: 'Produk & Stok'),
+      const _NavItem(icon: Icons.store_mall_directory_outlined, selectedIcon: Icons.store_mall_directory, label: 'Supplier'),
       const _NavItem(icon: Icons.sync_outlined, selectedIcon: Icons.sync, label: 'Sinkronisasi'),
     ];
     if (_isGlobalManager) {
@@ -164,6 +167,7 @@ class _DashboardContentState extends State<_DashboardContent>
       'Toko',
       'Pengajuan Customer',
       'Produk & Stok',
+      'Supplier',
       'Sinkronisasi',
     ];
     if (_isGlobalManager) {
@@ -305,12 +309,15 @@ class _DashboardContentState extends State<_DashboardContent>
     final orderReadOnly = widget.role != 'ADMIN';
     // Users tab: ADMIN, SUPERVISOR, MANAGER boleh add/edit user.
     final usersReadOnly = widget.role == 'SALES';
+    // Master data (Toko, Pengajuan Customer, Produk, Bulletin): read-only untuk non-ADMIN.
+    // Sync: ADMIN, SUPERVISOR, MANAGER boleh write (import Excel).
     final masterReadOnly = widget.role != 'ADMIN';
+    final syncReadOnly = widget.role == 'SALES';
 
     // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
-    // 3=Pengajuan Customer, 4=Produk & Stok, 5=Sinkronisasi.
-    // Global MANAGER: 6=User, 7=Performa Sales, 8=Penugasan Sales, 9=Bulletin, 10=Laporan Lintas.
-    // ADMIN/SUPERVISOR: 6=User, 7=Bulletin.
+    // 3=Pengajuan Customer, 4=Produk & Stok, 5=Supplier, 6=Sinkronisasi.
+    // Global MANAGER: 7=User, 8=Performa Sales, 9=Penugasan Sales, 10=Bulletin, 11=Laporan Lintas.
+    // ADMIN/SUPERVISOR: 7=User, 8=Bulletin.
     switch (i) {
       case 0:
         return StatsTab(role: widget.role);
@@ -323,21 +330,23 @@ class _DashboardContentState extends State<_DashboardContent>
       case 4:
         return ProductsTab(readOnly: masterReadOnly);
       case 5:
-        return SyncTab(readOnly: masterReadOnly);
+        return const SuppliersTab();
       case 6:
+        return SyncTab(readOnly: syncReadOnly);
+      case 7:
         return UsersTab(
           readOnly: usersReadOnly,
           currentRole: widget.role,
           currentBranch: widget.branch,
           currentBranchNama: widget.branchNama,
         );
-      case 7:
-        return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 8:
-        return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
+        return const PerformanceTab(); // MANAGER & SUPERVISOR
       case 9:
-        return BulletinsTab(readOnly: masterReadOnly); // MANAGER & SUPERVISOR
+        return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case 10:
+        return BulletinsTab(readOnly: masterReadOnly); // MANAGER & SUPERVISOR
+      case 11:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
     }
@@ -352,10 +361,12 @@ class _DashboardContentState extends State<_DashboardContent>
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _recordActivity(),
-      onPointerMove: (event) {
-        // Track drag, tapi jangan spam pada hover biasa.
-        if (event.buttons != 0) _recordActivity();
-      },
+      // Track any pointer movement (touch scroll, mouse hover, drag). Tanpa
+      // gate buttons != 0 supaya touch scroll di mobile ikut dihitung sebagai
+      // aktivitas — kalau gate tetap, mobile user yang cuma scroll list
+      // panjang akan ke-logout. Hover di desktop tetap aman karena pointer
+      // event jarang firing saat idle (tidak ada device input aktif).
+      onPointerMove: (_) => _recordActivity(),
       onPointerSignal: (_) => _recordActivity(), // wheel/trackpad
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -406,12 +417,17 @@ class _DashboardContentState extends State<_DashboardContent>
   /// Drawer untuk mode compact (mobile/tablet). Konten nav-nya sama dengan
   /// sidebar, dibungkus [Drawer] supaya Flutter yang handle gesture buka-tutup.
   Widget _buildDrawer(BuildContext context, Responsive resp) {
+    // Lebar drawer: minimum dari 280px (target tap-friendly) dan 85% viewport.
+    // Tanpa clamp, di layar 320px (iPhone SE 1st gen) drawer 280px menutupi
+    // hampir semua layar — user cuma melihat 40px konten di belakangnya.
+    final viewportWidth = MediaQuery.of(context).size.width;
+    final drawerWidth = math.min(280.0, viewportWidth * 0.85);
     return Drawer(
       backgroundColor: AppColors.sidebarBg,
       // Tanpa elevation — sidebar polos supaya tidak ada shadow menumpuk.
       elevation: 0,
       child: SizedBox(
-        width: resp.isMobile ? 280 : 300,
+        width: drawerWidth,
         child: _NavPanel(
           items: _navItems,
           selectedIndex: _selectedIndex,
@@ -471,22 +487,28 @@ class _DashboardContentState extends State<_DashboardContent>
                   ),
                 ),
                 if (showReadOnlyBadge)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.infoBg,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.infoBorder),
-                      ),
-                      child: const Text(
-                        'Read-only',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.info,
+                  Visibility(
+                    // Di compact, title + badge berebut ruang sempit. Sembunyikan
+                    // badge — refresh IconButton tetap ada di kanan. Info role
+                    // masih tersedia di sidebar/drawer (User section).
+                    visible: !resp.isCompact,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.infoBg,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.infoBorder),
+                        ),
+                        child: const Text(
+                          'Read-only',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.info,
+                          ),
                         ),
                       ),
                     ),

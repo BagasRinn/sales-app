@@ -24,12 +24,20 @@ class ResponsiveDialog extends StatelessWidget {
   final double maxHeight;
   final double desktopWidthFraction;
 
+  /// When true, render a 44x44 close IconButton overlay di pojok kanan-atas
+  /// (Stack, Positioned top: 0, right: 0). Berguna untuk caller yang tidak
+  /// punya struktur title-row sendiri dan butuh cara menutup dialog di mobile
+  /// (di mana tidak ada click-outside-to-dismiss yang reliable).
+  /// Default: false — backward compatible.
+  final bool showCloseButton;
+
   const ResponsiveDialog({
     super.key,
     required this.child,
     this.maxWidth = 960,
     this.maxHeight = 600,
     this.desktopWidthFraction = 0.94,
+    this.showCloseButton = false,
   });
 
   @override
@@ -51,7 +59,35 @@ class ResponsiveDialog extends StatelessWidget {
             color: const Color(0xFFF4F7FB), // AppColors.background
             borderRadius: BorderRadius.circular(resp.isMobile ? 0 : 16),
             elevation: 8,
-            child: SizedBox(width: width, height: height, child: child),
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: child),
+                  if (showCloseButton)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Tutup',
+                            onPressed: () => Navigator.of(context).pop(),
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           );
         },
       ),

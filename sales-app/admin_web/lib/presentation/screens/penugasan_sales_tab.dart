@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/sales_user.dart';
 import '../../data/models/sales_assignment.dart';
@@ -380,16 +381,21 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.infoBg,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      widget.area.kodeArea,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.info, fontWeight: FontWeight.w700,
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBg,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        widget.area.kodeArea,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.info, fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -614,10 +620,22 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
                     ),
                   ),
                   if (_loading) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                  TextButton.icon(
-                    onPressed: _openEditor,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Override'),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isCompact = constraints.maxWidth < Breakpoints.compactMax;
+                      if (isCompact) {
+                        return IconButton(
+                          onPressed: _openEditor,
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: 'Override',
+                        );
+                      }
+                      return TextButton.icon(
+                        onPressed: _openEditor,
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Override'),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -760,11 +778,9 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 520),
-        child: Padding(
+    return ResponsiveDialog(
+      showCloseButton: true,
+      child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -818,7 +834,6 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -854,11 +869,9 @@ class _MultiSelectSalesDialogState extends State<_MultiSelectSalesDialog> {
   @override
   Widget build(BuildContext context) {
     final candidates = widget.allSalesUsers;
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
-        child: Padding(
+    return ResponsiveDialog(
+      showCloseButton: true,
+      child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -919,7 +932,6 @@ class _MultiSelectSalesDialogState extends State<_MultiSelectSalesDialog> {
             ],
           ),
         ),
-      ),
     );
   }
 }

@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
 import '../../core/branch.dart';
+import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/data_card.dart';
 import '../../data/models/user_item.dart';
 
 class UsersTab extends StatefulWidget {
@@ -31,6 +33,9 @@ class _UsersTabState extends State<UsersTab> {
   bool _initialized = false;
   final _searchController = TextEditingController();
   String? _roleFilter;
+
+  static const _headerHeight = 48.0;
+  static const _rowHeight = 60.0;
 
   @override
   void initState() {
@@ -64,84 +69,78 @@ class _UsersTabState extends State<UsersTab> {
         return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
       });
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      child: Column(
-        children: [
-          // Search bar + filter chips role. Chips menggantikan dropdown
-          // — lebih visual dan satu tap, terutama untuk layar sempit.
-          Container(
-            padding: const EdgeInsets.all(12),
-            color: AppColors.surface,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Cari user (nama / username)...',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                    provider.searchUsers('');
-                                  },
-                                )
+    return Column(
+      children: [
+        // Search bar + filter chips role
+        Container(
+              padding: const EdgeInsets.all(12),
+              color: AppColors.surface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Cari user (nama / username)...',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _searchQuery = '');
+                                      provider.searchUsers('');
+                                    },
+                                  )
+                                : null,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            isDense: true,
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onChanged: (v) {
+                            setState(() => _searchQuery = v);
+                            provider.searchUsers(v);
+                          },
+                        ),
+                      ),
+                      if (!widget.readOnly) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: !widget.readOnly
+                              ? () => _openCreateDialog(context)
                               : null,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          isDense: true,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          icon: const Icon(Icons.person_add, size: 18),
+                          label: const Text('Tambah'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 18),
+                          ),
                         ),
-                        onChanged: (v) {
-                          setState(() => _searchQuery = v);
-                          provider.searchUsers(v);
-                        },
-                      ),
-                    ),
-                    if (!widget.readOnly) ...[
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: !widget.readOnly
-                            ? () => _openCreateDialog(context)
-                            : null,
-                        icon: const Icon(Icons.person_add, size: 18),
-                        label: const Text('Tambah'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 18),
-                        ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _roleChip(null, 'Semua'),
-                    _roleChip('ADMIN', 'Admin'),
-                    _roleChip('SUPERVISOR', 'Supervisor'),
-                    _roleChip('MANAGER', 'Manager'),
-                    _roleChip('SALES', 'Sales'),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _roleChip(null, 'Semua'),
+                      _roleChip('ADMIN', 'Admin'),
+                      _roleChip('SUPERVISOR', 'Supervisor'),
+                      _roleChip('MANAGER', 'Manager'),
+                      _roleChip('SALES', 'Sales'),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-            // Pakai DataTable Flutter — header dan rows otomatis align
-            // karena pakai layout intrinsic. Bungkus horizontal scroll supaya
-            // di mobile (atau tabel yang lebih lebar dari container) bisa
-            // digeser ke samping tanpa merusak alignment.
+            const Divider(height: 1),
+            // Table
             Expanded(
               child: isLoading && users.isEmpty
                   ? const Center(child: CircularProgressIndicator())
@@ -164,23 +163,315 @@ class _UsersTabState extends State<UsersTab> {
                             ],
                           ),
                         )
-                      : SingleChildScrollView(
-                          // Vertical: scroll untuk banyak user.
-                          child: SingleChildScrollView(
-                            // Horizontal: scroll untuk layar sempit.
-                            scrollDirection: Axis.horizontal,
-                            child: _UserDataTable(
-                              users: users,
-                              readOnly: widget.readOnly,
-                              currentRole: widget.currentRole,
-                              currentBranch: widget.currentBranch,
-                              currentBranchNama: widget.currentBranchNama,
-                            ),
-                          ),
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final resp = Responsive.of(constraints.maxWidth);
+                            return resp.isMobile
+                                ? _buildCardList(users)
+                                : _buildTable(users);
+                          },
                         ),
             ),
           ],
+        );
+      }
+
+  Widget _buildCardList(List<UserItem> users) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resp = Responsive.of(constraints.maxWidth);
+        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        const gap = 12.0;
+        const hPadding = 12.0;
+        final cardWidth =
+            (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
+                columns;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(hPadding, hPadding, hPadding, 16),
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final u in users)
+                SizedBox(
+                  width: cardWidth,
+                  child: DataCard(
+                    title: u.displayName,
+                    subtitle: '@${u.username}',
+                    badges: [
+                      _RoleBadge(role: u.role),
+                      if (u.branchNama != null && u.branchNama!.isNotEmpty)
+                        _BranchChip(label: u.branchNama!)
+                      else if (u.branch != null && u.branch!.isNotEmpty)
+                        _BranchChip(label: u.branch!),
+                    ],
+                    fields: [
+                      DataField(label: 'USERNAME', value: u.username),
+                      DataField(
+                        label: 'STATUS',
+                        valueWidget: _StatusBadge(active: u.isActive),
+                      ),
+                      if (u.branchNama != null || u.branch != null)
+                        DataField(
+                          label: 'CABANG',
+                          value: u.branchNama ?? u.branch ?? '-',
+                        ),
+                    ],
+                    actions: widget.readOnly
+                        ? null
+                        : [
+                            FilledButton.icon(
+                              onPressed: () => _openEditDialog(u),
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: const Text('Edit'),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
+                            ),
+                          ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTable(List<UserItem> users) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final avail = constraints.maxWidth;
+        const roleW = 100.0;
+        const statusW = 90.0;
+        const aksiW = 90.0;
+        final remaining = avail - roleW - statusW - aksiW;
+        final namaW = remaining * 0.35;
+        final usernameW = remaining * 0.25;
+        final cabangW = remaining * 0.40;
+        final colWidths = [namaW, usernameW, roleW, cabangW, statusW, aksiW];
+        final totalW = avail;
+
+        return Column(
+          children: [
+            SizedBox(
+              height: _headerHeight,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: _buildHeader(colWidths, totalW),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < users.length; i++) ...[
+                        _buildRow(users[i], colWidths, totalW),
+                        if (i < users.length - 1) const Divider(height: 1),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(List<double> colWidths, double totalW) {
+    const labels = ['NAMA', 'USERNAME', 'ROLE', 'CABANG', 'STATUS', 'AKSI'];
+    return SizedBox(
+      width: totalW,
+      child: Container(
+        height: _headerHeight,
+        color: AppColors.surface,
+        child: Row(
+          children: [
+            for (int i = 0; i < labels.length; i++)
+              SizedBox(
+                width: colWidths[i],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Center(
+                    child: Text(
+                      labels[i],
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _openEditDialog(UserItem user) {
+    final provider = context.read<AdminProvider>();
+    return showDialog(
+      context: context,
+      builder: (_) => _UserEditDialog(
+        existing: user,
+        provider: provider,
+        currentRole: widget.currentRole,
+        currentBranch: widget.currentBranch,
+        currentBranchNama: widget.currentBranchNama,
+      ),
+    );
+  }
+
+  Future<void> _openCreateDialog(BuildContext context) async {
+    final provider = context.read<AdminProvider>();
+    await showDialog(
+      context: context,
+      builder: (_) => _UserEditDialog(
+        provider: provider,
+        currentRole: widget.currentRole,
+        currentBranch: widget.currentBranch,
+        currentBranchNama: widget.currentBranchNama,
+      ),
+    );
+  }
+
+  Widget _buildRow(UserItem user, List<double> colWidths, double totalW) {
+    final initial =
+        user.displayName.isNotEmpty ? user.displayName[0].toUpperCase() : '?';
+    final color = switch (user.role) {
+      'ADMIN' => AppColors.error,
+      'SUPERVISOR' => AppColors.warning,
+      'MANAGER' => AppColors.info,
+      _ => AppColors.success,
+    };
+
+    return SizedBox(
+      width: totalW,
+      height: _rowHeight,
+      child: Row(
+        children: [
+          SizedBox(
+            width: colWidths[0],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '@${user.username}',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[1],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(
+                user.username,
+                style: AppTextStyles.bodySmall,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[2],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Center(child: _RoleBadge(role: user.role)),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[3],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(
+                user.branchNama ?? user.branch ?? '-',
+                style: AppTextStyles.bodySmall,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[4],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Center(child: _StatusBadge(active: user.isActive)),
+            ),
+          ),
+          SizedBox(
+            width: colWidths[5],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Center(
+                child: widget.readOnly
+                    ? const SizedBox()
+                    : IconButton(
+                        onPressed: () => _openEditDialog(user),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        color: AppColors.primaryLight,
+                        tooltip: 'Edit user',
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -206,215 +497,32 @@ class _UsersTabState extends State<UsersTab> {
       visualDensity: VisualDensity.compact,
     );
   }
-
-  Future<void> _openCreateDialog(BuildContext context) async {
-    final provider = context.read<AdminProvider>();
-    await showDialog(
-      context: context,
-      builder: (_) => _UserEditDialog(
-        provider: provider,
-        currentRole: widget.currentRole,
-        currentBranch: widget.currentBranch,
-        currentBranchNama: widget.currentBranchNama,
-      ),
-    );
-  }
 }
-
-class _UserDataTable extends StatelessWidget {
-  final List<UserItem> users;
-  final bool readOnly;
-  final String? currentRole;
-  final String? currentBranch;
-  final String? currentBranchNama;
-
-  const _UserDataTable({
-    required this.users,
-    this.readOnly = false,
-    this.currentRole,
-    this.currentBranch,
-    this.currentBranchNama,
-  });
+/// Chip kecil untuk label cabang pada card list. Memakai style mirip
+/// _RoleBadge/_StatusBadge tapi dengan warna netral (info) karena branch
+/// bukan indikator status.
+class _BranchChip extends StatelessWidget {
+  final String label;
+  const _BranchChip({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return DataTable(
-      headingRowColor: WidgetStateProperty.all(AppColors.borderLight),
-      headingTextStyle: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
-        letterSpacing: 0.5,
+    const color = AppColors.info;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      dataRowColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.hovered)) {
-          return AppColors.background.withValues(alpha: 0.6);
-        }
-        return null;
-      }),
-      columnSpacing: 28,
-      horizontalMargin: 16,
-      showCheckboxColumn: false,
-      dividerThickness: 0.5,
-      columns: [
-        const DataColumn(label: Center(child: Text('NAMA'))),
-        const DataColumn(label: Center(child: Text('USERNAME'))),
-        const DataColumn(label: Center(child: Text('ROLE'))),
-        const DataColumn(label: Center(child: Text('CABANG'))),
-        const DataColumn(label: Center(child: Text('STATUS'))),
-        if (!readOnly) const DataColumn(label: Center(child: Text('AKSI'))),
-      ],
-      rows: [
-        for (int i = 0; i < users.length; i++)
-          DataRow(
-            color: WidgetStateProperty.all(
-              i.isEven
-                  ? AppColors.surface
-                  : AppColors.borderLight.withValues(alpha: 0.4),
-            ),
-            cells: [
-              DataCell(_NameCell(
-                displayName: users[i].displayName,
-                username: users[i].username,
-                role: users[i].role,
-              )),
-              DataCell(Center(child: Text(
-                users[i].username,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontFamily: 'monospace',
-                ),
-              ))),
-              DataCell(Center(child: _RoleBadge(role: users[i].role))),
-              DataCell(Center(child: Text(
-                users[i].branchNama ?? users[i].branch ?? '-',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ))),
-              DataCell(Center(child: _StatusBadge(active: users[i].isActive))),
-              if (!readOnly)
-                DataCell(
-                  IconButton(
-                    onPressed: () => _openEditDialog(
-                      context,
-                      users[i],
-                      currentRole,
-                      currentBranch,
-                      currentBranchNama,
-                    ),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    color: AppColors.primaryLight,
-                    tooltip: 'Edit user',
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                    padding: EdgeInsets.zero,
-                  ),
-                ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  static Future<void> _openEditDialog(
-    BuildContext context,
-    UserItem user,
-    String? currentRole,
-    String? currentBranch,
-    String? currentBranchNama,
-  ) {
-    final provider = context.read<AdminProvider>();
-    return showDialog(
-      context: context,
-      builder: (_) => _UserEditDialog(
-        existing: user,
-        provider: provider,
-        currentRole: currentRole,
-        currentBranch: currentBranch,
-        currentBranchNama: currentBranchNama,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
       ),
-    );
-  }
-}
-
-/// Cell khusus untuk kolom NAMA — avatar lingkaran + nama + @username.
-class _NameCell extends StatelessWidget {
-  final String displayName;
-  final String username;
-  final String role;
-
-  const _NameCell({
-    required this.displayName,
-    required this.username,
-    required this.role,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final initial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
-    final color = switch (role) {
-      'ADMIN' => AppColors.error,
-      'SUPERVISOR' => AppColors.warning,
-      'MANAGER' => AppColors.info,
-      _ => AppColors.success,
-    };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                displayName,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '@$username',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textMuted,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -479,8 +587,8 @@ class _StatusBadge extends StatelessWidget {
 class _UserEditDialog extends StatefulWidget {
   final UserItem? existing;
   final AdminProvider provider;
-  // Role/branch of the logged-in user. SUPERVISOR → dropdown is locked to
-  // currentBranch. MANAGER/ADMIN → dropdown is functional across all branches.
+  // Role/branch of the logged-in user. SUPERVISOR â†’ dropdown is locked to
+  // currentBranch. MANAGER/ADMIN â†’ dropdown is functional across all branches.
   final String? currentRole;
   final String? currentBranch;
   final String? currentBranchNama;
@@ -576,7 +684,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     bool ok = false;
     String? unexpectedError;
     // Pakai widget.provider (di-passing via constructor dari pemanggil showDialog)
-    // — `context.read` di sini akan throw karena dialog hidup di navigator Overlay,
+    // â€” `context.read` di sini akan throw karena dialog hidup di navigator Overlay,
     // bukan descendant dari ChangeNotifierProvider di DashboardScreen.
     final provider = widget.provider;
     try {
@@ -637,12 +745,13 @@ class _UserEditDialogState extends State<_UserEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: 480,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+    return ResponsiveDialog(
+      showCloseButton: true,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        // Bungkus Column dengan SingleChildScrollView agar form bisa di-scroll
+        // saat keyboard mobile muncul dan konten melebihi tinggi viewport.
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -750,7 +859,6 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                           child: Text(BranchLabel.display(code) ?? code),
                         ))
                     .toList(),
-                // onChanged: null → dropdown disabled (locked untuk SUPERVISOR).
                 onChanged: _isBranchLocked
                     ? null
                     : (v) => setState(() => _branch = v),

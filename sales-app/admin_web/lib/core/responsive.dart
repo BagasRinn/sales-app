@@ -12,17 +12,12 @@ import 'package:flutter/widgets.dart';
 class Breakpoints {
   Breakpoints._();
 
-  /// Batas atas mobile. Lebar >= 600 berarti sudah masuk tablet.
   static const double mobileMax = 600;
 
-  /// Alias untuk [mobileMax] — nama "compact" lebih deskriptif saat dipakai
-  /// sebagai batas atas zona compact (mobile + tablet).
   static const double compactMax = 600;
 
-  /// Batas atas tablet. Lebar >= 1024 berarti sudah masuk desktop.
   static const double tabletMax = 1024;
 
-  /// Alias untuk [tabletMax] — batas atas zona medium (tablet).
   static const double mediumMax = 1024;
 }
 

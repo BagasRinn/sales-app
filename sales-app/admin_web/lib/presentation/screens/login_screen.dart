@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth_storage.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive.dart';
 import '../../data/repositories/api_service.dart';
 import 'dashboard_screen.dart';
 
@@ -103,6 +104,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final resp = Responsive.of(MediaQuery.of(context).size.width);
+    final cardPadding = resp.isMobile ? 16.0 : 32.0;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -148,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Login card
                     Container(
-                      padding: const EdgeInsets.all(32),
+                      padding: EdgeInsets.all(cardPadding),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(20),

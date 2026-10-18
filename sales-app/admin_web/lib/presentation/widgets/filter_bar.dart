@@ -51,7 +51,11 @@ class FilterBar extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              ?search,
+              // Wrap `search` in Expanded so a TextField (which has unbounded
+              // intrinsic width) receives a finite maxWidth from the Row.
+              // Without this, InputDecorator asserts at layout time on
+              // desktop (https://flutter.dev/docs/testing/errors).
+              if (search != null) Expanded(child: search!),
               if (search != null && filters.isNotEmpty)
                 const SizedBox(width: 12),
               if (filters.isNotEmpty)
@@ -65,7 +69,10 @@ class FilterBar extends StatelessWidget {
                 ),
               if ((search != null || filters.isNotEmpty) && trailing != null)
                 const SizedBox(width: 12),
-              ?trailing,
+              // `trailing` is typically a small action (icon button) — keep
+              // its natural size with Flexible(loose) but cap its width so
+              // a wide widget can't blow up the Row.
+              if (trailing != null) Flexible(child: trailing!),
             ],
           ),
         );

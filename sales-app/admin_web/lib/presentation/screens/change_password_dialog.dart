@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth_storage.dart';
 import '../../core/design_system.dart';
+import '../../core/responsive_dialog.dart';
 import '../../data/repositories/admin_repository.dart';
 import 'login_screen.dart';
 
@@ -97,108 +98,117 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: 480,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.infoBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.lock_outline,
-                      color: AppColors.info,
-                    ),
+    return ResponsiveDialog(
+      showCloseButton: true,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.infoBg,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ganti Password',
-                          style: AppTextStyles.headlineSmall,
-                        ),
-                        Text(
-                          'Verifikasi password lama untuk konfirmasi',
-                          style: AppTextStyles.bodySmall,
-                        ),
-                      ],
-                    ),
+                  child: const Icon(
+                    Icons.lock_outline,
+                    color: AppColors.info,
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _oldC,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password Lama *',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ganti Password',
+                        style: AppTextStyles.headlineSmall,
+                      ),
+                      Text(
+                        'Verifikasi password lama untuk konfirmasi',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Form fields are scrollable so the dialog handles small
+            // viewports and the on-screen keyboard without overflowing.
+            // Save/Cancel buttons stay pinned at the bottom (outside the
+            // scroll) so they remain reachable.
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _oldC,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Password Lama *',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _newC,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Password Baru *',
+                        helperText: 'Minimal 6 karakter',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _confirmC,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Konfirmasi Password Baru *',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _newC,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password Baru *',
-                  helperText: 'Minimal 6 karakter',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _confirmC,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Konfirmasi Password Baru *',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : () => Navigator.pop(context),
-                      child: const Text('Batal'),
-                    ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    child: const Text('Batal'),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _saving ? null : _save,
-                      icon: _saving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.save, size: 18),
-                      label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 18),
+                    label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -1,7 +1,6 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
 from dotenv import load_dotenv
 
 # Memuat variabel dari file .env
@@ -16,16 +15,18 @@ if SQLALCHEMY_DATABASE_URL and "+psycopg" not in SQLALCHEMY_DATABASE_URL:
         "postgresql://", "postgresql+psycopg://", 1
     )
 
-# NullPool: setiap request buka koneksi baru lalu close — kompatibel dengan
-# Supabase Supavisor session mode yang limit ~15 koneksi per client.
-# Default pool (QueuePool) overflow di atas limit itu → "max clients reached".
-# Trade-off: extra latency untuk TCP+TLS handshake per request. Untuk traffic
-# tinggi nanti, switch DATABASE_URL ke transaction mode pooler (port 6543)
-# dan kembali ke QueuePool dengan pool_size yang lebih besar.
+# QueuePool: reuse koneksi supaya tidak bayar TCP+TLS handshake ke Supabase
+# tiap request (NullPool sebelumnya). Sizing sengaja kecil (5+5=10) karena
+# Supavisor SESSION mode (port 5432) punya limit ~15 koneksi per client —
+# overflow ke atas itu bikin "max clients reached". Naikkan pool_size kalau
+# DATABASE_URL pindah ke transaction mode pooler (port 6543) dan traffic naik.
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    poolclass=NullPool,
-    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=30,
+    pool_pre_ping=True,   # buang koneksi stale sebelum dipakai
+    pool_recycle=1800,    # recycle tiap 30 menit
 )
 
 # Membuat SessionLocal yang akan digunakan setiap kali ada request datang

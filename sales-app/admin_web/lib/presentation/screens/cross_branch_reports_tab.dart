@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/branch.dart';
+import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../data/models/branch_report.dart';
 import '../providers/admin_provider.dart';
@@ -86,12 +87,11 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
         return Column(
           children: [
             Container(
-              color: Colors.white,
+              color: AppColors.surface,
               child: TabBar(
                 controller: _tabController,
-                labelColor: Colors.black87,
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: const Color(0xFF2196F3),
+                // Hardcoded label/indicator colors dropped — AppTheme.lightTheme
+                // provides them via ColorScheme.primary (AppColors.primaryLight).
                 // Scrollable supaya tab "Penjualan/Stok" bisa discroll di
                 // layar sempit (untuk konsistensi dengan tab Pesanan).
                 isScrollable: resp.isCompact,
@@ -196,11 +196,12 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 12),
             Wrap(spacing: 24, runSpacing: 8, children: [
-              _buildStatChip('Approved', '$totalApproved', Colors.green),
-              _buildStatChip('Pending', '$totalPending', Colors.orange),
-              _buildStatChip('Omset', _formatRupiah(totalRevenue), Colors.blue),
-              _buildStatChip('Customer', '$totalCustomers', Colors.purple),
-              _buildStatChip('Sales', '$totalSales', Colors.teal),
+              _buildStatChip('Approved', '$totalApproved', AppColors.success),
+              _buildStatChip('Pending', '$totalPending', AppColors.warning),
+              _buildStatChip('Omset', _formatRupiah(totalRevenue), AppColors.info),
+              // purple/teal → primaryLight (closest semantic token)
+              _buildStatChip('Customer', '$totalCustomers', AppColors.primaryLight),
+              _buildStatChip('Sales', '$totalSales', AppColors.primaryLight),
             ]),
           ],
         ),
@@ -222,11 +223,12 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
             ),
             const SizedBox(height: 8),
             Wrap(spacing: 20, runSpacing: 8, children: [
-              _buildStatChip('Approved', '${s.approvedCount}', Colors.green),
-              _buildStatChip('Omset', _formatRupiah(s.approvedRevenue), Colors.blue),
-              _buildStatChip('Pending', '${s.pendingCount}', Colors.orange),
-              _buildStatChip('Customer', '${s.customerCount}', Colors.purple),
-              _buildStatChip('Sales', '${s.salesCount}', Colors.teal),
+              _buildStatChip('Approved', '${s.approvedCount}', AppColors.success),
+              _buildStatChip('Omset', _formatRupiah(s.approvedRevenue), AppColors.info),
+              _buildStatChip('Pending', '${s.pendingCount}', AppColors.warning),
+              // purple/teal → primaryLight (closest semantic token)
+              _buildStatChip('Customer', '${s.customerCount}', AppColors.primaryLight),
+              _buildStatChip('Sales', '${s.salesCount}', AppColors.primaryLight),
             ]),
           ],
         ),
@@ -248,9 +250,10 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
             ),
             const SizedBox(height: 8),
             Wrap(spacing: 20, runSpacing: 8, children: [
-              _buildStatChip('SKU', '${s.skuCount}', Colors.blue),
-              _buildStatChip('Nilai Stok', _formatRupiah(s.totalStockValue), Colors.indigo),
-              _buildStatChip('Low Stock', '${s.lowStockCount}', s.lowStockCount > 0 ? Colors.red : Colors.grey),
+              _buildStatChip('SKU', '${s.skuCount}', AppColors.info),
+              // indigo → primaryLight (closest semantic token)
+              _buildStatChip('Nilai Stok', _formatRupiah(s.totalStockValue), AppColors.primaryLight),
+              _buildStatChip('Low Stock', '${s.lowStockCount}', s.lowStockCount > 0 ? AppColors.error : AppColors.textMuted),
             ]),
           ],
         ),
@@ -262,7 +265,7 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         const SizedBox(height: 2),
         Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 13)),
       ],
@@ -274,9 +277,9 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inbox_outlined, size: 48, color: Colors.grey[400]),
+          Icon(Icons.inbox_outlined, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
-          Text(msg, style: TextStyle(color: Colors.grey[600])),
+          Text(msg, style: TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _loadData,

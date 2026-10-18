@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
 import '../../data/models/bulletin.dart';
 import 'bulletin_pdf_picker_stub.dart'
-    if (dart.library.html) 'bulletin_pdf_picker_web.dart' as picker;
+    if (dart.library.html) 'bulletin_pdf_picker_web.dart' as picker;  
 
 /// Tab "Bulletin" — manager-only bulletin management.
 class BulletinsTab extends StatefulWidget {
@@ -156,13 +157,10 @@ class _BulletinsTabState extends State<BulletinsTab> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          return ResponsiveAlertDialog(
             title: Text(isEditing ? 'Edit Bulletin' : 'Buat Bulletin Baru'),
-            content: SizedBox(
-              width: 480,
-              child: SingleChildScrollView(
-                child: Column(
+            content: SingleChildScrollView(
+              child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -216,19 +214,27 @@ class _BulletinsTabState extends State<BulletinsTab> {
                     ],
                     const SizedBox(height: 12),
 
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Checkbox(
-                          value: noExpiration,
-                          onChanged: (v) {
-                            setDialogState(() {
-                              noExpiration = v ?? false;
-                              if (noExpiration) selectedDate = null;
-                            });
-                          },
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: noExpiration,
+                              onChanged: (v) {
+                                setDialogState(() {
+                                  noExpiration = v ?? false;
+                                  if (noExpiration) selectedDate = null;
+                                });
+                              },
+                            ),
+                            const Text('Tanpa batas waktu'),
+                          ],
                         ),
-                        const Text('Tanpa batas waktu'),
-                        const Spacer(),
                         if (!noExpiration)
                           OutlinedButton.icon(
                             onPressed: () async {
@@ -263,7 +269,6 @@ class _BulletinsTabState extends State<BulletinsTab> {
                   ],
                 ),
               ),
-            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -281,10 +286,10 @@ class _BulletinsTabState extends State<BulletinsTab> {
                 },
                 child: Text(isEditing ? 'Simpan' : 'Buat'),
               ),
-            ],
-          );
+              ],
+            );
         },
-      ),
+        ),
     );
 
     if (ok != true) return;
@@ -330,8 +335,7 @@ class _BulletinsTabState extends State<BulletinsTab> {
     final scaffold = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (ctx) => ResponsiveAlertDialog(
         title: const Text('Hapus Bulletin'),
         content: Text(
           'Hapus bulletin "${bulletin.title}"? Tindakan ini tidak dapat dibatalkan.',
@@ -451,7 +455,7 @@ class _BulletinCard extends StatelessWidget {
                     color: AppColors.textSecondary,
                     tooltip: 'Edit',
                     onPressed: readOnly ? null : onEdit,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                     padding: EdgeInsets.zero,
                   ),
                   IconButton(
@@ -459,7 +463,7 @@ class _BulletinCard extends StatelessWidget {
                     color: AppColors.error,
                     tooltip: 'Hapus',
                     onPressed: readOnly ? null : onDelete,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                     padding: EdgeInsets.zero,
                   ),
                 ],

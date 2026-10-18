@@ -8,9 +8,10 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy import cast, func
+from sqlalchemy import case, cast, func
 from sqlalchemy.types import Integer
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import aliased
 
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget
@@ -22,6 +23,11 @@ from app.schemas.schemas import (
     SalesPerformanceDashboardItem,
     SalesPerformanceDashboardResponse,
     SupplierPerformanceRow,
+    ReportSummaryResponse,
+    ReportSummaryByStatus,
+    ReportSummaryByProduct,
+    ReportSummaryBySales,
+    ReportSummaryByBranch,
 )
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -188,21 +194,38 @@ def daily_report(
         "APPROVED",
         description="Status filter, comma-separated. Default APPROVED.",
     ),
+    detail: bool = Query(
+        False,
+        description="Jika true, return Excel XLSX (per-row). Default: return JSON summary (agregat).",
+    ),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
-    """Generate Excel laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
+    """Generate laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
 
-    17 kolom: Tanggal, Cabang, Kode/Nama Pelanggan, Kode/Nama Item, Qty, Satuan,
-    Harga Satuan, Total Sebelum Diskon, Diskon Layer 1/2/3, Total Diskon,
-    Total Setelah Diskon, Nama Sales, Supplier.
+    Default: return JSON summary (agregat via SQL).
+    Opt-in `?detail=true`: return Excel XLSX dengan 17 kolom per row.
     """
     try:
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Format tanggal harus YYYY-MM-DD")
 
-    statuses = [s.strip().upper() for s in status.split(",") if s.strip()]
+    # Validasi range untuk konsistensi (daily selalu 1 hari, jadi selalu <= 365)
+    if detail:
+        return _build_daily_xlsx(target_date, status, db, current_user)
+    else:
+        return report_summary(
+            start_date=date,
+            end_date=date,
+            db=db,
+            current_user=current_user,
+        )
+
+
+def _build_daily_xlsx(target_date, statuses, db, current_user):
+    """Build XLSX binary untuk 1 hari (legacy behavior, dipanggil kalau ?detail=true)."""
+    statuses = statuses if isinstance(statuses, list) else [s.strip().upper() for s in statuses.split(",") if s.strip()]
     if not statuses:
         statuses = ["APPROVED"]
 
@@ -252,13 +275,19 @@ def period_report(
         "APPROVED",
         description="Status filter, comma-separated. Default APPROVED.",
     ),
+    detail: bool = Query(
+        False,
+        description="Jika true, return Excel XLSX (per-row). Default: return JSON summary (agregat).",
+    ),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
-    """Generate Excel laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
+    """Generate laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
 
-    17 kolom sama dengan laporan harian (plus kolom Tanggal & Cabang).
+    Default: return JSON summary (agregat via SQL).
+    Opt-in `?detail=true`: return Excel XLSX per row.
     """
+    # Validasi format & range — sama untuk kedua mode
     try:
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
     except ValueError:
@@ -270,8 +299,23 @@ def period_report(
 
     if end < start:
         raise HTTPException(status_code=400, detail="Tanggal akhir tidak boleh sebelum tanggal mulai")
+    if (end - start).days > 365:
+        raise HTTPException(status_code=400, detail="Rentang tanggal maksimal 365 hari")
 
-    statuses = [s.strip().upper() for s in status.split(",") if s.strip()]
+    if detail:
+        return _build_period_xlsx(start, end, status, db, current_user)
+    else:
+        return report_summary(
+            start_date=start_date,
+            end_date=end_date,
+            db=db,
+            current_user=current_user,
+        )
+
+
+def _build_period_xlsx(start, end, statuses, db, current_user):
+    """Build XLSX binary untuk rentang tanggal (legacy behavior, dipanggil kalau ?detail=true)."""
+    statuses = statuses if isinstance(statuses, list) else [s.strip().upper() for s in statuses.split(",") if s.strip()]
     if not statuses:
         statuses = ["APPROVED"]
 
@@ -299,17 +343,165 @@ def period_report(
 
     wb = Workbook()
     ws = wb.active
-    _build_report(orders, ws, f"Laporan {start_date} sd {end_date}")
+    _build_report(orders, ws, f"Laporan {start.isoformat()} sd {end.isoformat()}")
 
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f"laporan-periode-{start_date}-sd-{end_date}.xlsx"
+    filename = f"laporan-periode-{start.isoformat()}-sd-{end.isoformat()}.xlsx"
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/summary", response_model=ReportSummaryResponse)
+def report_summary(
+    start_date: str = Query(..., description="Tanggal mulai, YYYY-MM-DD (WITA)"),
+    end_date: str = Query(..., description="Tanggal akhir, YYYY-MM-DD (WITA)"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Agregat laporan per rentang tanggal. Pure SQL aggregation — TIDAK load row order.
+    Response: total counts + by_status, by_product (top 20), by_sales (top 20), by_branch.
+    """
+    try:
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Format tanggal mulai harus YYYY-MM-DD")
+    try:
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Format tanggal akhir harus YYYY-MM-DD")
+
+    if end < start:
+        raise HTTPException(status_code=400, detail="Tanggal akhir tidak boleh sebelum tanggal mulai")
+    if (end - start).days > 365:
+        raise HTTPException(status_code=400, detail="Rentang tanggal maksimal 365 hari")
+
+    wita = timezone(timedelta(hours=8))
+    start_utc = datetime.combine(start, datetime.min.time()).replace(tzinfo=wita).astimezone(timezone.utc)
+    end_utc = datetime.combine(end + timedelta(days=1), datetime.min.time()).replace(tzinfo=wita).astimezone(timezone.utc)
+
+    # Base query untuk orders dalam rentang + branch filter
+    base_orders = db.query(Order).filter(
+        Order.created_at >= start_utc,
+        Order.created_at < end_utc,
+    )
+    base_orders = apply_branch_filter(base_orders, Order, current_user)
+
+    # 1. Total orders
+    total_orders = base_orders.with_entities(func.count(Order.id)).scalar() or 0
+
+    # 2. by_status
+    by_status_rows = (
+        base_orders.with_entities(Order.status, func.count(Order.id).label("c"))
+        .group_by(Order.status).all()
+    )
+    by_status = [ReportSummaryByStatus(status=row[0] or "UNKNOWN", count=row[1]) for row in by_status_rows]
+
+    # 3. Total items sold + raw_revenue (qty * harga) via OrderItem join
+    item_agg = (
+        base_orders.join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .with_entities(
+            func.coalesce(func.sum(OrderItem.qty), 0).label("total_qty"),
+            func.coalesce(func.sum(OrderItem.qty * Product.harga), 0).label("raw_rev"),
+        )
+        .first()
+    )
+    total_items_sold = int(item_agg.total_qty or 0)
+    raw_revenue = int(item_agg.raw_rev or 0)
+
+    # 4. by_product (top 20 by raw_revenue)
+    by_product_rows = (
+        base_orders.join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .with_entities(
+            Product.id.label("product_id"),
+            Product.nama_barang.label("product_name"),
+            func.coalesce(func.sum(OrderItem.qty), 0).label("qty_sold"),
+            func.coalesce(func.sum(OrderItem.qty * Product.harga), 0).label("raw_revenue"),
+        )
+        .group_by(Product.id, Product.nama_barang)
+        .order_by(func.coalesce(func.sum(OrderItem.qty * Product.harga), 0).desc())
+        .limit(20).all()
+    )
+    by_product = [
+        ReportSummaryByProduct(
+            product_id=r.product_id,
+            product_name=r.product_name or "",
+            qty_sold=int(r.qty_sold or 0),
+            raw_revenue=int(r.raw_revenue or 0),
+        )
+        for r in by_product_rows
+    ]
+
+    # 5. by_sales (top 20 by order_count) — pakai distinct Order.id supaya
+    # order dengan multiple items tidak dihitung beberapa kali
+    UserAlias = aliased(User)
+    by_sales_rows = (
+        base_orders.join(UserAlias, UserAlias.id == Order.sales_id)
+        .with_entities(
+            UserAlias.id.label("user_id"),
+            UserAlias.username.label("username"),
+            UserAlias.nama.label("nama"),
+            func.count(func.distinct(Order.id)).label("order_count"),
+            func.coalesce(func.sum(OrderItem.qty * Product.harga), 0).label("raw_revenue"),
+        )
+        .outerjoin(OrderItem, OrderItem.order_id == Order.id)
+        .outerjoin(Product, Product.id == OrderItem.product_id)
+        .group_by(UserAlias.id, UserAlias.username, UserAlias.nama)
+        .order_by(func.count(func.distinct(Order.id)).desc())
+        .limit(20).all()
+    )
+    by_sales = [
+        ReportSummaryBySales(
+            user_id=r.user_id,
+            username=r.username or "",
+            nama=r.nama,
+            order_count=int(r.order_count or 0),
+            raw_revenue=int(r.raw_revenue or 0),
+        )
+        for r in by_sales_rows
+    ]
+
+    # 6. by_branch
+    by_branch_rows = (
+        base_orders.outerjoin(OrderItem, OrderItem.order_id == Order.id)
+        .outerjoin(Product, Product.id == OrderItem.product_id)
+        .with_entities(
+            Order.branch.label("branch"),
+            func.count(func.distinct(Order.id)).label("order_count"),
+            func.coalesce(func.sum(OrderItem.qty), 0).label("item_count"),
+            func.coalesce(func.sum(OrderItem.qty * Product.harga), 0).label("raw_revenue"),
+        )
+        .group_by(Order.branch)
+        .order_by(Order.branch.asc())
+        .all()
+    )
+    by_branch = [
+        ReportSummaryByBranch(
+            branch=r.branch or "",
+            order_count=int(r.order_count or 0),
+            item_count=int(r.item_count or 0),
+            raw_revenue=int(r.raw_revenue or 0),
+        )
+        for r in by_branch_rows
+    ]
+
+    return ReportSummaryResponse(
+        period_start=start,
+        period_end=end,
+        total_orders=total_orders,
+        total_items_sold=total_items_sold,
+        raw_revenue=raw_revenue,
+        by_status=by_status,
+        by_product=by_product,
+        by_sales=by_sales,
+        by_branch=by_branch,
     )
 
 
@@ -556,62 +748,77 @@ def cross_branch_sales_summary(
     current_user: dict = Depends(require_manager_global),
 ):
     """Per-branch approved count, revenue, pending count, customer count, sales count.
-    Global MANAGER only."""
+    Global MANAGER only.
+
+    4 query fixed (bukan 5×N): order counts, revenue, customer count, sales
+    count — masing-masing di-GROUP BY branch dalam 1 query.
+    """
     from app.core import branch as branch_constants
 
-    summary = []
-    for code in branch_constants.get_valid_branch_codes():
-        # Approved orders count + revenue
-        approved_q = (
-            db.query(func.count(Order.id))
-            .filter(Order.status == "APPROVED", Order.branch == code)
+    # Query 1: order counts (approved + pending) per branch
+    order_stats = (
+        db.query(
+            Order.branch.label("branch"),
+            func.sum(case((Order.status == "APPROVED", 1), else_=0)).label("approved_count"),
+            func.sum(case((Order.status == "PENDING", 1), else_=0)).label("pending_count"),
         )
-        approved_count = approved_q.scalar() or 0
+        .group_by(Order.branch)
+        .all()
+    )
+    stats_by_branch = {r.branch: r for r in order_stats}
 
-        # Revenue
-        final_subtotal_expr, _ = _three_layer_subtotal_expr()
-        revenue_q = (
-            db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
-            .join(Order, Order.id == OrderItem.order_id)
-            .join(Product, Product.id == OrderItem.product_id)
-            .filter(Order.status == "APPROVED", Order.branch == code)
+    # Query 2: revenue per branch (approved only, subtotal setelah 3-layer diskon)
+    final_subtotal_expr, _ = _three_layer_subtotal_expr()
+    revenue_rows = (
+        db.query(
+            Order.branch.label("branch"),
+            func.coalesce(func.sum(final_subtotal_expr), 0).label("revenue"),
         )
-        revenue = revenue_q.scalar() or 0
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(Product, Product.id == OrderItem.product_id)
+        .filter(Order.status == "APPROVED")
+        .group_by(Order.branch)
+        .all()
+    )
+    revenue_by_branch = {r.branch: r.revenue for r in revenue_rows}
 
-        # Pending orders
-        pending_count = (
-            db.query(func.count(Order.id))
-            .filter(Order.status == "PENDING", Order.branch == code)
-            .scalar() or 0
+    # Query 3: customer count per branch
+    customer_counts = {
+        branch: count
+        for branch, count in (
+            db.query(Customer.branch, func.count(Customer.id))
+            .filter(Customer.deleted_at.is_(None))
+            .group_by(Customer.branch)
+            .all()
         )
+    }
 
-        # Customer count
-        customer_count = (
-            db.query(func.count(Customer.id))
-            .filter(Customer.deleted_at.is_(None), Customer.branch == code)
-            .scalar() or 0
-        )
-
-        # Sales count
-        sales_count = (
-            db.query(func.count(User.id))
+    # Query 4: sales count per branch
+    sales_counts = {
+        branch: count
+        for branch, count in (
+            db.query(User.branch, func.count(User.id))
             .filter(
                 User.role == "SALES",
                 User.is_active.is_(True),
                 User.deleted_at.is_(None),
-                User.branch == code,
             )
-            .scalar() or 0
+            .group_by(User.branch)
+            .all()
         )
+    }
 
+    summary = []
+    for code in branch_constants.get_valid_branch_codes():
+        row = stats_by_branch.get(code)
         summary.append({
             "branch": code,
             "branch_nama": branch_constants.get_branch_nama(code),
-            "approved_count": approved_count,
-            "approved_revenue": int(revenue),
-            "pending_count": pending_count,
-            "customer_count": customer_count,
-            "sales_count": sales_count,
+            "approved_count": int(row.approved_count or 0) if row else 0,
+            "approved_revenue": int(revenue_by_branch.get(code) or 0),
+            "pending_count": int(row.pending_count or 0) if row else 0,
+            "customer_count": int(customer_counts.get(code) or 0),
+            "sales_count": int(sales_counts.get(code) or 0),
         })
 
     return {"branches": summary}
@@ -622,52 +829,40 @@ def cross_branch_stock_summary(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_manager_global),
 ):
-    """Per-branch stock value, SKU count, low-stock flags. Global MANAGER only."""
-    from sqlalchemy import func, Integer, cast
+    """Per-branch stock value, SKU count, low-stock flags. Global MANAGER only.
+
+    1 query GROUP BY branch (sebelumnya 4×N query, satu scalar per branch).
+    """
     from app.core import branch as branch_constants
+
+    stok_expr = (
+        func.coalesce(Product.stok_sistem, 0)
+        - func.coalesce(Product.stok_booking, 0)
+        - func.coalesce(Product.stok_diterima, 0)
+    )
+    rows = (
+        db.query(
+            Product.branch.label("branch"),
+            func.count(Product.id).label("sku_count"),
+            func.coalesce(func.sum(Product.stok_sistem * Product.harga), 0).label("stock_value"),
+            func.sum(
+                case(((stok_expr > 0) & (stok_expr <= 5), 1), else_=0)
+            ).label("low_stock_count"),
+        )
+        .group_by(Product.branch)
+        .all()
+    )
+    stats_by_branch = {r.branch: r for r in rows}
 
     summary = []
     for code in branch_constants.get_valid_branch_codes():
-        sku_count = (
-            db.query(func.count(Product.id))
-            .filter(Product.branch == code)
-            .scalar() or 0
-        )
-
-        # Stock value = sum(stok_sistem * harga) per branch
-        stock_value_q = (
-            db.query(func.coalesce(func.sum(Product.stok_sistem * Product.harga), 0))
-            .filter(Product.branch == code)
-        )
-        stock_value = stock_value_q.scalar() or 0
-
-        # Low stock (stok_tersedia <= 5)
-        stok_expr = (
-            func.coalesce(Product.stok_sistem, 0)
-            - func.coalesce(Product.stok_booking, 0)
-            - func.coalesce(Product.stok_diterima, 0)
-        )
-        low_stock_count = (
-            db.query(func.count(Product.id))
-            .filter(
-                Product.branch == code,
-                stok_expr <= 5,
-                stok_expr > 0,
-            )
-            .scalar() or 0
-        )
-        out_of_stock = (
-            db.query(func.count(Product.id))
-            .filter(Product.branch == code, stok_expr <= 0)
-            .scalar() or 0
-        )
-
+        row = stats_by_branch.get(code)
         summary.append({
             "branch": code,
             "branch_nama": branch_constants.get_branch_nama(code),
-            "sku_count": sku_count,
-            "total_stock_value": int(stock_value),
-            "low_stock_count": low_stock_count,
+            "sku_count": int(row.sku_count or 0) if row else 0,
+            "total_stock_value": int(row.stock_value or 0) if row else 0,
+            "low_stock_count": int(row.low_stock_count or 0) if row else 0,
         })
 
     return {"branches": summary}

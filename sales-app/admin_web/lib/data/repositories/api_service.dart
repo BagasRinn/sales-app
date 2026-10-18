@@ -85,6 +85,19 @@ class ApiService {
     }
   }
 
+  Future<dynamic> patch(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final resp = await _dio.patch(endpoint, data: body, cancelToken: cancelToken);
+      return resp.data;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   Future<dynamic> postFile(
     String endpoint,
     List<int> fileBytes,

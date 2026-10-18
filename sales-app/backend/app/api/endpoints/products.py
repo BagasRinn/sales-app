@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import func, Integer, cast, Date
+from sqlalchemy import func, Integer, cast, Date, or_, select
 from typing import List, Optional
 from uuid import UUID
 import os
 
 from app.models.database import get_db
-from app.models.models import Product, Order, ImportLog, SyncValidationError
+from app.models.models import Product, Order, ImportLog, SyncValidationError, Supplier
 from app.core import branch as branch_constants
 from app.schemas.schemas import (
     ProductResponse,
@@ -22,9 +22,23 @@ from app.services.stock_logger import log_stock_change
 router = APIRouter(prefix="/products", tags=["Products"])
 
 
-def _get_4p_suppliers() -> List[str]:
-    """Parse SUPPLIERS_4P env var (comma-separated supplier names) into a list.
-    Returns empty list if env var is not set."""
+def _get_4p_suppliers(db: Optional[Session] = None) -> List[str]:
+    """Return daftar supplier 4P.
+    Primary source: database suppliers table (order_type = '4P' and is_active = true).
+    Fallback source: env SUPPLIERS_4P if db is not provided or query fails."""
+    if db is not None:
+        try:
+            rows = (
+                db.query(Supplier.name)
+                .filter(Supplier.order_type == "4P", Supplier.is_active == True)  # noqa: E712
+                .order_by(Supplier.name)
+                .all()
+            )
+            if rows:
+                return [r[0] for r in rows]
+        except Exception:
+            pass
+
     raw = os.getenv("SUPPLIERS_4P", "").strip()
     if not raw:
         return []
@@ -33,11 +47,12 @@ def _get_4p_suppliers() -> List[str]:
 
 @router.get("/suppliers/4p", response_model=List[str])
 def get_suppliers_4p(
+    db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_auth),
 ):
-    """Return daftar supplier yang dikategorikan sebagai 4P (dari env SUPPLIERS_4P).
+    """Return daftar supplier yang dikategorikan sebagai 4P (dari tabel suppliers DB, fallback env).
     Mobile fetch endpoint ini saat app init, lalu filter produk 4P berdasarkan daftar ini."""
-    return _get_4p_suppliers()
+    return _get_4p_suppliers(db=db)
 
 
 @router.get("/sales-stats")
@@ -149,6 +164,20 @@ def list_products(
     query = db.query(Product)
     # Branch filter applied first
     query = apply_branch_filter(query, Product, current_user)
+
+    if current_user["role"] == "SALES":
+        # Hide products whose supplier is inactive. Products with NULL or empty
+        # nama_supplier remain visible (backward-compat for legacy products).
+        active_suppliers_subq = (
+            select(Supplier.name).where(Supplier.is_active == True).scalar_subquery()
+        )
+        query = query.filter(
+            or_(
+                Product.nama_supplier.is_(None),
+                Product.nama_supplier == "",
+                Product.nama_supplier.in_(active_suppliers_subq),
+            )
+        )
 
     if search:
         query = query.filter(

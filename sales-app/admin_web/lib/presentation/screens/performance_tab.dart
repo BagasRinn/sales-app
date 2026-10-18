@@ -4,14 +4,18 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
+import '../../core/responsive_dialog.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/supplier_performance.dart';
 import '../providers/admin_provider.dart';
 import '../widgets/supplier_target_edit_dialog.dart';
 
-String _fmt(int amount) =>
-    NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
+String _fmt(int amount) => NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: '',
+  decimalDigits: 0,
+).format(amount);
 
 class PerformanceTab extends StatefulWidget {
   const PerformanceTab({super.key});
@@ -29,6 +33,10 @@ class _PerformanceTabState extends State<PerformanceTab> {
   late DateTime _toDate;
   bool _useCustomRange = false;
 
+  // Pagination: KPI per Supplier
+  int _supplierPage = 1;
+  static const int _supplierPageSize = 10;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +51,7 @@ class _PerformanceTabState extends State<PerformanceTab> {
   }
 
   void _loadData() {
+    setState(() => _supplierPage = 1);
     final provider = context.read<AdminProvider>();
     final ym = _yearMonth(_fromDate);
     provider.loadSalesPerformance(from: _fromDate, to: _toDate);
@@ -115,7 +124,8 @@ class _PerformanceTabState extends State<PerformanceTab> {
             return b.revenue.compareTo(a.revenue);
           });
 
-        final currentPeriod = '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}';
+        final currentPeriod =
+            '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}';
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -126,27 +136,32 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Section: Period Filter + Sort
-              _buildPeriodFilterSection(),
-              const SizedBox(height: 24),
+                  _buildPeriodFilterSection(),
+                  const SizedBox(height: 24),
 
-              // Section 1: KPI per Supplier — revenue & target with auto-rollover
-              _buildSectionTitle('KPI per Supplier'),
-              const SizedBox(height: 12),
-              _buildSupplierPerformanceTable(provider),
-              const SizedBox(height: 32),
+                  // Section 1: KPI per Supplier — revenue & target with auto-rollover
+                  _buildSectionTitle('KPI per Supplier'),
+                  const SizedBox(height: 12),
+                  _buildSupplierPerformanceTable(provider),
+                  const SizedBox(height: 32),
 
-              // Section 2: Leaderboard
-              _buildSectionTitle('Leaderboard'),
-              const SizedBox(height: 12),
-              _buildLeaderboard(sorted, provider, sortBy, loading),
-              const SizedBox(height: 32),
+                  // Section 2: Leaderboard
+                  _buildSectionTitle('Leaderboard'),
+                  const SizedBox(height: 12),
+                  _buildLeaderboard(sorted, provider, sortBy, loading),
+                  const SizedBox(height: 32),
 
-              // Section 3: Target & Incentive
-              _buildSectionTitle('Target & Incentive'),
-              const SizedBox(height: 12),
-              _buildTargetSection(sorted, provider, currentPeriod, targetsLoading),
-            ],
-          ),
+                  // Section 3: Target & Incentive
+                  _buildSectionTitle('Target & Incentive'),
+                  const SizedBox(height: 12),
+                  _buildTargetSection(
+                    sorted,
+                    provider,
+                    currentPeriod,
+                    targetsLoading,
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -171,7 +186,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
         '${DateFormat('dd MMM yyyy', 'id_ID').format(_fromDate)} - '
         '${DateFormat('dd MMM yyyy', 'id_ID').format(_toDate)}';
 
-    return Row(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
         // Monthly picker
         OutlinedButton.icon(
@@ -181,18 +198,21 @@ class _PerformanceTabState extends State<PerformanceTab> {
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primaryLight,
             backgroundColor: AppColors.primaryLight.withValues(alpha: 0.08),
-            side: BorderSide(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+            side: BorderSide(
+              color: AppColors.primaryLight.withValues(alpha: 0.4),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
         ),
-        const SizedBox(width: 8),
         // Custom range toggle
         TextButton.icon(
           onPressed: _pickCustomRange,
           icon: const Icon(Icons.date_range, size: 18),
           label: const Text('Custom Range'),
           style: TextButton.styleFrom(
-            foregroundColor: _useCustomRange ? Colors.white : AppColors.textMuted,
+            foregroundColor: _useCustomRange
+                ? Colors.white
+                : AppColors.textMuted,
             backgroundColor: _useCustomRange ? AppColors.primaryLight : null,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
@@ -240,100 +260,192 @@ class _PerformanceTabState extends State<PerformanceTab> {
 
     final canEdit = provider.isAdmin || provider.isSupervisor;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      // Use Table (not DataTable) so columns stretch to fill the parent
-      // width via FlexColumnWidth — DataTable sizes each column to its
-      // content and leaves white space on the right on wide screens.
-      child: Table(
-        columnWidths: const {
-          0: FlexColumnWidth(3), // Supplier (long text)
-          1: FlexColumnWidth(2), // Target
-          2: FlexColumnWidth(2), // Value
-          3: FlexColumnWidth(1.5), // Pencapaian
-          4: FixedColumnWidth(56), // Edit icon
-        },
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          TableRow(
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppColors.border, width: 1),
+    // Pagination
+    final totalPages = ((rows.length - 1) / _supplierPageSize).ceil().clamp(
+      1,
+      999999,
+    );
+    final safePage = _supplierPage.clamp(1, totalPages);
+    final start = (safePage - 1) * _supplierPageSize;
+    final pageRows = rows.skip(start).take(_supplierPageSize).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, tableConstraints) {
+            // Desktop: full width. Mobile: min 560 so columns stay readable,
+            // horizontal scroll handles the rest.
+            final avail = tableConstraints.maxWidth - 2;
+            final tableWidth = avail < 560 ? 560.0 : avail;
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+                border: Border.all(color: AppColors.border),
               ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(3),
+                      1: FlexColumnWidth(2),
+                      2: FlexColumnWidth(2),
+                      3: FlexColumnWidth(1.5),
+                      4: FixedColumnWidth(56),
+                    },
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      TableRow(
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: AppColors.border,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        children: [
+                          const _TableHeaderCell(
+                            'Supplier',
+                            align: TextAlign.left,
+                          ),
+                          const _TableHeaderCell(
+                            'Target',
+                            align: TextAlign.right,
+                          ),
+                          const _TableHeaderCell(
+                            'Value',
+                            align: TextAlign.right,
+                          ),
+                          const _TableHeaderCell(
+                            'Pencapaian',
+                            align: TextAlign.right,
+                          ),
+                          const _TableHeaderCell(''),
+                        ],
+                      ),
+                      ...pageRows.map((row) {
+                        final pencapaianText = row.pencapaian == null
+                            ? '—'
+                            : '${row.pencapaian!.toStringAsFixed(0)}%';
+                        Color pencapaianColor = AppColors.textMuted;
+                        FontWeight pencapaianWeight = FontWeight.normal;
+                        if (row.pencapaian != null) {
+                          if (row.pencapaian! >= 100) {
+                            pencapaianColor = AppColors.success;
+                            pencapaianWeight = FontWeight.bold;
+                          } else if (row.pencapaian! >= 81) {
+                            pencapaianColor = AppColors.warning;
+                          } else {
+                            pencapaianColor = AppColors.error;
+                          }
+                        }
+                        return TableRow(
+                          children: [
+                            _TableBodyCell(
+                              Text(
+                                row.supplierName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              align: TextAlign.left,
+                            ),
+                            _TableBodyCell(
+                              Text('Rp ${_fmt(row.target)}'),
+                              align: TextAlign.right,
+                            ),
+                            _TableBodyCell(
+                              Text('Rp ${_fmt(row.value)}'),
+                              align: TextAlign.right,
+                            ),
+                            _TableBodyCell(
+                              Text(
+                                pencapaianText,
+                                style: TextStyle(
+                                  color: pencapaianColor,
+                                  fontWeight: pencapaianWeight,
+                                ),
+                              ),
+                              align: TextAlign.right,
+                            ),
+                            _TableBodyCell(
+                              canEdit
+                                  ? IconButton(
+                                      icon: const Icon(Icons.edit, size: 18),
+                                      tooltip: 'Edit target',
+                                      onPressed: () =>
+                                          _openTargetDialog(provider, row),
+                                    )
+                                  : const SizedBox.shrink(),
+                              align: TextAlign.center,
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(12),
             ),
+            border: Border(
+              left: BorderSide(color: AppColors.border),
+              right: BorderSide(color: AppColors.border),
+              bottom: BorderSide(color: AppColors.border),
+            ),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const _TableHeaderCell('Supplier', align: TextAlign.left),
-              const _TableHeaderCell('Target', align: TextAlign.right),
-              const _TableHeaderCell('Value', align: TextAlign.right),
-              const _TableHeaderCell('Pencapaian', align: TextAlign.right),
-              const _TableHeaderCell(''),
+              Text(
+                'Total: ${rows.length} supplier',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton(
+                    onPressed: safePage > 1
+                        ? () => setState(() => _supplierPage = safePage - 1)
+                        : null,
+                    child: const Icon(Icons.chevron_left),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Halaman $safePage dari $totalPages',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: safePage < totalPages
+                        ? () => setState(() => _supplierPage = safePage + 1)
+                        : null,
+                    child: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
             ],
           ),
-          ...rows.map((row) {
-            final pencapaianText = row.pencapaian == null
-                ? '—'
-                : '${row.pencapaian!.toStringAsFixed(0)}%';
-            Color pencapaianColor = AppColors.textMuted;
-            FontWeight pencapaianWeight = FontWeight.normal;
-            if (row.pencapaian != null) {
-              if (row.pencapaian! >= 100) {
-                // 100%+ → hijau (target tercapai)
-                pencapaianColor = AppColors.success;
-                pencapaianWeight = FontWeight.bold;
-              } else if (row.pencapaian! >= 81) {
-                // 81% - 99% → kuning (mendekati target)
-                pencapaianColor = AppColors.warning;
-              } else {
-                // 0% - 80% → merah (jauh dari target)
-                pencapaianColor = AppColors.error;
-              }
-            }
-            return TableRow(
-              children: [
-                _TableBodyCell(
-                  Text(
-                    row.supplierName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  align: TextAlign.left,
-                ),
-                _TableBodyCell(
-                  Text('Rp ${_fmt(row.target)}'),
-                  align: TextAlign.right,
-                ),
-                _TableBodyCell(
-                  Text('Rp ${_fmt(row.value)}'),
-                  align: TextAlign.right,
-                ),
-                _TableBodyCell(
-                  Text(
-                    pencapaianText,
-                    style: TextStyle(
-                      color: pencapaianColor,
-                      fontWeight: pencapaianWeight,
-                    ),
-                  ),
-                  align: TextAlign.right,
-                ),
-                _TableBodyCell(
-                  canEdit
-                      ? IconButton(
-                          icon: const Icon(Icons.edit, size: 18),
-                          tooltip: 'Edit target',
-                          onPressed: () => _openTargetDialog(provider, row),
-                        )
-                      : const SizedBox.shrink(),
-                  align: TextAlign.center,
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -370,163 +482,179 @@ class _PerformanceTabState extends State<PerformanceTab> {
               ),
             )
           : sorted.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'Tidak ada data leaderboard.',
-                      style: TextStyle(color: AppColors.textMuted),
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'Tidak ada data leaderboard.',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                // Sort toggle header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppColors.border)),
+                  ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'Urutkan:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      ChoiceChip(
+                        label: const Text(
+                          'Revenue',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        selected: sortBy == 'revenue',
+                        onSelected: (_) =>
+                            provider.setPerformanceSort('revenue'),
+                        selectedColor: AppColors.primaryLight,
+                        backgroundColor: AppColors.background,
+                        side: BorderSide(
+                          color: sortBy == 'revenue'
+                              ? AppColors.primaryLight
+                              : AppColors.border,
+                        ),
+                        labelStyle: TextStyle(
+                          color: sortBy == 'revenue'
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      ChoiceChip(
+                        label: const Text(
+                          'Order',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        selected: sortBy == 'order_count',
+                        onSelected: (_) =>
+                            provider.setPerformanceSort('order_count'),
+                        selectedColor: AppColors.primaryLight,
+                        backgroundColor: AppColors.background,
+                        side: BorderSide(
+                          color: sortBy == 'order_count'
+                              ? AppColors.primaryLight
+                              : AppColors.border,
+                        ),
+                        labelStyle: TextStyle(
+                          color: sortBy == 'order_count'
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Table header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.borderLight,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(11),
+                      topRight: Radius.circular(11),
                     ),
                   ),
-                )
-              : Column(
-                  children: [
-                    // Sort toggle header
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Text(
-                            'Urutkan:',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('Revenue', style: TextStyle(fontSize: 12)),
-                            selected: sortBy == 'revenue',
-                            onSelected: (_) => provider.setPerformanceSort('revenue'),
-                            selectedColor: AppColors.primaryLight,
-                            backgroundColor: AppColors.background,
-                            side: BorderSide(
-                              color: sortBy == 'revenue'
-                                  ? AppColors.primaryLight
-                                  : AppColors.border,
-                            ),
-                            labelStyle: TextStyle(
-                              color: sortBy == 'revenue'
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('Order', style: TextStyle(fontSize: 12)),
-                            selected: sortBy == 'order_count',
-                            onSelected: (_) => provider.setPerformanceSort('order_count'),
-                            selectedColor: AppColors.primaryLight,
-                            backgroundColor: AppColors.background,
-                            side: BorderSide(
-                              color: sortBy == 'order_count'
-                                  ? AppColors.primaryLight
-                                  : AppColors.border,
-                            ),
-                            labelStyle: TextStyle(
-                              color: sortBy == 'order_count'
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Table header
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: const BoxDecoration(
-                        color: AppColors.borderLight,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(11),
-                          topRight: Radius.circular(11),
-                        ),
-                      ),
-                      child: const Row(
-                        children: [
-                          SizedBox(width: 36, child: Text('#', style: _thStyle)),
-                          Expanded(flex: 2, child: Text('Nama', style: _thStyle)),
-                          Expanded(child: Text('Order', style: _thStyle)),
-                          Expanded(child: Text('Revenue', style: _thStyle)),
-                          Expanded(child: Text('Submission', style: _thStyle)),
-                        ],
-                      ),
-                    ),
-                    // Rows
-                    ...sorted.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final perf = entry.value;
-                      final rowBg = idx % 2 == 0
-                          ? AppColors.surface
-                          : AppColors.borderLight.withValues(alpha: 0.5);
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: rowBg,
-                          border: const Border(
-                            bottom: BorderSide(color: AppColors.border),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 36,
-                              child: Text(
-                                '#${idx + 1}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: idx == 0
-                                      ? AppColors.primaryLight
-                                      : AppColors.textMuted,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                perf.displayName,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                perf.orderCount.toString(),
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                _fmt(perf.revenue),
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                perf.submissionCount.toString(),
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
+                  child: const Row(
+                    children: [
+                      SizedBox(width: 36, child: Text('#', style: _thStyle)),
+                      Expanded(flex: 2, child: Text('Nama', style: _thStyle)),
+                      Expanded(child: Text('Order', style: _thStyle)),
+                      Expanded(child: Text('Revenue', style: _thStyle)),
+                      Expanded(child: Text('Submission', style: _thStyle)),
+                    ],
+                  ),
                 ),
+                // Rows
+                ...sorted.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final perf = entry.value;
+                  final rowBg = idx % 2 == 0
+                      ? AppColors.surface
+                      : AppColors.borderLight.withValues(alpha: 0.5);
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: rowBg,
+                      border: const Border(
+                        bottom: BorderSide(color: AppColors.border),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            '#${idx + 1}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: idx == 0
+                                  ? AppColors.primaryLight
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            perf.displayName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            perf.orderCount.toString(),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            _fmt(perf.revenue),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            perf.submissionCount.toString(),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
     );
   }
 
@@ -556,113 +684,137 @@ class _PerformanceTabState extends State<PerformanceTab> {
               ),
             )
           : sorted.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'Tidak ada sales untuk diset target.',
-                      style: TextStyle(color: AppColors.textMuted),
+          ? const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'Tidak ada sales untuk diset target.',
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.borderLight,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(11),
+                      topRight: Radius.circular(11),
                     ),
                   ),
-                )
-              : Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: const BoxDecoration(
-                        color: AppColors.borderLight,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(11),
-                          topRight: Radius.circular(11),
-                        ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        flex: 2,
+                        child: Text('Nama', style: _thStyle),
                       ),
-                      child: Row(
-                        children: [
-                          const Expanded(flex: 2, child: Text('Nama', style: _thStyle)),
-                          const Expanded(child: Text('Tipe Target', style: _thStyle)),
-                          const Expanded(child: Text('Nilai Target', style: _thStyle)),
-                          const Expanded(child: Text('Incentive', style: _thStyle)),
-                          const SizedBox(width: 80, child: Text('Aksi', style: _thStyle)),
-                        ],
+                      const Expanded(
+                        child: Text('Tipe Target', style: _thStyle),
+                      ),
+                      const Expanded(
+                        child: Text('Nilai Target', style: _thStyle),
+                      ),
+                      const Expanded(child: Text('Incentive', style: _thStyle)),
+                      const SizedBox(
+                        width: 100,
+                        child: Text('Aksi', style: _thStyle),
+                      ),
+                    ],
+                  ),
+                ),
+                // Rows
+                ...sorted.map((perf) {
+                  final target = provider.getTargetFor(
+                    perf.userId,
+                    currentPeriod,
+                  );
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.border),
                       ),
                     ),
-                    // Rows
-                    ...sorted.map((perf) {
-                      final target = provider.getTargetFor(perf.userId, currentPeriod);
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: const BoxDecoration(
-                          border: Border(bottom: BorderSide(color: AppColors.border)),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            perf.displayName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                perf.displayName,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                target?.isRevenue == true
-                                    ? 'Revenue'
-                                    : target?.isOrderCount == true
-                                        ? 'Order Count'
-                                        : '-',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                target != null
-                                    ? (target.isRevenue ? _fmt(target.targetValue) : target.targetValue.toString())
-                                    : '-',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                target != null ? _fmt(target.incentiveAmount) : '-',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: target != null && target.incentiveAmount > 0
-                                      ? AppColors.success
-                                      : AppColors.textMuted,
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 80,
-                              child: TextButton(
-                                onPressed: () => _showTargetDialog(
-                                  context,
-                                  provider,
-                                  perf,
-                                  currentPeriod,
-                                  target,
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.primaryLight,
-                                  padding: EdgeInsets.zero,
-                                ),
-                                child: Text(
-                                  target == null ? 'Set Target' : 'Edit',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            ),
-                          ],
+                        Expanded(
+                          child: Text(
+                            target?.isRevenue == true
+                                ? 'Revenue'
+                                : target?.isOrderCount == true
+                                ? 'Order Count'
+                                : '-',
+                            style: const TextStyle(fontSize: 13),
+                          ),
                         ),
-                      );
-                    }),
-                  ],
-                ),
+                        Expanded(
+                          child: Text(
+                            target != null
+                                ? (target.isRevenue
+                                      ? _fmt(target.targetValue)
+                                      : target.targetValue.toString())
+                                : '-',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            target != null ? _fmt(target.incentiveAmount) : '-',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color:
+                                  target != null && target.incentiveAmount > 0
+                                  ? AppColors.success
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 100,
+                          child: TextButton(
+                            onPressed: () => _showTargetDialog(
+                              context,
+                              provider,
+                              perf,
+                              currentPeriod,
+                              target,
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primaryLight,
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: Text(
+                              target == null ? 'Set Target' : 'Edit',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
     );
   }
 
@@ -673,7 +825,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
     String currentPeriod,
     SalesTarget? existing,
   ) async {
-    final targetType = (existing?.isRevenue ?? false) ? 'REVENUE' : 'ORDER_COUNT';
+    final targetType = (existing?.isRevenue ?? false)
+        ? 'REVENUE'
+        : 'ORDER_COUNT';
     final targetValueController = TextEditingController(
       text: existing?.targetValue.toString() ?? '',
     );
@@ -684,72 +838,75 @@ class _PerformanceTabState extends State<PerformanceTab> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => ResponsiveAlertDialog(
         title: Text(
           existing == null
               ? 'Set Target untuk ${perf.displayName}'
               : 'Edit Target ${perf.displayName}',
         ),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Periode: $currentPeriod',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textMuted,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Tipe Target', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              ValueListenableBuilder<String>(
-                valueListenable: selectedType,
-                builder: (_, val, _) => Row(
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Order Count', style: TextStyle(fontSize: 12)),
-                      selected: val == 'ORDER_COUNT',
-                      onSelected: (_) => selectedType.value = 'ORDER_COUNT',
-                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Periode: $currentPeriod',
+              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Tipe Target',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<String>(
+              valueListenable: selectedType,
+              builder: (_, val, _) => Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text(
+                      'Order Count',
+                      style: TextStyle(fontSize: 12),
                     ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Revenue', style: TextStyle(fontSize: 12)),
-                      selected: val == 'REVENUE',
-                      onSelected: (_) => selectedType.value = 'REVENUE',
-                      selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                    selected: val == 'ORDER_COUNT',
+                    onSelected: (_) => selectedType.value = 'ORDER_COUNT',
+                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text(
+                      'Revenue',
+                      style: TextStyle(fontSize: 12),
                     ),
-                  ],
-                ),
+                    selected: val == 'REVENUE',
+                    onSelected: (_) => selectedType.value = 'REVENUE',
+                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: targetValueController,
-                decoration: InputDecoration(
-                  labelText: selectedType.value == 'REVENUE'
-                      ? 'Target Revenue (Rp)'
-                      : 'Target Order Count',
-                  border: const OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: targetValueController,
+              decoration: InputDecoration(
+                labelText: selectedType.value == 'REVENUE'
+                    ? 'Target Revenue (Rp)'
+                    : 'Target Order Count',
+                border: const OutlineInputBorder(),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: incentiveController,
-                decoration: const InputDecoration(
-                  labelText: 'Incentive / Bonus (Rp)',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: incentiveController,
+              decoration: const InputDecoration(
+                labelText: 'Incentive / Bonus (Rp)',
+                border: OutlineInputBorder(),
               ),
-            ],
-          ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -778,7 +935,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
         // ignore: use_build_context_synchronously — mounted is State.mounted, context is State.context
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok ? 'Target berhasil disimpan' : 'Gagal menyimpan target'),
+            content: Text(
+              ok ? 'Target berhasil disimpan' : 'Gagal menyimpan target',
+            ),
             backgroundColor: ok ? AppColors.success : AppColors.error,
           ),
         );
@@ -826,8 +985,8 @@ class _TableBodyCell extends StatelessWidget {
         alignment: align == TextAlign.right
             ? Alignment.centerRight
             : align == TextAlign.center
-                ? Alignment.center
-                : Alignment.centerLeft,
+            ? Alignment.center
+            : Alignment.centerLeft,
         child: child,
       ),
     );

@@ -435,6 +435,20 @@ class SupplierTarget(Base):
     )
 
 
+class Supplier(Base):
+    __tablename__ = "suppliers"
+
+    name = Column(String, primary_key=True)  # matches Product.nama_supplier
+    is_active = Column(Boolean, nullable=False, default=True)
+    order_type = Column(String(10), nullable=False, default="REGULER")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class Bulletin(Base):
     __tablename__ = "bulletins"
     __table_args__ = (

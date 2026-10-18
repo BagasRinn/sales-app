@@ -15,6 +15,7 @@ import '../models/bulletin.dart';
 import '../models/branch_report.dart';
 import '../models/supplier_target.dart';
 import '../models/supplier_performance.dart';
+import '../models/supplier.dart';
 
 class AdminRepository {
   final ApiService _api;
@@ -214,6 +215,7 @@ class AdminRepository {
 
   /// Download laporan harian sebagai bytes Excel. Caller yang handle
   /// blob URL / file save (browser download di web).
+  /// `?detail=true` opt-in ke XLSX binary (default endpoint = JSON summary).
   Future<List<int>> downloadDailyReport({
     required DateTime date,
     List<String> statuses = const ['APPROVED'],
@@ -221,7 +223,7 @@ class AdminRepository {
     final dateStr = '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
-    final qs = '?date=$dateStr&status=${statuses.join(',')}';
+    final qs = '?date=$dateStr&status=${statuses.join(',')}&detail=true';
     // Ambil raw bytes — pakai helper Dio langsung agar bypass deserialization JSON.
     final dio = _api.dio;
     final response = await dio.get<List<int>>(
@@ -232,6 +234,7 @@ class AdminRepository {
   }
 
   /// Download laporan periode (rentang tanggal) sebagai bytes Excel.
+  /// `?detail=true` opt-in ke XLSX binary (default endpoint = JSON summary).
   Future<List<int>> downloadPeriodReport({
     required DateTime startDate,
     required DateTime endDate,
@@ -243,13 +246,30 @@ class AdminRepository {
     final endStr = '${endDate.year.toString().padLeft(4, '0')}-'
         '${endDate.month.toString().padLeft(2, '0')}-'
         '${endDate.day.toString().padLeft(2, '0')}';
-    final qs = '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}';
+    final qs = '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}&detail=true';
     final dio = _api.dio;
     final response = await dio.get<List<int>>(
       '/reports/period$qs',
       options: Options(responseType: ResponseType.bytes),
     );
     return response.data ?? [];
+  }
+
+  /// Get summary agregat laporan (JSON, pure SQL aggregation).
+  /// Pakai ini untuk display dashboard — tidak download XLSX.
+  /// Range validasi: end >= start, max 365 hari (sesuai backend).
+  Future<Map<String, dynamic>> getReportSummary({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final startStr = '${startDate.year.toString().padLeft(4, '0')}-'
+        '${startDate.month.toString().padLeft(2, '0')}-'
+        '${startDate.day.toString().padLeft(2, '0')}';
+    final endStr = '${endDate.year.toString().padLeft(4, '0')}-'
+        '${endDate.month.toString().padLeft(2, '0')}-'
+        '${endDate.day.toString().padLeft(2, '0')}';
+    final data = await _api.get('/reports/summary?start_date=$startStr&end_date=$endStr');
+    return data as Map<String, dynamic>;
   }
 
   Future<List<Product>> getProducts({
@@ -764,5 +784,49 @@ class AdminRepository {
         '${Uri.encodeComponent(period)}';
     final data = await _api.put(path, body: {'target_value': targetValue});
     return SupplierTarget.fromJson(data as Map<String, dynamic>);
+  }
+
+  // --- Supplier management (active/inactive) ---
+
+  /// Fetch all suppliers. Pass [active] to filter by is_active.
+  Future<List<Supplier>> getSuppliers({bool? active}) async {
+    final params = <String, String>{};
+    if (active != null) params['active'] = active.toString();
+    final qs = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/suppliers$qs');
+    return (data as List)
+        .map((e) => Supplier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Create a new supplier. MANAGER only on the backend.
+  /// `orderType` default 'REGULER' (sesuai backend schema SupplierCreate.order_type).
+  Future<Supplier> createSupplier(String name, {String orderType = 'REGULER'}) async {
+    final data = await _api.post(
+      '/suppliers',
+      body: {'name': name, 'order_type': orderType},
+    );
+    return Supplier.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Toggle a supplier's is_active. MANAGER only on the backend.
+  Future<Supplier> updateSupplierActive(String name, bool isActive) async {
+    final data = await _api.patch(
+      '/suppliers/${Uri.encodeComponent(name)}/active',
+      body: {'is_active': isActive},
+    );
+    return Supplier.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Update supplier's order_type (REGULER/4P). MANAGER only.
+  /// Backend akan cascade ke semua products di supplier ini.
+  Future<Supplier> updateSupplierOrderType(String name, String orderType) async {
+    final data = await _api.patch(
+      '/suppliers/${Uri.encodeComponent(name)}/order-type',
+      body: {'order_type': orderType},
+    );
+    return Supplier.fromJson(data as Map<String, dynamic>);
   }
 }

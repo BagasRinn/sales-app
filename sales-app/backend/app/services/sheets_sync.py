@@ -20,30 +20,39 @@ from app.services.stock_logger import log_stock_change
 EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
 
 
-SUPPLIERS_4P = [
-    "CANDRA FOOD, CV",
-    "CUAN BERKAT BERSAMA, PT",
-    "DARMAWAN SUKSES MANDIRI, PT",
-    "PANGAN INDUSTRI BANUA, PT",
-]
+def normalize_supplier_name(raw: str | None) -> str | None:
+    """Normalize supplier name string: strip zero-width & invisible unicode chars,
+    collapse whitespace, trim, uppercase."""
+    if not raw:
+        return None
+    # Strip ZWSP, NBSP, BOM, soft hyphen, etc.
+    cleaned = re.sub(r"[\u200b-\u200d\ufeff\xa0]", "", raw)
+    # Collapse multiple whitespace
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().upper()
+    return cleaned if cleaned else None
 
 
-def _get_4p_suppliers() -> list[str]:
-    """Return daftar supplier 4P. Prioritas dari env SUPPLIERS_4P, fallback ke hardcoded list."""
-    env_raw = os.getenv("SUPPLIERS_4P", "").strip()
-    if env_raw:
-        return [s.strip() for s in env_raw.split(",") if s.strip()]
-    return SUPPLIERS_4P
+def _get_supplier_order_type_map(db: Session, raw_suppliers: set[str]) -> dict[str, str]:
+    """Map normalized supplier names to order_type.
+    Looks up in DB `suppliers` table first. For unknown suppliers, auto-inserts them
+    with order_type='REGULER' into `suppliers` table."""
+    norm_set = {s for s in (normalize_supplier_name(x) for x in raw_suppliers) if s}
+    if not norm_set:
+        return {}
 
+    existing = db.query(Supplier).filter(Supplier.name.in_(norm_set)).all()
+    out = {s.name: s.order_type for s in existing}
 
-def _supplier_order_type(nama_supplier: str | None) -> str:
-    """Return '4P' if supplier is in SUPPLIERS_4P list, else 'REGULER'."""
-    if not nama_supplier:
-        return "REGULER"
-    suppliers_4p = _get_4p_suppliers()
-    if not suppliers_4p:
-        return "REGULER"
-    return "4P" if nama_supplier in suppliers_4p else "REGULER"
+    missing = norm_set - set(out.keys())
+    for name in missing:
+        sup = Supplier(name=name, is_active=True, order_type="REGULER")
+        db.add(sup)
+        out[name] = "REGULER"
+
+    if missing:
+        db.flush()
+
+    return out
 
 
 def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
@@ -168,6 +177,14 @@ def sync_products_from_excel(
 
     total_rows = len(raw_rows)
 
+    # Collect non-empty raw supplier names to bulk-query order_type mapping from DB
+    raw_supplier_set = {
+        str(row.get("LAST SUPPLIER") or "").strip()
+        for row in raw_rows
+        if str(row.get("LAST SUPPLIER") or "").strip()
+    }
+    supplier_ot_map = _get_supplier_order_type_map(db, raw_supplier_set)
+
     for row_num, row in enumerate(raw_rows, start=2):
         sku = str(row.get("CCODE") or "").strip()
         nama_produk = str(row.get("NAME ITEM") or "").strip()
@@ -176,7 +193,7 @@ def sync_products_from_excel(
         kategori = str(row.get("KATEGORI") or "").strip() or None
         satuan = str(row.get("OUM") or "").strip() or None
 
-        nama_supplier = str(row.get("LAST SUPPLIER") or "").strip() or None
+        nama_supplier_norm = normalize_supplier_name(row.get("LAST SUPPLIER"))
 
         error = _validate_row(row_num, sku, nama_produk, harga_raw, good_raw)
         if error:
@@ -194,7 +211,7 @@ def sync_products_from_excel(
 
         harga = int(harga_raw) if harga_raw else 0
         stok = int(good_raw) if good_raw else 0
-        order_type = _supplier_order_type(nama_supplier)
+        order_type = supplier_ot_map.get(nama_supplier_norm) if nama_supplier_norm else None
         cabang = current_user.get("branch") or ""
         validated_rows.append({
             "sku": sku,
@@ -203,7 +220,7 @@ def sync_products_from_excel(
             "stok": stok,
             "kategori": kategori,
             "satuan": satuan,
-            "nama_supplier": nama_supplier,
+            "nama_supplier": nama_supplier_norm,
             "order_type": order_type,
             "branch": cabang,
         })
@@ -269,7 +286,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
              "stok_booking": 0, "stok_diterima": 0,
              "kategori": r.get("kategori"),
              "satuan": r.get("satuan"), "nama_supplier": r.get("nama_supplier"),
-             "order_type": r.get("order_type", "REGULER"),
+             "order_type": r.get("order_type") or "REGULER",
              "branch": branch}
             for r in to_insert
         ])
@@ -284,29 +301,43 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
 
         if changed:
             # Preserve existing stok_booking (and stok_diterima) — don't reset during sync
-            stmt = insert(Product).values([
-                {"id": r["sku"], "nama_barang": r["nama_barang"],
-                 "harga": r["harga"], "stok_sistem": r["stok"],
-                 "stok_booking": existing[(r["sku"], branch_filter)]["stok_booking"],
-                 "stok_diterima": 0,  # reset — Excel GOOD sudah neto dari stok yang diterima
-                 "kategori": r.get("kategori"), "satuan": r.get("satuan"),
-                 "nama_supplier": r.get("nama_supplier"),
-                 "order_type": r.get("order_type", "REGULER"),
-                 "branch": branch}
-                for r in changed
-            ])
+            insert_vals = []
+            for r in changed:
+                val = {
+                    "id": r["sku"],
+                    "nama_barang": r["nama_barang"],
+                    "harga": r["harga"],
+                    "stok_sistem": r["stok"],
+                    "stok_booking": existing[(r["sku"], branch_filter)]["stok_booking"],
+                    "stok_diterima": 0,  # reset — Excel GOOD sudah neto
+                    "kategori": r.get("kategori"),
+                    "satuan": r.get("satuan"),
+                    "branch": branch,
+                }
+                if r.get("nama_supplier") is not None:
+                    val["nama_supplier"] = r["nama_supplier"]
+                if r.get("order_type") is not None:
+                    val["order_type"] = r["order_type"]
+                insert_vals.append(val)
+
+            stmt = insert(Product).values(insert_vals)
+            set_dict = {
+                "nama_barang": stmt.excluded.nama_barang,
+                "harga": stmt.excluded.harga,
+                "stok_sistem": stmt.excluded.stok_sistem,
+                "stok_booking": stmt.excluded.stok_booking,
+                "stok_diterima": 0,
+                "kategori": stmt.excluded.kategori,
+                "satuan": stmt.excluded.satuan,
+                "branch": stmt.excluded.branch,
+            }
+            # Only overwrite nama_supplier and order_type if Excel provided non-empty value
+            set_dict["nama_supplier"] = func.coalesce(stmt.excluded.nama_supplier, Product.nama_supplier)
+            set_dict["order_type"] = func.coalesce(stmt.excluded.order_type, Product.order_type)
+
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id", "branch"],
-                set_={"nama_barang": stmt.excluded.nama_barang,
-                      "harga": stmt.excluded.harga,
-                      "stok_sistem": stmt.excluded.stok_sistem,
-                      "stok_booking": stmt.excluded.stok_booking,
-                      "stok_diterima": 0,  # reset — Excel GOOD sudah neto dari stok yang diterima
-                      "kategori": stmt.excluded.kategori,
-                      "satuan": stmt.excluded.satuan,
-                      "nama_supplier": stmt.excluded.nama_supplier,
-                      "order_type": stmt.excluded.order_type,
-                      "branch": stmt.excluded.branch},
+                set_=set_dict,
             )
             db.execute(stmt)
             for r in changed:
@@ -329,23 +360,35 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                         branch=branch,
                     )
         if unchanged:
-            stmt = insert(Product).values([
-                {"id": r["sku"], "nama_barang": r["nama_barang"],
-                 "harga": r["harga"],
-                 "kategori": r.get("kategori"), "satuan": r.get("satuan"),
-                 "nama_supplier": r.get("nama_supplier"),
-                 "order_type": r.get("order_type", "REGULER"),
-                 "branch": branch}
-                for r in unchanged
-            ])
+            insert_vals = []
+            for r in unchanged:
+                val = {
+                    "id": r["sku"],
+                    "nama_barang": r["nama_barang"],
+                    "harga": r["harga"],
+                    "kategori": r.get("kategori"),
+                    "satuan": r.get("satuan"),
+                    "branch": branch,
+                }
+                if r.get("nama_supplier") is not None:
+                    val["nama_supplier"] = r["nama_supplier"]
+                if r.get("order_type") is not None:
+                    val["order_type"] = r["order_type"]
+                insert_vals.append(val)
+
+            stmt = insert(Product).values(insert_vals)
+            set_dict = {
+                "nama_barang": stmt.excluded.nama_barang,
+                "harga": stmt.excluded.harga,
+                "kategori": stmt.excluded.kategori,
+                "satuan": stmt.excluded.satuan,
+            }
+            set_dict["nama_supplier"] = func.coalesce(stmt.excluded.nama_supplier, Product.nama_supplier)
+            set_dict["order_type"] = func.coalesce(stmt.excluded.order_type, Product.order_type)
+
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id", "branch"],
-                set_={"nama_barang": stmt.excluded.nama_barang,
-                      "harga": stmt.excluded.harga,
-                      "kategori": stmt.excluded.kategori,
-                      "satuan": stmt.excluded.satuan,
-                      "nama_supplier": stmt.excluded.nama_supplier,
-                      "order_type": stmt.excluded.order_type},
+                set_=set_dict,
             )
             db.execute(stmt)
         logger.info(f"[SYNC] Bulk updated {len(to_update)} products ({len(changed)} stock changes)")

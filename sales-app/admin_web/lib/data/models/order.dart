@@ -118,6 +118,38 @@ class Order {
       default: return status;
     }
   }
+
+  /// Buat Order baru dengan field yang diubah. Field null = pakai nilai lama.
+  /// Dipakai untuk local state update setelah mutasi (approve/reject/cancel)
+  /// supaya TIDAK refetch semua data dari server.
+  Order copyWith({
+    String? status,
+    String? rejectReason,
+    List<CancelledItem>? cancelledItems,
+    List<OrderItem>? items,
+  }) {
+    return Order(
+      id: id,
+      salesId: salesId,
+      status: status ?? this.status,
+      createdAt: createdAt,
+      items: items ?? this.items,
+      salesUsername: salesUsername,
+      salesNama: salesNama,
+      storeName: storeName,
+      storeContact: storeContact,
+      storeAddress: storeAddress,
+      customerId: customerId,
+      customerName: customerName,
+      customerKode: customerKode,
+      cancelledItems: cancelledItems ?? this.cancelledItems,
+      rejectReason: rejectReason ?? this.rejectReason,
+      invoiceNumber: invoiceNumber,
+      notes: notes,
+      branch: branch,
+      branchNama: branchNama,
+    );
+  }
 }
 
 class OrderItem {

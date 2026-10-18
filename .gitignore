@@ -119,3 +119,5 @@ sales-app/admin_web/.agents/
 .env.local
 .env.production
 .env.*.local
+
+l.txt

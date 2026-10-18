@@ -45,6 +45,22 @@ def _get_customer(customer_id, db):
     return customer
 
 
+def _load_products_map(db, product_ids, branch) -> dict:
+    """Batch-load Product rows untuk 1 order (hindari N+1).
+
+    Sebelumnya create/update order query Product per item DUA kali (validasi
+    order_type lalu pricing) → 2N query. Sekarang 1 query per order.
+    Return {product_id: Product}; branch None = tanpa filter branch.
+    """
+    ids = list(product_ids)
+    if not ids:
+        return {}
+    q = db.query(Product).filter(Product.id.in_(ids))
+    if branch is not None:
+        q = q.filter(Product.branch == branch)
+    return {p.id: p for p in q.all()}
+
+
 def _validate_customer_for_sales(customer_id, sales_id, db):
     """Validate customer accessibility untuk sales (hybrid: area + customer override).
 
@@ -462,11 +478,11 @@ def create_order(
     # Validasi ringan dulu: produk ada + tipe cocok dengan order_type. Cek stok
     # aktual dilakukan di _book_items() setelah Order+OrderItems ditambah, supaya
     # race "stok diambil orang lain" bisa terdeteksi secara atomic.
+    product_map = _load_products_map(
+        db, {item.product_id for item in order_req.items}, user_branch
+    )
     for item in order_req.items:
-        product = db.query(Product).filter(
-            Product.id == item.product_id,
-            Product.branch == user_branch if user_branch else True,
-        ).first()
+        product = product_map.get(item.product_id)
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -512,10 +528,7 @@ def create_order(
             (item.discount2_type, item.discount2_percent, item.discount2_nominal),
             (item.discount3_type, item.discount3_percent, item.discount3_nominal),
         ]
-        product = db.query(Product).filter(
-            Product.id == item.product_id,
-            Product.branch == user_branch if user_branch else True,
-        ).first()
+        product = product_map.get(item.product_id)
         harga_satuan = (product.harga or 0) if product else 0
         raw_subtotal = harga_satuan * item.qty
 
@@ -769,11 +782,12 @@ def update_draft_order(
         customer = _get_customer(order_update.customer_id, db)
 
     # Validasi setiap item.product.order_type cocok dengan new_order_type.
+    # Batch-load produk sekali (sebelumnya 1 query per item, 2× per request).
+    product_map = _load_products_map(
+        db, {item.product_id for item in order_update.items}, order.branch
+    )
     for item in order_update.items:
-        product = db.query(Product).filter(
-            Product.id == item.product_id,
-            Product.branch == order.branch,
-        ).first()
+        product = product_map.get(item.product_id)
         if not product:
             raise HTTPException(
                 status_code=404,
@@ -800,10 +814,7 @@ def update_draft_order(
         # Pakai order.branch (bukan user_branch) supaya konsisten dengan
         # validasi di loop sebelumnya — produk harus dari branch order yang
         # sudah tersimpan.
-        product = db.query(Product).filter(
-            Product.id == item.product_id,
-            Product.branch == order.branch,
-        ).first()
+        product = product_map.get(item.product_id)
         harga_satuan = (product.harga or 0) if product else 0
         raw_subtotal = harga_satuan * item.qty
 
