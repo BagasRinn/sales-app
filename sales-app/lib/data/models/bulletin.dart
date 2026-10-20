@@ -1,5 +1,3 @@
-import '../../core/datetime_utils.dart';
-
 class Bulletin {
   final String id;
   final String title;
@@ -25,10 +23,11 @@ class Bulletin {
       title: json['title'] as String,
       description: json['description'] as String?,
       pdfUrl: json['pdf_url'] as String?,
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
       expireAt: json['expire_at'] != null
-          ? DateTime.parse(json['expire_at'] as String).toWita()
+          ? DateTime.parse(json['expire_at'] as String)
           : null,
-      createdAt: DateTime.parse(json['created_at'] as String).toWita(),
+      createdAt: DateTime.parse(json['created_at'] as String),
       isRead: json['is_read'] as bool? ?? false,
     );
   }

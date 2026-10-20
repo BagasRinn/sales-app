@@ -35,11 +35,10 @@ class Customer {
       // Toleran: backend bisa kirim 'kode_area' (snake_case) atau 'kodeArea'
       // (camelCase, kalau pernah pakai serializer lain).
       kodeArea: (json['kode_area'] as String?) ?? (json['kodeArea'] as String?),
-      createdAt: DateTime.parse(json['created_at'] as String).toWita(),
-      updatedAt: DateTime.parse(json['updated_at'] as String).toWita(),
-      deletedAt: json['deleted_at'] != null
-          ? DateTime.parse(json['deleted_at'] as String).toWita()
-          : null,
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
+      createdAt: parseWitaIso(json['created_at'] as String),
+      updatedAt: parseWitaIso(json['updated_at'] as String),
+      deletedAt: parseWitaIsoOrNull(json['deleted_at'] as String),
       branch: json['branch'] as String?,
       branchNama: json['branch_nama'] as String?,
     );

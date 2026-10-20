@@ -95,43 +95,6 @@ class _StatsTabState extends State<StatsTab> {
   String _statusFilter = 'APPROVED';
   bool _downloading = false;
   bool _downloadingPeriod = false;
-  Map<String, dynamic>? _summary;
-  bool _summaryLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Load summary untuk periode default. Defer ke post-frame supaya provider
-    // sudah siap di-decode.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadReportSummary();
-    });
-  }
-
-  Future<void> _loadReportSummary() async {
-    if (_periodEnd.isBefore(_periodStart)) return;
-    setState(() => _summaryLoading = true);
-    try {
-      final repo = context.read<AdminProvider>().adminRepository;
-      final data = await repo.getReportSummary(
-        startDate: _periodStart,
-        endDate: _periodEnd,
-      );
-      if (mounted) setState(() => _summary = data);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _summary = null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memuat ringkasan: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _summaryLoading = false);
-    }
-  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -209,7 +172,6 @@ class _StatsTabState extends State<StatsTab> {
     );
     if (picked != null) {
       setState(() => _periodStart = picked);
-      _loadReportSummary();
     }
   }
 
@@ -223,7 +185,6 @@ class _StatsTabState extends State<StatsTab> {
     );
     if (picked != null) {
       setState(() => _periodEnd = picked);
-      _loadReportSummary();
     }
   }
 
@@ -568,70 +529,6 @@ class _StatsTabState extends State<StatsTab> {
                 ),
               ),
             ),
-          ],
-
-          // Section: Ringkasan Laporan (agregat via /reports/summary — pure SQL,
-          // TIDAK load row order). Default display = summary, user klik tombol
-          // "Download XLSX" untuk opt-in detail.
-          if (_summaryLoading) ...[
-            const SizedBox(height: 16),
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-          ] else if (_summary != null) ...[
-            const SizedBox(height: 20),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12, left: 4),
-              child: Text(
-                'Ringkasan Laporan (Periode Dipilih)',
-                style: AppTextStyles.labelLarge,
-              ),
-            ),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _StatCard(
-                  title: 'Total Pesanan',
-                  value: '${_summary!['total_orders'] ?? 0}',
-                  icon: Icons.assessment,
-                  color: AppColors.info,
-                ),
-                _StatCard(
-                  title: 'Item Terjual',
-                  value: '${_summary!['total_items_sold'] ?? 0}',
-                  icon: Icons.inventory_2,
-                  color: AppColors.success,
-                ),
-                _StatCard(
-                  title: 'Pendapatan (Raw)',
-                  value: _fmt((_summary!['raw_revenue'] ?? 0) as int),
-                  icon: Icons.payments,
-                  color: AppColors.warning,
-                ),
-              ],
-            ),
-            if ((_summary!['by_status'] as List?)?.isNotEmpty ?? false) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final s in (_summary!['by_status'] as List))
-                      Chip(
-                        label: Text('${s['status']}: ${s['count']}'),
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(color: AppColors.border),
-                      ),
-                  ],
-                ),
-              ),
-            ],
           ],
 
           if (isLoading && stats.isEmpty && pending.isEmpty)

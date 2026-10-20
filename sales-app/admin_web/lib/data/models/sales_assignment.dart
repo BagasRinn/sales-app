@@ -18,8 +18,9 @@ class SalesAssignment {
       salesId: json['sales_id'] ?? '',
       salesUsername: json['sales_username'] as String?,
       salesNama: json['sales_nama'] as String?,
-      assignedAt: DateTime.tryParse(json['assigned_at'] ?? '')?.toWita() ??
-          DateTime.now(),
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
+      assignedAt: parseWitaIsoOrNull(json['assigned_at'] ?? '') ?? DateTime.now(),
     );
   }
 

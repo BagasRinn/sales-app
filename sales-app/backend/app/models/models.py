@@ -200,6 +200,7 @@ class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         Index("ix_orders_branch_status_created_at", "branch", "status", "created_at"),
+        Index("ix_orders_sales_status_created", "sales_id", "status", "created_at"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

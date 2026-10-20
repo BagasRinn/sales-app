@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/datetime_utils.dart';
 import '../repositories/api_service.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -69,18 +70,8 @@ class AdminRepository {
     };
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (search != null && search.isNotEmpty) params['search'] = search;
-    if (dateFrom != null) {
-      params['date_from'] =
-          '${dateFrom.year.toString().padLeft(4, '0')}-'
-          '${dateFrom.month.toString().padLeft(2, '0')}-'
-          '${dateFrom.day.toString().padLeft(2, '0')}';
-    }
-    if (dateTo != null) {
-      params['date_to'] =
-          '${dateTo.year.toString().padLeft(4, '0')}-'
-          '${dateTo.month.toString().padLeft(2, '0')}-'
-          '${dateTo.day.toString().padLeft(2, '0')}';
-    }
+    if (dateFrom != null) params['date_from'] = witaDateStr(dateFrom);
+    if (dateTo != null) params['date_to'] = witaDateStr(dateTo);
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/orders$qs', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
@@ -108,18 +99,8 @@ class AdminRepository {
     if (salesId != null && salesId.isNotEmpty) params['sales_id'] = salesId;
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     if (status != null && status.isNotEmpty) params['status'] = status;
-    if (dateFrom != null) {
-      params['date_from'] =
-          '${dateFrom.year.toString().padLeft(4, '0')}-'
-          '${dateFrom.month.toString().padLeft(2, '0')}-'
-          '${dateFrom.day.toString().padLeft(2, '0')}';
-    }
-    if (dateTo != null) {
-      params['date_to'] =
-          '${dateTo.year.toString().padLeft(4, '0')}-'
-          '${dateTo.month.toString().padLeft(2, '0')}-'
-          '${dateTo.day.toString().padLeft(2, '0')}';
-    }
+    if (dateFrom != null) params['date_from'] = witaDateStr(dateFrom);
+    if (dateTo != null) params['date_to'] = witaDateStr(dateTo);
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final response = await _api.dio.get<dynamic>(
       '/orders$qs',
@@ -149,18 +130,8 @@ class AdminRepository {
     };
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (search != null && search.isNotEmpty) params['search'] = search;
-    if (dateFrom != null) {
-      params['date_from'] =
-          '${dateFrom.year.toString().padLeft(4, '0')}-'
-          '${dateFrom.month.toString().padLeft(2, '0')}-'
-          '${dateFrom.day.toString().padLeft(2, '0')}';
-    }
-    if (dateTo != null) {
-      params['date_to'] =
-          '${dateTo.year.toString().padLeft(4, '0')}-'
-          '${dateTo.month.toString().padLeft(2, '0')}-'
-          '${dateTo.day.toString().padLeft(2, '0')}';
-    }
+    if (dateFrom != null) params['date_from'] = witaDateStr(dateFrom);
+    if (dateTo != null) params['date_to'] = witaDateStr(dateTo);
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final response = await _api.dio.get<dynamic>(
       '/orders$qs',
@@ -220,9 +191,7 @@ class AdminRepository {
     required DateTime date,
     List<String> statuses = const ['APPROVED'],
   }) async {
-    final dateStr = '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
+    final dateStr = witaDateStr(date);
     final qs = '?date=$dateStr&status=${statuses.join(',')}&detail=true';
     // Ambil raw bytes — pakai helper Dio langsung agar bypass deserialization JSON.
     final dio = _api.dio;
@@ -240,12 +209,8 @@ class AdminRepository {
     required DateTime endDate,
     List<String> statuses = const ['APPROVED'],
   }) async {
-    final startStr = '${startDate.year.toString().padLeft(4, '0')}-'
-        '${startDate.month.toString().padLeft(2, '0')}-'
-        '${startDate.day.toString().padLeft(2, '0')}';
-    final endStr = '${endDate.year.toString().padLeft(4, '0')}-'
-        '${endDate.month.toString().padLeft(2, '0')}-'
-        '${endDate.day.toString().padLeft(2, '0')}';
+    final startStr = witaDateStr(startDate);
+    final endStr = witaDateStr(endDate);
     final qs = '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}&detail=true';
     final dio = _api.dio;
     final response = await dio.get<List<int>>(
@@ -262,12 +227,8 @@ class AdminRepository {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    final startStr = '${startDate.year.toString().padLeft(4, '0')}-'
-        '${startDate.month.toString().padLeft(2, '0')}-'
-        '${startDate.day.toString().padLeft(2, '0')}';
-    final endStr = '${endDate.year.toString().padLeft(4, '0')}-'
-        '${endDate.month.toString().padLeft(2, '0')}-'
-        '${endDate.day.toString().padLeft(2, '0')}';
+    final startStr = witaDateStr(startDate);
+    final endStr = witaDateStr(endDate);
     final data = await _api.get('/reports/summary?start_date=$startStr&end_date=$endStr');
     return data as Map<String, dynamic>;
   }
@@ -592,11 +553,7 @@ class AdminRepository {
   Future<Map<String, int>> getDashboardStats({DateTime? date, CancelToken? cancelToken}) async {
     // Use the server-side /products/stats endpoint so the count is never
     // limited by a client-side 50-order window.
-    final qs = date != null
-        ? '?date=${date.year.toString().padLeft(4, '0')}-'
-              '${date.month.toString().padLeft(2, '0')}-'
-              '${date.day.toString().padLeft(2, '0')}'
-        : '';
+    final qs = date != null ? '?date=${witaDateStr(date)}' : '';
     final data = await _api.get('/products/stats$qs', cancelToken: cancelToken, receiveTimeout: const Duration(seconds: 30));
     return {
       'total_orders': data['total_orders'] ?? 0,
@@ -616,12 +573,8 @@ class AdminRepository {
     required DateTime fromDate,
     required DateTime toDate,
   }) async {
-    final fromStr = '${fromDate.year.toString().padLeft(4, '0')}-'
-        '${fromDate.month.toString().padLeft(2, '0')}-'
-        '${fromDate.day.toString().padLeft(2, '0')}';
-    final toStr = '${toDate.year.toString().padLeft(4, '0')}-'
-        '${toDate.month.toString().padLeft(2, '0')}-'
-        '${toDate.day.toString().padLeft(2, '0')}';
+    final fromStr = witaDateStr(fromDate);
+    final toStr = witaDateStr(toDate);
     final qs = '?from_date=$fromStr&to_date=$toStr';
     final data = await _api.get('/reports/sales-performance$qs');
     final list = data['sales'] as List? ?? [];
@@ -629,8 +582,12 @@ class AdminRepository {
   }
 
   /// Dashboard breakdown: MTD + Today for APPROVED / PENDING / REJECTED per sales.
+  /// Heavy aggregation — give the DB 60s to respond (vs the default 10s).
   Future<List<SalesPerformanceDashboardItem>> getSalesPerformanceDashboard() async {
-    final data = await _api.get('/reports/sales-performance/dashboard');
+    final data = await _api.get(
+      '/reports/sales-performance/dashboard',
+      receiveTimeout: const Duration(seconds: 60),
+    );
     final list = data['sales'] as List? ?? [];
     return list
         .map((e) => SalesPerformanceDashboardItem.fromJson(e as Map<String, dynamic>))
@@ -678,12 +635,7 @@ class AdminRepository {
     final body = <String, dynamic>{'title': title};
     if (description != null && description.isNotEmpty) body['description'] = description;
     if (pdfUrl != null && pdfUrl.isNotEmpty) body['pdf_url'] = pdfUrl;
-    if (expireAt != null) {
-      body['expire_at'] =
-          '${expireAt.year.toString().padLeft(4, '0')}-'
-          '${expireAt.month.toString().padLeft(2, '0')}-'
-          '${expireAt.day.toString().padLeft(2, '0')}';
-    }
+    if (expireAt != null) body['expire_at'] = witaDateStr(expireAt);
     final data = await _api.post('/bulletins', body: body);
     return Bulletin.fromJson(data as Map<String, dynamic>);
   }
@@ -700,10 +652,7 @@ class AdminRepository {
     if (description != null) body['description'] = description;
     if (pdfUrl != null) body['pdf_url'] = pdfUrl;
     if (expireAt != null) {
-      body['expire_at'] =
-          '${expireAt.year.toString().padLeft(4, '0')}-'
-          '${expireAt.month.toString().padLeft(2, '0')}-'
-          '${expireAt.day.toString().padLeft(2, '0')}';
+      body['expire_at'] = witaDateStr(expireAt);
     } else {
       // Allow clearing expiration
       body['expire_at'] = null;
@@ -723,7 +672,10 @@ class AdminRepository {
 
   // ===== Cross-Branch Reports (global MANAGER only) =====
   Future<List<BranchSalesSummary>> getCrossBranchSalesSummary() async {
-    final data = await _api.get('/reports/cross-branch/sales-summary');
+    final data = await _api.get(
+      '/reports/cross-branch/sales-summary',
+      receiveTimeout: const Duration(seconds: 60),
+    );
     final list = data['branches'] as List? ?? [];
     return list
         .map((e) => BranchSalesSummary.fromJson(e as Map<String, dynamic>))
@@ -731,7 +683,10 @@ class AdminRepository {
   }
 
   Future<List<BranchStockSummary>> getCrossBranchStockSummary() async {
-    final data = await _api.get('/reports/cross-branch/stock-summary');
+    final data = await _api.get(
+      '/reports/cross-branch/stock-summary',
+      receiveTimeout: const Duration(seconds: 60),
+    );
     final list = data['branches'] as List? ?? [];
     return list
         .map((e) => BranchStockSummary.fromJson(e as Map<String, dynamic>))

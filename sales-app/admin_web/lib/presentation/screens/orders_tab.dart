@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../core/datetime_utils.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
@@ -928,7 +929,6 @@ class _OrderCardState extends State<_OrderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     final currencyFormat =
         NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
     final s = orderStatusFromString(_order.status);
@@ -976,14 +976,14 @@ class _OrderCardState extends State<_OrderCard> {
                 ),
               if (_order.branchNama != null || _order.branch != null)
                 SelectableText(
-                  'Cabang: ${_order.branchNama ?? _order.branch}',
+                  '${_order.branchNama ?? _order.branch}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.primaryLight,
                   ),
                 ),
               const SizedBox(height: 2),
               SelectableText(
-                '${_order.items.length} item • ${currencyFormat.format(_order.totalAmount)} • ${dateFormat.format(_order.createdAt)}',
+                '${_order.items.length} item • ${currencyFormat.format(_order.totalAmount)} • ${witaFormat(_order.createdAt, pattern: 'dd MMM yyyy, HH:mm')}',
                 style: AppTextStyles.bodySmall,
               ),
             ],

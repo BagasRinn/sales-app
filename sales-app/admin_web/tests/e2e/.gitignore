@@ -1,0 +1,9 @@
+node_modules/
+dist/
+playwright-report/
+playwright-results/
+screenshots/
+test-results/
+playwright/.auth/
+*.log
+.env

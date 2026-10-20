@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 enum DiscountType { percent, nominal }
 
 class DiscountLayer {
@@ -272,7 +274,7 @@ class Order {
       customerName: json['customer_name'] as String? ?? '',
       status: json['status'] as String,
       notes: json['notes'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseWitaIso(json['created_at'] as String),
       storeName: json['store_name'] as String? ?? '',
       storeContact: json['store_contact'] as String?,
       storeAddress: json['store_address'] as String?,

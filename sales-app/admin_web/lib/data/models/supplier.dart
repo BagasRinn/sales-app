@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class Supplier {
   final String name;
   final bool isActive;
@@ -20,12 +22,8 @@ class Supplier {
         isActive: json['is_active'] as bool? ?? true,
         orderType: json['order_type'] as String? ?? 'REGULER',
         productCount: (json['product_count'] as num?)?.toInt() ?? 0,
-        createdAt: json['created_at'] != null
-            ? DateTime.tryParse(json['created_at'] as String)
-            : null,
-        updatedAt: json['updated_at'] != null
-            ? DateTime.tryParse(json['updated_at'] as String)
-            : null,
+        createdAt: parseWitaIsoOrNull(json['created_at'] as String?),
+        updatedAt: parseWitaIsoOrNull(json['updated_at'] as String),
       );
 
   Map<String, dynamic> toJson() => {

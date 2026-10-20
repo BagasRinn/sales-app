@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:intl/intl.dart';
 import '../../core/design_system.dart';
 import '../../core/datetime_utils.dart';
 import '../../core/responsive.dart';
@@ -476,7 +475,6 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
   }
 
   Future<void> _showErrorsDialog(BuildContext context, List<SyncError> errors) async {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     await showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
@@ -547,7 +545,7 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                         separatorBuilder: (context, index) =>
                             const SizedBox(height: 10),
                         itemBuilder: (context, i) =>
-                            _buildErrorTile(errors[i], dateFormat),
+                            _buildErrorTile(errors[i]),
                       ),
               ),
               const Divider(height: 1),
@@ -569,18 +567,16 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
     );
   }
 
-  Widget _buildErrorTile(SyncError err, DateFormat dateFormat) {
+  Widget _buildErrorTile(SyncError err) {
     final isStore = err.isStoreImport;
     final tint = isStore ? AppColors.success : AppColors.info;
     final tintBg = isStore ? AppColors.successBg : AppColors.infoBg;
     final tintBorder = isStore ? AppColors.successBorder : AppColors.infoBorder;
     final typeLabel = isStore ? 'Toko' : 'Produk';
 
-    DateTime? ts;
-    if (err.timestamp != null) {
-      ts = DateTime.tryParse(err.timestamp!)?.toWita();
-    }
-    final tsText = ts != null ? dateFormat.format(ts) : '-';
+    final tsText = err.timestamp != null
+        ? witaFormat(DateTime.parse(err.timestamp!), pattern: 'dd MMM yyyy, HH:mm')
+        : '-';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -782,7 +778,6 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
   }
 
   Widget _buildDesktopTable(List<Map<String, dynamic>> logs) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -805,15 +800,14 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
           ),
         ),
         const SizedBox(height: 4),
-        ...logs.map((log) => _FlexImportLogRow(log: log, dateFormat: dateFormat)),
+        ...logs.map((log) => _FlexImportLogRow(log: log)),
       ],
     );
   }
 
   Widget _buildMobileList(List<Map<String, dynamic>> logs) {
-    final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
     return Column(
-      children: logs.map((log) => _ImportLogCard(log: log, dateFormat: dateFormat)).toList(),
+      children: logs.map((log) => _ImportLogCard(log: log)).toList(),
     );
   }
 
@@ -878,14 +872,16 @@ class _FlexHeaderCell extends StatelessWidget {
 
 class _FlexImportLogRow extends StatelessWidget {
   final Map<String, dynamic> log;
-  final DateFormat dateFormat;
 
-  const _FlexImportLogRow({required this.log, required this.dateFormat});
+  const _FlexImportLogRow({required this.log});
 
   @override
   Widget build(BuildContext context) {
     final createdAt = log['created_at'] != null
-        ? DateTime.tryParse(log['created_at'].toString())
+        ? (() {
+            final dt = DateTime.tryParse(log['created_at'].toString());
+            return dt != null && dt.isUtc ? dt.add(const Duration(hours: 8)) : dt;
+          })()
         : null;
     final skipped = log['skipped'] as int? ?? 0;
     final type = log['import_type']?.toString() ?? 'PRODUCT';
@@ -903,7 +899,7 @@ class _FlexImportLogRow extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-              createdAt != null ? dateFormat.format(createdAt.toWita()) : '-',
+              createdAt != null ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm') : '-',
               style: AppTextStyles.mono.copyWith(fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
@@ -970,14 +966,16 @@ class _FlexImportLogRow extends StatelessWidget {
 
 class _ImportLogCard extends StatelessWidget {
   final Map<String, dynamic> log;
-  final DateFormat dateFormat;
 
-  const _ImportLogCard({required this.log, required this.dateFormat});
+  const _ImportLogCard({required this.log});
 
   @override
   Widget build(BuildContext context) {
     final createdAt = log['created_at'] != null
-        ? DateTime.tryParse(log['created_at'].toString())
+        ? (() {
+            final dt = DateTime.tryParse(log['created_at'].toString());
+            return dt != null && dt.isUtc ? dt.add(const Duration(hours: 8)) : dt;
+          })()
         : null;
     final skipped = log['skipped'] as int? ?? 0;
     final type = log['import_type']?.toString() ?? 'PRODUCT';
@@ -1003,7 +1001,7 @@ class _ImportLogCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      createdAt != null ? dateFormat.format(createdAt.toWita()) : '-',
+                      createdAt != null ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm') : '-',
                       style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),

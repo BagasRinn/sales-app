@@ -19,6 +19,31 @@ import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
 
+/// Cache durations - mengatur berapa lama data di-cache sebelum perlu di-refresh.
+/// Nilai ini di-tune untuk balance antara fresh data dan penghematan request.
+class CacheConfig {
+  /// Cache untuk data yang sering berubah (pending orders).
+  static const pendingOrders = Duration(minutes: 1);
+  /// Cache untuk dashboard stats.
+  static const dashboardStats = Duration(minutes: 5);
+  /// Cache untuk customer submissions.
+  static const customerSubmissions = Duration(minutes: 2);
+  /// Cache untuk daftar customer (paginated).
+  static const customers = Duration(minutes: 5);
+  /// Cache untuk products (paginated).
+  static const products = Duration(minutes: 5);
+  /// Cache untuk supplier list.
+  static const suppliers = Duration(minutes: 10);
+  /// Cache untuk sales performance (manager view).
+  static const salesPerformance = Duration(minutes: 5);
+  /// Cache untuk bulletins.
+  static const bulletins = Duration(minutes: 10);
+  /// Cache untuk users list.
+  static const users = Duration(minutes: 10);
+  /// Cache untuk orders (paginated, filtered).
+  static const orders = Duration(minutes: 2);
+}
+
 class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   final AdminRepository _repo;
 
@@ -36,8 +61,26 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   SyncResult? _lastSyncResult;
   Map<String, int> _stats = {};
   String? _loadingMessage;
-  Timer? _autoRefreshTimer;
   bool _hasNewPending = false;
+
+  /// Cache timestamps untuk tracking kapan data terakhir di-fetch.
+  /// Ini adalah kunci untuk menentukan apakah perlu fetch ulang atau tidak.
+  DateTime? _pendingOrdersCacheTime;
+  DateTime? _statsCacheTime;
+  DateTime? _customersCacheTime;
+  DateTime? _customerSubmissionsCacheTime;
+  DateTime? _productsCacheTime;
+  DateTime? _suppliersCacheTime;
+  DateTime? _salesPerformanceCacheTime;
+  DateTime? _bulletinsCacheTime;
+  DateTime? _usersCacheTime;
+  DateTime? _ordersCacheTime;
+
+  /// Helper untuk check apakah cache masih valid.
+  bool _isCacheValid(DateTime? cacheTime, Duration maxAge) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < maxAge;
+  }
 
   // Pagination
   int _productPage = 0;
@@ -86,6 +129,14 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _loadCancelToken = null;
   }
 
+  int _activeTabIndex = 0;
+
+  /// Set tab yang sedang aktif. Dipanggil dari dashboard saat user navigasi.
+  /// loadAll() dan auto-refresh akan load data sesuai tab.
+  void setActiveTab(int index) {
+    _activeTabIndex = index;
+  }
+
   // ===== Sales Performance (Manager only) =====
   List<SalesPerformance> _performanceList = [];
   DateTime? _performanceDateFrom;
@@ -118,6 +169,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       _suppliers = await _repo.getSuppliers(active: active);
+      _suppliersCacheTime = DateTime.now(); // Update cache timestamp
     } catch (e) {
       _suppliersError = e.toString();
     } finally {
@@ -226,82 +278,109 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _userBranch = branch;
   }
 
-  /// Start auto-refresh. Call from dashboard initState.
-  void startAutoRefresh({Duration interval = const Duration(seconds: 30)}) {
-    stopAutoRefresh();
-    WidgetsBinding.instance.addObserver(this);
-    _autoRefreshTimer = Timer.periodic(interval, (_) => _autoRefresh());
-  }
-
-  /// Stop auto-refresh. Call from dashboard dispose.
-  void stopAutoRefresh() {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = null;
-    WidgetsBinding.instance.removeObserver(this);
-  }
-
-  /// Track app lifecycle — skip auto-refresh kalau tab/background, immediate
-  /// refresh saat balik ke foreground supaya data tidak stale.
+  /// Track app lifecycle — hanya refresh saat balik ke foreground kalau cache expired.
+  /// Ini pengganti auto-refresh interval yang boros request.
   bool _isVisible = true;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final wasVisible = _isVisible;
     _isVisible = state == AppLifecycleState.resumed;
-    // Saat balik ke foreground, fire 1 immediate refresh supaya data up-to-date.
-    if (!wasVisible && _isVisible && _autoRefreshTimer != null) {
-      _autoRefresh();
+    // Saat balik ke foreground, check apakah cache sudah expired.
+    // Kalau expired, refresh data tab yang aktif.
+    if (!wasVisible && _isVisible) {
+      _refreshIfCacheExpired();
     }
+  }
+
+  /// Check apakah cache untuk tab aktif sudah expired. Kalau ya, fetch ulang.
+  /// Ini dipanggil saat app kembali ke foreground.
+  Future<void> _refreshIfCacheExpired() async {
+    if (_state == AdminState.loading) return;
+
+    bool needsRefresh = false;
+    switch (_activeTabIndex) {
+      case 0: // Dashboard
+        needsRefresh = !_isCacheValid(_pendingOrdersCacheTime, CacheConfig.pendingOrders) ||
+            !_isCacheValid(_statsCacheTime, CacheConfig.dashboardStats);
+        break;
+      case 1: // Pesanan
+        needsRefresh = !_isCacheValid(_ordersCacheTime, CacheConfig.orders);
+        break;
+      case 2: // Toko
+      case 3: // Pengajuan Customer
+        needsRefresh = !_isCacheValid(_customersCacheTime, CacheConfig.customers) ||
+            !_isCacheValid(_customerSubmissionsCacheTime, CacheConfig.customerSubmissions);
+        break;
+      case 4: // Produk & Stok
+        needsRefresh = !_isCacheValid(_productsCacheTime, CacheConfig.products);
+        break;
+      case 5: // Supplier
+        needsRefresh = !_isCacheValid(_suppliersCacheTime, CacheConfig.suppliers);
+        break;
+      case 7: // User
+        needsRefresh = !_isCacheValid(_usersCacheTime, CacheConfig.users);
+        break;
+      case 8: // Performa Sales
+        needsRefresh = !_isCacheValid(_salesPerformanceCacheTime, CacheConfig.salesPerformance);
+        break;
+      case 10: // Bulletin
+        needsRefresh = !_isCacheValid(_bulletinsCacheTime, CacheConfig.bulletins);
+        break;
+    }
+
+    if (needsRefresh) {
+      await loadAll();
+    }
+  }
+
+  /// Invalidate cache untuk tab tertentu. Dipanggil setelah operasi write
+  /// (approve, reject, create, update, delete) supaya data fresh setelahnya.
+  void invalidateTabCache(int tabIndex) {
+    switch (tabIndex) {
+      case 0: // Dashboard
+        _pendingOrdersCacheTime = null;
+        _statsCacheTime = null;
+        _salesPerformanceCacheTime = null;
+        break;
+      case 1: // Pesanan
+        _ordersCacheTime = null;
+        _pendingOrdersCacheTime = null;
+        break;
+      case 2: // Toko
+        _customersCacheTime = null;
+        break;
+      case 3: // Pengajuan Customer
+        _customerSubmissionsCacheTime = null;
+        break;
+      case 4: // Produk & Stok
+        _productsCacheTime = null;
+        _statsCacheTime = null;
+        break;
+      case 5: // Supplier
+        _suppliersCacheTime = null;
+        break;
+    }
+  }
+
+  /// Invalidate semua cache. Dipakai saat user manual refresh.
+  void invalidateAllCache() {
+    _pendingOrdersCacheTime = null;
+    _statsCacheTime = null;
+    _customersCacheTime = null;
+    _customerSubmissionsCacheTime = null;
+    _productsCacheTime = null;
+    _suppliersCacheTime = null;
+    _salesPerformanceCacheTime = null;
+    _bulletinsCacheTime = null;
+    _usersCacheTime = null;
+    _ordersCacheTime = null;
   }
 
   /// Clear the "new pending" badge after user sees it.
   void clearNewPendingBadge() {
     _hasNewPending = false;
     notifyListeners();
-  }
-
-  Future<void> _autoRefresh() async {
-    if (_state == AdminState.loading) return; // skip if user-initiated load is active
-    // Skip kalau app/tab tidak visible — tidak ada user yang lihat anyway.
-    if (!_isVisible) return;
-    try {
-      final prevLength = _pendingOrders.length;
-      final prevStats = Map<String, int>.from(_stats);
-      final prevSubmissionsLen = _customerSubmissions.length;
-      final prevSubmissionsPending =
-          _customerSubmissions.where((s) => s.status == 'PENDING').length;
-      final tasks = <Future<void>>[
-        _loadPendingOrders(),
-        if (isAdmin || isManager || isSupervisor) _loadStats(),
-        // Refresh customer submissions only kalau sudah pernah di-load (avoid
-        // hitting endpoint saat tab belum pernah dibuka).
-        if (_customerSubmissions.isNotEmpty || _customerSubmissionsStatus != null)
-          _loadCustomerSubmissionsSilent(),
-      ];
-      await Future.wait(tasks);
-      // Only rebuild UI if data actually changed
-      final pendingChanged = _pendingOrders.length != prevLength;
-      final statsChanged = (isAdmin || isManager || isSupervisor) && !_mapEquals(_stats, prevStats);
-      final submissionsChanged = _customerSubmissions.length != prevSubmissionsLen ||
-          _customerSubmissions.where((s) => s.status == 'PENDING').length !=
-              prevSubmissionsPending;
-      if (pendingChanged) {
-        _hasNewPending = _pendingOrders.length > prevLength;
-      }
-      if (pendingChanged || statsChanged || submissionsChanged) {
-        notifyListeners();
-      }
-    } catch (_) {
-      // silent fail on auto-refresh — don't interrupt user, no rebuild on error
-    }
-  }
-
-  bool _mapEquals(Map<String, int> a, Map<String, int> b) {
-    if (a.length != b.length) return false;
-    for (final key in a.keys) {
-      if (a[key] != b[key]) return false;
-    }
-    return true;
   }
 
   void _setLoading(bool loading, [String? msg]) {
@@ -314,6 +393,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> loadPendingOrders({String? search}) async {
     try {
       _pendingOrders = await _repo.getPendingOrders(search: search);
+      _pendingOrdersCacheTime = DateTime.now(); // Update cache timestamp
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -346,6 +426,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       _allOrders = result.orders;
       _orderTotal = result.total;
+      _ordersCacheTime = DateTime.now(); // Update cache timestamp
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -373,6 +454,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       ]);
       _products = results[0] as List<Product>;
       _productTotal = results[1] as int;
+      _productsCacheTime = DateTime.now(); // Update cache timestamp
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -456,9 +538,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       ]);
       _customers = results[0] as List<Customer>;
       _customerTotal = results[1] as int;
+      _customersCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
     }
   }
 
@@ -476,6 +559,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       _customerSubmissionsStatus = status;
       _customerSubmissions = await _repo.getCustomerSubmissions(status: status);
+      _customerSubmissionsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -545,6 +629,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _customerSubmissions = await _repo.getCustomerSubmissions(
         status: _customerSubmissionsStatus,
       );
+      _customerSubmissionsCacheTime = DateTime.now(); // Update cache timestamp
     } catch (_) {
       // silent
     }
@@ -740,6 +825,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         role: _userRoleFilter.isEmpty ? null : _userRoleFilter,
         search: _userSearch.isEmpty ? null : _userSearch,
       );
+      _usersCacheTime = DateTime.now(); // Update cache timestamp
       _sortUsers();
       notifyListeners();
     } catch (e) {
@@ -764,11 +850,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       // bukan total sepanjang masa di database.
       final effectiveDate = date ?? _todayWita();
       _stats = await _repo.getDashboardStats(date: effectiveDate, cancelToken: cancelToken);
+      _statsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
       // _stats = {} default, dashboard tampil 0 bukan blank/crash.
-      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
     }
   }
 
@@ -779,35 +866,108 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     return DateTime(now.year, now.month, now.day);
   }
 
-  Future<void> loadAll({DateTime? date}) async {
-    _setLoading(true, 'Memuat data...');
-    // Cancel any in-flight loadAll requests supaya server tidak kirim response
-    // yang bakal diabaikan. Kalau user navigasi tab cepat, ini menghemat resource.
-    final cancelToken = _newLoadToken();
-    try {
-      // Batch 1: orders + stats (dipakai Dashboard & Pesanan)
-      await Future.wait([
-        _loadPendingOrders(cancelToken),
-        _loadAllOrders(cancelToken),
-        if (isAdmin || isManager || isSupervisor) _loadStats(date: date, cancelToken: cancelToken),
-      ]);
-      // Batch 2: customers + products (dipakai Toko + Produk). Dijalankan
-      // setelah batch 1 supaya kalau tab Pesanan di-lewat cepat, batch 2
-      // tidak jadi beban pada user concurrency.
-      await Future.wait([
-        _loadCustomers(cancelToken),
-        _loadProducts(cancelToken),
-      ]);
-      _state = AdminState.loaded;
-    } catch (e) {
-      if (e is DioException && CancelToken.isCancel(e)) {
-        // Cancelled — tidak perlu notify (request di-batalkan oleh user).
+  Future<void> loadAll({DateTime? date, bool forceRefresh = false}) async {
+    final tab = _activeTabIndex;
+
+    // Check cache validity if not forcing refresh
+    if (!forceRefresh) {
+      bool cacheValid = false;
+      switch (tab) {
+        case 0: // Dashboard
+          cacheValid = _isCacheValid(_pendingOrdersCacheTime, CacheConfig.pendingOrders) &&
+              _isCacheValid(_statsCacheTime, CacheConfig.dashboardStats);
+          break;
+        case 1: // Pesanan
+          cacheValid = _isCacheValid(_ordersCacheTime, CacheConfig.orders);
+          break;
+        case 2: // Toko
+          cacheValid = _isCacheValid(_customersCacheTime, CacheConfig.customers);
+          break;
+        case 3: // Pengajuan Customer
+          cacheValid = _isCacheValid(_customerSubmissionsCacheTime, CacheConfig.customerSubmissions);
+          break;
+        case 4: // Produk & Stok
+          cacheValid = _isCacheValid(_productsCacheTime, CacheConfig.products);
+          break;
+        case 5: // Supplier
+          cacheValid = _isCacheValid(_suppliersCacheTime, CacheConfig.suppliers);
+          break;
+        case 7: // User
+          cacheValid = _isCacheValid(_usersCacheTime, CacheConfig.users);
+          break;
+        case 8: // Performa Sales (Manager & Supervisor)
+          cacheValid = _isCacheValid(_salesPerformanceCacheTime, CacheConfig.salesPerformance);
+          break;
+        case 10: // Bulletin (Manager & Supervisor)
+          cacheValid = _isCacheValid(_bulletinsCacheTime, CacheConfig.bulletins);
+          break;
+        default:
+          cacheValid = false;
+      }
+
+      // If cache is valid, just mark as loaded without fetching
+      if (cacheValid && _state == AdminState.loaded) {
         return;
       }
+    }
+
+    _setLoading(true, 'Memuat data...');
+    final cancelToken = _newLoadToken();
+    try {
+      // Lazy load: hanya fetch data sesuai tab yang aktif. Tidak load
+      // data tab lain di awal —irit request dan backend load.
+      if (tab == 0) {
+        // Dashboard: pending + stats + performance
+        await Future.wait([
+          _loadPendingOrders(cancelToken),
+          if (isAdmin || isManager || isSupervisor)
+            _loadStats(date: date, cancelToken: cancelToken),
+          if (isManager || isSupervisor)
+            _loadSalesPerformanceDashboard(),
+        ]);
+      } else if (tab == 1) {
+        // Pesanan: orders + pending
+        await Future.wait([
+          _loadPendingOrders(cancelToken),
+          _loadAllOrders(cancelToken),
+        ]);
+      } else if (tab == 2 || tab == 3) {
+        // Toko / Pengajuan Customer: customers + submissions
+        await Future.wait([
+          _loadCustomers(cancelToken),
+          _loadCustomerSubmissionsSilent(),
+        ]);
+      } else if (tab == 4) {
+        // Produk & Stok
+        await _loadProducts(cancelToken);
+      } else if (tab == 7) {
+        // User
+        // users loaded separately by users tab itself
+      }
+      _state = AdminState.loaded;
+    } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) return;
       _state = AdminState.error;
       _errorMessage = e.toString();
     }
     notifyListeners();
+  }
+
+  /// Manual refresh — force reload data untuk tab aktif.
+  /// Dipanggil dari refresh button di dashboard.
+  Future<void> refresh() async {
+    await loadAll(forceRefresh: true);
+  }
+
+  Future<void> _loadSalesPerformanceDashboard() async {
+    try {
+      _dashboardPerformance = await _repo.getSalesPerformanceDashboard();
+      _errorMessage = null;
+    } catch (e) {
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e is ApiException ? e.message : e.toString();
+      }
+    }
   }
 
   Future<void> _loadPendingOrders([CancelToken? cancelToken]) async {
@@ -816,9 +976,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         search: _orderSearch,
         cancelToken: cancelToken,
       );
+      _pendingOrdersCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
     }
   }
 
@@ -834,11 +995,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       _allOrders = result.orders;
       _orderTotal = result.total;
+      _ordersCacheTime = DateTime.now(); // Update cache timestamp
       // Jangan reset _errorMessage di sini — kalau _loadStats sukses,
       // _errorMessage sudah di-clear di sana. Kalau _loadOrders gagal,
       // _loadStats berikutnya akan overwrite kalau dia juga tidak gagal.
     } catch (e, st) {
-      if (!CancelToken.isCancel(e as DioException)) {
+      if (e is! DioException || !CancelToken.isCancel(e)) {
         _errorMessage = e.toString();
         // Print stack trace supaya debugging lebih mudah di Flutter web.
         // ignore: avoid_print
@@ -869,9 +1031,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       ]);
       _products = results[0] as List<Product>;
       _productTotal = results[1] as int;
+      _productsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (!CancelToken.isCancel(e as DioException)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
     }
   }
 
@@ -891,6 +1054,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
         _stats['approved_orders'] = (_stats['approved_orders'] ?? 0) + 1;
       }
+      // Update cache timestamp after write operation
+      _pendingOrdersCacheTime = DateTime.now();
+      _ordersCacheTime = DateTime.now();
       _setLoading(false);
       notifyListeners();
       return true;
@@ -916,6 +1082,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
         _stats['rejected_orders'] = (_stats['rejected_orders'] ?? 0) + 1;
       }
+      // Update cache timestamp after write operation
+      _pendingOrdersCacheTime = DateTime.now();
+      _ordersCacheTime = DateTime.now();
       _setLoading(false);
       notifyListeners();
       return true;
@@ -1138,6 +1307,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       _performanceList = await _repo.getSalesPerformance(fromDate: from, toDate: to);
+      _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -1152,9 +1322,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       _dashboardPerformance = await _repo.getSalesPerformanceDashboard();
+      _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
     } finally {
       _dashboardPerformanceLoading = false;
       notifyListeners();
@@ -1286,6 +1457,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _bulletins = await _repo.getBulletins(includeRead: includeRead);
       // Sort newest first
       _bulletins.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _bulletinsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();

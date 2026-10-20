@@ -12,7 +12,7 @@ class AppConfig {
   //     (cek dengan `ipconfig` → IPv4 Address, mis. 192.168.x.x)
 
   // [ACTIVE — PRODUCTION] Deploy di Railway
-  static const String baseUrl = 'https://practical-beauty-production-071a.up.railway.app/api/v1';
+  static const String baseUrl = 'https://sales-app-production-1872.up.railway.app/api/v1';
 
   // [LOCAL DEV] Android Emulator — comment baris di atas, uncomment ini
   // static const String baseUrl = 'http://10.0.2.2:8000/api/v1';

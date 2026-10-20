@@ -123,9 +123,7 @@ class _DashboardContentState extends State<_DashboardContent>
   late final ApiService _apiService;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Track aktivitas user untuk idle auto-logout. Default 15 menit — standar
-  // untuk aplikasi admin. Bisa diturunkan kalau perlu lebih ketat, atau
-  // dinaikkan kalau admin sering monitor tanpa interaksi.
+  //idle auto-logout
   static const Duration _idleTimeout = Duration(minutes: 15);
   static const Duration _idleCheckInterval = Duration(seconds: 30);
 
@@ -135,7 +133,6 @@ class _DashboardContentState extends State<_DashboardContent>
   bool get _isGlobalManager => widget.role == 'MANAGER';
 
   List<_NavItem> get _navItems {
-    // ADMIN has write access; SUPERVISOR, MANAGER are read-only (monitoring only).
     final items = <_NavItem>[
       const _NavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
       const _NavItem(icon: Icons.assignment_outlined, selectedIcon: Icons.assignment, label: 'Pesanan'),
@@ -214,8 +211,7 @@ class _DashboardContentState extends State<_DashboardContent>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _adminProvider.loadAll();
-      _adminProvider.startAutoRefresh();
-      // Load dashboard performance breakdown for MANAGER & SUPERVISOR
+
       if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') {
         _adminProvider.loadSalesPerformanceDashboard();
       }
@@ -272,7 +268,6 @@ class _DashboardContentState extends State<_DashboardContent>
   void dispose() {
     _idleTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    _adminProvider.stopAutoRefresh();
     _apiService.setOnUnauthorized(null);
     super.dispose();
   }
@@ -291,6 +286,8 @@ class _DashboardContentState extends State<_DashboardContent>
     // Cancel any in-flight loadAll requests — user sudah pindah tab,
     // response dari tab lama tidak relevan.
     context.read<AdminProvider>().cancelInFlightLoads();
+    // Tell provider tab aktif supaya auto-refresh hanya load data tab ini.
+    context.read<AdminProvider>().setActiveTab(i);
   }
 
   Widget _buildBody() {
@@ -521,7 +518,7 @@ class _DashboardContentState extends State<_DashboardContent>
             tooltip: 'Refresh',
             color: AppColors.textSecondary,
             onPressed: () {
-              context.read<AdminProvider>().loadAll();
+              context.read<AdminProvider>().refresh();
             },
           ),
         ],

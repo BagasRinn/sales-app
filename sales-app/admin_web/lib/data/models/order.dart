@@ -60,7 +60,8 @@ class Order {
       id: json['id'] ?? '',
       salesId: json['sales_id'] ?? '',
       status: json['status'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toWita() ?? DateTime.now(),
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
+      createdAt: parseWitaIsoOrNull(json['created_at'] ?? '') ?? DateTime.now(),
       items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
       salesUsername: json['sales_username'],
       salesNama: json['sales_nama'],

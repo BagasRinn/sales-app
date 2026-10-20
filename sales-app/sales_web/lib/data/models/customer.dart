@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class Customer {
   final String id;
   final String? kode;
@@ -24,8 +26,8 @@ class Customer {
       namaToko: (json['nama_toko'] ?? json['namaToko'] ?? json['nama']) as String? ?? '',
       alamat: json['alamat'] as String?,
       kodeArea: (json['kode_area'] ?? json['kodeArea']) as String?,
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'] as String) : null,
+      createdAt: parseWitaIsoOrNull(json['created_at'] as String?),
+      updatedAt: parseWitaIsoOrNull(json['updated_at'] as String?),
     );
   }
 }

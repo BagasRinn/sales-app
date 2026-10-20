@@ -243,6 +243,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
 
       // Refresh orders
       if (mounted) {
+        setState(() => _isSubmitting = false);
         context.read<OrderProvider>().loadOrders();
         context.read<OrderProvider>().loadRecentOrders();
 
@@ -290,6 +291,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       );
 
       if (mounted) {
+        setState(() => _isSubmitting = false);
         context.read<OrderProvider>().loadOrders();
         context.read<OrderProvider>().loadRecentOrders();
 
@@ -788,9 +790,12 @@ class _StepPickProductsState extends State<_StepPickProducts> {
       }).toList();
     }
 
-    return Column(
-      children: [
-        // ── Header: Tipe + Toko ──────────────────────────────────────────────
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          // ── Header: Tipe + Toko ──────────────────────────────────────────────
         Container(
           color: AppColors.surface,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -905,6 +910,7 @@ class _StepPickProductsState extends State<_StepPickProducts> {
                     ),
         ),
       ],
+    ),
     );
   }
 
@@ -1256,9 +1262,12 @@ class _StepReviewState extends State<_StepReview> {
     final productMap = {for (final p in products) p.id: p};
     final idr = NumberFormat('#,###', 'id');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1418,6 +1427,7 @@ class _StepReviewState extends State<_StepReview> {
           ),
         ),
       ],
+    ),
     );
   }
 
@@ -1896,6 +1906,7 @@ class _ReviewQtyStepperState extends State<_ReviewQtyStepper> {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                     decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 6), border: InputBorder.none),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (v) => _commit(v),
                     onSubmitted: _commit,
                     onTapOutside: (_) => _commit(_ctrl.text),
                   )
@@ -2165,6 +2176,7 @@ class _LayerCard extends StatelessWidget {
                   ),
                   inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
                   onChanged: onChanged,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2372,6 +2384,7 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
                       ),
               ),
               onChanged: (_) => setState(() {}),
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
             ),
             const SizedBox(height: 12),
             Container(

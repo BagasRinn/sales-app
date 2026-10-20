@@ -96,9 +96,12 @@ code_review_output.json
 *.log
 
 # ---------- Migration & one-off scripts (local dev only) ----------
-migrate_*.py
-test_*.py
-seed_*.py
+migrate_to_railway.py
+create_tables_railway.py
+migrate_storage_to_s3.py
+
+# Exports folder (data sensitif, temporary migrasi)
+exports/
 
 # ---------- Docs drafts & planning ----------
 docs/superpowers/
@@ -121,3 +124,5 @@ sales-app/admin_web/.agents/
 .env.*.local
 
 l.txt
+CLAUDE.md
+Revisian.txt

@@ -1,19 +1,14 @@
 import 'package:intl/intl.dart';
 
-/// Sejak backend serialize semua datetime sebagai WITA (`+08:00`),
-/// parsing langsung menghasilkan DateTime yang field hour/minute-nya
-/// sudah dalam WITA. Frontend cukup format — tidak perlu konversi
-/// tambahan.
+/// Frontend datetime utilities.
 ///
-/// `toWita()` dipertahankan sebagai no-op untuk backward compat dengan
-/// call sites yang sudah ada; tidak melakukan shift apapun.
-
-extension WitaDateTime on DateTime {
-  /// No-op. Backend sudah mengirim WITA. Return `this` supaya call
-  /// sites lama yang memanggil `.toWita()` tidak error dan tidak
-  /// double-shift waktu.
-  DateTime toWita() => this;
-}
+/// NOTE: Backend sekarang mengirim semua datetime dalam format WITA (+08:00).
+/// Frontend cukup parse dan tampilkan langsung — tidak perlu konversi timezone.
+/// Helper di file ini terutama untuk format tanggal saja.
+///
+/// Contoh format datetime dari backend: "2026-10-20T10:00:00+08:00"
+/// Flutter DateTime.parse() handle ini dengan benar — time component langsung
+/// dalam WITA, tidak perlu tambahan konversi.
 
 /// Format DateTime ke string. Asumsikan input sudah dalam WITA
 /// (datang dari backend).

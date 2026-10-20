@@ -315,15 +315,43 @@ class _SuppliersTabState extends State<SuppliersTab> {
             SizedBox(
               width: 80,
               child: Center(
-                child: IconButton(
-                  icon: Icon(
-                    s.isActive ? Icons.toggle_off_outlined : Icons.toggle_on_outlined,
-                    size: 20,
-                  ),
-                  tooltip: s.isActive ? 'Nonaktifkan' : 'Aktifkan',
-                  onPressed: () => _onToggle(context, s),
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                  padding: EdgeInsets.zero,
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  tooltip: 'Aksi',
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem<String>(
+                      value: 'order_type',
+                      height: 44,
+                      child: Row(
+                        children: [
+                          Icon(Icons.swap_horiz, size: 18),
+                          SizedBox(width: 8),
+                          Text('Ubah Tipe Order'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'toggle',
+                      height: 44,
+                      child: Row(
+                        children: [
+                          Icon(
+                            s.isActive ? Icons.toggle_off : Icons.toggle_on,
+                            size: 18,
+                          ),
+                          SizedBox(width: 8),
+                          Text(s.isActive ? 'Nonaktifkan' : 'Aktifkan'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onSelected: (action) {
+                    if (action == 'order_type') {
+                      _onEditOrderType(context, s);
+                    } else if (action == 'toggle') {
+                      _onToggle(context, s);
+                    }
+                  },
                 ),
               ),
             ),

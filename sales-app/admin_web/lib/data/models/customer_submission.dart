@@ -88,10 +88,7 @@ class CustomerSubmission {
   });
 
   factory CustomerSubmission.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDt(String? s) =>
-        s == null ? null : DateTime.parse(s).toWita();
-    // Defensive fallback untuk created_at/updated_at — kalau null/missing,
-    // pakai epoch (1970-01-01) supaya tidak throw di DateTime.parse.
+    // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
     final createdStr = json['created_at'] as String?;
     final updatedStr = json['updated_at'] as String?;
     return CustomerSubmission(
@@ -104,13 +101,9 @@ class CustomerSubmission {
       approvedCustomerId: json['approved_customer_id'] as String?,
       reviewedBy: json['reviewed_by'] as String?,
       reviewedByNama: json['reviewed_by_nama'] as String?,
-      reviewedAt: parseDt(json['reviewed_at'] as String?),
-      createdAt: createdStr != null
-          ? DateTime.parse(createdStr).toWita()
-          : DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: updatedStr != null
-          ? DateTime.parse(updatedStr).toWita()
-          : DateTime.fromMillisecondsSinceEpoch(0),
+      reviewedAt: parseWitaIsoOrNull(json['reviewed_at'] as String?),
+      createdAt: parseWitaIsoOrNull(createdStr) ?? DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: parseWitaIsoOrNull(updatedStr) ?? DateTime.fromMillisecondsSinceEpoch(0),
       namaLangganan: json['nama_langganan'] ?? '',
       nomorIdKtp: json['nomor_id_ktp'] as String?,
       alamatKtp: json['alamat_ktp'] as String?,
@@ -219,7 +212,7 @@ class SubmissionOrder {
           [],
       totalAmount: json['total_amount'],
       totalDiscount: json['total_discount'],
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      createdAt: parseWitaIsoOrNull(json['created_at'] ?? '') ?? DateTime.now(),
       hargaSaldoTersedia: json['harga_saldo_tersedia'],
     );
   }

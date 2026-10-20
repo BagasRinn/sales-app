@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer, cast, Date, or_, select
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timezone, timedelta
 import os
 
 from app.models.database import get_db
@@ -20,6 +21,17 @@ from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+WITA = timezone(timedelta(hours=8))
+
+
+def _wita_str(dt: datetime) -> str:
+    """Convert datetime to WITA ISO string with +08:00 suffix."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(WITA).isoformat()
 
 
 def _get_4p_suppliers(db: Optional[Session] = None) -> List[str]:
@@ -436,7 +448,7 @@ def get_sync_errors(
             "reason": err.reason,
             "import_type": log.import_type if log else None,
             "file_name": log.file_name if log else None,
-            "timestamp": err.created_at.isoformat() if err.created_at else None,
+            "timestamp": _wita_str(err.created_at),
         }
         for err, log in rows
     ]

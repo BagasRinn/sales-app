@@ -25,6 +25,7 @@ from app.schemas.schemas import (
     OrderDiscountUpdate,
     CancelItemsRequest,
     OrderReject,
+    WITA,
 )
 from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
 from app.core import branch as branch_constants
@@ -198,6 +199,17 @@ def _layer_cut_sql(type_col, percent_col, nominal_col, base):
     return case((type_col == "NOMINAL", nominal_cut), else_=percent_cut)
 
 
+def _wita_str(dt: datetime) -> str:
+    """Convert datetime to WITA ISO string with +08:00 suffix."""
+    if dt is None:
+        return None
+    # Ensure UTC if naive, then convert to WITA
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    wita_dt = dt.astimezone(WITA)
+    return wita_dt.isoformat()
+
+
 def _build_order_response(order: Order) -> dict:
     items_data = []
     total_amount = 0
@@ -269,7 +281,7 @@ def _build_order_response(order: Order) -> dict:
         "customer_kode": order.customer.kode if order.customer else None,
         "status": order.status,
         "notes": order.notes,
-        "created_at": order.created_at,
+        "created_at": _wita_str(order.created_at),
         "items": items_data,
         "store_name": order.store_name,
         "store_contact": order.store_contact,
@@ -907,6 +919,9 @@ def submit_draft_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.status == "PENDING":
+        # Idempotency: jika order sudah PENDING (double-tap / retry), anggap sukses.
+        return _build_order_response(order)
     if order.status != "DRAFT":
         raise HTTPException(
             status_code=400,

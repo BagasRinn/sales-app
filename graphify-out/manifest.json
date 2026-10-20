@@ -36,16 +36,16 @@
     "semantic_hash": "55eed98ac3cc0512a5f9fc0e20cf0403"
   },
   "sales-app/admin_web/lib/core/config.dart": {
-    "mtime": 1791934068.9677553,
-    "seen": 1792213755.845148,
+    "mtime": 1792406483.757557,
+    "seen": 1792465511.2197902,
     "ast_hash": "ec5d77abea86711878eddd1fccbd746c",
     "semantic_hash": "ec5d77abea86711878eddd1fccbd746c"
   },
   "sales-app/admin_web/lib/core/datetime_utils.dart": {
-    "mtime": 1791161191.279343,
-    "seen": 1792213755.8451493,
-    "ast_hash": "ceb37fa95c3eab84e61dff94fd6f777b",
-    "semantic_hash": "ceb37fa95c3eab84e61dff94fd6f777b"
+    "mtime": 1792466454.3426588,
+    "seen": 1792466626.8260639,
+    "ast_hash": "5f91c233bb9ae017e250818f58041dbd",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/core/design_system.dart": {
     "mtime": 1792165909.846882,
@@ -126,10 +126,10 @@
     "semantic_hash": "3078fbe41af32923894cf99a51a606de"
   },
   "sales-app/admin_web/lib/data/models/order.dart": {
-    "mtime": 1792031890.216238,
-    "seen": 1792213755.845161,
-    "ast_hash": "02585d427b5db318ac5d32ca540a459c",
-    "semantic_hash": "02585d427b5db318ac5d32ca540a459c"
+    "mtime": 1792218965.7111177,
+    "seen": 1792465511.2211401,
+    "ast_hash": "b57abed97996f6e46331c9997c8ee769",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/data/models/product.dart": {
     "mtime": 1791515318.6260164,
@@ -162,10 +162,10 @@
     "semantic_hash": "22e7b96b01ba27ff652fde12cc17243e"
   },
   "sales-app/admin_web/lib/data/models/supplier.dart": {
-    "mtime": 1792046015.6095212,
-    "seen": 1792213755.8451672,
-    "ast_hash": "31200598fb004094ea807dc2f6e24ee5",
-    "semantic_hash": "31200598fb004094ea807dc2f6e24ee5"
+    "mtime": 1792253651.574462,
+    "seen": 1792465511.221627,
+    "ast_hash": "757a8940ab4431b1f2b33f630118caaa",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/data/models/supplier_performance.dart": {
     "mtime": 1791856654.3812,
@@ -192,10 +192,10 @@
     "semantic_hash": "d10d83da7c4a282bb980a4f1e253809a"
   },
   "sales-app/admin_web/lib/data/repositories/admin_repository.dart": {
-    "mtime": 1792047150.4186137,
-    "seen": 1792213755.8451712,
-    "ast_hash": "6ffa61f66fcb1c028cbbe12922bd08fc",
-    "semantic_hash": "6ffa61f66fcb1c028cbbe12922bd08fc"
+    "mtime": 1792466547.1806407,
+    "seen": 1792466626.8324552,
+    "ast_hash": "21ee9cc618b443cdf8e53c7b132b7e82",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/data/repositories/api_service.dart": {
     "mtime": 1792047133.6476815,
@@ -210,10 +210,10 @@
     "semantic_hash": "0682134965213b4d017eca0eaf984ed1"
   },
   "sales-app/admin_web/lib/presentation/providers/admin_provider.dart": {
-    "mtime": 1792047484.718242,
-    "seen": 1792213755.8451736,
-    "ast_hash": "4b40c0e2a3a01c238d4425c6281129a3",
-    "semantic_hash": "4b40c0e2a3a01c238d4425c6281129a3"
+    "mtime": 1792465767.9562905,
+    "seen": 1792466626.8329997,
+    "ast_hash": "33a171bbd9ca760f03f9745db4153a1e",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/bulletin_pdf_picker_stub.dart": {
     "mtime": 1790825258.3244612,
@@ -258,10 +258,10 @@
     "semantic_hash": "9982a3d110e4a86aba960642c9ae5f5a"
   },
   "sales-app/admin_web/lib/presentation/screens/dashboard_screen.dart": {
-    "mtime": 1792159551.8818872,
-    "seen": 1792213755.8451807,
-    "ast_hash": "8f4d3771cf03256e505189f8949287c8",
-    "semantic_hash": "8f4d3771cf03256e505189f8949287c8"
+    "mtime": 1792465436.426089,
+    "seen": 1792465511.222922,
+    "ast_hash": "ad09e367acb47e6c849d3059a7602329",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/login_screen.dart": {
     "mtime": 1792017387.5574443,
@@ -270,10 +270,10 @@
     "semantic_hash": "25dfbe0f0e84d3efc3e0c3b7b660a628"
   },
   "sales-app/admin_web/lib/presentation/screens/orders_tab.dart": {
-    "mtime": 1792064907.211556,
-    "seen": 1792213755.8451824,
-    "ast_hash": "24da6dcd5d576b5731ef512d570ddab9",
-    "semantic_hash": "24da6dcd5d576b5731ef512d570ddab9"
+    "mtime": 1792466286.5853925,
+    "seen": 1792466626.8360343,
+    "ast_hash": "c299c18e1ffbdfee87f2c124022517c0",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/penugasan_sales_tab.dart": {
     "mtime": 1792030898.1126728,
@@ -288,28 +288,28 @@
     "semantic_hash": "136342d4efe28547aa1adc3f60392a42"
   },
   "sales-app/admin_web/lib/presentation/screens/products_tab.dart": {
-    "mtime": 1792030858.1500487,
-    "seen": 1792213755.8451846,
-    "ast_hash": "0c40a0ce86db912fecd831f0cf67b524",
-    "semantic_hash": "0c40a0ce86db912fecd831f0cf67b524"
+    "mtime": 1792335784.5421202,
+    "seen": 1792465511.2232747,
+    "ast_hash": "f2d28af69d4b3a080664dac424654637",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/stats_tab.dart": {
-    "mtime": 1792167707.4811127,
-    "seen": 1792213755.8451855,
+    "mtime": 1792401897.5982118,
+    "seen": 1792465511.2232761,
     "ast_hash": "7069eaa3fc29a91c17afadaadaf77185",
     "semantic_hash": "7069eaa3fc29a91c17afadaadaf77185"
   },
   "sales-app/admin_web/lib/presentation/screens/suppliers_tab.dart": {
-    "mtime": 1792158726.1148467,
-    "seen": 1792213755.8451862,
-    "ast_hash": "1ef9c78a9801e2d9f24d159e65d03d7a",
-    "semantic_hash": "1ef9c78a9801e2d9f24d159e65d03d7a"
+    "mtime": 1792400895.2508383,
+    "seen": 1792465511.2232778,
+    "ast_hash": "8656a2f5b5e68668ee08f3ccc1d3a5db",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/sync_tab.dart": {
-    "mtime": 1792163743.7968323,
-    "seen": 1792213755.8451872,
-    "ast_hash": "b0fa2e02ce1dfecd9c13676dd3e78577",
-    "semantic_hash": "b0fa2e02ce1dfecd9c13676dd3e78577"
+    "mtime": 1792466404.2575068,
+    "seen": 1792466626.837349,
+    "ast_hash": "abcfaed9bc40370946c8f7706a16a9be",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/screens/users_tab.dart": {
     "mtime": 1792208298.7839267,
@@ -384,10 +384,10 @@
     "semantic_hash": "a20a299c2de81e60a5a46bbefb30677a"
   },
   "sales-app/admin_web/lib/presentation/widgets/supplier_create_dialog.dart": {
-    "mtime": 1792047555.9918072,
-    "seen": 1792213755.8451967,
-    "ast_hash": "7ad855510da52c26b32e68b782e32240",
-    "semantic_hash": "7ad855510da52c26b32e68b782e32240"
+    "mtime": 1792334093.3213303,
+    "seen": 1792465511.2244947,
+    "ast_hash": "7fe5efda53b25df48f8d3e759b251172",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/lib/presentation/widgets/supplier_target_edit_dialog.dart": {
     "mtime": 1791890867.5521317,
@@ -414,10 +414,10 @@
     "semantic_hash": "08394c7954d4a17166602769915db7fb"
   },
   "sales-app/admin_web/test/widgets/admin_provider_supplier_test.dart": {
-    "mtime": 1792047463.658153,
-    "seen": 1792213755.8452003,
-    "ast_hash": "d6e81a925c5be28522e18e18901182c0",
-    "semantic_hash": "d6e81a925c5be28522e18e18901182c0"
+    "mtime": 1792334240.4564877,
+    "seen": 1792465511.2248788,
+    "ast_hash": "c6f1bf2940f5ea35cddc775cedb7cf4e",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/test/widgets/admin_repository_supplier_test.dart": {
     "mtime": 1792047131.997846,
@@ -468,10 +468,10 @@
     "semantic_hash": "7d6d2446f67f85151c251330f4fade53"
   },
   "sales-app/admin_web/test/widgets/suppliers_tab_test.dart": {
-    "mtime": 1792158678.1111279,
-    "seen": 1792213755.845207,
-    "ast_hash": "f976fad391eab5fcd724ca820df1727a",
-    "semantic_hash": "f976fad391eab5fcd724ca820df1727a"
+    "mtime": 1792334241.5185394,
+    "seen": 1792465511.225588,
+    "ast_hash": "91289e296a3bf1f7efe100939a4fb8cf",
+    "semantic_hash": ""
   },
   "sales-app/admin_web/vercel.json": {
     "mtime": 1790223499.676965,
@@ -534,10 +534,10 @@
     "semantic_hash": "52127c3f3bfddff48f15fe5df155cfea"
   },
   "sales-app/backend/app/api/endpoints/bulletins.py": {
-    "mtime": 1791803683.1892464,
-    "seen": 1792213755.8452168,
-    "ast_hash": "42a7b972be20c23be09286fab98ceb4b",
-    "semantic_hash": "42a7b972be20c23be09286fab98ceb4b"
+    "mtime": 1792216910.7581255,
+    "seen": 1792465511.2266665,
+    "ast_hash": "b110347e615be02b9d809b5861e13062",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/bulletins_scheduler.py": {
     "mtime": 1790820861.8947928,
@@ -546,10 +546,10 @@
     "semantic_hash": "46546edb52e2d4718ab88e7658e5d2c3"
   },
   "sales-app/backend/app/api/endpoints/customer_submissions.py": {
-    "mtime": 1791819971.49487,
-    "seen": 1792213755.8452225,
-    "ast_hash": "e757fe5875c699c019c092c9e17cb44e",
-    "semantic_hash": "e757fe5875c699c019c092c9e17cb44e"
+    "mtime": 1792216938.0569606,
+    "seen": 1792465511.22676,
+    "ast_hash": "53a2605640aef898ccb58140ab1f2abf",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/customers.py": {
     "mtime": 1791819971.4976654,
@@ -558,22 +558,22 @@
     "semantic_hash": "9ecf1050f26363349d51f7701d461760"
   },
   "sales-app/backend/app/api/endpoints/orders.py": {
-    "mtime": 1792206307.9483726,
-    "seen": 1792213755.8452253,
-    "ast_hash": "20c61e9e8bff4553ad6a8f6f6fa42315",
-    "semantic_hash": "20c61e9e8bff4553ad6a8f6f6fa42315"
+    "mtime": 1792216845.7775736,
+    "seen": 1792465511.2268517,
+    "ast_hash": "cc4f36c30b7dbddfe6ad6d908d7bfef0",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/products.py": {
-    "mtime": 1792043721.0252292,
-    "seen": 1792213755.8452265,
-    "ast_hash": "f2d72aa426c77bc0494bcb60bc557b16",
-    "semantic_hash": "f2d72aa426c77bc0494bcb60bc557b16"
+    "mtime": 1792252753.7287548,
+    "seen": 1792465511.2268531,
+    "ast_hash": "c66e5af5524ca179f4946704721daee0",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/reports.py": {
-    "mtime": 1792213603.8571875,
-    "seen": 1792213755.845228,
-    "ast_hash": "f9c7a7e1a7681e9f86b84f8415f61630",
-    "semantic_hash": "f9c7a7e1a7681e9f86b84f8415f61630"
+    "mtime": 1792404549.4759023,
+    "seen": 1792465511.2268538,
+    "ast_hash": "4ec7d32bd5d7a71ed3be208a2bd293b8",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/sales.py": {
     "mtime": 1791819971.5024872,
@@ -594,16 +594,16 @@
     "semantic_hash": "e957c2ce4c8f8cb1b5cacf1352b0015b"
   },
   "sales-app/backend/app/api/endpoints/suppliers.py": {
-    "mtime": 1792042923.6462283,
-    "seen": 1792213755.845231,
-    "ast_hash": "4a089aee96f2b0b5a1271f597377acaa",
-    "semantic_hash": "4a089aee96f2b0b5a1271f597377acaa"
+    "mtime": 1792252691.1141133,
+    "seen": 1792465511.2271178,
+    "ast_hash": "034f81951c222befc849f0e351512d49",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/api/endpoints/users.py": {
-    "mtime": 1791803688.5366921,
-    "seen": 1792213755.8452315,
-    "ast_hash": "6524a2f28679dd118208312cd8973d73",
-    "semantic_hash": "6524a2f28679dd118208312cd8973d73"
+    "mtime": 1792216942.83159,
+    "seen": 1792465511.2271187,
+    "ast_hash": "c652f23ae50bd2cf4a3043e00f60bcd9",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/core/branch.py": {
     "mtime": 1791609829.1473217,
@@ -636,22 +636,22 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "sales-app/backend/app/models/database.py": {
-    "mtime": 1791251346.6387637,
-    "seen": 1792213755.8452365,
-    "ast_hash": "bcdecf9c2e68ca1b6cdc84a4110b0f23",
-    "semantic_hash": "bcdecf9c2e68ca1b6cdc84a4110b0f23"
+    "mtime": 1792216861.2335527,
+    "seen": 1792465511.2275884,
+    "ast_hash": "f4f2587824b2d4124337a41beb446c1b",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/models/models.py": {
-    "mtime": 1792040395.8309166,
-    "seen": 1792213755.8452375,
-    "ast_hash": "8f5d40e79401f9ca67a888005d7339b5",
-    "semantic_hash": "8f5d40e79401f9ca67a888005d7339b5"
+    "mtime": 1792400913.3590934,
+    "seen": 1792465511.2275898,
+    "ast_hash": "098bc235b5a72c796fb6f3a6ce861384",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/schemas/schemas.py": {
-    "mtime": 1792213584.4561834,
-    "seen": 1792213755.8452382,
-    "ast_hash": "80a492a9af55b0f3c9e224efd79f3337",
-    "semantic_hash": "80a492a9af55b0f3c9e224efd79f3337"
+    "mtime": 1792252650.8232367,
+    "seen": 1792465511.2275908,
+    "ast_hash": "36ee1c4fd3fe48150a1bc1aff435a493",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/services/__init__.py": {
     "mtime": 1786356389.4335825,
@@ -666,10 +666,10 @@
     "semantic_hash": "851c4b195a1682bcf98977960fed98c5"
   },
   "sales-app/backend/app/services/sheets_sync.py": {
-    "mtime": 1791784297.954175,
-    "seen": 1792213755.8452404,
-    "ast_hash": "75659f8c589d04032924ca38a756a2d1",
-    "semantic_hash": "75659f8c589d04032924ca38a756a2d1"
+    "mtime": 1792252997.9006386,
+    "seen": 1792465511.2277942,
+    "ast_hash": "63fd2d54d334fbe0aea58db0ad020644",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/services/stock_logger.py": {
     "mtime": 1791527736.2167728,
@@ -678,10 +678,10 @@
     "semantic_hash": "02661adade689d4ca9a2f3c58399c21d"
   },
   "sales-app/backend/app/services/supabase_storage.py": {
-    "mtime": 1790820807.919558,
-    "seen": 1792213755.845242,
-    "ast_hash": "ccc9266c95ecf3ca761e0d91fdc7a1a0",
-    "semantic_hash": "ccc9266c95ecf3ca761e0d91fdc7a1a0"
+    "mtime": 1792412676.9396677,
+    "seen": 1792465511.2278829,
+    "ast_hash": "63e8f9ce92d4e41b27df57d7b7d5c358",
+    "semantic_hash": ""
   },
   "sales-app/backend/app/services/tasks.py": {
     "mtime": 1789957436.9413598,
@@ -720,10 +720,10 @@
     "semantic_hash": "c2c742cc3044099f95855b71412593d3"
   },
   "sales-app/backend/set_order_type_from_supplier.py": {
-    "mtime": 1791872431.2674832,
-    "seen": 1792213755.8452475,
-    "ast_hash": "9ea44e9b0cb0fc3e938ba34245f3318e",
-    "semantic_hash": "9ea44e9b0cb0fc3e938ba34245f3318e"
+    "mtime": 1792335592.4110181,
+    "seen": 1792465511.2284725,
+    "ast_hash": "f3d26350084778c7de397082b4a5fd4d",
+    "semantic_hash": ""
   },
   "sales-app/backend/test_response.json": {
     "mtime": 1792205792.5562544,
@@ -918,10 +918,10 @@
     "semantic_hash": "9f4f39a34ad7133ebf7a3f6d9a750b42"
   },
   "sales-app/lib/presentation/providers/product_provider.dart": {
-    "mtime": 1791129449.1349826,
-    "seen": 1792213755.8452718,
-    "ast_hash": "aa87fc2889d2e0470ffbee86a06887ae",
-    "semantic_hash": "aa87fc2889d2e0470ffbee86a06887ae"
+    "mtime": 1792217022.8008873,
+    "seen": 1792465511.2314358,
+    "ast_hash": "f1d8c5ff236669311c6fbe5c223548ec",
+    "semantic_hash": ""
   },
   "sales-app/lib/presentation/screens/auth/change_password_dialog.dart": {
     "mtime": 1790556010.5213394,
@@ -978,10 +978,10 @@
     "semantic_hash": "a07f1bef75204bfad22f09a2b88c7a6a"
   },
   "sales-app/lib/presentation/screens/order_flow/step_pick_customer.dart": {
-    "mtime": 1790761169.6626537,
-    "seen": 1792213755.8452795,
-    "ast_hash": "a2230b0fd51c0ccadf68980088b8ab17",
-    "semantic_hash": "a2230b0fd51c0ccadf68980088b8ab17"
+    "mtime": 1792216974.4952655,
+    "seen": 1792465511.232296,
+    "ast_hash": "181dc1fbc55e59c3d66c2c28e602f975",
+    "semantic_hash": ""
   },
   "sales-app/lib/presentation/screens/order_flow/step_pick_order_type.dart": {
     "mtime": 1790683207.369947,
@@ -1050,10 +1050,10 @@
     "semantic_hash": "808f286e2fd3ae02dd9f9dbb1f0452e3"
   },
   "sales-app/sales_web/lib/core/datetime_utils.dart": {
-    "mtime": 1791596998.922683,
-    "seen": 1792213755.8452942,
-    "ast_hash": "d2f9edd99a0212da47ac4301ff38e20d",
-    "semantic_hash": "d2f9edd99a0212da47ac4301ff38e20d"
+    "mtime": 1792466570.5353365,
+    "seen": 1792466626.8920796,
+    "ast_hash": "583c82fb3ff414b5accc529e9ad54067",
+    "semantic_hash": ""
   },
   "sales-app/sales_web/lib/core/design_system.dart": {
     "mtime": 1791428586.3346112,
@@ -1330,5 +1330,647 @@
     "seen": 1792213755.8453298,
     "ast_hash": "1f0cc931e5d25b46bf563f9151efedfc",
     "semantic_hash": "1f0cc931e5d25b46bf563f9151efedfc"
+  },
+  "sales-app/admin_web/lib/presentation/widgets/supplier_edit_order_type_dialog.dart": {
+    "mtime": 1792334100.9186728,
+    "seen": 1792465511.2244964,
+    "ast_hash": "f4e27a85b25832ea5fd613f5a8ae2775",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/fixtures/auth.fixture.ts": {
+    "mtime": 1792411934.8365793,
+    "seen": 1792465511.2255895,
+    "ast_hash": "163135f9eb1afc4e046496dcf764b59a",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/package.json": {
+    "mtime": 1792411685.2527843,
+    "seen": 1792465511.2255907,
+    "ast_hash": "a85db3ff5e5753ca5de530c03b2ddea9",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/base.page.ts": {
+    "mtime": 1792418722.878045,
+    "seen": 1792465511.2255924,
+    "ast_hash": "5231e31c23d15bfb776bcfedab6aa015",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/bulletins.page.ts": {
+    "mtime": 1792411911.0044618,
+    "seen": 1792465511.2255936,
+    "ast_hash": "e9d21f35b6ffef544e309d190a7c9562",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/cross-branch.page.ts": {
+    "mtime": 1792411919.364645,
+    "seen": 1792465511.2255952,
+    "ast_hash": "334a13f7d1e3831fff00de12ebea5784",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/customer-submissions.page.ts": {
+    "mtime": 1792411820.2162015,
+    "seen": 1792465511.2255962,
+    "ast_hash": "c93bf7e7873541ae713d183de0625a00",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/customers.page.ts": {
+    "mtime": 1792411806.1672337,
+    "seen": 1792465511.2255971,
+    "ast_hash": "a70a3d9bc7c06eaff7b08ab9169c174c",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/dashboard.page.ts": {
+    "mtime": 1792418771.3929532,
+    "seen": 1792465511.225598,
+    "ast_hash": "36e209592f5b33e8a8e461bfe7e191a4",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/login.page.ts": {
+    "mtime": 1792418780.131045,
+    "seen": 1792465511.225599,
+    "ast_hash": "2c49dfacd27a97211d572a847ea21d8f",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/orders.page.ts": {
+    "mtime": 1792411792.8493216,
+    "seen": 1792465511.2256,
+    "ast_hash": "a0cfe192ffd45fa06ca2568fe0595b1e",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/penugasan-sales.page.ts": {
+    "mtime": 1792411896.846655,
+    "seen": 1792465511.2256007,
+    "ast_hash": "d2f99c87d9ceb20c1415e4997457412b",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/performance.page.ts": {
+    "mtime": 1792411884.1272943,
+    "seen": 1792465511.2256017,
+    "ast_hash": "afc16a02a715272b37c4527ea9ca1b7a",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/products.page.ts": {
+    "mtime": 1792412126.2571123,
+    "seen": 1792465511.2256029,
+    "ast_hash": "31418ba4ac4ed0fa3142abf34f8069fc",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/stats.page.ts": {
+    "mtime": 1792411779.1381633,
+    "seen": 1792465511.225604,
+    "ast_hash": "05add861ebf8b9deb458d0f1987e94f0",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/suppliers.page.ts": {
+    "mtime": 1792411850.8679366,
+    "seen": 1792465511.225605,
+    "ast_hash": "cf42d6ad088a2f6d349475528cb1aff2",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/sync.page.ts": {
+    "mtime": 1792411862.2046833,
+    "seen": 1792465511.225606,
+    "ast_hash": "593c429b360998333816f04023e1a56f",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/pages/users.page.ts": {
+    "mtime": 1792411874.7341163,
+    "seen": 1792465511.2256074,
+    "ast_hash": "f18512bdc243c635ee92b2aef425bdb5",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/playwright.config.ts": {
+    "mtime": 1792419090.9170244,
+    "seen": 1792465511.2256083,
+    "ast_hash": "56834fd79a46b5545f0921970b0ecb35",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/auth.spec.ts": {
+    "mtime": 1792418807.250661,
+    "seen": 1792465511.2256098,
+    "ast_hash": "6c00549f8b934a7b14adaac8e83d6378",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/bulletins.spec.ts": {
+    "mtime": 1792412093.181043,
+    "seen": 1792465511.2256114,
+    "ast_hash": "de3c258811807c1c27277062e252b898",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/cross-branch.spec.ts": {
+    "mtime": 1792412103.3311775,
+    "seen": 1792465511.2256124,
+    "ast_hash": "6ba9c1ee683b44e5fc30f8ee51931b21",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/customer-submissions.spec.ts": {
+    "mtime": 1792412008.0645523,
+    "seen": 1792465511.2256138,
+    "ast_hash": "538dca505bb2945ef564663df2727c2a",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/customers.spec.ts": {
+    "mtime": 1792411996.65915,
+    "seen": 1792465511.2256148,
+    "ast_hash": "905c857ddc641817a5c65c2aea2130c7",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/orders.spec.ts": {
+    "mtime": 1792418808.3697314,
+    "seen": 1792465511.225616,
+    "ast_hash": "2b4f1db60512017221fa483174d1b81e",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/penugasan-sales.spec.ts": {
+    "mtime": 1792412077.784306,
+    "seen": 1792465511.225617,
+    "ast_hash": "121f1d248a658df7957111948f9185eb",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/performance.spec.ts": {
+    "mtime": 1792412063.6406672,
+    "seen": 1792465511.225618,
+    "ast_hash": "5c3d05274c742ffa4819f6e6d88cd95e",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/products.spec.ts": {
+    "mtime": 1792418809.4700086,
+    "seen": 1792465511.2256186,
+    "ast_hash": "a828a6ab59565d08939154286f74344c",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/role-access.spec.ts": {
+    "mtime": 1792412149.330249,
+    "seen": 1792465511.2256198,
+    "ast_hash": "938e914f8b922d554ce792f0c938fa62",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/stats.spec.ts": {
+    "mtime": 1792411975.4783578,
+    "seen": 1792465511.2256207,
+    "ast_hash": "4485be6d78dc8ccdcfcb45c61c0f740f",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/suppliers.spec.ts": {
+    "mtime": 1792412033.5904756,
+    "seen": 1792465511.2256215,
+    "ast_hash": "6ce2be5d8f4a5c00c0e7e8b583c73e62",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/sync.spec.ts": {
+    "mtime": 1792412136.4396622,
+    "seen": 1792465511.2256231,
+    "ast_hash": "2eb4cd3521beae404ee86a8ff7fb025d",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/specs/users.spec.ts": {
+    "mtime": 1792412054.3417041,
+    "seen": 1792465511.225624,
+    "ast_hash": "cd6b9fea505c6c03713b72c9d41278f4",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/tsconfig.json": {
+    "mtime": 1792411706.4812007,
+    "seen": 1792465511.225625,
+    "ast_hash": "29b8cd80cfdf1998c625f76b9a69e50d",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/utils/helpers.ts": {
+    "mtime": 1792418732.371998,
+    "seen": 1792465511.2256265,
+    "ast_hash": "9c9dc041e4abd451c455eaecd30265ef",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/utils/test-data.ts": {
+    "mtime": 1792411716.7091608,
+    "seen": 1792465511.2256272,
+    "ast_hash": "e2c2d5aec1965f3752bede8aa49249ad",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/app/services/storage.py": {
+    "mtime": 1792412670.168,
+    "seen": 1792465511.2278812,
+    "ast_hash": "e2ba49de7afe15cbb75c9df42e75a42a",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/area_assignments.json": {
+    "mtime": 1792424219.1831675,
+    "seen": 1792465511.2284544,
+    "ast_hash": "1df60569a2aae24128a256bd2a04fe87",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/branches.json": {
+    "mtime": 1792424215.8414912,
+    "seen": 1792465511.228456,
+    "ast_hash": "c019d9721fe32df142819b98733d42a7",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/bulletin_dismisses.json": {
+    "mtime": 1792424224.8749397,
+    "seen": 1792465511.2284575,
+    "ast_hash": "d751713988987e9331980363e24189ce",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/bulletins.json": {
+    "mtime": 1792424224.539289,
+    "seen": 1792465511.2284584,
+    "ast_hash": "d751713988987e9331980363e24189ce",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/customer_assignments.json": {
+    "mtime": 1792424218.8432534,
+    "seen": 1792465511.2284596,
+    "ast_hash": "d4a1d868e344eef99c71b7ff1bd98e58",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/customer_registration_submissions.json": {
+    "mtime": 1792424222.7895825,
+    "seen": 1792465511.2284606,
+    "ast_hash": "e96f4d8e34497c1b68c9158db17ba34d",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/import_logs.json": {
+    "mtime": 1792424223.1252534,
+    "seen": 1792465511.2284617,
+    "ast_hash": "f45a31df9293e3489b85914f595f33ce",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/orders.json": {
+    "mtime": 1792424219.7362921,
+    "seen": 1792465511.228463,
+    "ast_hash": "b6112bea8b13d56f83e0ed8f36b920c8",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/sales_targets.json": {
+    "mtime": 1792424223.854476,
+    "seen": 1792465511.2284644,
+    "ast_hash": "d751713988987e9331980363e24189ce",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/supplier_targets.json": {
+    "mtime": 1792424224.1925373,
+    "seen": 1792465511.2284653,
+    "ast_hash": "098db814617fc311b456d58fe61b4507",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/suppliers.json": {
+    "mtime": 1792424216.268156,
+    "seen": 1792465511.2284667,
+    "ast_hash": "bc3d53e39fec42e6b24e8c96f4209d6c",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/sync_validation_errors.json": {
+    "mtime": 1792424223.5083745,
+    "seen": 1792465511.2284682,
+    "ast_hash": "86033313ecf32732ca5815807b52f35e",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/exports/users.json": {
+    "mtime": 1792424216.6258087,
+    "seen": 1792465511.228469,
+    "ast_hash": "e458320255d529dac73b11d5543ea876",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/scripts/add_missing_columns.py": {
+    "mtime": 1792423559.459992,
+    "seen": 1792465511.22847,
+    "ast_hash": "3476475934cd6fcfb1308c7f9ddc8706",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/scripts/create_tables_railway.py": {
+    "mtime": 1792422752.3530655,
+    "seen": 1792465511.228471,
+    "ast_hash": "e80ef03dae388ab3082e7c2f8f9c60b8",
+    "semantic_hash": ""
+  },
+  "sales-app/lib/core/debouncer.dart": {
+    "mtime": 1792216961.731906,
+    "seen": 1792465511.2295616,
+    "ast_hash": "d05eb82ad216339ca0628375d6dd4c14",
+    "semantic_hash": ""
+  },
+  ".agents/skills/flutter-apply-architecture-best-practices/SKILL.md": {
+    "mtime": 1791969658.9475865,
+    "seen": 1792465511.237588,
+    "ast_hash": "c475304b95d37c3f58d411ba603e5034",
+    "semantic_hash": ""
+  },
+  ".github/workflows/deploy-admin-web-firebase.yml": {
+    "mtime": 1791336418.8625643,
+    "seen": 1792465511.2375898,
+    "ast_hash": "87d5cbff4d0baa17e980135dd970d770",
+    "semantic_hash": ""
+  },
+  ".github/workflows/deploy-sales-web-firebase.yml": {
+    "mtime": 1791336429.692666,
+    "seen": 1792465511.2375908,
+    "ast_hash": "1a281db47e322dd2bff9dd55b1a3d11e",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1792210064.5983698,
+    "seen": 1792465511.237592,
+    "ast_hash": "67d88e9d0760c3ba54c75dfd9551c1c5",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1791871836.822611,
+    "seen": 1792465511.2375932,
+    "ast_hash": "460b706a6a441ccbac88bb71ba82f704",
+    "semantic_hash": ""
+  },
+  "plans/2026-10-17-reduce-supabase-egress.md": {
+    "mtime": 1792213402.0863018,
+    "seen": 1792465511.2375944,
+    "ast_hash": "04146dd241295d9f5442ee423690e499",
+    "semantic_hash": ""
+  },
+  "plans/admin_web-mobile-responsive.md": {
+    "mtime": 1791975485.8814566,
+    "seen": 1792465511.2375953,
+    "ast_hash": "54066dba5dae7d26f20ead232516092b",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/analysis_options.yaml": {
+    "mtime": 1786363144.211934,
+    "seen": 1792465511.2375965,
+    "ast_hash": "9e65f4b9beebb674c0dc252f70a5c177",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/devtools_options.yaml": {
+    "mtime": 1789975719.002583,
+    "seen": 1792465511.2375972,
+    "ast_hash": "d1ff5187b1b67653e7357395895e8449",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/public/index.html": {
+    "mtime": 1790227228.2061303,
+    "seen": 1792465511.2375984,
+    "ast_hash": "48166621f12ac55dc364c97b9e95d59d",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/pubspec.yaml": {
+    "mtime": 1790574437.0937743,
+    "seen": 1792465511.2375994,
+    "ast_hash": "ee2ee6998a64b7157210f0b49755b2ba",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/tests/e2e/README.md": {
+    "mtime": 1792412162.3884747,
+    "seen": 1792465511.2376006,
+    "ast_hash": "27d85e011dddf7ccafe3887aeac5ee74",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/index.html": {
+    "mtime": 1786363144.3555963,
+    "seen": 1792465511.2376015,
+    "ast_hash": "deecdba6771c14094893c4fd3a362a5a",
+    "semantic_hash": ""
+  },
+  "sales-app/analysis_options.yaml": {
+    "mtime": 1786358407.68489,
+    "seen": 1792465511.2376025,
+    "ast_hash": "9e65f4b9beebb674c0dc252f70a5c177",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/docs/MIGRATION_GUIDE.md": {
+    "mtime": 1792412578.0037389,
+    "seen": 1792465511.2376037,
+    "ast_hash": "98287429f192eca828917172787a98c3",
+    "semantic_hash": ""
+  },
+  "sales-app/backend/requirements.txt": {
+    "mtime": 1790821473.4121552,
+    "seen": 1792465511.2376046,
+    "ast_hash": "74ad18a3525b44322e7e119c621d6339",
+    "semantic_hash": ""
+  },
+  "sales-app/egress_pytest.txt": {
+    "mtime": 1792218520.8307889,
+    "seen": 1792465511.2376056,
+    "ast_hash": "257324d9e5e387f37e47d1e7aad6513c",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md": {
+    "mtime": 1775559146.2584727,
+    "seen": 1792465511.237607,
+    "ast_hash": "f7ee1b402881509d197f34963e569927",
+    "semantic_hash": ""
+  },
+  "sales-app/pubspec.yaml": {
+    "mtime": 1790814730.3592422,
+    "seen": 1792465511.2376077,
+    "ast_hash": "a5efee89b23636e2e2f7d0d321ecdb54",
+    "semantic_hash": ""
+  },
+  "sales-app/sales_web/pubspec.yaml": {
+    "mtime": 1791172535.1530855,
+    "seen": 1792465511.2376084,
+    "ast_hash": "ea375cdbac2b1b4c498433e2a9f99245",
+    "semantic_hash": ""
+  },
+  "sales-app/sales_web/web/index.html": {
+    "mtime": 1791442215.7130992,
+    "seen": 1792465511.2376091,
+    "ast_hash": "d71bad24bc1ed23f5f4a2e75199c9176",
+    "semantic_hash": ""
+  },
+  "sales-app/windows/CMakeLists.txt": {
+    "mtime": 1789967061.532038,
+    "seen": 1792465511.2376103,
+    "ast_hash": "38dff3caa1ef21c605c4d36c8eb2a3fd",
+    "semantic_hash": ""
+  },
+  "sales-app/windows/flutter/CMakeLists.txt": {
+    "mtime": 1775559146.2972949,
+    "seen": 1792465511.2376118,
+    "ast_hash": "bbf66fed5180bd9ae8198b8d7c4a0001",
+    "semantic_hash": ""
+  },
+  "sales-app/windows/runner/CMakeLists.txt": {
+    "mtime": 1775559146.2983031,
+    "seen": 1792465511.2376125,
+    "ast_hash": "028602ab9754bffe716659ada7590d29",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/favicon.png": {
+    "mtime": 1775559146.292015,
+    "seen": 1792465511.2376137,
+    "ast_hash": "5dcef449791fa27946b3d35ad8803796",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/icons/Icon-192.png": {
+    "mtime": 1775559146.292015,
+    "seen": 1792465511.2376144,
+    "ast_hash": "ac9a721a12bbc803b44f645561ecb1e1",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/icons/Icon-512.png": {
+    "mtime": 1775559146.2932818,
+    "seen": 1792465511.2376153,
+    "ast_hash": "96e752610906ba2a93c65f8abe1645f1",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/icons/Icon-maskable-192.png": {
+    "mtime": 1775559183.3237002,
+    "seen": 1792465511.237616,
+    "ast_hash": "c457ef57daa1d16f64b27b786ec2ea3c",
+    "semantic_hash": ""
+  },
+  "sales-app/admin_web/web/icons/Icon-maskable-512.png": {
+    "mtime": 1775559183.3105354,
+    "seen": 1792465511.2376175,
+    "ast_hash": "301a7604d45b3e739efc881eb04896ea",
+    "semantic_hash": ""
+  },
+  "sales-app/android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "mtime": 1775559146.2240143,
+    "seen": 1792465511.2376192,
+    "ast_hash": "13e9c72ec37fac220397aa819fa1ef2d",
+    "semantic_hash": ""
+  },
+  "sales-app/android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "mtime": 1775559146.2250183,
+    "seen": 1792465511.2376206,
+    "ast_hash": "6270344430679711b81476e29878caa7",
+    "semantic_hash": ""
+  },
+  "sales-app/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "mtime": 1775559146.2250183,
+    "seen": 1792465511.2376215,
+    "ast_hash": "a0a8db5985280b3679d99a820ae2db79",
+    "semantic_hash": ""
+  },
+  "sales-app/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "mtime": 1775559146.2261965,
+    "seen": 1792465511.2376232,
+    "ast_hash": "afe1b655b9f32da22f9a4301bb8e6ba8",
+    "semantic_hash": ""
+  },
+  "sales-app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "mtime": 1775559146.2261965,
+    "seen": 1792465511.2376237,
+    "ast_hash": "57838d52c318faff743130c3fcfae0c6",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png": {
+    "mtime": 1775559181.894312,
+    "seen": 1792465511.237625,
+    "ast_hash": "c785f8932297af4acd5f5ccb7630f01c",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png": {
+    "mtime": 1775559181.937024,
+    "seen": 1792465511.2376256,
+    "ast_hash": "a2f8558fb1d42514111fbbb19fb67314",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png": {
+    "mtime": 1775559181.818221,
+    "seen": 1792465511.2376268,
+    "ast_hash": "2247a840b6ee72b8a069208af170e5b1",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png": {
+    "mtime": 1775559182.0065188,
+    "seen": 1792465511.237628,
+    "ast_hash": "1b3b1538136316263c7092951e923e9d",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png": {
+    "mtime": 1775559182.111665,
+    "seen": 1792465511.2376287,
+    "ast_hash": "be8887071dd7ec39cb754d236aa9584f",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png": {
+    "mtime": 1775559181.64099,
+    "seen": 1792465511.2376306,
+    "ast_hash": "043119ef4faa026ff82bd03f241e5338",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png": {
+    "mtime": 1775559181.9753525,
+    "seen": 1792465511.2376318,
+    "ast_hash": "2b1452c4c1bda6177b4fbbb832df217f",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png": {
+    "mtime": 1775559181.6821408,
+    "seen": 1792465511.2376328,
+    "ast_hash": "2247a840b6ee72b8a069208af170e5b1",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png": {
+    "mtime": 1775559182.0692759,
+    "seen": 1792465511.2376337,
+    "ast_hash": "8245359312aea1b0d2412f79a07b0ca5",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png": {
+    "mtime": 1775559181.7451577,
+    "seen": 1792465511.237635,
+    "ast_hash": "5b3c0902200ce596e9848f22e1f0fe0e",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png": {
+    "mtime": 1775559181.8394547,
+    "seen": 1792465511.237636,
+    "ast_hash": "5b3c0902200ce596e9848f22e1f0fe0e",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png": {
+    "mtime": 1775559181.6110034,
+    "seen": 1792465511.2376373,
+    "ast_hash": "e419d22a37bc40ba185aca1acb6d4ac6",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png": {
+    "mtime": 1775559181.801792,
+    "seen": 1792465511.2376385,
+    "ast_hash": "36c0d7a7132bdde18898ffdfcfcdc4d2",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png": {
+    "mtime": 1775559182.1517851,
+    "seen": 1792465511.2376394,
+    "ast_hash": "643842917530acf4c5159ae851b0baf2",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png": {
+    "mtime": 1775559182.049818,
+    "seen": 1792465511.2376404,
+    "ast_hash": "665cb5e3c5729da6d639d26eff47a503",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png": {
+    "mtime": 1775559181.5900497,
+    "seen": 1792465511.2376418,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png": {
+    "mtime": 1775559181.5739994,
+    "seen": 1792465511.2376428,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "sales-app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png": {
+    "mtime": 1775559181.5579498,
+    "seen": 1792465511.2376437,
+    "ast_hash": "978c1bee49d7ad5fc1a4d81099b13e18",
+    "semantic_hash": ""
+  },
+  "sales-app/sales_web/web/icons/Icon-192.png": {
+    "mtime": 1791505650.0282602,
+    "seen": 1792465511.237645,
+    "ast_hash": "d7f9655539dc021690a0597c4b495632",
+    "semantic_hash": ""
+  },
+  "sales-app/sales_web/web/icons/Icon-512.png": {
+    "mtime": 1791505650.1328483,
+    "seen": 1792465511.2376456,
+    "ast_hash": "3d67e88c89926ab97b96ade5ff140906",
+    "semantic_hash": ""
   }
 }

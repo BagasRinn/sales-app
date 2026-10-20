@@ -1,5 +1,3 @@
-import '../../core/datetime_utils.dart';
-
 class CustomerSubmission {
   final String id;
   final String salesId;
@@ -87,8 +85,7 @@ class CustomerSubmission {
   });
 
   factory CustomerSubmission.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDt(String? s) =>
-        s == null ? null : DateTime.parse(s).toWita();
+    DateTime? parseDt(String? s) => s == null ? null : DateTime.parse(s);
     return CustomerSubmission(
       id: json['id'] as String,
       salesId: json['sales_id'] as String,
@@ -101,8 +98,8 @@ class CustomerSubmission {
       reviewedBy: json['reviewed_by'] as String?,
       reviewedByNama: json['reviewed_by_nama'] as String?,
       reviewedAt: parseDt(json['reviewed_at'] as String?),
-      createdAt: DateTime.parse(json['created_at'] as String).toWita(),
-      updatedAt: DateTime.parse(json['updated_at'] as String).toWita(),
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
       namaLangganan: json['nama_langganan'] as String,
       nomorIdKtp: json['nomor_id_ktp'] as String?,
       alamatKtp: json['alamat_ktp'] as String?,

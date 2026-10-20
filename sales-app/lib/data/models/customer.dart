@@ -1,5 +1,3 @@
-import '../../core/datetime_utils.dart';
-
 class Customer {
   final String id;
   final String? kode;
@@ -33,14 +31,15 @@ class Customer {
       // Toleran: backend bisa kirim 'kode_area' (snake_case) atau 'kodeArea'
       // (camelCase, untuk serializer lain). Default null kalau tidak ada.
       kodeArea: (json['kode_area'] as String?) ?? (json['kodeArea'] as String?),
+      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)?.toWita()
+          ? DateTime.tryParse(json['created_at'] as String)
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.tryParse(json['updated_at'] as String)?.toWita()
+          ? DateTime.tryParse(json['updated_at'] as String)
           : null,
       deletedAt: json['deleted_at'] != null
-          ? DateTime.tryParse(json['deleted_at'] as String)?.toWita()
+          ? DateTime.tryParse(json['deleted_at'] as String)
           : null,
     );
   }

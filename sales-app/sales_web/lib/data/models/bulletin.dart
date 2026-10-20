@@ -1,3 +1,5 @@
+import '../../core/datetime_utils.dart';
+
 class Bulletin {
   final String id;
   final String title;
@@ -23,10 +25,8 @@ class Bulletin {
       title: json['title'] as String,
       description: json['description'] as String?,
       pdfUrl: json['pdf_url'] as String?,
-      expireAt: json['expire_at'] != null
-          ? DateTime.tryParse(json['expire_at'] as String)
-          : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      expireAt: parseWitaIsoOrNull(json['expire_at'] as String?),
+      createdAt: parseWitaIso(json['created_at'] as String),
       isRead: json['is_read'] as bool? ?? false,
     );
   }

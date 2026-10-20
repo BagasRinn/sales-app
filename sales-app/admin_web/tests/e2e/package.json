@@ -1,0 +1,21 @@
+{
+  "name": "admin_web_e2e",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for admin_web",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:auth": "playwright test auth",
+    "test:chrome": "playwright test --project=chromium",
+    "install:browsers": "playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
