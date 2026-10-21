@@ -983,6 +983,35 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     Navigator.pop(context);
   }
 
+  void _onApplyToAll() {
+    final draft = context.read<DraftOrderProvider>();
+    final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
+    if (otherCount == 0) return;
+
+    // Apply ke item lain
+    draft.applyDiscountToAll(widget.line.id);
+
+    // Apply juga ke item ini sendiri (sama seperti Save)
+    for (var idx = 1; idx <= 3; idx++) {
+      final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+      draft.setDiscountLayer(
+        lineId: widget.line.id,
+        layer: idx,
+        type: _typeFor(idx),
+        value: v,
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Diskon diterapkan ke $otherCount item lainnya'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    Navigator.pop(context);
+  }
+
   int _calcPreview(int idx) {
     final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
     if (v <= 0) return 0;
@@ -1094,7 +1123,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
           const Divider(height: 1, indent: 20, endIndent: 20),
           // Subtotal
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1111,6 +1140,27 @@ class _DiscountSheetState extends State<_DiscountSheet> {
                 ),
               ],
             ),
+          ),
+          // Terapkan ke Semua Item
+          Consumer<DraftOrderProvider>(
+            builder: (context, draft, _) {
+              final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
+              if (otherCount == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _onApplyToAll,
+                    icon: const Icon(Icons.done_all, size: 18),
+                    label: Text('Terapkan ke Semua Item ($otherCount)'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           // Tombol simpan
           Padding(

@@ -1,12 +1,12 @@
 # Graph Report - Project-magang  (2026-10-20)
 
 ## Corpus Check
-- 287 files · ~991,030 words
+- 287 files · ~991,414 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 48 file(s) not represented in the graph (top: (none) 16, .xml 7, .plist 4)
 
 ## Summary
-- 4943 nodes · 8012 edges · 195 communities (145 shown, 50 thin omitted)
+- 4957 nodes · 8028 edges · 197 communities (150 shown, 47 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 338 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
@@ -45,7 +45,7 @@
 - sync_tab
 - design_system
 - customer_registration_screen
-- package:flutter/material.dart
+- package:flutter_test/flutter_test.dart
 - penugasan_sales_tab
 - users_tab
 - order
@@ -55,7 +55,7 @@
 - main
 - confirm_dialog
 - storage.py
-- login_screen
+- package:provider/provider.dart
 - customer_submissions_tab
 - auth_provider
 - performance_tab
@@ -98,7 +98,7 @@
 - Supabase Egress Reduction Plan
 - win32_window
 - flutter_window
-- customer_sync
+- models.py
 - data_card
 - order_provider
 - product_provider
@@ -106,9 +106,9 @@
 - product
 - BasePage
 - product
-- change_password_dialog
+- User
 - api_service
-- screens/change_password_dialog.dart
+- screens/login_screen.dart
 - api_service
 - main
 - e2e/package.json
@@ -132,7 +132,7 @@
 - bulletin
 - customer
 - jwt_utils
-- datetime_utils
+- package:intl/intl.dart
 - win32_window
 - user_item
 - manifest
@@ -145,7 +145,7 @@
 - supplier
 - supplier_target
 - api_exception
-- sales_assignment
+- step_pick_order_type.dart
 - railway
 - Point
 - generated_plugin_registrant
@@ -157,16 +157,16 @@
 - config
 - MainActivity
 - vercel
-- orders_tab
-- orders_tab
-- orders_tab
-- orders_tab
-- orders_tab
-- penugasan_sales_tab
-- penugasan_sales_tab
-- penugasan_sales_tab
-- penugasan_sales_tab
-- penugasan_sales_tab
+- AdminProvider
+- screens/change_password_dialog.dart
+- admin_provider_supplier_test.dart
+- package:admin_web/core/design_system.dart
+- suppliers_tab_test.dart
+- responsive_action_menu_test.dart
+- sales_web/lib/core/datetime_utils.dart
+- navigator_key.dart
+- _DashboardContentState
+- DashboardScreen
 - stats_tab
 - stats_tab
 - CustomersTabPage
@@ -184,15 +184,17 @@
 - CrossBranchReportsTabPage
 - PerformanceTabPage
 - SyncTabPage
-- supplier_create_dialog.dart
+- _CustomerImportCardState
 - SubmissionDetailPage
 - StatsTabPage
 - Admin Web E2E Test Suite
 - MultiSelectSalesDialog
 - ChangePasswordDialog
-- Size
+- _ImportHistorySectionState
 - CLAUDE.md
 - LaunchImage.imageset/README.md
+- _SyncErrorsSectionState
+- _SyncTabState
 
 ## God Nodes (most connected - your core abstractions)
 1. `============================================================` - 163 edges
@@ -221,7 +223,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (195 total, 50 thin omitted)
+## Communities (197 total, 47 thin omitted)
 
 ### Community 0 - "AdminProvider State Hub"
 Cohesion: 0.01
@@ -229,19 +231,19 @@ Nodes (180): _activeTabIndex, adminRepository, AdminState, _allOrders, approveCu
 
 ### Community 1 - "Sales App Home Screens"
 Cohesion: 0.04
-Nodes (51): _animation, _BerandaTab, _BerandaTabState, color, _controller, createState, currency, _currentIndex (+43 more)
+Nodes (51): _animation, _BerandaTab, _BerandaTabState, build, color, _controller, createState, currency (+43 more)
 
 ### Community 2 - "Admin Stats Tab"
 Cohesion: 0.02
 Nodes (100): aggregateDashboardPerformance, _applyFilters, approvedMtdCount, approvedMtdRevenue, approvedTodayCount, approvedTodayRevenue, branch, _branchFilter (+92 more)
 
 ### Community 3 - "Backend Auth Endpoints"
-Cohesion: 0.04
-Nodes (43): change_password(), login(), refresh_token(), register(), disable_branch(), _reload_cache(), _build_bulletin_response(), expire_bulletins() (+35 more)
+Cohesion: 0.07
+Nodes (14): load_branches_cache(), require_admin(), require_admin_or_supervisor(), require_auth(), require_manager(), require_manager_global(), require_supervisor(), require_supervisor_or_manager_global() (+6 more)
 
 ### Community 4 - "Backend Pydantic Schemas"
-Cohesion: 0.04
-Nodes (71): BaseSchema, BranchBase, BranchCreate, BranchResponse, Config, BranchSalesSummary, BranchStatsResponse, BranchStockSummary (+63 more)
+Cohesion: 0.03
+Nodes (73): BaseSchema, BranchBase, BranchCreate, BranchResponse, Config, BranchSalesSummary, BranchStatsResponse, BranchStockSummary (+65 more)
 
 ### Community 5 - "Admin API Repositories"
 Cohesion: 0.02
@@ -252,20 +254,20 @@ Cohesion: 0.03
 Nodes (78): _activeLayersSummary, _bsDetailRow, _buildBottomBar, _buildStepContent, _calcPreview, _chip, color, _commit (+70 more)
 
 ### Community 7 - "Backend Order Endpoints"
-Cohesion: 0.09
+Cohesion: 0.10
 Nodes (33): _apply_3_layers(), approve_order(), _book_items(), _build_order_response(), cancel_order(), cancel_order_items(), create_order(), delete_draft_order() (+25 more)
 
 ### Community 8 - "Admin Orders Tab"
-Cohesion: 0.03
-Nodes (74): _applyFilters, _buildAllOrders, _buildPendingOrders, _buildPriceSummary, _CancelItemResult, canEdit, controller, createState (+66 more)
+Cohesion: 0.02
+Nodes (82): _applyFilters, _buildAllOrders, _buildPendingOrders, _buildPriceSummary, _CancelItemDialog, _CancelItemDialogState, _CancelItemResult, canEdit (+74 more)
 
 ### Community 9 - "Backend Product Endpoints"
-Cohesion: 0.07
-Nodes (33): clear_import_errors(), delete_product(), _get_4p_suppliers(), get_admin_stats(), get_import_logs(), get_kategori_list(), get_product(), get_product_count() (+25 more)
+Cohesion: 0.12
+Nodes (23): clear_import_errors(), delete_product(), _get_4p_suppliers(), get_admin_stats(), get_import_logs(), get_kategori_list(), get_product(), get_product_count() (+15 more)
 
 ### Community 10 - "Backend Customer Endpoints"
 Cohesion: 0.08
-Nodes (29): create_customer(), _customer_to_response(), delete_customer(), _exclude_deleted(), get_customer(), get_customer_count(), import_excel(), _list_assignments() (+21 more)
+Nodes (27): create_customer(), _customer_to_response(), delete_customer(), _exclude_deleted(), get_customer(), get_customer_count(), import_excel(), _list_assignments() (+19 more)
 
 ### Community 11 - "Order Flow Review Step"
 Cohesion: 0.03
@@ -273,7 +275,7 @@ Nodes (62): _actionIconBtn, _activeLayersSummary, _AddLineSheet, _AddLineSheetSt
 
 ### Community 12 - "Customer Registration Form"
 Cohesion: 0.03
-Nodes (64): _alamatKirimCtl, _alamatKtpCtl, _areaCtl, _barengOrder, _batasKreditCtl, _buildPayload, _channelKategori, _channelOptions (+56 more)
+Nodes (57): _alamatKirimCtl, _alamatKtpCtl, _areaCtl, _barengOrder, _batasKreditCtl, _buildPayload, _channelKategori, _channelOptions (+49 more)
 
 ### Community 13 - "Admin Design System"
 Cohesion: 0.03
@@ -285,7 +287,7 @@ Nodes (62): CancelledItem, cancelledItems, canDelete, canEdit, createdAt, custom
 
 ### Community 15 - "Shared UI Widget Classes"
 Cohesion: 0.04
-Nodes (61): _EmptyState, _StatCard, _SubmissionsList, _NavPanel, _LayerField, _OrderItemRow, _BranchPerformanceCard, _PeriodReportCard (+53 more)
+Nodes (61): _LayerField, _OrderItemRow, _BranchPerformanceCard, _PeriodReportCard, _ReportDownloadCard, _SalesOverlayDialog, _SalesPerformanceCard, _StatCard (+53 more)
 
 ### Community 16 - "Draft Order Provider"
 Cohesion: 0.03
@@ -297,15 +299,15 @@ Nodes (57): AppColors, AppTextStyles, AppTheme, available, background, bodyLarge
 
 ### Community 18 - "Mobile Order Flow"
 Cohesion: 0.05
-Nodes (46): _back, _backFromProducts, build, _confirmCancel, _connector, createState, currentStep, _dot (+38 more)
+Nodes (40): build, build, build, _openOrderFlow, _back, _backFromProducts, build, _confirmCancel (+32 more)
 
 ### Community 19 - "customer_submission"
 Cohesion: 0.04
 Nodes (55): alamatKirim, alamatKtp, approvedCustomerId, areaRoute, batasKreditRupiah, branch, branchNama, channelKategori (+47 more)
 
 ### Community 20 - "misc_screen"
-Cohesion: 0.05
-Nodes (42): build, bulletin, _BulletinCard, BulletinScreen, _BulletinScreenState, createState, initState, onTap (+34 more)
+Cohesion: 0.03
+Nodes (62): build, ErrorState, icon, message, onRetry, title, build, color (+54 more)
 
 ### Community 21 - "draft_order_provider"
 Cohesion: 0.04
@@ -321,7 +323,7 @@ Nodes (53): alamatKirim, alamatKtp, approvedCustomerId, areaRoute, barengCustome
 
 ### Community 24 - "dashboard_screen"
 Cohesion: 0.04
-Nodes (35): accessToken, _adminProvider, _apiService, branch, branchNama, _buildBody, _checkIdle, createState (+27 more)
+Nodes (33): accessToken, _adminProvider, _apiService, branch, branchNama, _buildBody, _checkIdle, createState (+25 more)
 
 ### Community 25 - "order"
 Cohesion: 0.04
@@ -329,7 +331,7 @@ Nodes (52): branch, branchNama, CancelledItem, cancelledItems, copyWith, created
 
 ### Community 26 - "sync_tab"
 Cohesion: 0.05
-Nodes (40): align, build, _buildDesktopTable, _buildErrorTile, _buildMobileList, _clearErrors, color, createState (+32 more)
+Nodes (34): align, build, _buildDesktopTable, _buildErrorTile, _buildMobileList, _clearErrors, color, createState (+26 more)
 
 ### Community 27 - "design_system"
 Cohesion: 0.04
@@ -339,17 +341,17 @@ Nodes (46): AppColors, AppTextStyles, AppTheme, available, background, _bg, body
 Cohesion: 0.04
 Nodes (48): _alamatKirimCtl, _alamatKtpCtl, _areaCtl, _barengOrder, _batasKreditCtl, build, _buildPayload, _channelKategori (+40 more)
 
-### Community 29 - "package:flutter/material.dart"
-Cohesion: 0.03
-Nodes (44): rootNavigatorKey, actions, build, child, content, contentMaxWidth, desktopWidthFraction, maxHeight (+36 more)
+### Community 29 - "package:flutter_test/flutter_test.dart"
+Cohesion: 0.15
+Nodes (7): showSupplierEditOrderTypeDialog, message, showSupplierToggleDialog, willActivate, main, main, main
 
 ### Community 30 - "penugasan_sales_tab"
-Cohesion: 0.05
-Nodes (40): _allCustomers, _allSalesUsers, _allUsers, area, _areaAssignments, _AreaRow, areas, _AssignmentChip (+32 more)
+Cohesion: 0.04
+Nodes (47): _allCustomers, _allSalesUsers, _allUsers, area, _AreaAssignmentRow, _AreaAssignmentRowState, _areaAssignments, _AreaRow (+39 more)
 
 ### Community 31 - "users_tab"
 Cohesion: 0.05
-Nodes (40): active, _branch, _BranchChip, build, _buildCardList, _buildHeader, _buildRow, _buildTable (+32 more)
+Nodes (41): active, _branch, _BranchChip, build, _buildCardList, _buildHeader, _buildRow, _buildTable (+33 more)
 
 ### Community 32 - "order"
 Cohesion: 0.05
@@ -357,7 +359,7 @@ Nodes (42): CancelledItem, cancelledItems, canDelete, canEdit, createdAt, custom
 
 ### Community 34 - "customers_tab"
 Cohesion: 0.05
-Nodes (38): _alamatC, build, _buildCardList, _buildError, _buildFooter, _buildForm, _buildHeader, _buildRow (+30 more)
+Nodes (40): _alamatC, build, _buildCardList, _buildError, _buildFooter, _buildForm, _buildHeader, _buildRow (+32 more)
 
 ### Community 35 - "web_auth_storage"
 Cohesion: 0.05
@@ -365,23 +367,23 @@ Nodes (29): triggerBrowserDownload, triggerBrowserDownload, anchor, blob, blobPa
 
 ### Community 36 - "main"
 Cohesion: 0.06
-Nodes (25): _apiService, _authRepo, AuthWrapper, _AuthWrapperState, _backgroundTimeout, _checking, createState, didChangeAppLifecycleState (+17 more)
+Nodes (31): _apiService, _authRepo, _AuthWrapperState, _backgroundTimeout, build, _checkAuth, _checkBackgroundTimeout, _checking (+23 more)
 
 ### Community 37 - "confirm_dialog"
 Cohesion: 0.07
 Nodes (24): build, _CancelButton, _ConfirmButton, ConfirmDialog, InfoDialog, isDestructive, label, onPressed (+16 more)
 
 ### Community 38 - "storage.py"
-Cohesion: 0.08
-Nodes (18): _assert_bulletin_visible(), bulletin_upload_pdf(), create_bulletin(), delete_bulletin(), dismiss_bulletin(), list_bulletins(), update_bulletin(), delete_file() (+10 more)
-
-### Community 39 - "login_screen"
 Cohesion: 0.07
-Nodes (27): build, _checkAuth, _checkBackgroundTimeout, build, createState, dispose, _formKey, _handleLogin (+19 more)
+Nodes (23): _assert_bulletin_visible(), _build_bulletin_response(), bulletin_upload_pdf(), create_bulletin(), delete_bulletin(), dismiss_bulletin(), list_bulletins(), expire_bulletins() (+15 more)
+
+### Community 39 - "package:provider/provider.dart"
+Cohesion: 0.04
+Nodes (42): _LoginScreenState, formKey, name, nameController, orderType, showSupplierCreateDialog, SupplierCreateResult, build (+34 more)
 
 ### Community 40 - "customer_submissions_tab"
-Cohesion: 0.04
-Nodes (55): AdminProvider, active, _changeFilter, color, count, createState, CustomerSubmissionsTab, _CustomerSubmissionsTabState (+47 more)
+Cohesion: 0.05
+Nodes (38): active, _changeFilter, color, count, createState, _displayLimit, _EmptyState, _filter (+30 more)
 
 ### Community 41 - "auth_provider"
 Cohesion: 0.06
@@ -392,8 +394,8 @@ Cohesion: 0.06
 Nodes (30): align, build, _buildLeaderboard, _buildPeriodFilterSection, _buildSectionTitle, _buildSupplierPerformanceTable, _buildTargetSection, child (+22 more)
 
 ### Community 43 - "reports.py"
-Cohesion: 0.05
-Nodes (30): _build_daily_xlsx(), _build_report(), cross_branch_sales_summary(), cross_branch_stock_summary(), daily_report(), get_supplier_performance(), _layer_cut_value(), period_report() (+22 more)
+Cohesion: 0.08
+Nodes (19): _build_report(), get_supplier_performance(), _layer_cut_value(), report_summary(), sales_performance_report(), _three_layer_breakdown(), _three_layer_subtotal_expr(), ReportSummaryByBranch (+11 more)
 
 ### Community 44 - "responsive"
 Cohesion: 0.06
@@ -401,19 +403,19 @@ Nodes (32): _, Breakpoints, cardGap, cardPadding, columns, compactMax, contentPa
 
 ### Community 45 - "product_catalog_screen"
 Cohesion: 0.07
-Nodes (26): build, build, initState, _ProductRow, build, build, initState, _onScroll (+18 more)
+Nodes (29): build, build, initState, _ProductRow, _StepPickProductsState, build, build, initState (+21 more)
 
 ### Community 46 - "products_tab"
 Cohesion: 0.06
 Nodes (31): build, _buildCardList, _buildFilterDropdowns, _buildProductCard, _buildTable, colW, _confirmDelete, createState (+23 more)
 
 ### Community 47 - "step_pick_products"
-Cohesion: 0.07
-Nodes (27): _animation, available, _controller, createState, _detailRow, didUpdateWidget, disabled, dispose (+19 more)
+Cohesion: 0.06
+Nodes (28): _animation, _applyInput, available, _controller, createState, _detailRow, didUpdateWidget, disabled (+20 more)
 
 ### Community 48 - "action_button_row"
 Cohesion: 0.04
-Nodes (50): ActionButton, ActionButtonRow, actions, alignment, build, _buildButton, destructive, icon (+42 more)
+Nodes (50): actions, build, child, content, contentMaxWidth, desktopWidthFraction, maxHeight, maxWidth (+42 more)
 
 ### Community 49 - "product_provider"
 Cohesion: 0.06
@@ -424,16 +426,16 @@ Cohesion: 0.07
 Nodes (22): completer, input, onChange, pickPdfFile, build, bulletin, _BulletinCard, BulletinsTab (+14 more)
 
 ### Community 51 - "step_pick_customer.dart"
-Cohesion: 0.05
-Nodes (33): build, _controller, createState, dispose, height, initState, label, LoadingState (+25 more)
+Cohesion: 0.06
+Nodes (28): build, _controller, createState, dispose, height, initState, label, LoadingState (+20 more)
 
 ### Community 52 - "============================================================"
 Cohesion: 0.01
 Nodes (162): ============================================================, ----------------------------------------, ----------------------------------------, ----------------------------------------, ============================================================, ============================================================, ----------------------------------------, ---------------------------------------- (+154 more)
 
 ### Community 53 - "OrderProvider"
-Cohesion: 0.03
-Nodes (66): build, _maybeShowBulletinPopup, build, build, build, _HomeScreenState, _openOrderFlow, build (+58 more)
+Cohesion: 0.04
+Nodes (51): _HomeScreenState, _animation, build, _buildList, _controller, createState, didChangeAppLifecycleState, dispose (+43 more)
 
 ### Community 54 - "Sales App Order Repository"
 Cohesion: 0.07
@@ -453,7 +455,7 @@ Nodes (23): _api, BulletinRepository, dismissBulletin, getBulletins, _api, get4p
 
 ### Community 58 - "my_submissions_screen"
 Cohesion: 0.07
-Nodes (27): _buildBody, createState, _error, _formatDate, initState, _loading, MySubmissionsScreen, _MySubmissionsScreenState (+19 more)
+Nodes (26): _buildBody, createState, _error, _formatDate, initState, _loading, MySubmissionsScreen, _MySubmissionsScreenState (+18 more)
 
 ### Community 59 - "Orders Provider"
 Cohesion: 0.08
@@ -465,11 +467,11 @@ Nodes (37): 0. Keputusan User (locked in), 1. Ringkasan & Tujuan, 2.1 Breakpoint
 
 ### Community 61 - "Customer Submission Endpoints"
 Cohesion: 0.17
-Nodes (9): approve_submission(), cancel_submission(), check_duplicate_customer(), get_submission(), list_my_submissions(), list_submissions(), reject_submission(), _serialize() (+1 more)
+Nodes (10): approve_submission(), cancel_submission(), check_duplicate_customer(), get_submission(), list_my_submissions(), list_submissions(), reject_submission(), _serialize() (+2 more)
 
 ### Community 62 - "bulletin_provider"
-Cohesion: 0.07
-Nodes (23): build, FilterBar, filters, search, trailing, BulletinProvider, _bulletins, dismissBulletin (+15 more)
+Cohesion: 0.09
+Nodes (17): BulletinProvider, _bulletins, dismissBulletin, _error, hasUnread, latestUnread, loadBulletins, _loading (+9 more)
 
 ### Community 63 - "Cross-Branch Reports Tab"
 Cohesion: 0.09
@@ -484,8 +486,8 @@ Cohesion: 0.06
 Nodes (28): _confirmSubmit, initState, _submit, children, _color, createState, _currentRole, _currentUsername (+20 more)
 
 ### Community 66 - "branches"
-Cohesion: 0.18
-Nodes (7): create_branch(), enable_branch(), get_branch(), get_branch_stats(), list_branches(), update_branch(), Branch
+Cohesion: 0.15
+Nodes (8): create_branch(), disable_branch(), enable_branch(), get_branch(), get_branch_stats(), list_branches(), _reload_cache(), update_branch()
 
 ### Community 67 - "sales_target"
 Cohesion: 0.15
@@ -500,8 +502,8 @@ Cohesion: 0.08
 Nodes (21): _activeFilter, build, _buildEmptyState, _cardList, _chip, createState, dispose, initState (+13 more)
 
 ### Community 70 - "State"
-Cohesion: 0.06
-Nodes (42): _ChangePasswordDialogState, _CustomerDetailDialog, _CustomerDetailDialogState, DashboardScreen, _DashboardScreenState, _OrderCard, _UserEditDialog, _UserEditDialogState (+34 more)
+Cohesion: 0.05
+Nodes (46): _ChangePasswordDialogState, CustomerSubmissionsTab, _CustomerSubmissionsTabState, _OrderCard, _SkeletonBoxState, AuthWrapper, _ChangePasswordDialogState, CustomerRegistrationScreen (+38 more)
 
 ### Community 71 - "customer_submission_detail_screen"
 Cohesion: 0.09
@@ -540,20 +542,20 @@ Cohesion: 0.07
 Nodes (28): 0. Keputusan User (locked in), 10. Phase Execution Order & Verifikasi, 11. Catatan Teknis, 1. Ringkasan & Tujuan, 2. Phase 1 — Mobile Search Debounce (HIGH impact, 1 fase), 4. Phase 3 — Backend N+1 Elimination (MEDIUM impact, 1 fase), 5. Phase 4 — Backend Connection Pool (MEDIUM impact, 1 fase), 6. Phase 5 — Excel Report Optimization (HIGH impact, 1 fase) (+20 more)
 
 ### Community 80 - "win32_window"
-Cohesion: 0.18
+Cohesion: 0.16
 Nodes (5): Scale(), Win32Window::Win32Window(), WindowClassRegistrar, class_registered_, instance_
 
 ### Community 81 - "flutter_window"
 Cohesion: 0.12
 Nodes (4): FlutterWindow, flutter_controller_, FlutterWindow::FlutterWindow(), project_
 
-### Community 82 - "customer_sync"
-Cohesion: 0.18
-Nodes (7): _bulk_upsert_customers(), _normalize(), _read_excel(), _safe_reason(), _str_or_none(), sync_customers_from_excel(), _validate_row()
+### Community 82 - "models.py"
+Cohesion: 0.08
+Nodes (18): Branch, ImportLog, StokLog, SupplierTarget, SyncValidationError, _bulk_upsert_customers(), _normalize(), _read_excel() (+10 more)
 
 ### Community 83 - "data_card"
-Cohesion: 0.07
-Nodes (21): actions, badges, build, _buildActions, _buildField, _buildFields, _buildHeader, DataCard (+13 more)
+Cohesion: 0.11
+Nodes (17): actions, badges, build, _buildActions, _buildField, _buildFields, _buildHeader, DataCard (+9 more)
 
 ### Community 84 - "order_provider"
 Cohesion: 0.11
@@ -575,17 +577,17 @@ Nodes (15): branch, branchNama, fromJson, harga, id, kategori, namaBarang, namaS
 Cohesion: 0.12
 Nodes (15): fromJson, harga, id, kategori, namaBarang, namaSupplier, orderType, perluDitinjau (+7 more)
 
-### Community 90 - "change_password_dialog"
-Cohesion: 0.12
-Nodes (15): build, _buildPasswordField, ChangePasswordDialog, _confirmController, createState, _currentController, dispose, _error (+7 more)
+### Community 90 - "User"
+Cohesion: 0.06
+Nodes (29): change_password(), login(), refresh_token(), register(), cross_branch_sales_summary(), cross_branch_stock_summary(), daily_report(), period_report() (+21 more)
 
 ### Community 91 - "api_service"
 Cohesion: 0.13
 Nodes (11): _accessToken, ApiService, _checkTokenExpiry, clearAccessToken, delete, _handleResponse, message, post (+3 more)
 
-### Community 92 - "screens/change_password_dialog.dart"
-Cohesion: 0.06
-Nodes (24): adminRepository, build, ChangePasswordDialog, _confirmC, createState, dispose, _errSnack, _newC (+16 more)
+### Community 92 - "screens/login_screen.dart"
+Cohesion: 0.13
+Nodes (11): build, createState, dispose, _error, _formKey, _isLoading, _login, LoginScreen (+3 more)
 
 ### Community 93 - "api_service"
 Cohesion: 0.13
@@ -652,8 +654,8 @@ Cohesion: 0.15
 Nodes (11): _api, cancelOrder, createOrder, deleteOrder, getMyOrders, getMyStats, getOrderDetail, OrderRepository (+3 more)
 
 ### Community 109 - "sales_targets"
-Cohesion: 0.24
-Nodes (3): get_my_target(), list_sales_targets(), upsert_sales_target()
+Cohesion: 0.18
+Nodes (5): get_my_target(), list_sales_targets(), upsert_sales_target(), SalesTarget, SalesTargetUpdate
 
 ### Community 110 - "supplier_targets"
 Cohesion: 0.22
@@ -664,8 +666,8 @@ Cohesion: 0.15
 Nodes (12): accessTokenKey, AppConfig, baseUrl, refreshTokenKey, requestTimeout, tokenKey, userBranchKey, userBranchNamaKey (+4 more)
 
 ### Community 112 - "auth_provider"
-Cohesion: 0.20
-Nodes (9): AuthProvider, DraftOrderProvider, OrderProvider, ProductProvider, AuthProvider, DraftOrderProvider, HomeStatsProvider, OrderProvider (+1 more)
+Cohesion: 0.18
+Nodes (10): AuthProvider, DraftOrderProvider, OrderProvider, ProductProvider, AuthProvider, BulletinProvider, DraftOrderProvider, HomeStatsProvider (+2 more)
 
 ### Community 113 - "bulletin"
 Cohesion: 0.17
@@ -679,9 +681,9 @@ Nodes (11): alamat, createdAt, Customer, deletedAt, fromJson, id, kode, kodeArea
 Cohesion: 0.18
 Nodes (8): _base64UrlDecode, decodePayload, isExpired, JwtUtils, decodePayload, getExpiryDate, isExpired, JwtUtils
 
-### Community 117 - "datetime_utils"
-Cohesion: 0.18
-Nodes (7): toWita, WitaDateTime, witaFormat, toWita, WitaDateTime, witaFormat, witaFormat
+### Community 117 - "package:intl/intl.dart"
+Cohesion: 0.11
+Nodes (15): dt, now, nowWita, parseWita, parts, toUtcFromWita, toWita, wita (+7 more)
 
 ### Community 118 - "win32_window"
 Cohesion: 0.24
@@ -700,8 +702,8 @@ Cohesion: 0.18
 Nodes (9): AppConfig, baseUrl, refreshTokenKey, requestTimeout, tokenKey, userIdKey, userNamaKey, userRoleKey (+1 more)
 
 ### Community 122 - "bulletin"
-Cohesion: 0.20
-Nodes (9): Bulletin, createdAt, description, expireAt, fromJson, id, isRead, pdfUrl (+1 more)
+Cohesion: 0.11
+Nodes (15): assignedAt, fromJson, SalesAssignment, salesId, salesNama, salesUsername, Bulletin, createdAt (+7 more)
 
 ### Community 123 - "manifest"
 Cohesion: 0.20
@@ -727,17 +729,17 @@ Nodes (8): branch, fromJson, id, period, supplierName, SupplierTarget, targetVal
 Cohesion: 0.22
 Nodes (8): data, isConflict, isForbidden, isNotFound, isUnauthorized, message, statusCode, toString
 
-### Community 130 - "sales_assignment"
-Cohesion: 0.25
-Nodes (6): assignedAt, fromJson, SalesAssignment, salesId, salesNama, salesUsername
+### Community 130 - "step_pick_order_type.dart"
+Cohesion: 0.13
+Nodes (14): build, createState, initState, isSelected, onBack, onNext, onTap, _options (+6 more)
 
 ### Community 131 - "railway"
 Cohesion: 0.25
 Nodes (7): build, dockerfilePath, deploy, numReplicas, restartPolicyLimit, restartPolicyType, $schema
 
 ### Community 132 - "Point"
-Cohesion: 0.50
-Nodes (3): Point, x, y
+Cohesion: 0.21
+Nodes (6): Point, x, y, Size, height, width
 
 ### Community 134 - "api_exception"
 Cohesion: 0.33
@@ -759,13 +761,41 @@ Nodes (3): message, statusCode, toString
 Cohesion: 0.50
 Nodes (3): firebase, dependencies, firebase
 
+### Community 145 - "AdminProvider"
+Cohesion: 0.08
+Nodes (24): AdminProvider, build, _buildDrawer, _buildSidebar, _buildTopBar, initState, _NavPanel, _onNavTap (+16 more)
+
+### Community 146 - "screens/change_password_dialog.dart"
+Cohesion: 0.13
+Nodes (12): adminRepository, build, ChangePasswordDialog, _confirmC, createState, dispose, _errSnack, _newC (+4 more)
+
+### Community 147 - "admin_provider_supplier_test.dart"
+Cohesion: 0.15
+Nodes (9): AdminRepository, createSupplier, failWith, _FakeAdminRepository, getSuppliers, main, suppliers, updateSupplierActive (+1 more)
+
+### Community 148 - "package:admin_web/core/design_system.dart"
+Cohesion: 0.18
+Nodes (5): _harness, main, _useWideSurface, _harness, main
+
+### Community 149 - "suppliers_tab_test.dart"
+Cohesion: 0.18
+Nodes (9): createSupplier, data, getSuppliers, _harness, main, _setDesktop, _setMobile, _setTablet (+1 more)
+
+### Community 150 - "responsive_action_menu_test.dart"
+Cohesion: 0.20
+Nodes (4): _harness, main, _harness, main
+
+### Community 151 - "sales_web/lib/core/datetime_utils.dart"
+Cohesion: 0.22
+Nodes (7): dt, parseWita, toWita, wita, witaDateStr, WitaDateTime, witaFormat
+
 ### Community 173 - "compilerOptions"
 Cohesion: 0.14
 Nodes (13): compilerOptions, esModuleInterop, module, moduleResolution, outDir, resolveJsonModule, rootDir, skipLibCheck (+5 more)
 
 ### Community 174 - "list_suppliers"
-Cohesion: 0.22
-Nodes (5): create_supplier(), list_suppliers(), update_supplier_active(), update_supplier_order_type(), SupplierResponse
+Cohesion: 0.23
+Nodes (6): create_supplier(), list_suppliers(), update_supplier_active(), update_supplier_order_type(), Supplier, SupplierResponse
 
 ### Community 175 - "Architecting Flutter Applications"
 Cohesion: 0.15
@@ -791,37 +821,29 @@ Nodes (9): alamat, createdAt, Customer, fromJson, id, kode, kodeArea, namaToko (
 Cohesion: 0.22
 Nodes (7): isForbidden, isNotFound, isServerError, isUnauthorized, message, statusCode, toString
 
-### Community 186 - "supplier_create_dialog.dart"
-Cohesion: 0.25
-Nodes (6): formKey, name, nameController, orderType, showSupplierCreateDialog, SupplierCreateResult
-
 ### Community 189 - "Admin Web E2E Test Suite"
 Cohesion: 0.29
 Nodes (6): Admin Web E2E Test Suite, Environment Variables, Running Tests, Setup, Test Structure, Writing New Tests
 
-### Community 192 - "Size"
-Cohesion: 0.50
-Nodes (3): Size, height, width
-
 ## Knowledge Gaps
-- **2697 isolated node(s):** `message`, `statusCode`, `toString`, `onResponse`, `onError` (+2692 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3558 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **50 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2710 isolated node(s):** `message`, `statusCode`, `toString`, `onResponse`, `onError` (+2705 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3571 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **47 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Order` connect `Backend Order Endpoints` to `Backend Auth Endpoints`, `OrdersTabPage`, `Backend Product Endpoints`, `reports.py`, `Customer Submission Endpoints`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
+- **Why does `Order` connect `Backend Order Endpoints` to `Backend Auth Endpoints`, `OrdersTabPage`, `Backend Product Endpoints`, `reports.py`, `models.py`, `User`, `Customer Submission Endpoints`?**
+  _High betweenness centrality (0.159) - this node is a cross-community bridge._
 - **What connects `message`, `statusCode`, `toString` to the rest of the system?**
-  _2697 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2710 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `AdminProvider State Hub` be split into smaller, more focused modules?**
   _Cohesion score 0.0106951871657754 - nodes in this community are weakly interconnected._
 - **Why does `Task 2.3 — Stop `loadAll()` di `approveOrder/rejectOrder/cancelOrderItem`` connect `OrdersTabPage` to `Backend Order Endpoints`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
+  _High betweenness centrality (0.159) - this node is a cross-community bridge._
 - **Should `Sales App Home Screens` be split into smaller, more focused modules?**
   _Cohesion score 0.04038461538461539 - nodes in this community are weakly interconnected._
 - **Why does `OrdersTabPage` connect `OrdersTabPage` to `@playwright/test`, `DashboardPage`, `BasePage`?**
-  _High betweenness centrality (0.138) - this node is a cross-community bridge._
+  _High betweenness centrality (0.149) - this node is a cross-community bridge._
 - **Should `Admin Stats Tab` be split into smaller, more focused modules?**
-  _Cohesion score 0.019230769230769232 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.019417475728155338 - nodes in this community are weakly interconnected._

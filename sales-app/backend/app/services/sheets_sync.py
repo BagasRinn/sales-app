@@ -1,7 +1,9 @@
 import logging
 import os
+import re
 from io import BytesIO
 from typing import List, Tuple, Dict, Any
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
@@ -13,7 +15,7 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from app.models.models import Product, SyncValidationError, ImportLog
+from app.models.models import Product, SyncValidationError, ImportLog, Supplier
 from app.services.stock_logger import log_stock_change
 
 

@@ -175,6 +175,55 @@ class DraftOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set semua layer diskon + up price untuk satu line dalam satu operation.
+  /// Layer dengan value <= 0 di-skip. Up price di-skip kalau isEmpty.
+  /// Notifies sekali di akhir.
+  void setLineDiscountAndUpPrice({
+    required String lineId,
+    required ItemDiscount? discount,
+    required ItemUpPrice? upPrice,
+  }) {
+    final lineIndex = items.indexWhere((l) => l.id == lineId);
+    if (lineIndex < 0) return;
+
+    items = [
+      for (int i = 0; i < items.length; i++)
+        if (i == lineIndex)
+          items[i].copyWith(
+            discount: discount?.isEmpty == true ? null : discount,
+            clearDiscount: discount == null || discount.isEmpty,
+            upPrice: upPrice?.isEmpty == true ? null : upPrice,
+            clearUpPrice: upPrice == null || upPrice.isEmpty,
+          )
+        else
+          items[i],
+    ];
+    notifyListeners();
+  }
+
+  /// Apply diskon dan up price dari [sourceLineId] ke semua line LAIN.
+  /// TIDAK menimpa [sourceLineId] itu sendiri.
+  /// Layer dengan value <= 0 di-skip (nullified). Up price di-skip kalau isEmpty.
+  void applyDiscountToAll(String sourceLineId) {
+    final sourceIndex = items.indexWhere((l) => l.id == sourceLineId);
+    if (sourceIndex < 0) return;
+    final source = items[sourceIndex];
+
+    items = [
+      for (int i = 0; i < items.length; i++)
+        if (i != sourceIndex)
+          items[i].copyWith(
+            discount: source.discount?.isEmpty == true ? null : source.discount,
+            clearDiscount: source.discount == null || source.discount!.isEmpty,
+            upPrice: source.upPrice?.isEmpty == true ? null : source.upPrice,
+            clearUpPrice: source.upPrice == null || source.upPrice!.isEmpty,
+          )
+        else
+          items[i],
+    ];
+    notifyListeners();
+  }
+
   /// Lookup helpers.
   OrderLine? getLineById(String lineId) {
     for (final l in items) {

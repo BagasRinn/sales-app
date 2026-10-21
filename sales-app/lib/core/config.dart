@@ -1,16 +1,4 @@
 class AppConfig {
-  // Base URL untuk backend API. Pilih sesuai target runtime.
-  // Untuk switch local ↔ production, comment/uncomment baris baseUrl di bawah.
-  // URL yang tidak dipakai tetap disimpan sebagai komentar untuk referensi.
-  //
-  //   Chrome (web) di mesin yang sama dengan backend → http://localhost:8000/api/v1
-  //
-  //   Android Emulator (AVD) → http://10.0.2.2:8000/api/v1
-  //     (10.0.2.2 adalah alias emulator ke host laptop)
-  //
-  //   Physical Android/iOS device di WiFi sama → http://<PC-IP-LAN>:8000/api/v1
-  //     (cek dengan `ipconfig` → IPv4 Address, mis. 192.168.x.x)
-
   // [ACTIVE — PRODUCTION] Deploy di Railway
   static const String baseUrl = 'https://sales-app-production-1872.up.railway.app/api/v1';
 
