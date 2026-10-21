@@ -44,7 +44,10 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (data is! Map) {
-        setState(() => _error = 'Respons server tidak valid');
+        setState(() {
+          _error = 'Respons server tidak valid';
+          _isLoading = false;
+        });
         return;
       }
       final accessToken = data['access_token'];
@@ -52,7 +55,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final role = data['role']?.toString();
 
       if (accessToken == null || refreshToken == null) {
-        setState(() => _error = 'Token tidak ditemukan dalam respons');
+        setState(() {
+          _error = 'Token tidak ditemukan dalam respons';
+          _isLoading = false;
+        });
         return;
       }
 
