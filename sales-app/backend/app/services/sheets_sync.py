@@ -271,11 +271,20 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
     skus = [r["sku"] for r in rows]
     branch_filter = branch if branch else ""
     existing = {
-        (p.id, p.branch): {"stok_sistem": p.stok_sistem, "stok_booking": p.stok_booking, "stok_diterima": p.stok_diterima}
+        (p.id, p.branch): {
+            "stok_sistem": p.stok_sistem,
+            "stok_booking": p.stok_booking,
+            "stok_diterima": p.stok_diterima,
+            "nama_supplier": p.nama_supplier,
+            "order_type": p.order_type,
+        }
         for p in db.query(Product).filter(
             Product.id.in_(skus),
             Product.branch == branch_filter,
-        ).with_entities(Product.id, Product.branch, Product.stok_sistem, Product.stok_booking, Product.stok_diterima).all()
+        ).with_entities(
+            Product.id, Product.branch, Product.stok_sistem, Product.stok_booking,
+            Product.stok_diterima, Product.nama_supplier, Product.order_type,
+        ).all()
     }
 
     to_insert = [r for r in rows if (r["sku"], branch_filter) not in existing]
@@ -305,18 +314,20 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
             # Preserve existing stok_booking (and stok_diterima) — don't reset during sync
             insert_vals = []
             for r in changed:
+                ex = existing[(r["sku"], branch_filter)]
                 insert_vals.append({
                     "id": r["sku"],
                     "nama_barang": r["nama_barang"],
                     "harga": r["harga"],
                     "stok_sistem": r["stok"],
-                    "stok_booking": existing[(r["sku"], branch_filter)]["stok_booking"],
+                    "stok_booking": ex["stok_booking"],
                     "stok_diterima": 0,  # reset — Excel GOOD sudah neto
                     "kategori": r.get("kategori"),
                     "satuan": r.get("satuan"),
-                    # keys must be present in every row (bulk VALUES); None keeps old value via coalesce
-                    "nama_supplier": r.get("nama_supplier"),
-                    "order_type": r.get("order_type"),
+                    # Resolve against existing row: order_type is NOT NULL and Postgres
+                    # checks it before ON CONFLICT resolution.
+                    "nama_supplier": r.get("nama_supplier") or ex["nama_supplier"],
+                    "order_type": r.get("order_type") or ex["order_type"],
                     "branch": branch,
                 })
 
@@ -362,15 +373,17 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
         if unchanged:
             insert_vals = []
             for r in unchanged:
+                ex = existing[(r["sku"], branch_filter)]
                 insert_vals.append({
                     "id": r["sku"],
                     "nama_barang": r["nama_barang"],
                     "harga": r["harga"],
                     "kategori": r.get("kategori"),
                     "satuan": r.get("satuan"),
-                    # keys must be present in every row (bulk VALUES); None keeps old value via coalesce
-                    "nama_supplier": r.get("nama_supplier"),
-                    "order_type": r.get("order_type"),
+                    # Resolve against existing row: order_type is NOT NULL and Postgres
+                    # checks it before ON CONFLICT resolution.
+                    "nama_supplier": r.get("nama_supplier") or ex["nama_supplier"],
+                    "order_type": r.get("order_type") or ex["order_type"],
                     "branch": branch,
                 })
 
