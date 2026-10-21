@@ -305,7 +305,7 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
             # Preserve existing stok_booking (and stok_diterima) — don't reset during sync
             insert_vals = []
             for r in changed:
-                val = {
+                insert_vals.append({
                     "id": r["sku"],
                     "nama_barang": r["nama_barang"],
                     "harga": r["harga"],
@@ -314,13 +314,11 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
                     "stok_diterima": 0,  # reset — Excel GOOD sudah neto
                     "kategori": r.get("kategori"),
                     "satuan": r.get("satuan"),
+                    # keys must be present in every row (bulk VALUES); None keeps old value via coalesce
+                    "nama_supplier": r.get("nama_supplier"),
+                    "order_type": r.get("order_type"),
                     "branch": branch,
-                }
-                if r.get("nama_supplier") is not None:
-                    val["nama_supplier"] = r["nama_supplier"]
-                if r.get("order_type") is not None:
-                    val["order_type"] = r["order_type"]
-                insert_vals.append(val)
+                })
 
             stmt = insert(Product).values(insert_vals)
             set_dict = {
@@ -364,19 +362,17 @@ def _bulk_upsert(db: Session, rows: List[Dict[str, Any]], branch: str | None = N
         if unchanged:
             insert_vals = []
             for r in unchanged:
-                val = {
+                insert_vals.append({
                     "id": r["sku"],
                     "nama_barang": r["nama_barang"],
                     "harga": r["harga"],
                     "kategori": r.get("kategori"),
                     "satuan": r.get("satuan"),
+                    # keys must be present in every row (bulk VALUES); None keeps old value via coalesce
+                    "nama_supplier": r.get("nama_supplier"),
+                    "order_type": r.get("order_type"),
                     "branch": branch,
-                }
-                if r.get("nama_supplier") is not None:
-                    val["nama_supplier"] = r["nama_supplier"]
-                if r.get("order_type") is not None:
-                    val["order_type"] = r["order_type"]
-                insert_vals.append(val)
+                })
 
             stmt = insert(Product).values(insert_vals)
             set_dict = {
