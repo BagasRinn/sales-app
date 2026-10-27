@@ -571,7 +571,7 @@ class _QtyStepperState extends State<_QtyStepper> {
               keyboardType: TextInputType.number,
               style: AppTextStyles.bodyLarge.copyWith(
                 fontWeight: FontWeight.w600,
-                color: widget.qty > 0 ? AppColors.primaryLight : AppColors.textMuted,
+                color: currentQty > 0 ? AppColors.primaryLight : AppColors.textMuted,
                 fontSize: 15,
               ),
               decoration: const InputDecoration(
@@ -595,6 +595,9 @@ class _QtyStepperState extends State<_QtyStepper> {
                     text: capped,
                     selection: TextSelection.collapsed(offset: capped.length),
                   );
+                  _applyInput();
+                } else if (parsed >= 0) {
+                  _applyInput();
                 }
               },
               onSubmitted: (_) => _applyInput(),
