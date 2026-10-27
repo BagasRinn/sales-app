@@ -485,7 +485,7 @@ class _QtyStepper extends StatefulWidget {
   final String productId;
   final int qty;
   final int available;
-  _QtyStepper({
+  const _QtyStepper({
     required this.productId,
     required this.qty,
     required this.available,
