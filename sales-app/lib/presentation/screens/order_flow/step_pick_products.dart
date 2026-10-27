@@ -485,7 +485,7 @@ class _QtyStepper extends StatefulWidget {
   final String productId;
   final int qty;
   final int available;
-  const _QtyStepper({
+  _QtyStepper({
     required this.productId,
     required this.qty,
     required this.available,
@@ -538,15 +538,16 @@ class _QtyStepperState extends State<_QtyStepper> {
 
   @override
   Widget build(BuildContext context) {
-    final canIncrement = widget.available > 0 && widget.qty < widget.available;
+    final currentQty = int.tryParse(_controller.text) ?? widget.qty;
+    final canIncrement = widget.available > 0 && currentQty < widget.available;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _StepperButton(
           icon: Icons.remove,
-          onTap: widget.qty > 0
+          onTap: currentQty > 0
               ? () {
-                  final newQty = (widget.qty - 1).clamp(0, widget.available);
+                  final newQty = (currentQty - 1).clamp(0, widget.available);
                   _controller.text = '$newQty';
                   context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
                 }
@@ -604,7 +605,8 @@ class _QtyStepperState extends State<_QtyStepper> {
           icon: Icons.add,
           onTap: canIncrement
               ? () {
-                  final newQty = (widget.qty + 1).clamp(0, widget.available);
+                  final currentQty = int.tryParse(_controller.text) ?? widget.qty;
+                  final newQty = (currentQty + 1).clamp(0, widget.available);
                   _controller.text = '$newQty';
                   context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
                 }

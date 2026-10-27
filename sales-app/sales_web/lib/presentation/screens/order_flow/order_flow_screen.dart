@@ -1238,6 +1238,7 @@ class _QtyStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final qty = int.tryParse(controller.text) ?? currentQty;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1247,15 +1248,15 @@ class _QtyStepper extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(
-              color: enabled && currentQty > 0
+              color: enabled && qty > 0
                   ? AppColors.border
                   : AppColors.border.withValues(alpha: 0.4),
             ),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: enabled && currentQty > 0
-                ? () => onChanged('${currentQty - 1}')
+            onTap: enabled && qty > 0
+                ? () => onChanged('${qty - 1}')
                 : null,
             child: SizedBox(
               width: 32,
@@ -1263,7 +1264,7 @@ class _QtyStepper extends StatelessWidget {
               child: Icon(
                 Icons.remove,
                 size: 16,
-                color: enabled && currentQty > 0
+                color: enabled && qty > 0
                     ? AppColors.textPrimary
                     : AppColors.textMuted,
               ),
@@ -1299,7 +1300,7 @@ class _QtyStepper extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: enabled ? () => onChanged('${currentQty + 1}') : null,
+            onTap: enabled ? () => onChanged('${qty + 1}') : null,
             child: SizedBox(
               width: 32,
               height: 32,
