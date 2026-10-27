@@ -89,7 +89,9 @@ class OrderRepository {
 
 class SalesStats {
   final int omsetHariIni;
+  final int approvedCountToday;
   final int pendingCount;
+  final int pendingValue;
   final int selesaiBulanIniCount;
   final int selesaiBulanIniTotal;
 
@@ -101,7 +103,9 @@ class SalesStats {
 
   SalesStats({
     required this.omsetHariIni,
+    required this.approvedCountToday,
     required this.pendingCount,
+    required this.pendingValue,
     required this.selesaiBulanIniCount,
     required this.selesaiBulanIniTotal,
     this.targetType,
@@ -113,7 +117,9 @@ class SalesStats {
   factory SalesStats.fromJson(Map<String, dynamic> json) {
     return SalesStats(
       omsetHariIni: json['omset_hari_ini'] as int? ?? 0,
+      approvedCountToday: json['approved_count_today'] as int? ?? 0,
       pendingCount: json['pending_count'] as int? ?? 0,
+      pendingValue: json['pending_value'] as int? ?? 0,
       selesaiBulanIniCount: json['selesai_bulan_ini_count'] as int? ?? 0,
       selesaiBulanIniTotal: json['selesai_bulan_ini_total'] as int? ?? 0,
       targetType: json['target_type'] as String?,

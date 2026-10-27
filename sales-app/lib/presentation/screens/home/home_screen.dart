@@ -111,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen>
         icon: const Icon(Icons.add),
         label: const Text('Order Baru'),
         backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.textOnPrimary,
       ),
     );
   }
@@ -246,6 +247,7 @@ class _StatsCards extends StatelessWidget {
               label: 'Menunggu',
               value: '${stats?.pendingCount ?? 0}',
               subtitle: 'menunggu admin',
+              extraText: currency.format(stats?.pendingValue ?? 0),
               icon: Icons.hourglass_top_outlined,
               color: AppColors.info,
             ),

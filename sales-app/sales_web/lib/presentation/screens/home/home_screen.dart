@@ -168,7 +168,8 @@ class HomeScreen extends StatelessWidget {
               child: _StatCard(
                 title: 'Menunggu',
                 value: s != null ? '${s.pendingCount}' : '-',
-                icon: Icons.hourglass_empty,
+                extra: s != null ? 'Rp ${idr.format(s.pendingValue)}' : null,
+                icon: Icons.hourglass_top_outlined,
                 color: AppColors.info,
                 bgColor: AppColors.infoBg,
               ),

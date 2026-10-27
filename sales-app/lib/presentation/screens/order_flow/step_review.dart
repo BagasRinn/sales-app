@@ -26,17 +26,111 @@ class StepReview extends StatefulWidget {
 class _StepReviewState extends State<StepReview> {
   late TextEditingController _notesController;
 
+  // Global discount/up price controllers
+  late TextEditingController _globalDisc1Ctrl;
+  late TextEditingController _globalDisc2Ctrl;
+  late TextEditingController _globalDisc3Ctrl;
+  late TextEditingController _globalUpPriceCtrl;
+  String _globalDisc1Type = 'PERCENT';
+  String _globalDisc2Type = 'PERCENT';
+  String _globalDisc3Type = 'PERCENT';
+  String _globalUpPriceType = 'NOMINAL';
+
   @override
   void initState() {
     super.initState();
     _notesController =
         TextEditingController(text: context.read<DraftOrderProvider>().notes);
+    _globalDisc1Ctrl = TextEditingController();
+    _globalDisc2Ctrl = TextEditingController();
+    _globalDisc3Ctrl = TextEditingController();
+    _globalUpPriceCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _notesController.dispose();
+    _globalDisc1Ctrl.dispose();
+    _globalDisc2Ctrl.dispose();
+    _globalDisc3Ctrl.dispose();
+    _globalUpPriceCtrl.dispose();
     super.dispose();
+  }
+
+  void _applyGlobalDiscount() {
+    final draft = context.read<DraftOrderProvider>();
+    if (draft.items.isEmpty) return;
+
+    final d1 = double.tryParse(_globalDisc1Ctrl.text.replaceAll(',', '.')) ?? 0;
+    final d2 = double.tryParse(_globalDisc2Ctrl.text.replaceAll(',', '.')) ?? 0;
+    final d3 = double.tryParse(_globalDisc3Ctrl.text.replaceAll(',', '.')) ?? 0;
+
+    if (d1 <= 0 && d2 <= 0 && d3 <= 0) return;
+
+    for (final line in draft.items) {
+      if (d1 > 0) {
+        draft.setDiscountLayer(
+          lineId: line.id,
+          layer: 1,
+          type: _globalDisc1Type,
+          value: d1,
+        );
+      }
+      if (d2 > 0) {
+        draft.setDiscountLayer(
+          lineId: line.id,
+          layer: 2,
+          type: _globalDisc2Type,
+          value: d2,
+        );
+      }
+      if (d3 > 0) {
+        draft.setDiscountLayer(
+          lineId: line.id,
+          layer: 3,
+          type: _globalDisc3Type,
+          value: d3,
+        );
+      }
+    }
+
+    _globalDisc1Ctrl.clear();
+    _globalDisc2Ctrl.clear();
+    _globalDisc3Ctrl.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Diskon global diterapkan ke semua item'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _applyGlobalUpPrice() {
+    final draft = context.read<DraftOrderProvider>();
+    if (draft.items.isEmpty) return;
+
+    final value = double.tryParse(_globalUpPriceCtrl.text.replaceAll(',', '.')) ?? 0;
+    if (value <= 0) return;
+
+    for (final line in draft.items) {
+      draft.setUpPrice(
+        lineId: line.id,
+        type: _globalUpPriceType,
+        value: value,
+      );
+    }
+
+    _globalUpPriceCtrl.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Up Price global diterapkan ke semua item'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -112,16 +206,17 @@ class _StepReviewState extends State<StepReview> {
                 ),
                 child: Column(
                   children: [
-                    for (var i = 0; i < draft.items.length; i++)
-                      if (draft.items[i].qty > 0) ...[
+                    for (var i = 0; i < draft.items.length; i++) ...[
+                      if (draft.items[i].qty > 0)
                         _LineRow(
                           line: draft.items[i],
                           product: productMap[draft.items[i].productId],
                         ),
-                        if (i < draft.items.length - 1)
-                          const Divider(height: 1, indent: 14, endIndent: 14),
-                      ],
-                    const Divider(height: 1, indent: 14, endIndent: 14),
+                      if (i < draft.items.length - 1 &&
+                          draft.items[i].qty > 0)
+                        Container(height: 1, color: AppColors.borderLight),
+                    ],
+                    Container(height: 1, color: AppColors.borderLight),
                     InkWell(
                       onTap: widget.onBack,
                       child: Padding(
@@ -129,8 +224,11 @@ class _StepReviewState extends State<StepReview> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add,
-                                size: 16, color: AppColors.textSecondary),
+                            Icon(
+                              Icons.add,
+                              size: 16,
+                              color: AppColors.textSecondary,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Tambah Produk',
@@ -144,6 +242,34 @@ class _StepReviewState extends State<StepReview> {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 20),
+
+              // Global Diskon
+              _sectionTitle('Diskon Global'),
+              const SizedBox(height: 8),
+              _GlobalDiscountSection(
+                disc1Ctrl: _globalDisc1Ctrl,
+                disc2Ctrl: _globalDisc2Ctrl,
+                disc3Ctrl: _globalDisc3Ctrl,
+                disc1Type: _globalDisc1Type,
+                disc2Type: _globalDisc2Type,
+                disc3Type: _globalDisc3Type,
+                onDisc1TypeChanged: (v) => setState(() => _globalDisc1Type = v),
+                onDisc2TypeChanged: (v) => setState(() => _globalDisc2Type = v),
+                onDisc3TypeChanged: (v) => setState(() => _globalDisc3Type = v),
+                onApply: _applyGlobalDiscount,
+              ),
+              const SizedBox(height: 20),
+
+              // Global Up Price
+              _sectionTitle('Up Price Global'),
+              const SizedBox(height: 8),
+              _GlobalUpPriceSection(
+                upPriceCtrl: _globalUpPriceCtrl,
+                upPriceType: _globalUpPriceType,
+                onTypeChanged: (v) => setState(() => _globalUpPriceType = v),
+                onApply: _applyGlobalUpPrice,
               ),
               const SizedBox(height: 20),
 
@@ -237,7 +363,7 @@ class _StepReviewState extends State<StepReview> {
 }
 
 /// Widget kartu total — hanya menampilkan ringkasan, tanpa input diskon.
-/// Diskon diatur per-item di _ProductRow.
+/// Diskon diatur per-item di _LineRow.
 class _OrderTotalCard extends StatelessWidget {
   final DraftOrderProvider draft;
   final NumberFormat currency;
@@ -1751,6 +1877,272 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
       labelStyle: TextStyle(
         color: selected ? AppColors.warning : AppColors.textSecondary,
         fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _GlobalDiscountSection extends StatelessWidget {
+  final TextEditingController disc1Ctrl;
+  final TextEditingController disc2Ctrl;
+  final TextEditingController disc3Ctrl;
+  final String disc1Type;
+  final String disc2Type;
+  final String disc3Type;
+  final ValueChanged<String> onDisc1TypeChanged;
+  final ValueChanged<String> onDisc2TypeChanged;
+  final ValueChanged<String> onDisc3TypeChanged;
+  final VoidCallback onApply;
+
+  const _GlobalDiscountSection({
+    required this.disc1Ctrl,
+    required this.disc2Ctrl,
+    required this.disc3Ctrl,
+    required this.disc1Type,
+    required this.disc2Type,
+    required this.disc3Type,
+    required this.onDisc1TypeChanged,
+    required this.onDisc2TypeChanged,
+    required this.onDisc3TypeChanged,
+    required this.onApply,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _GlobalDiscountLayer(
+            label: 'Diskon 1',
+            controller: disc1Ctrl,
+            type: disc1Type,
+            onTypeChanged: onDisc1TypeChanged,
+          ),
+          const SizedBox(height: 10),
+          _GlobalDiscountLayer(
+            label: 'Diskon 2',
+            controller: disc2Ctrl,
+            type: disc2Type,
+            onTypeChanged: onDisc2TypeChanged,
+          ),
+          const SizedBox(height: 10),
+          _GlobalDiscountLayer(
+            label: 'Diskon 3',
+            controller: disc3Ctrl,
+            type: disc3Type,
+            onTypeChanged: onDisc3TypeChanged,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onApply,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('Terapkan ke Semua Item'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success,
+                foregroundColor: AppColors.textOnPrimary,
+                minimumSize: const Size.fromHeight(44),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlobalDiscountLayer extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String type;
+  final ValueChanged<String> onTypeChanged;
+
+  const _GlobalDiscountLayer({
+    required this.label,
+    required this.controller,
+    required this.type,
+    required this.onTypeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                _TypeChip(label: '%', selected: type == 'PERCENT', onTap: () => onTypeChanged('PERCENT')),
+                const SizedBox(width: 6),
+                _TypeChip(label: 'Rp', selected: type == 'NOMINAL', onTap: () => onTypeChanged('NOMINAL')),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+          decoration: InputDecoration(
+            hintText: type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
+            prefixText: type == 'PERCENT' ? null : 'Rp ',
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.primaryLight, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlobalUpPriceSection extends StatelessWidget {
+  final TextEditingController upPriceCtrl;
+  final String upPriceType;
+  final ValueChanged<String> onTypeChanged;
+  final VoidCallback onApply;
+
+  const _GlobalUpPriceSection({
+    required this.upPriceCtrl,
+    required this.upPriceType,
+    required this.onTypeChanged,
+    required this.onApply,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Up Price (per-piece)',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  _TypeChip(label: 'Rp', selected: upPriceType == 'NOMINAL', onTap: () => onTypeChanged('NOMINAL')),
+                  const SizedBox(width: 6),
+                  _TypeChip(label: '%', selected: upPriceType == 'PERCENT', onTap: () => onTypeChanged('PERCENT')),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: upPriceCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+            decoration: InputDecoration(
+              hintText: upPriceType == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
+              prefixText: upPriceType == 'PERCENT' ? null : 'Rp ',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.warning, width: 2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onApply,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('Terapkan ke Semua Item'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.warning,
+                foregroundColor: AppColors.textOnPrimary,
+                minimumSize: const Size.fromHeight(44),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TypeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: AppColors.primaryLight.withValues(alpha: 0.15),
+      labelStyle: TextStyle(
+        color: selected ? AppColors.primaryLight : AppColors.textSecondary,
+        fontWeight: FontWeight.w600,
+        fontSize: 12,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: BorderSide(
+          color: selected ? AppColors.primaryLight : AppColors.border,
+        ),
       ),
     );
   }
