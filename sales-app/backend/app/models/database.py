@@ -27,6 +27,12 @@ engine = create_engine(
     pool_timeout=30,
     pool_pre_ping=True,   # buang koneksi stale sebelum dipakai
     pool_recycle=1800,    # recycle tiap 30 menit
+    # psycopg3 auto-prepare setelah 5 eksekusi query yang sama. Di balik
+    # Supavisor, server connection dipakai ulang lintas client → nama
+    # prepared statement bentrok ("prepared statement _pg3_N already exists").
+    # Matikan auto-prepare; biar tiap statement di-parse ulang (tetap cached
+    # di server lewat generic plan Postgres).
+    connect_args={"prepare_threshold": None},
 )
 
 # Membuat SessionLocal yang akan digunakan setiap kali ada request datang

@@ -24,7 +24,10 @@ class AdminRepository {
   AdminRepository(this._api);
 
   Future<void> login(String username, String password) async {
-    final resp = await _api.post('/auth/login', body: {'username': username, 'password': password});
+    final resp = await _api.post(
+      '/auth/login',
+      body: {'username': username, 'password': password},
+    );
     _api.setTokens(
       access: resp['access_token'],
       refresh: resp['refresh_token'],
@@ -34,8 +37,14 @@ class AdminRepository {
   }
 
   /// Returns the raw login response data (caller uses for branch/role info).
-  Future<Map<String, dynamic>> loginFull(String username, String password) async {
-    final resp = await _api.post('/auth/login', body: {'username': username, 'password': password});
+  Future<Map<String, dynamic>> loginFull(
+    String username,
+    String password,
+  ) async {
+    final resp = await _api.post(
+      '/auth/login',
+      body: {'username': username, 'password': password},
+    );
     _api.setTokens(
       access: resp['access_token'],
       refresh: resp['refresh_token'],
@@ -43,46 +52,60 @@ class AdminRepository {
     return resp as Map<String, dynamic>;
   }
 
-  void setTokens(String access, String refresh) => _api.setTokens(access: access, refresh: refresh);
+  void setTokens(String access, String refresh) =>
+      _api.setTokens(access: access, refresh: refresh);
   void clearTokens() => _api.clearTokens();
   bool get hasToken => _api.hasToken;
 
-  Future<List<Order>> getPendingOrders({String? search, CancelToken? cancelToken}) async {
+  Future<List<Order>> getPendingOrders({
+    String? search,
+    CancelToken? cancelToken,
+  }) async {
     final params = <String, String>{};
     if (search != null && search.isNotEmpty) params['search'] = search;
-    final qs = params.isEmpty ? '' : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    params['limit'] = '10000';
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/orders/pending$qs', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
   }
 
-  Future<List<Order>> getAllOrders({
-    String? status,
-    String? search,
-    DateTime? dateFrom,
-    DateTime? dateTo,
-    int skip = 0,
-    int limit = 50,
-    CancelToken? cancelToken,
-  }) async {
-    final params = <String, String>{
-      'skip': skip.toString(),
-      'limit': limit.toString(),
-    };
-    if (status != null && status.isNotEmpty) params['status'] = status;
-    if (search != null && search.isNotEmpty) params['search'] = search;
-    if (dateFrom != null) params['date_from'] = witaDateStr(dateFrom);
-    if (dateTo != null) params['date_to'] = witaDateStr(dateTo);
-    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/orders$qs', cancelToken: cancelToken);
-    return (data as List).map((e) => Order.fromJson(e)).toList();
+  /// Release (delete) a draft order. Body must include reason.
+  Future<void> deleteDraftOrder(String id, String reason) async {
+    await _api.delete('/orders/$id', data: {'reason': reason});
   }
 
-  /// Ambil semua order untuk sales tertentu (untuk popup detail di dashboard).
+  /// Get draft orders (status DRAFT).
+  Future<List<Order>> getDraftOrders({CancelToken? cancelToken}) async {
+    final data = await _api.get(
+      '/orders?status=DRAFT&limit=10000',
+      cancelToken: cancelToken,
+    );
+    final orders = data is Map<String, dynamic>
+        ? (data['orders'] as List? ?? const [])
+        : (data as List? ?? const []);
+    return orders
+        .map((e) => Order.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Ambil order untuk sales/branch tertentu (untuk popup detail di dashboard).
   /// [salesId] nullable — kalau null, tidak filter per sales (dipakai oleh
   /// "Total Semua Sales" card untuk lihat gabungan semua sales dalam branch).
   /// [branch] nullable — kalau di-set, hanya return order dari branch tsb
   /// (dipakai oleh "Masing-masing Cabang" card untuk MANAGER drill-down).
-  Future<List<Order>> getOrdersBySales({
+  /// Total (orders/amount/discount/up price) dihitung server untuk SELURUH
+  /// hasil filter — list yang dikirim tetap dibatasi [limit], jadi summary
+  /// popup tidak ikut terpotong.
+  Future<
+    ({
+      List<Order> orders,
+      int total,
+      int totalAmount,
+      int totalDiscount,
+      int totalUpPrice,
+    })
+  >
+  getOrdersBySales({
     String? salesId,
     String? branch,
     String? status,
@@ -107,15 +130,20 @@ class AdminRepository {
       options: Options(responseType: ResponseType.json),
     );
     final body = response.data as Map<String, dynamic>;
-    final ordersList = body['orders'] as List? ?? body as List;
-    return ordersList
-        .map((e) => Order.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final ordersList = body['orders'] as List? ?? const [];
+    return (
+      orders: ordersList
+          .map((e) => Order.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (body['total'] as num?)?.toInt() ?? ordersList.length,
+      totalAmount: (body['total_amount'] as num?)?.toInt() ?? 0,
+      totalDiscount: (body['total_discount'] as num?)?.toInt() ?? 0,
+      totalUpPrice: (body['total_up_price'] as num?)?.toInt() ?? 0,
+    );
   }
 
-  /// Sama dengan [getAllOrders] tapi juga baca header X-Total-Count —
-  /// untuk pagination di client. Pakai Dio langsung agar bisa akses
-  /// response.headers.
+  /// Ambil order dengan pagination — pakai Dio langsung agar bisa akses
+  /// response.headers (X-Total-Count) dan body `{orders, total}`.
   Future<({List<Order> orders, int total})> getAllOrdersPaginated({
     String? status,
     String? search,
@@ -139,7 +167,9 @@ class AdminRepository {
     );
     final body = response.data as Map<String, dynamic>;
     final ordersList = body['orders'] as List? ?? body as List;
-    final orders = ordersList.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final orders = ordersList
+        .map((e) => Order.fromJson(e as Map<String, dynamic>))
+        .toList();
     final total = (body['total'] as num?)?.toInt() ?? orders.length;
     return (orders: orders, total: total);
   }
@@ -166,9 +196,10 @@ class AdminRepository {
     String orderId, {
     required List<Map<String, dynamic>> items,
   }) async {
-    final data = await _api.put('/orders/$orderId/discounts', body: {
-      'items': items,
-    });
+    final data = await _api.put(
+      '/orders/$orderId/discounts',
+      body: {'items': items},
+    );
     return Order.fromJson(data);
   }
 
@@ -178,9 +209,10 @@ class AdminRepository {
     String orderId, {
     required List<Map<String, dynamic>> items,
   }) async {
-    final data = await _api.put('/orders/$orderId/cancel-items', body: {
-      'items': items,
-    });
+    final data = await _api.put(
+      '/orders/$orderId/cancel-items',
+      body: {'items': items},
+    );
     return Order.fromJson(data);
   }
 
@@ -211,7 +243,8 @@ class AdminRepository {
   }) async {
     final startStr = witaDateStr(startDate);
     final endStr = witaDateStr(endDate);
-    final qs = '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}&detail=true';
+    final qs =
+        '?start_date=$startStr&end_date=$endStr&status=${statuses.join(',')}&detail=true';
     final dio = _api.dio;
     final response = await dio.get<List<int>>(
       '/reports/period$qs',
@@ -229,7 +262,9 @@ class AdminRepository {
   }) async {
     final startStr = witaDateStr(startDate);
     final endStr = witaDateStr(endDate);
-    final data = await _api.get('/reports/summary?start_date=$startStr&end_date=$endStr');
+    final data = await _api.get(
+      '/reports/summary?start_date=$startStr&end_date=$endStr',
+    );
     return data as Map<String, dynamic>;
   }
 
@@ -250,8 +285,13 @@ class AdminRepository {
       if (status != null && status.isNotEmpty) 'status': status,
       if (orderType != null && orderType.isNotEmpty) 'order_type': orderType,
     };
-    final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
-    final data = await _api.get('/products?$queryString', cancelToken: cancelToken);
+    final queryString = queryParams.entries
+        .map((e) => '${e.key}=${e.value}')
+        .join('&');
+    final data = await _api.get(
+      '/products?$queryString',
+      cancelToken: cancelToken,
+    );
     return (data as List).map((e) => Product.fromJson(e)).toList();
   }
 
@@ -273,8 +313,13 @@ class AdminRepository {
       if (status != null && status.isNotEmpty) 'status': status,
       if (orderType != null && orderType.isNotEmpty) 'order_type': orderType,
     };
-    final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/products/count$queryString', cancelToken: cancelToken);
+    final queryString = queryParams.isEmpty
+        ? ''
+        : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get(
+      '/products/count$queryString',
+      cancelToken: cancelToken,
+    );
     return data['total'] as int;
   }
 
@@ -284,7 +329,10 @@ class AdminRepository {
   }
 
   Future<void> overrideStock(String productId, int stokSistem) async {
-    await _api.put('/products/$productId/stock', body: {'stok_sistem': stokSistem});
+    await _api.put(
+      '/products/$productId/stock',
+      body: {'stok_sistem': stokSistem},
+    );
   }
 
   /// Partial update produk (kategori/satuan/nama_supplier/order_type) — admin only.
@@ -316,13 +364,34 @@ class AdminRepository {
   }
 
   Future<SyncResult> importExcel(List<int> fileBytes, String fileName) async {
-    final data = await _api.postFile('/products/import-excel', fileBytes, fileName);
+    final data = await _api.postFile(
+      '/products/import-excel',
+      fileBytes,
+      fileName,
+    );
     return SyncResult.fromJson(data);
   }
 
-  Future<SyncResult> importCustomersExcel(List<int> fileBytes, String fileName) async {
-    final data = await _api.postFile('/customers/import-excel', fileBytes, fileName);
+  Future<SyncResult> importCustomersExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    final data = await _api.postFile(
+      '/customers/import-excel',
+      fileBytes,
+      fileName,
+    );
     return SyncResult.fromJson(data);
+  }
+
+  Future<dynamic> importSalesExcel(List<int> fileBytes, String fileName) async {
+    return _api.postFile('/sales-imports/excel', fileBytes, fileName);
+  }
+
+  Future<Map<String, dynamic>> getImportedSalesSummary({String? month}) async {
+    final queryString = month != null && month.isNotEmpty ? 'month=$month' : '';
+    final data = await _api.get('/sales-imports/summary?$queryString');
+    return Map<String, dynamic>.from(data as Map);
   }
 
   Future<List<Customer>> getCustomers({
@@ -336,17 +405,32 @@ class AdminRepository {
       'limit': limit.toString(),
       if (search != null && search.isNotEmpty) 'search': search,
     };
-    final queryString = queryParams.entries.map((e) => '${e.key}=${e.value}').join('&');
-    final data = await _api.get('/customers?$queryString', cancelToken: cancelToken);
-    return (data as List).map((e) => Customer.fromJson(e as Map<String, dynamic>)).toList();
+    final queryString = queryParams.entries
+        .map((e) => '${e.key}=${e.value}')
+        .join('&');
+    final data = await _api.get(
+      '/customers?$queryString',
+      cancelToken: cancelToken,
+    );
+    return (data as List)
+        .map((e) => Customer.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<int> getCustomerCount({String? search, CancelToken? cancelToken}) async {
+  Future<int> getCustomerCount({
+    String? search,
+    CancelToken? cancelToken,
+  }) async {
     final queryParams = {
       if (search != null && search.isNotEmpty) 'search': search,
     };
-    final queryString = queryParams.isEmpty ? '' : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/customers/count$queryString', cancelToken: cancelToken);
+    final queryString = queryParams.isEmpty
+        ? ''
+        : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get(
+      '/customers/count$queryString',
+      cancelToken: cancelToken,
+    );
     return data['total'] as int;
   }
 
@@ -355,7 +439,10 @@ class AdminRepository {
     return Customer.fromJson(data);
   }
 
-  Future<Customer> updateCustomer(String customerId, Map<String, dynamic> body) async {
+  Future<Customer> updateCustomer(
+    String customerId,
+    Map<String, dynamic> body,
+  ) async {
     final data = await _api.put('/customers/$customerId', body: body);
     return Customer.fromJson(data);
   }
@@ -366,7 +453,9 @@ class AdminRepository {
 
   // ===== Customer Submissions =====
 
-  Future<List<CustomerSubmission>> getCustomerSubmissions({String? status}) async {
+  Future<List<CustomerSubmission>> getCustomerSubmissions({
+    String? status,
+  }) async {
     final queryString = (status != null && status.isNotEmpty)
         ? '?status=${Uri.encodeComponent(status)}'
         : '';
@@ -416,11 +505,15 @@ class AdminRepository {
 
   Future<List<SalesUser>> listSalesUsers() async {
     final data = await _api.get('/users/sales');
-    return (data as List).map((e) => SalesUser.fromJson(e as Map<String, dynamic>)).toList();
+    return (data as List)
+        .map((e) => SalesUser.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Assignment management — endpoint baru untuk tab "Penugasan Sales".
-  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+  Future<List<SalesAssignment>> getCustomerAssignments(
+    String customerId,
+  ) async {
     final data = await _api.get('/customers/$customerId/assignments');
     return (data as List)
         .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
@@ -477,9 +570,13 @@ class AdminRepository {
     final params = <String, String>{};
     if (role != null && role.isNotEmpty) params['role'] = role;
     if (search != null && search.isNotEmpty) params['search'] = search;
-    final qs = params.isEmpty ? '' : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final qs = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/users$qs');
-    return (data as List).map((e) => UserItem.fromJson(e as Map<String, dynamic>)).toList();
+    return (data as List)
+        .map((e) => UserItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<UserItem> createUser({
@@ -489,13 +586,16 @@ class AdminRepository {
     String? nama,
     String? branch,
   }) async {
-    final data = await _api.post('/users', body: {
-      'username': username,
-      'password': password,
-      'role': role,
-      if (nama != null && nama.isNotEmpty) 'nama': nama,
-      if (branch != null && branch.isNotEmpty) 'branch': branch,
-    });
+    final data = await _api.post(
+      '/users',
+      body: {
+        'username': username,
+        'password': password,
+        'role': role,
+        if (nama != null && nama.isNotEmpty) 'nama': nama,
+        if (branch != null && branch.isNotEmpty) 'branch': branch,
+      },
+    );
     return UserItem.fromJson(data);
   }
 
@@ -516,10 +616,10 @@ class AdminRepository {
     required String oldPassword,
     required String newPassword,
   }) async {
-    await _api.post('/auth/change-password', body: {
-      'old_password': oldPassword,
-      'new_password': newPassword,
-    });
+    await _api.post(
+      '/auth/change-password',
+      body: {'old_password': oldPassword, 'new_password': newPassword},
+    );
   }
 
   Future<List<SyncError>> getSyncErrors() async {
@@ -542,7 +642,9 @@ class AdminRepository {
   /// `terjual` = total qty approved (moved into stok_diterima) in the given month.
   /// Survives product import — import resets are logged with negative delta and
   /// excluded from the sum.
-  Future<List<Map<String, dynamic>>> getProductSalesStats({String? yearMonth}) async {
+  Future<List<Map<String, dynamic>>> getProductSalesStats({
+    String? yearMonth,
+  }) async {
     final qs = (yearMonth != null && yearMonth.isNotEmpty)
         ? '?year_month=${Uri.encodeComponent(yearMonth)}'
         : '';
@@ -550,11 +652,18 @@ class AdminRepository {
     return (data as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, int>> getDashboardStats({DateTime? date, CancelToken? cancelToken}) async {
+  Future<Map<String, int>> getDashboardStats({
+    DateTime? date,
+    CancelToken? cancelToken,
+  }) async {
     // Use the server-side /products/stats endpoint so the count is never
     // limited by a client-side 50-order window.
     final qs = date != null ? '?date=${witaDateStr(date)}' : '';
-    final data = await _api.get('/products/stats$qs', cancelToken: cancelToken, receiveTimeout: const Duration(seconds: 30));
+    final data = await _api.get(
+      '/products/stats$qs',
+      cancelToken: cancelToken,
+      receiveTimeout: const Duration(seconds: 30),
+    );
     return {
       'total_orders': data['total_orders'] ?? 0,
       'pending_orders': data['pending_orders'] ?? 0,
@@ -562,6 +671,7 @@ class AdminRepository {
       'rejected_orders': data['rejected_orders'] ?? 0,
       'expired_orders': data['expired_orders'] ?? 0,
       'cancelled_orders': data['cancelled_orders'] ?? 0,
+      'draft_orders': data['draft_orders'] ?? 0,
       'total_products': data['total_products'] ?? 0,
       'total_customers': data['total_customers'] ?? 0,
       'needs_review': data['needs_review'] ?? 0,
@@ -578,19 +688,25 @@ class AdminRepository {
     final qs = '?from_date=$fromStr&to_date=$toStr';
     final data = await _api.get('/reports/sales-performance$qs');
     final list = data['sales'] as List? ?? [];
-    return list.map((e) => SalesPerformance.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => SalesPerformance.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Dashboard breakdown: MTD + Today for APPROVED / PENDING / REJECTED per sales.
   /// Heavy aggregation — give the DB 60s to respond (vs the default 10s).
-  Future<List<SalesPerformanceDashboardItem>> getSalesPerformanceDashboard() async {
+  Future<List<SalesPerformanceDashboardItem>>
+  getSalesPerformanceDashboard() async {
     final data = await _api.get(
       '/reports/sales-performance/dashboard',
       receiveTimeout: const Duration(seconds: 60),
     );
     final list = data['sales'] as List? ?? [];
     return list
-        .map((e) => SalesPerformanceDashboardItem.fromJson(e as Map<String, dynamic>))
+        .map(
+          (e) =>
+              SalesPerformanceDashboardItem.fromJson(e as Map<String, dynamic>),
+        )
         .toList();
   }
 
@@ -598,7 +714,9 @@ class AdminRepository {
   Future<List<SalesTarget>> getSalesTargets({String? period}) async {
     final qs = period != null ? '?period=${Uri.encodeComponent(period)}' : '';
     final data = await _api.get('/sales-targets$qs');
-    return (data as List).map((e) => SalesTarget.fromJson(e as Map<String, dynamic>)).toList();
+    return (data as List)
+        .map((e) => SalesTarget.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<SalesTarget> updateSalesTarget({
@@ -608,12 +726,15 @@ class AdminRepository {
     required int targetValue,
     required int incentiveAmount,
   }) async {
-    final data = await _api.put('/sales-targets/$userId', body: {
-      'period': period,
-      'target_type': targetType,
-      'target_value': targetValue,
-      'incentive_amount': incentiveAmount,
-    });
+    final data = await _api.put(
+      '/sales-targets/$userId',
+      body: {
+        'period': period,
+        'target_type': targetType,
+        'target_value': targetValue,
+        'incentive_amount': incentiveAmount,
+      },
+    );
     return SalesTarget.fromJson(data);
   }
 
@@ -633,7 +754,9 @@ class AdminRepository {
     DateTime? expireAt,
   }) async {
     final body = <String, dynamic>{'title': title};
-    if (description != null && description.isNotEmpty) body['description'] = description;
+    if (description != null && description.isNotEmpty) {
+      body['description'] = description;
+    }
     if (pdfUrl != null && pdfUrl.isNotEmpty) body['pdf_url'] = pdfUrl;
     if (expireAt != null) body['expire_at'] = witaDateStr(expireAt);
     final data = await _api.post('/bulletins', body: body);
@@ -666,7 +789,11 @@ class AdminRepository {
   }
 
   Future<String> uploadBulletinPdf(List<int> fileBytes, String fileName) async {
-    final data = await _api.postFile('/bulletins/upload-pdf', fileBytes, fileName);
+    final data = await _api.postFile(
+      '/bulletins/upload-pdf',
+      fileBytes,
+      fileName,
+    );
     return data['pdf_url'] as String;
   }
 
@@ -696,12 +823,21 @@ class AdminRepository {
   // ===== Supplier Performance (KPI per Supplier — Performa Sales) =====
   /// Monthly KPI per supplier: revenue vs target, with auto-rollover on
   /// the backend. [yearMonth] = 'YYYY-MM'. Null = current month (server).
+  /// [branch] = filter cabang (MANAGER only); null = semua cabang.
   /// The endpoint batches target lookups but can still take a few seconds
   /// on a remote DB, so use a 60s receive timeout (vs the default 10s).
-  Future<List<SupplierPerformanceRow>> getSupplierPerformance({String? yearMonth}) async {
-    final qs = (yearMonth != null && yearMonth.isNotEmpty)
-        ? '?year_month=${Uri.encodeComponent(yearMonth)}'
-        : '';
+  Future<List<SupplierPerformanceRow>> getSupplierPerformance({
+    String? yearMonth,
+    String? branch,
+  }) async {
+    final params = <String, String>{};
+    if (yearMonth != null && yearMonth.isNotEmpty) {
+      params['year_month'] = yearMonth;
+    }
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final qs = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
     final data = await _api.get(
       '/reports/supplier-performance$qs',
       receiveTimeout: const Duration(seconds: 60),
@@ -712,28 +848,25 @@ class AdminRepository {
         .toList();
   }
 
-  /// List all supplier targets for the user's branch, optionally filtered
-  /// by period ('YYYY-MM').
-  Future<List<SupplierTarget>> getSupplierTargets({String? period}) async {
-    final qs = (period != null && period.isNotEmpty)
-        ? '?period=${Uri.encodeComponent(period)}'
-        : '';
-    final data = await _api.get('/supplier-targets$qs');
+  /// Active branches — for the MANAGER branch picker in Performa Sales.
+  Future<List<BranchOption>> getBranches() async {
+    final data = await _api.get('/branches');
     return (data as List)
         .cast<Map<String, dynamic>>()
-        .map(SupplierTarget.fromJson)
+        .map(BranchOption.fromJson)
         .toList();
   }
 
   /// Upsert the target value for a (branch, supplier, period) triple.
-  /// Restricted to ADMIN/SUPERVISOR on the backend.
+  /// Restricted to SUPERVISOR/MANAGER on the backend.
   Future<SupplierTarget> updateSupplierTarget({
     required String branch,
     required String supplierName,
     required String period,
     required int targetValue,
   }) async {
-    final path = '/supplier-targets/'
+    final path =
+        '/supplier-targets/'
         '${Uri.encodeComponent(branch)}/'
         '${Uri.encodeComponent(supplierName)}/'
         '${Uri.encodeComponent(period)}';
@@ -744,21 +877,37 @@ class AdminRepository {
   // --- Supplier management (active/inactive) ---
 
   /// Fetch all suppliers. Pass [active] to filter by is_active.
-  Future<List<Supplier>> getSuppliers({bool? active}) async {
-    final params = <String, String>{};
+  Future<({List<Supplier> suppliers, int total})> getSuppliers({
+    bool? active,
+    String? search,
+    int skip = 0,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
     if (active != null) params['active'] = active.toString();
-    final qs = params.isEmpty
-        ? ''
-        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/suppliers$qs');
-    return (data as List)
+    if (search != null && search.trim().isNotEmpty) {
+      params['search'] = search.trim();
+    }
+    final qs =
+        '?${params.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
+    final response = await _api.dio.get<dynamic>('/suppliers$qs');
+    final body = response.data as Map<String, dynamic>;
+    final suppliers = ((body['suppliers'] as List?) ?? const [])
         .map((e) => Supplier.fromJson(e as Map<String, dynamic>))
         .toList();
+    final total = (body['total'] as num?)?.toInt() ?? suppliers.length;
+    return (suppliers: suppliers, total: total);
   }
 
   /// Create a new supplier. MANAGER only on the backend.
   /// `orderType` default 'REGULER' (sesuai backend schema SupplierCreate.order_type).
-  Future<Supplier> createSupplier(String name, {String orderType = 'REGULER'}) async {
+  Future<Supplier> createSupplier(
+    String name, {
+    String orderType = 'REGULER',
+  }) async {
     final data = await _api.post(
       '/suppliers',
       body: {'name': name, 'order_type': orderType},
@@ -777,7 +926,10 @@ class AdminRepository {
 
   /// Update supplier's order_type (REGULER/4P). MANAGER only.
   /// Backend akan cascade ke semua products di supplier ini.
-  Future<Supplier> updateSupplierOrderType(String name, String orderType) async {
+  Future<Supplier> updateSupplierOrderType(
+    String name,
+    String orderType,
+  ) async {
     final data = await _api.patch(
       '/suppliers/${Uri.encodeComponent(name)}/order-type',
       body: {'order_type': orderType},

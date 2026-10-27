@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../data/models/product.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../providers/auth_provider.dart';
@@ -21,7 +22,8 @@ class CustomerRegistrationScreen extends StatefulWidget {
       _CustomerRegistrationScreenState();
 }
 
-class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen> {
+class _CustomerRegistrationScreenState
+    extends State<CustomerRegistrationScreen> {
   // Section 1: Identitas
   final _namaCtl = TextEditingController();
   final _ktpCtl = TextEditingController();
@@ -71,12 +73,16 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       if (auth.nama != null) _namaSalesmanCtl.text = auth.nama!;
       // Load dropdown options. Silent on failure: empty list → form tetap
       // usable via "Lainnya (ketik manual)...".
-      context.read<CustomerRepository>().getKodeAreas().then((areas) {
-        if (!mounted) return;
-        setState(() => _kodeAreaOptions = areas);
-      }).catchError((_) {
-        // sengaja di-swallow: dropdown kosong bukan error
-      });
+      context
+          .read<CustomerRepository>()
+          .getKodeAreas()
+          .then((areas) {
+            if (!mounted) return;
+            setState(() => _kodeAreaOptions = areas);
+          })
+          .catchError((_) {
+            // sengaja di-swallow: dropdown kosong bukan error
+          });
     });
   }
 
@@ -143,9 +149,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     }
 
     final tipeLangganan =
-        _tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isNotEmpty
-            ? 'PASAR (${_namaPasarCtl.text.trim()})'
-            : _tipeLanggananKategori;
+        _tipeLanggananKategori == 'PASAR' &&
+            _namaPasarCtl.text.trim().isNotEmpty
+        ? 'PASAR (${_namaPasarCtl.text.trim()})'
+        : _tipeLanggananKategori;
 
     // KREDIT: kirim jangka_kredit_hari + batas_kredit_rupiah.
     // TUNAI: kirim null supaya tidak mengisi field (backend hanya accept null).
@@ -171,14 +178,20 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       'nama_pasar': _orNull(_namaPasarCtl.text),
       'jangka_kredit_hari': isKredit ? 14 : null,
       // Section 3
-      'batas_kredit_rupiah': isKredit ? parseIntOrNull(_batasKreditCtl.text) : null,
+      'batas_kredit_rupiah': isKredit
+          ? parseIntOrNull(_batasKreditCtl.text)
+          : null,
       // Section 4
       'channel_kategori': _channelKategori,
       // Section 5
       'key_account_ref_id': _orNull(_keyAccountCtl.text),
       'cluster_langganan': _clusterLangganan,
-      'kode_salesman': _kodeSalesmanCtl.text.trim().isEmpty ? null : _kodeSalesmanCtl.text.trim(),
-      'nama_salesman': _namaSalesmanCtl.text.trim().isEmpty ? null : _namaSalesmanCtl.text.trim(),
+      'kode_salesman': _kodeSalesmanCtl.text.trim().isEmpty
+          ? null
+          : _kodeSalesmanCtl.text.trim(),
+      'nama_salesman': _namaSalesmanCtl.text.trim().isEmpty
+          ? null
+          : _namaSalesmanCtl.text.trim(),
       'siklus_kunjungan': _siklusKunjungan,
       'hari_kunjungan': _hariKunjungan,
       // Flag: buat customer langsung juga (untuk flow bareng order)
@@ -232,7 +245,8 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       _snack('Tipe langganan (Pasar/Non Pasar) wajib dipilih');
       return;
     }
-    if (_tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isEmpty) {
+    if (_tipeLanggananKategori == 'PASAR' &&
+        _namaPasarCtl.text.trim().isEmpty) {
       _snack('Nama Pasar wajib diisi');
       return;
     }
@@ -293,9 +307,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
           if (!mounted) return;
           await Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => const OrderFlowScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const OrderFlowScreen()),
           );
           return;
         }
@@ -316,10 +328,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
     Map<String, dynamic>? dupResult;
     try {
-      dupResult = await repo.checkDuplicateCustomer(
-        name: nama,
-        alamat: alamat,
-      );
+      dupResult = await repo.checkDuplicateCustomer(name: nama, alamat: alamat);
     } catch (_) {
       dupResult = null;
     }
@@ -350,7 +359,9 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
                     '• ${c['kode'] ?? '-'} — ${c['nama_toko']}${c['alamat'] != null ? ' (${c['alamat']})' : ''}',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 );
               }),
@@ -381,9 +392,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pengajuan Customer Baru'),
-      ),
+      appBar: AppBar(title: const Text('Pengajuan Customer Baru')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
@@ -402,7 +411,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.shopping_cart_outlined, size: 18, color: AppColors.info),
+                    const Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 18,
+                      color: AppColors.info,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Langsung buat order juga?',
@@ -433,7 +446,9 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   const SizedBox(height: 8),
                   Text(
                     'Setelah customer disubmit, akan langsung diarahkan ke langkah order.',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.info),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.info,
+                    ),
                   ),
                 ],
               ],
@@ -446,12 +461,24 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           // ============================================================
           _SectionHeader(title: '1. Identitas Pelanggan'),
           const SizedBox(height: 8),
-          _Field(label: 'Nama Langganan / Outlet *', controller: _namaCtl, required: true),
+          _Field(
+            label: 'Nama Langganan / Outlet *',
+            controller: _namaCtl,
+            required: true,
+          ),
           _Field(label: 'Nomor ID /KTP', controller: _ktpCtl),
           _Field(label: 'Alamat KTP', controller: _alamatKtpCtl, maxLines: 3),
           _Field(label: 'Nama Kontak /Pemilik', controller: _kontakCtl),
-          _Field(label: 'Telpon / HP', controller: _telponCtl, keyboardType: TextInputType.phone),
-          _Field(label: 'Alamat Kirim', controller: _alamatKirimCtl, maxLines: 3),
+          _Field(
+            label: 'Telpon / HP',
+            controller: _telponCtl,
+            keyboardType: TextInputType.phone,
+          ),
+          _Field(
+            label: 'Alamat Kirim',
+            controller: _alamatKirimCtl,
+            maxLines: 3,
+          ),
           _Field(label: 'Propinsi', controller: _propinsiCtl),
           _Field(label: 'Kecamatan', controller: _kecamatanCtl),
           _Field(label: 'Kota', controller: _kotaCtl),
@@ -476,15 +503,15 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   child: DropdownButton<String>(
                     value: _kodeAreaIsCustom
                         ? '__custom__'
-                        : (_kodeAreaOptions.contains(_kodeArea) ? _kodeArea : null),
+                        : (_kodeAreaOptions.contains(_kodeArea)
+                              ? _kodeArea
+                              : null),
                     hint: const Text('Pilih kode area'),
                     isExpanded: true,
                     items: [
                       ..._kodeAreaOptions.map(
-                        (a) => DropdownMenuItem<String>(
-                          value: a,
-                          child: Text(a),
-                        ),
+                        (a) =>
+                            DropdownMenuItem<String>(value: a, child: Text(a)),
                       ),
                       const DropdownMenuItem<String>(
                         value: '__custom__',
@@ -654,10 +681,15 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.send),
-            label: Text(_barengOrder ? 'Submit & Buat Order' : 'Submit Pengajuan'),
+            label: Text(
+              _barengOrder ? 'Submit & Buat Order' : 'Submit Pengajuan',
+            ),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
             ),
@@ -749,18 +781,10 @@ class _ClusterField extends StatelessWidget {
       runSpacing: 8,
       children: _clusterOptions.map((o) {
         final isSel = o == selected;
-        return ChoiceChip(
-          label: Text(o),
+        return AppChoiceChip(
+          label: o,
           selected: isSel,
-          onSelected: (sel) {
-            onChanged(sel ? o : null);
-          },
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: isSel ? Colors.white : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
+          onSelected: () => onChanged(isSel ? null : o),
         );
       }).toList(),
     );
@@ -864,18 +888,10 @@ class _ChoiceRow extends StatelessWidget {
       runSpacing: 8,
       children: options.map((o) {
         final isSel = o == selected;
-        return ChoiceChip(
-          label: Text(o),
+        return AppChoiceChip(
+          label: o,
           selected: isSel,
-          onSelected: (sel) {
-            if (sel) onSelected(o);
-          },
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: isSel ? Colors.white : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
+          onSelected: () => onSelected(o),
         );
       }).toList(),
     );
@@ -902,18 +918,10 @@ class _ChoiceWrap extends StatelessWidget {
         runSpacing: 8,
         children: options.map((o) {
           final isSel = o == selected;
-          return ChoiceChip(
-            label: Text(o),
+          return AppChoiceChip(
+            label: o,
             selected: isSel,
-            onSelected: (sel) {
-              if (sel) onSelected(o);
-            },
-            selectedColor: AppColors.primaryLight,
-            labelStyle: TextStyle(
-              color: isSel ? Colors.white : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
+            onSelected: () => onSelected(o),
           );
         }).toList(),
       ),
@@ -947,9 +955,7 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
     // Trigger load with current order type filter
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<ProductProvider>().loadProducts(
-        orderType: widget.orderType,
-      );
+      context.read<ProductProvider>().loadProducts(orderType: widget.orderType);
     });
   }
 
@@ -972,7 +978,11 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
   Widget build(BuildContext context) {
     final productProvider = context.watch<ProductProvider>();
     final products = _filtered(productProvider.products);
-    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final currency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -997,7 +1007,11 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                  const Icon(
+                    Icons.search,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -1011,7 +1025,10 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
                         ),
                         filled: true,
                         fillColor: AppColors.background,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         isDense: true,
                       ),
                       onChanged: (v) => setState(() => _search = v),
@@ -1031,102 +1048,109 @@ class _ProductSearchSheetState extends State<_ProductSearchSheet> {
               child: productProvider.isLoading && products.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : products.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Produk tidak ditemukan',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          controller: scrollController,
-                          padding: const EdgeInsets.all(16),
-                          itemCount: products.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (context, i) {
-                            final p = products[i];
-                            final isOutOfStock = p.stokTersedia == 0;
-                            return Material(
-                              color: AppColors.cardSurface,
-                              borderRadius: BorderRadius.circular(10),
-                              child: InkWell(
+                  ? Center(
+                      child: Text(
+                        'Produk tidak ditemukan',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: products.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, i) {
+                        final p = products[i];
+                        final isOutOfStock = p.stokTersedia == 0;
+                        return Material(
+                          color: AppColors.cardSurface,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: isOutOfStock
+                                ? null
+                                : () => Navigator.pop(context, p),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
-                                onTap: isOutOfStock ? null : () => Navigator.pop(context, p),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: isOutOfStock
-                                          ? AppColors.borderLight.withValues(alpha: 0.5)
-                                          : AppColors.borderLight,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              p.namaBarang,
-                                              style: AppTextStyles.bodyMedium.copyWith(
+                                border: Border.all(
+                                  color: isOutOfStock
+                                      ? AppColors.borderLight.withValues(
+                                          alpha: 0.5,
+                                        )
+                                      : AppColors.borderLight,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          p.namaBarang,
+                                          style: AppTextStyles.bodyMedium
+                                              .copyWith(
                                                 fontWeight: FontWeight.w600,
                                                 color: isOutOfStock
                                                     ? AppColors.textMuted
                                                     : AppColors.textPrimary,
                                               ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'Stok: ${p.stokTersedia}',
-                                              style: AppTextStyles.bodySmall.copyWith(
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Stok: ${p.stokTersedia}',
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
                                                 color: isOutOfStock
                                                     ? AppColors.error
                                                     : AppColors.textSecondary,
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        currency.format(p.harga),
-                                        style: AppTextStyles.bodyMedium.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: isOutOfStock
-                                              ? AppColors.textMuted
-                                              : AppColors.primaryLight,
-                                        ),
-                                      ),
-                                      if (isOutOfStock) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.shade50,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'Habis',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.red.shade700,
-                                            ),
-                                          ),
                                         ),
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
+                                  Text(
+                                    currency.format(p.harga),
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: isOutOfStock
+                                          ? AppColors.textMuted
+                                          : AppColors.primaryLight,
+                                    ),
+                                  ),
+                                  if (isOutOfStock) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Habis',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         );

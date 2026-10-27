@@ -53,7 +53,9 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
     try {
       final results = await Future.wait([
         provider.adminRepository.getCustomers(
-          search: null, page: 0, limit: 500,
+          search: null,
+          page: 0,
+          limit: 500,
         ),
         provider.adminRepository.getCustomerCount(),
         provider.listSalesUsers(),
@@ -89,10 +91,13 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
   List<UserItem> get _filteredSales {
     if (_search.isEmpty) return _allUsers;
     final s = _search.toLowerCase();
-    return _allUsers.where((u) =>
-      u.username.toLowerCase().contains(s) ||
-      (u.nama?.toLowerCase().contains(s) ?? false)
-    ).toList();
+    return _allUsers
+        .where(
+          (u) =>
+              u.username.toLowerCase().contains(s) ||
+              (u.nama?.toLowerCase().contains(s) ?? false),
+        )
+        .toList();
   }
 
   @override
@@ -108,7 +113,11 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
           children: [
             Container(
               padding: EdgeInsets.fromLTRB(
-                  resp.contentPadding, 12, resp.contentPadding, 12),
+                resp.contentPadding,
+                12,
+                resp.contentPadding,
+                12,
+              ),
               color: AppColors.surface,
               // Pada layar sempit stack vertikal (segmented di atas, search di bawah).
               // Pada desktop pakai Row horizontal.
@@ -120,9 +129,21 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                           scrollDirection: Axis.horizontal,
                           child: SegmentedButton<int>(
                             segments: const [
-                              ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
-                              ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
-                              ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
+                              ButtonSegment(
+                                value: 0,
+                                label: Text('Per Area'),
+                                icon: Icon(Icons.map_outlined),
+                              ),
+                              ButtonSegment(
+                                value: 1,
+                                label: Text('Per Customer'),
+                                icon: Icon(Icons.store_outlined),
+                              ),
+                              ButtonSegment(
+                                value: 2,
+                                label: Text('Per Sales'),
+                                icon: Icon(Icons.person_outline),
+                              ),
                             ],
                             selected: {_subView},
                             onSelectionChanged: (s) =>
@@ -137,21 +158,27 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                             hintText: _subView == 0
                                 ? 'Cari area...'
                                 : _subView == 1
-                                    ? 'Cari customer...'
-                                    : 'Cari sales...',
+                                ? 'Cari customer...'
+                                : 'Cari sales...',
                             prefixIcon: const Icon(Icons.search, size: 18),
                             isDense: true,
                             filled: true,
                             fillColor: AppColors.background,
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.border),
+                              borderSide: const BorderSide(
+                                color: AppColors.border,
+                              ),
                             ),
                           ),
                         ),
@@ -161,9 +188,21 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                       children: [
                         SegmentedButton<int>(
                           segments: const [
-                            ButtonSegment(value: 0, label: Text('Per Area'), icon: Icon(Icons.map_outlined)),
-                            ButtonSegment(value: 1, label: Text('Per Customer'), icon: Icon(Icons.store_outlined)),
-                            ButtonSegment(value: 2, label: Text('Per Sales'), icon: Icon(Icons.person_outline)),
+                            ButtonSegment(
+                              value: 0,
+                              label: Text('Per Area'),
+                              icon: Icon(Icons.map_outlined),
+                            ),
+                            ButtonSegment(
+                              value: 1,
+                              label: Text('Per Customer'),
+                              icon: Icon(Icons.store_outlined),
+                            ),
+                            ButtonSegment(
+                              value: 2,
+                              label: Text('Per Sales'),
+                              icon: Icon(Icons.person_outline),
+                            ),
                           ],
                           selected: {_subView},
                           onSelectionChanged: (s) =>
@@ -178,23 +217,27 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                               hintText: _subView == 0
                                   ? 'Cari area...'
                                   : _subView == 1
-                                      ? 'Cari customer...'
-                                      : 'Cari sales...',
+                                  ? 'Cari customer...'
+                                  : 'Cari sales...',
                               prefixIcon: const Icon(Icons.search, size: 18),
                               isDense: true,
                               filled: true,
                               fillColor: AppColors.background,
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    const BorderSide(color: AppColors.border),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    const BorderSide(color: AppColors.border),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                ),
                               ),
                             ),
                           ),
@@ -212,16 +255,16 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
                       readOnly: widget.readOnly,
                     )
                   : _subView == 1
-                      ? _PerCustomerView(
-                          customers: _filteredCustomers,
-                          totalCount: _customerTotal ?? _allCustomers.length,
-                          allSalesUsers: _allSalesUsers,
-                          onChanged: _loadAll,
-                        )
-                      : _PerSalesView(
-                          salesUsers: _filteredSales,
-                          onChanged: _loadAll,
-                        ),
+                  ? _PerCustomerView(
+                      customers: _filteredCustomers,
+                      totalCount: _customerTotal ?? _allCustomers.length,
+                      allSalesUsers: _allSalesUsers,
+                      onChanged: _loadAll,
+                    )
+                  : _PerSalesView(
+                      salesUsers: _filteredSales,
+                      onChanged: _loadAll,
+                    ),
             ),
           ],
         );
@@ -233,12 +276,14 @@ class _PenugasanSalesTabState extends State<PenugasanSalesTab> {
   List<_AreaRow> _filteredAreaRows() {
     final s = _search.toLowerCase();
     final rows = _areaAssignments
-        .map((m) => _AreaRow(
-              kodeArea: m['kode_area'] as String,
-              sales: ((m['sales'] as List?) ?? [])
-                  .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
-                  .toList(),
-            ))
+        .map(
+          (m) => _AreaRow(
+            kodeArea: m['kode_area'] as String,
+            sales: ((m['sales'] as List?) ?? [])
+                .map((e) => SalesAssignment.fromJson(e as Map<String, dynamic>))
+                .toList(),
+          ),
+        )
         .toList();
     if (s.isEmpty) return rows;
     return rows.where((r) => r.kodeArea.toLowerCase().contains(s)).toList();
@@ -280,7 +325,9 @@ class _PerAreaView extends StatelessWidget {
               Text(
                 'Belum ada customer dengan kode_area. Import customer dengan kolom kode_area di Excel untuk memulai.',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textMuted,
+                ),
               ),
             ],
           ),
@@ -334,7 +381,8 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
       context: context,
       builder: (_) => _MultiSelectSalesDialog(
         title: 'Sales untuk area ${widget.area.kodeArea}',
-        subtitle: 'Sales yang ditugaskan akan cover semua customer di area ini.',
+        subtitle:
+            'Sales yang ditugaskan akan cover semua customer di area ini.',
         allSalesUsers: widget.allSalesUsers,
         currentSelected: widget.area.sales.map((a) => a.salesId).toSet(),
       ),
@@ -350,7 +398,7 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Penugasan area ${widget.area.kodeArea} disimpan'),
-          backgroundColor: AppColors.success,
+          backgroundColor: AppColors.primary,
         ),
       );
     } catch (e) {
@@ -384,7 +432,10 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 120),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.infoBg,
                         borderRadius: BorderRadius.circular(4),
@@ -394,7 +445,8 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.info, fontWeight: FontWeight.w700,
+                          color: AppColors.info,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -418,7 +470,10 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
                 )
               else
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(4),
@@ -427,7 +482,8 @@ class _AreaAssignmentRowState extends State<_AreaAssignmentRow> {
                   child: Text(
                     'Belum di-assign (customer di area visible ke semua sales)',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textMuted, fontStyle: FontStyle.italic,
+                      color: AppColors.textMuted,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
                 ),
@@ -445,15 +501,7 @@ class _AssignmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.infoBg,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.infoBorder),
-      ),
-      child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.info)),
-    );
+    return AppBadge(label: label, variant: AppBadgeVariant.info, compact: true);
   }
 }
 
@@ -565,17 +613,16 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
     );
     if (selected == null || !mounted) return;
     try {
-      final newList = await context.read<AdminProvider>().putCustomerAssignments(
-        widget.customer.id,
-        selected.toList(),
-      );
+      final newList = await context
+          .read<AdminProvider>()
+          .putCustomerAssignments(widget.customer.id, selected.toList());
       if (!mounted) return;
       setState(() => _assignments = newList);
       widget.onChanged();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Override ${widget.customer.namaToko} disimpan'),
-          backgroundColor: AppColors.success,
+          backgroundColor: AppColors.primary,
         ),
       );
     } catch (e) {
@@ -609,20 +656,32 @@ class _CustomerAssignmentRowState extends State<_CustomerAssignmentRow> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.customer.namaToko,
-                            style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                        Text(
+                          widget.customer.namaToko,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           '${widget.customer.kode ?? '-'} • ${widget.customer.kodeArea ?? 'tanpa area'}',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (_loading) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  if (_loading)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final isCompact = constraints.maxWidth < Breakpoints.compactMax;
+                      final isCompact =
+                          constraints.maxWidth < Breakpoints.compactMax;
                       if (isCompact) {
                         return IconButton(
                           onPressed: _openEditor,
@@ -674,7 +733,11 @@ class _PerSalesView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.person_off_outlined, size: 48, color: AppColors.textMuted),
+              Icon(
+                Icons.person_off_outlined,
+                size: 48,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(height: 12),
               Text('Belum ada user sales', style: AppTextStyles.bodyMedium),
             ],
@@ -707,8 +770,13 @@ class _PerSalesView extends StatelessWidget {
                     radius: 18,
                     backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                     child: Text(
-                      u.displayName.isNotEmpty ? u.displayName[0].toUpperCase() : '?',
-                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                      u.displayName.isNotEmpty
+                          ? u.displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -716,9 +784,17 @@ class _PerSalesView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(u.displayName, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                        Text(
+                          u.displayName,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text('@${u.username} • ${u.role}', style: AppTextStyles.bodySmall),
+                        Text(
+                          '@${u.username} • ${u.role}',
+                          style: AppTextStyles.bodySmall,
+                        ),
                       ],
                     ),
                   ),
@@ -764,7 +840,9 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
 
   Future<void> _load() async {
     try {
-      final result = await context.read<AdminProvider>().getSalesCustomers(widget.salesUser.id);
+      final result = await context.read<AdminProvider>().getSalesCustomers(
+        widget.salesUser.id,
+      );
       if (!mounted) return;
       setState(() {
         _customers = result;
@@ -781,59 +859,68 @@ class _SalesCustomersDialogState extends State<_SalesCustomersDialog> {
     return ResponsiveDialog(
       showCloseButton: true,
       child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Toko untuk ${widget.salesUser.displayName}',
-                            style: AppTextStyles.headlineSmall),
-                        Text('@${widget.salesUser.username}', style: AppTextStyles.bodySmall),
-                      ],
-                    ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Toko untuk ${widget.salesUser.displayName}',
+                        style: AppTextStyles.headlineSmall,
+                      ),
+                      Text(
+                        '@${widget.salesUser.username}',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _customers == null || _customers!.isEmpty
-                        ? Center(
-                            child: Text(
-                              'Sales ini belum cover toko manapun',
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: _customers!.length,
-                            separatorBuilder: (_, _) => const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final c = _customers![i];
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.store_outlined, size: 18),
-                                title: Text(c.namaToko),
-                                subtitle: Text('${c.kodeArea ?? "tanpa area"} • ${c.alamat ?? '-'}'),
-                                trailing: c.kode == null ? null : Text(c.kode!),
-                              );
-                            },
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _customers == null || _customers!.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Sales ini belum cover toko manapun',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _customers!.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final c = _customers![i];
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.store_outlined, size: 18),
+                          title: Text(c.namaToko),
+                          subtitle: Text(
+                            '${c.kodeArea ?? "tanpa area"} • ${c.alamat ?? '-'}',
                           ),
-              ),
-            ],
-          ),
+                          trailing: c.kode == null ? null : Text(c.kode!),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
+      ),
     );
   }
 }
@@ -854,7 +941,8 @@ class _MultiSelectSalesDialog extends StatefulWidget {
   });
 
   @override
-  State<_MultiSelectSalesDialog> createState() => _MultiSelectSalesDialogState();
+  State<_MultiSelectSalesDialog> createState() =>
+      _MultiSelectSalesDialogState();
 }
 
 class _MultiSelectSalesDialogState extends State<_MultiSelectSalesDialog> {
@@ -872,66 +960,72 @@ class _MultiSelectSalesDialogState extends State<_MultiSelectSalesDialog> {
     return ResponsiveDialog(
       showCloseButton: true,
       child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.title, style: AppTextStyles.headlineSmall),
-              const SizedBox(height: 4),
-              Text(widget.subtitle,
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              Flexible(
-                child: candidates.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Text(
-                          'Belum ada user sales. Buat dulu di tab User.',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: AppTextStyles.headlineSmall),
+            const SizedBox(height: 4),
+            Text(
+              widget.subtitle,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Flexible(
+              child: candidates.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'Belum ada user sales. Buat dulu di tab User.',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
                         ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: candidates.length,
-                        itemBuilder: (context, i) {
-                          final u = candidates[i];
-                          final checked = _selected.contains(u.id);
-                          return CheckboxListTile(
-                            dense: true,
-                            value: checked,
-                            onChanged: (v) => setState(() {
-                              if (v == true) {
-                                _selected.add(u.id);
-                              } else {
-                                _selected.remove(u.id);
-                              }
-                            }),
-                            title: Text(u.displayName),
-                            subtitle: Text('@${u.username}'),
-                          );
-                        },
                       ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, null),
-                    child: const Text('Batal'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, _selected),
-                    child: const Text('Simpan'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: candidates.length,
+                      itemBuilder: (context, i) {
+                        final u = candidates[i];
+                        final checked = _selected.contains(u.id);
+                        return CheckboxListTile(
+                          dense: true,
+                          value: checked,
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _selected.add(u.id);
+                            } else {
+                              _selected.remove(u.id);
+                            }
+                          }),
+                          title: Text(u.displayName),
+                          subtitle: Text('@${u.username}'),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Batal'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, _selected),
+                  child: const Text('Simpan'),
+                ),
+              ],
+            ),
+          ],
         ),
+      ),
     );
   }
 }

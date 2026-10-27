@@ -27,14 +27,15 @@ def _cleanup():
             "(SELECT id FROM orders WHERE notes LIKE 'TEST-DET-%')"
         ))
         conn.execute(text("DELETE FROM orders WHERE notes LIKE 'TEST-DET-%'"))
+        conn.execute(text("DELETE FROM users WHERE username LIKE 'TEST-DET-USER-%'"))
 
 
 def _seed_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"TEST-DET-USER-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 
@@ -45,8 +46,8 @@ def _seed_one_order(sales_id: str) -> str:
     test_dt = datetime(2020, 1, 16, 10, 0, 0, tzinfo=WITA).astimezone(timezone.utc)
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO orders (id, branch, sales_id, status, notes, created_at) "
-            "VALUES (:id, :branch, :sid, 'APPROVED', 'TEST-DET-seed', :ts)"
+            "INSERT INTO orders (id, branch, sales_id, status, notes, created_at, order_type) "
+            "VALUES (:id, :branch, :sid, 'APPROVED', 'TEST-DET-seed', :ts, 'REGULER')"
         ), {"id": oid, "branch": USER_BRANCH, "sid": sales_id, "ts": test_dt})
     return oid
 

@@ -11,13 +11,18 @@ class OrderRepository {
     required List<Map<String, dynamic>> items,
     String? notes,
     String orderType = 'REGULER',
+    String? clientRequestId,
   }) async {
-    final data = await _api.post('/orders', body: {
-      'customer_id': customerId,
-      'items': items,
-      'notes': notes ?? '',
-      'order_type': orderType,
-    });
+    final data = await _api.post(
+      '/orders',
+      body: {
+        'customer_id': customerId,
+        'items': items,
+        'notes': notes ?? '',
+        'order_type': orderType,
+        'client_request_id': ?clientRequestId,
+      },
+    );
     return Order.fromJson(data);
   }
 
@@ -28,12 +33,15 @@ class OrderRepository {
     String? notes,
     String orderType = 'REGULER',
   }) async {
-    final data = await _api.put('/orders/$orderId', body: {
-      'customer_id': customerId,
-      'items': items,
-      'notes': notes ?? '',
-      'order_type': orderType,
-    });
+    final data = await _api.put(
+      '/orders/$orderId',
+      body: {
+        'customer_id': customerId,
+        'items': items,
+        'notes': notes ?? '',
+        'order_type': orderType,
+      },
+    );
     return Order.fromJson(data);
   }
 

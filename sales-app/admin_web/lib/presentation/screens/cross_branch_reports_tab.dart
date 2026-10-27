@@ -117,7 +117,7 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
   }
 
   Widget _buildSalesTab(Responsive resp) {
-    if (_loadingSales) return const Center(child: CircularProgressIndicator());
+    if (_loadingSales) return _buildSkeleton();
     if (_salesSummaries.isEmpty) {
       return _buildEmpty('Belum ada data penjualan lintas cabang.');
     }
@@ -148,7 +148,7 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
   }
 
   Widget _buildStockTab(Responsive resp) {
-    if (_loadingStock) return const Center(child: CircularProgressIndicator());
+    if (_loadingStock) return _buildSkeleton();
     if (_stockSummaries.isEmpty) {
       return _buildEmpty('Belum ada data stok lintas cabang.');
     }
@@ -174,6 +174,13 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
     );
   }
 
+  Widget _buildSkeleton() {
+    return const Padding(
+      padding: EdgeInsets.all(AppSpacing.md),
+      child: AppSkeletonList(rows: 5),
+    );
+  }
+
   Widget _buildTotalCard() {
     final totalRevenue = _salesSummaries.fold<int>(
       0, (sum, s) => sum + s.approvedRevenue);
@@ -186,77 +193,77 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
     final totalSales = _salesSummaries.fold<int>(
       0, (sum, s) => sum + s.salesCount);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Total Semua Cabang',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
-            Wrap(spacing: 24, runSpacing: 8, children: [
-              _buildStatChip('Approved', '$totalApproved', AppColors.success),
-              _buildStatChip('Pending', '$totalPending', AppColors.warning),
-              _buildStatChip('Omset', _formatRupiah(totalRevenue), AppColors.info),
-              // purple/teal → primaryLight (closest semantic token)
-              _buildStatChip('Customer', '$totalCustomers', AppColors.primaryLight),
-              _buildStatChip('Sales', '$totalSales', AppColors.primaryLight),
-            ]),
-          ],
-        ),
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Total Semua Cabang — Bulan Ini', style: AppTextStyles.h3),
+          const SizedBox(height: AppSpacing.sm + 4),
+          Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
+            _buildStatChip('Approved', '$totalApproved', AppColors.successText),
+            _buildStatChip('Pending', '$totalPending', AppColors.warningText),
+            _buildStatChip('Omset', _formatRupiah(totalRevenue), AppColors.infoText),
+            _buildStatChip('Customer', '$totalCustomers', AppColors.textPrimary),
+            _buildStatChip('Sales', '$totalSales', AppColors.textPrimary),
+          ]),
+        ],
       ),
     );
   }
 
   Widget _buildSalesCard(BranchSalesSummary s) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              BranchLabel.display(s.branch) ?? s.branch,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 8),
-            Wrap(spacing: 20, runSpacing: 8, children: [
-              _buildStatChip('Approved', '${s.approvedCount}', AppColors.success),
-              _buildStatChip('Omset', _formatRupiah(s.approvedRevenue), AppColors.info),
-              _buildStatChip('Pending', '${s.pendingCount}', AppColors.warning),
-              // purple/teal → primaryLight (closest semantic token)
-              _buildStatChip('Customer', '${s.customerCount}', AppColors.primaryLight),
-              _buildStatChip('Sales', '${s.salesCount}', AppColors.primaryLight),
-            ]),
-          ],
-        ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm + 4),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            BranchLabel.display(s.branch) ?? s.branch,
+            style: AppTextStyles.h3,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
+            _buildStatChip('Approved', '${s.approvedCount}', AppColors.successText),
+            _buildStatChip('Omset', _formatRupiah(s.approvedRevenue), AppColors.infoText),
+            _buildStatChip('Pending', '${s.pendingCount}', AppColors.warningText),
+            _buildStatChip('Customer', '${s.customerCount}', AppColors.textPrimary),
+            _buildStatChip('Sales', '${s.salesCount}', AppColors.textPrimary),
+          ]),
+        ],
       ),
     );
   }
 
   Widget _buildStockCard(BranchStockSummary s) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              BranchLabel.display(s.branch) ?? s.branch,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm + 4),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            BranchLabel.display(s.branch) ?? s.branch,
+            style: AppTextStyles.h3,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
+            _buildStatChip('SKU', '${s.skuCount}', AppColors.infoText),
+            _buildStatChip(
+              'Nilai Stok',
+              _formatRupiah(s.totalStockValue),
+              AppColors.textPrimary,
             ),
-            const SizedBox(height: 8),
-            Wrap(spacing: 20, runSpacing: 8, children: [
-              _buildStatChip('SKU', '${s.skuCount}', AppColors.info),
-              // indigo → primaryLight (closest semantic token)
-              _buildStatChip('Nilai Stok', _formatRupiah(s.totalStockValue), AppColors.primaryLight),
-              _buildStatChip('Low Stock', '${s.lowStockCount}', s.lowStockCount > 0 ? AppColors.error : AppColors.textMuted),
-            ]),
-          ],
-        ),
+            _buildStatChip(
+              'Low Stock',
+              '${s.lowStockCount}',
+              s.lowStockCount > 0
+                  ? AppColors.dangerText
+                  : AppColors.textSecondary,
+            ),
+          ]),
+        ],
       ),
     );
   }
@@ -265,28 +272,37 @@ class _CrossBranchReportsTabState extends State<CrossBranchReportsTab>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        Text(label, style: AppTextStyles.caption),
         const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 13)),
+        Text(
+          value,
+          style: AppTextStyles.h3.copyWith(
+            color: color,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildEmpty(String msg) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inbox_outlined, size: 48, color: AppColors.textMuted),
-          const SizedBox(height: 12),
-          Text(msg, style: TextStyle(color: AppColors.textSecondary)),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _loadData,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
-          ),
-        ],
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: AppErrorState(message: _error!, onRetry: _loadData),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: AppEmptyState(
+        icon: Icons.inbox_outlined,
+        title: msg,
+        action: AppButton(
+          label: 'Muat ulang',
+          icon: Icons.refresh,
+          variant: AppButtonVariant.outline,
+          onPressed: _loadData,
+        ),
       ),
     );
   }

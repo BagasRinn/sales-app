@@ -60,7 +60,6 @@ class Order {
       id: json['id'] ?? '',
       salesId: json['sales_id'] ?? '',
       status: json['status'] ?? '',
-      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
       createdAt: parseWitaIsoOrNull(json['created_at'] ?? '') ?? DateTime.now(),
       items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e)).toList() ?? [],
       salesUsername: json['sales_username'],
@@ -240,8 +239,8 @@ class OrderItem {
   }
 
   /// Nominal diskon saja (tidak termasuk up price).
-  /// raw - subtotal = disk - up, jadi kurangi up untuk dapat diskon saja.
-  int get nominalDiskon => hargaSatuan * qty - subtotal - nominalUpPrice;
+  /// subtotal = raw + up - disk → disk = raw + up - subtotal.
+  int get nominalDiskon => hargaSatuan * qty + nominalUpPrice - subtotal;
 
   bool get hasDiscount => nominalDiskon > 0;
 

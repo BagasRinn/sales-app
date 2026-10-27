@@ -12,8 +12,11 @@ import '../../data/models/sales_performance.dart';
 import '../../data/models/order.dart';
 import '../providers/admin_provider.dart';
 
-String _fmt(int amount) =>
-    NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(amount);
+String _fmt(int amount) => NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: '',
+  decimalDigits: 0,
+).format(amount);
 
 /// Group per-sales performance items by branch code.
 /// Urutan key mengikuti urutan pertama kali branch muncul di list
@@ -23,9 +26,7 @@ String _fmt(int amount) =>
 /// Items dengan branch null dikumpulkan di bucket "" (string kosong) supaya
 /// tidak hilang saat iteration.
 Map<String, List<SalesPerformanceDashboardItem>>
-    groupDashboardPerformanceByBranch(
-  List<SalesPerformanceDashboardItem> items,
-) {
+groupDashboardPerformanceByBranch(List<SalesPerformanceDashboardItem> items) {
   final result = <String, List<SalesPerformanceDashboardItem>>{};
   for (final item in items) {
     final key = item.branch ?? '';
@@ -81,8 +82,9 @@ SalesPerformanceDashboardItem? aggregateDashboardPerformance(
 
 class StatsTab extends StatefulWidget {
   final String role;
+  final void Function(int initialTabIndex)? onOpenOrdersTab;
 
-  const StatsTab({super.key, required this.role});
+  const StatsTab({super.key, required this.role, this.onOpenOrdersTab});
 
   @override
   State<StatsTab> createState() => _StatsTabState();
@@ -132,8 +134,10 @@ class _StatsTabState extends State<StatsTab> {
           '${_selectedDate.year.toString().padLeft(4, '0')}-'
           '${_selectedDate.month.toString().padLeft(2, '0')}-'
           '${_selectedDate.day.toString().padLeft(2, '0')}';
-      _triggerBrowserDownload(Uint8List.fromList(bytes),
-          'laporan-harian-$dateStr.xlsx');
+      _triggerBrowserDownload(
+        Uint8List.fromList(bytes),
+        'laporan-harian-$dateStr.xlsx',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -223,8 +227,10 @@ class _StatsTabState extends State<StatsTab> {
           '${_periodEnd.year.toString().padLeft(4, '0')}-'
           '${_periodEnd.month.toString().padLeft(2, '0')}-'
           '${_periodEnd.day.toString().padLeft(2, '0')}';
-      _triggerBrowserDownload(Uint8List.fromList(bytes),
-          'laporan-periode-$startStr-sd-$endStr.xlsx');
+      _triggerBrowserDownload(
+        Uint8List.fromList(bytes),
+        'laporan-periode-$startStr-sd-$endStr.xlsx',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -275,17 +281,12 @@ class _StatsTabState extends State<StatsTab> {
     if (sales.isEmpty) {
       // Tanpa data sales, tidak ada yang bisa diagregasi — section kosong
       // supaya tidak misleading.
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
+      return const AppCard(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(
           child: Text(
             'Belum ada data performa cabang.',
-            style: TextStyle(color: AppColors.textMuted),
+            style: AppTextStyles.bodyMuted,
           ),
         ),
       );
@@ -294,7 +295,8 @@ class _StatsTabState extends State<StatsTab> {
     final aggregate = aggregateDashboardPerformance(sales)!;
     return _BranchPerformanceCard(
       total: aggregate,
-      onTapSection: (status) => _openTotalDetail(provider, initialStatus: status),
+      onTapSection: (status) =>
+          _openTotalDetail(provider, initialStatus: status),
     );
   }
 
@@ -322,7 +324,9 @@ class _StatsTabState extends State<StatsTab> {
     final groups = groupDashboardPerformanceByBranch(sales);
     // Skip branch kosong (item dengan branch null) untuk section ini — bukan
     // branch yang valid untuk di-tampilkan.
-    final branchEntries = groups.entries.where((e) => e.key.isNotEmpty).toList();
+    final branchEntries = groups.entries
+        .where((e) => e.key.isNotEmpty)
+        .toList();
     if (branchEntries.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -332,8 +336,9 @@ class _StatsTabState extends State<StatsTab> {
       runSpacing: 12,
       children: branchEntries.map((entry) {
         final aggregate = aggregateDashboardPerformance(entry.value)!;
-        return SizedBox(
-          width: 420,
+        return ConstrainedBox(
+          // Fixed 420px bikin overflow di mobile; batasi atas saja.
+          constraints: const BoxConstraints(maxWidth: 420),
           child: _BranchPerformanceCard(
             total: aggregate,
             title: 'Cabang ${entry.key}',
@@ -341,21 +346,15 @@ class _StatsTabState extends State<StatsTab> {
             headerIcon: Icons.business_outlined,
             headerIconColor: AppColors.info,
             fullWidth: false,
-            onTapSection: (status) => _openBranchDetail(
-              provider,
-              entry.key,
-              initialStatus: status,
-            ),
+            onTapSection: (status) =>
+                _openBranchDetail(provider, entry.key, initialStatus: status),
           ),
         );
       }).toList(),
     );
   }
 
-  void _openTotalDetail(
-    AdminProvider provider, {
-    String? initialStatus,
-  }) {
+  void _openTotalDetail(AdminProvider provider, {String? initialStatus}) {
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -417,17 +416,12 @@ class _StatsTabState extends State<StatsTab> {
     }
 
     if (sales.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
+      return const AppCard(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(
           child: Text(
             'Belum ada data performa sales.',
-            style: TextStyle(color: AppColors.textMuted),
+            style: AppTextStyles.bodyMuted,
           ),
         ),
       );
@@ -436,11 +430,15 @@ class _StatsTabState extends State<StatsTab> {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
-      children: sales.map((s) => _SalesPerformanceCard(
-        s: s,
-        onTapSection: (status) =>
-            _openSalesDetail(provider, s, initialStatus: status),
-      )).toList(),
+      children: sales
+          .map(
+            (s) => _SalesPerformanceCard(
+              s: s,
+              onTapSection: (status) =>
+                  _openSalesDetail(provider, s, initialStatus: status),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -469,6 +467,12 @@ class _StatsTabState extends State<StatsTab> {
     );
   }
 
+  /// Judul sub-section di dalam halaman (bukan level halaman).
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm + 4),
+    child: Text(text, style: AppTextStyles.h2),
+  );
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AdminProvider>();
@@ -482,6 +486,7 @@ class _StatsTabState extends State<StatsTab> {
     final approvedOrders = stats['approved_orders'] ?? 0;
     final rejectedOrders = stats['rejected_orders'] ?? 0;
     final cancelledOrders = stats['cancelled_orders'] ?? 0;
+    final draftOrders = stats['draft_orders'] ?? 0;
     final totalProducts = stats['total_products'] ?? 0;
     final totalCustomers = stats['total_customers'] ?? 0;
     // Produk di mana stok_sistem < (stok_booking + stok_diterima) — perlu audit segera.
@@ -495,378 +500,294 @@ class _StatsTabState extends State<StatsTab> {
         return SingleChildScrollView(
           padding: EdgeInsets.all(resp.contentPadding),
           child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Ringkasan Sistem', style: AppTextStyles.headlineLarge),
-          const SizedBox(height: 8),
-          const Text(
-            'Pesanan hari ini, ringkasan data master, dan ambil laporan',
-            style: AppTextStyles.bodyMedium,
-          ),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AppPageHeader(
+                title: 'Ringkasan Sistem',
+                subtitle:
+                    'Pesanan hari ini, ringkasan data master, dan ambil laporan',
+              ),
 
-          if (errorMessage != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              color: AppColors.errorBg,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: AppColors.error, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        errorMessage,
-                        style: const TextStyle(color: AppColors.error, fontSize: 13),
+              if (errorMessage != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
+                  color: AppColors.errorBg,
+                  borderColor: AppColors.errorBorder,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: AppColors.error,
+                        size: 20,
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh, color: AppColors.error, size: 20),
-                      tooltip: 'Coba lagi',
-                      onPressed: () => provider.loadAll(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          if (isLoading && stats.isEmpty && pending.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Memuat data...', style: AppTextStyles.bodyMedium),
-                  ],
-                ),
-              ),
-            )
-          else ...[
-            const SizedBox(height: 20),
-            // Section: order hari ini
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12, left: 4),
-              child: Text('Pesanan Hari Ini', style: AppTextStyles.labelLarge),
-            ),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _StatCard(
-                  title: 'Total Pesanan',
-                  value: '$totalOrders',
-                  icon: Icons.shopping_cart,
-                  color: AppColors.info,
-                ),
-                _StatCard(
-                  title: 'Menunggu Persetujuan',
-                  value: '$pendingOrders',
-                  icon: Icons.pending_actions,
-                  color: AppColors.warning,
-                ),
-                _StatCard(
-                  title: 'Disetujui',
-                  value: '$approvedOrders',
-                  icon: Icons.check_circle,
-                  color: AppColors.success,
-                ),
-                _StatCard(
-                  title: 'Ditolak',
-                  value: '$rejectedOrders',
-                  color: AppColors.error,
-                  icon: Icons.cancel,
-                ),
-                _StatCard(
-                  title: 'Dibatalkan',
-                  value: '$cancelledOrders',
-                  color: AppColors.textMuted,
-                  icon: Icons.block,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            // Section: data master (total keseluruhan, bukan per hari)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12, left: 4),
-              child: Text('Data Master', style: AppTextStyles.labelLarge),
-            ),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _StatCard(
-                  title: 'Total Produk',
-                  value: '$totalProducts',
-                  icon: Icons.inventory_2,
-                  color: AppColors.primary,
-                ),
-                _StatCard(
-                  title: 'Total Toko',
-                  value: '$totalCustomers',
-                  icon: Icons.store,
-                  color: AppColors.info,
-                ),
-                _StatCard(
-                  title: 'Produk Perlu Tinjau',
-                  value: '$needsReview',
-                  icon: Icons.report_problem_outlined,
-                  // Warna bahaya kalau ada yang perlu ditinjau, netral kalau 0.
-                  color: needsReview > 0 ? AppColors.error : AppColors.success,
-                ),
-              ],
-            ),
-
-            // MANAGER & SUPERVISOR: ringkasan performa
-            if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') ...[
-              const SizedBox(height: 24),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12, left: 4),
-                child: Text(
-                  'Total Semua Cabang',
-                  style: AppTextStyles.labelLarge,
-                ),
-              ),
-              _buildBranchPerformanceSection(provider),
-              // MANAGER (global) saja — lihat per-cabang karena lihat semua
-              // branch. SUPERVISOR cuma 1 branch jadi tidak ada gunanya.
-              if (widget.role == 'MANAGER') ...[
-                const SizedBox(height: 20),
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12, left: 4),
-                  child: Text(
-                    'Masing-masing Cabang',
-                    style: AppTextStyles.labelLarge,
+                      const SizedBox(width: AppSpacing.sm + 4),
+                      Expanded(
+                        child: Text(
+                          errorMessage,
+                          style: AppTextStyles.body.copyWith(
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.refresh,
+                          color: AppColors.error,
+                          size: 20,
+                        ),
+                        tooltip: 'Coba lagi',
+                        onPressed: () => provider.loadAll(),
+                      ),
+                    ],
                   ),
                 ),
-                _buildPerBranchSection(provider),
               ],
-              const SizedBox(height: 20),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12, left: 4),
-                child: Text('Performa Sales', style: AppTextStyles.labelLarge),
-              ),
-              _buildSalesPerformanceSection(provider),
-            ],
 
-            const SizedBox(height: 32),
-            // Laporan
-            const Text('Ambil Laporan', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 16),
-            _ReportDownloadCard(
-              selectedDate: _selectedDate,
-              statusFilter: _statusFilter,
-              downloading: _downloading,
-              onPickDate: _pickDate,
-              onChangeStatus: (s) => setState(() => _statusFilter = s),
-              onDownload: _downloadReport,
-            ),
-            const SizedBox(height: 16),
-            _PeriodReportCard(
-              periodStart: _periodStart,
-              periodEnd: _periodEnd,
-              statusFilter: _statusFilter,
-              downloading: _downloadingPeriod,
-              onPickStart: _pickPeriodStart,
-              onPickEnd: _pickPeriodEnd,
-              onChangeStatus: (s) => setState(() => _statusFilter = s),
-              onDownload: _downloadPeriodReport,
-            ),
-            // Hide "Pesanan Perlu Tindakan" for SUPERVISOR — they focus on monitoring, not order actions
-            if (widget.role != 'SUPERVISOR') ...[
-              const SizedBox(height: 36),
-              Row(
-                children: [
-                  const Text('Pesanan Perlu Tindakan', style: AppTextStyles.headlineLarge),
-                  const SizedBox(width: 12),
-                  if (pending.isNotEmpty)
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.warningBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.warningBorder),
-                      ),
-                      child: Text(
-                        '${pending.length}',
-                        style: const TextStyle(
-                          color: AppColors.warning,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (pending.isNotEmpty)
-                ...pending.take(5).map((order) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: AppColors.warningBg,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.store,
-                                    color: AppColors.warning, size: 22),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      order.storeName ?? 'Toko Tidak Diketahui',
-                                      style: AppTextStyles.labelLarge,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Order #${order.id.substring(0, 8)} • ${order.items.length} item • Rp ${_fmt(order.totalAmount)}',
-                                      style: AppTextStyles.bodySmall,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: AppColors.warningBg,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border:
-                                      Border.all(color: AppColors.warningBorder),
-                                ),
-                                child: const Text(
-                                  'Menunggu',
-                                  style: TextStyle(
-                                    color: AppColors.warning,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ))
-              else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              if (isLoading && stats.isEmpty && pending.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.successBg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.check_circle,
-                              color: AppColors.success, size: 32),
-                        ),
-                        const SizedBox(width: 20),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Semua pesanan sudah diproses',
-                                style: AppTextStyles.headlineSmall),
-                            SizedBox(height: 4),
-                            Text(
-                              'Tidak ada pesanan yang menunggu persetujuan',
-                              style: AppTextStyles.bodyMedium,
-                            ),
-                          ],
-                        ),
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Memuat data...', style: AppTextStyles.bodyMedium),
                       ],
                     ),
                   ),
+                )
+              else ...[
+                const SizedBox(height: AppSpacing.lg - 4),
+                // Section: order hari ini
+                _sectionLabel('Pesanan Hari Ini'),
+                AppResponsiveGrid(
+                  desktopCols: 5,
+                  tabletCols: 3,
+                  mobileCols: 2,
+                  children: [
+                    AppStatCard(
+                      title: 'Total Pesanan',
+                      value: '$totalOrders',
+                      icon: Icons.shopping_cart,
+                    ),
+                    AppStatCard(
+                      title: 'Menunggu Persetujuan',
+                      value: '$pendingOrders',
+                      icon: Icons.pending_actions,
+                    ),
+                    AppStatCard(
+                      title: 'Disetujui',
+                      value: '$approvedOrders',
+                      icon: Icons.check_circle,
+                    ),
+                    AppStatCard(
+                      title: 'Ditolak',
+                      value: '$rejectedOrders',
+                      icon: Icons.cancel,
+                    ),
+                    AppStatCard(
+                      title: 'Dibatalkan',
+                      value: '$cancelledOrders',
+                      icon: Icons.block,
+                    ),
+                  ],
                 ),
-            ],
-          ],
-        ],
-      ),
-      );
-      },
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Lebar kartu adaptif: pada layar < 600px (mobile) paksa 2 kartu per
-    // baris, pada tablet/desktop tetap 200px seperti aslinya. Wrap parent
-    // (spacing: 16) akan menaruh sisa kartu ke baris berikutnya.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 600;
-        final cardWidth = compact
-            ? (constraints.maxWidth - 8) / 2 // 2 per baris (8 = half spacing)
-            : 200.0;
-        return SizedBox(
-          width: cardWidth,
-          child: AppCard(
-            padding: EdgeInsets.all(compact ? 14 : 20),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: AppSpacing.lg),
+                // Section: data master (total keseluruhan, bukan per hari)
+                _sectionLabel('Data Master'),
+                AppResponsiveGrid(
+                  desktopCols: 4,
+                  tabletCols: 2,
+                  mobileCols: 2,
+                  children: [
+                    AppStatCard(
+                      title: 'Total Produk',
+                      value: '$totalProducts',
+                      icon: Icons.inventory_2,
                     ),
-                    child: Icon(icon, color: color, size: compact ? 20 : 22),
-                  ),
-                  SizedBox(height: compact ? 12 : 16),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontFamily: AppTextStyles.fontFamily,
-                      fontSize: compact ? 24 : 30,
-                      fontWeight: FontWeight.w800,
-                      color: color,
-                      letterSpacing: -1,
+                    AppStatCard(
+                      title: 'Total Toko',
+                      value: '$totalCustomers',
+                      icon: Icons.store,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    title,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: compact ? 12 : 14,
+                    AppStatCard(
+                      title: 'Draft Pesanan',
+                      value: '$draftOrders',
+                      icon: Icons.drafts_outlined,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    AppStatCard(
+                      title: 'Produk Perlu Tinjau',
+                      value: '$needsReview',
+                      icon: Icons.report_problem_outlined,
+                      // Warna bahaya kalau ada yang perlu ditinjau, netral kalau 0.
+                      accentColor: needsReview > 0
+                          ? AppColors.error
+                          : AppColors.success,
+                    ),
+                  ],
+                ),
+
+                // MANAGER & SUPERVISOR: ringkasan performa
+                if (widget.role == 'MANAGER' ||
+                    widget.role == 'SUPERVISOR') ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _sectionLabel('Total Semua Cabang'),
+                  _buildBranchPerformanceSection(provider),
+                  // MANAGER (global) saja — lihat per-cabang karena lihat semua
+                  // branch. SUPERVISOR cuma 1 branch jadi tidak ada gunanya.
+                  if (widget.role == 'MANAGER') ...[
+                    const SizedBox(height: AppSpacing.lg - 4),
+                    _sectionLabel('Masing-masing Cabang'),
+                    _buildPerBranchSection(provider),
+                  ],
+                  const SizedBox(height: AppSpacing.lg - 4),
+                  _sectionLabel('Performa Sales'),
+                  _buildSalesPerformanceSection(provider),
                 ],
-              ),
-            ),
-          );
+
+                const SizedBox(height: AppSpacing.xl),
+                // Laporan
+                Text('Ambil Laporan', style: AppTextStyles.h1),
+                const SizedBox(height: AppSpacing.md),
+                _ReportDownloadCard(
+                  selectedDate: _selectedDate,
+                  statusFilter: _statusFilter,
+                  downloading: _downloading,
+                  onPickDate: _pickDate,
+                  onChangeStatus: (s) => setState(() => _statusFilter = s),
+                  onDownload: _downloadReport,
+                ),
+                const SizedBox(height: 16),
+                _PeriodReportCard(
+                  periodStart: _periodStart,
+                  periodEnd: _periodEnd,
+                  statusFilter: _statusFilter,
+                  downloading: _downloadingPeriod,
+                  onPickStart: _pickPeriodStart,
+                  onPickEnd: _pickPeriodEnd,
+                  onChangeStatus: (s) => setState(() => _statusFilter = s),
+                  onDownload: _downloadPeriodReport,
+                ),
+                // Hide "Pesanan Perlu Tindakan" for SUPERVISOR — they focus on monitoring, not order actions
+                if (widget.role != 'SUPERVISOR') ...[
+                  const SizedBox(height: AppSpacing.xl + 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Pesanan Perlu Tindakan',
+                          style: AppTextStyles.h1,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (pending.isNotEmpty) ...[
+                        const SizedBox(width: AppSpacing.sm + 4),
+                        AppBadge(
+                          label: '${pending.length}',
+                          variant: AppBadgeVariant.warning,
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (pending.isNotEmpty)
+                    ...pending
+                        .take(5)
+                        .map(
+                          (order) => Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: AppCard(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warningSoft,
+                                      borderRadius: AppRadius.md,
+                                    ),
+                                    child: const Icon(
+                                      Icons.store,
+                                      color: AppColors.warning,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.md - 2),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          order.storeName ??
+                                              'Toko Tidak Diketahui',
+                                          style: AppTextStyles.labelLarge,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Order #${order.id.substring(0, 8)} • ${order.items.length} item • Rp ${_fmt(order.totalAmount)}',
+                                          style: AppTextStyles.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  const AppBadge(
+                                    label: 'Menunggu',
+                                    variant: AppBadgeVariant.warning,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                  else
+                    const AppCard(
+                      padding: EdgeInsets.all(AppSpacing.xl),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppColors.successSoft,
+                            child: Icon(
+                              Icons.check_circle,
+                              color: AppColors.success,
+                              size: 28,
+                            ),
+                          ),
+                          SizedBox(width: AppSpacing.md + 4),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Semua pesanan sudah diproses',
+                                  style: AppTextStyles.h2,
+                                ),
+                                SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  'Tidak ada pesanan yang menunggu persetujuan',
+                                  style: AppTextStyles.bodyMuted,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ],
+            ],
+          ),
+        );
       },
     );
   }
@@ -901,131 +822,123 @@ class _PeriodReportCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(20),
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.date_range,
-                    color: AppColors.info,
-                    size: 22,
-                  ),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: AppRadius.md,
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Laporan Periode', style: AppTextStyles.headlineSmall),
-                      SizedBox(height: 2),
-                      Text(
-                        'Export data order ke Excel berdasarkan rentang tanggal',
-                        style: AppTextStyles.bodySmall,
-                      ),
-                    ],
-                  ),
+                child: const Icon(
+                  Icons.date_range,
+                  color: AppColors.primary,
+                  size: 22,
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: downloading ? null : onPickStart,
-                  icon: const Icon(Icons.calendar_today, size: 16),
-                  label: Text(startLabel),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Text('—', style: AppTextStyles.bodyMedium),
-                ),
-                OutlinedButton.icon(
-                  onPressed: downloading ? null : onPickEnd,
-                  icon: const Icon(Icons.calendar_today, size: 16),
-                  label: Text(endLabel),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: statusFilter,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
-                      DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
-                      DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
-                      DropdownMenuItem(
-                        value: 'APPROVED,PENDING,REJECTED',
-                        child: Text('Semua Status'),
-                      ),
-                    ],
-                    onChanged: downloading
-                        ? null
-                        : (v) {
-                            if (v != null) onChangeStatus(v);
-                          },
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: downloading ? null : onDownload,
-                  icon: downloading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.download, size: 18),
-                  label: Text(
-                    downloading ? 'Mengunduh...' : 'Download Periode',
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.info,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 18),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Default: 30 hari ke belakang • Status default: Disetujui',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textMuted,
               ),
-            ),
-          ],
-        ),
-      );
-    }
+              const SizedBox(width: AppSpacing.md),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Laporan Periode', style: AppTextStyles.h2),
+                    SizedBox(height: 2),
+                    Text(
+                      'Export data order ke Excel berdasarkan rentang tanggal',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: downloading ? null : onPickStart,
+                icon: const Icon(Icons.calendar_today, size: 16),
+                label: Text(startLabel),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text('—', style: AppTextStyles.bodyMedium),
+              ),
+              OutlinedButton.icon(
+                onPressed: downloading ? null : onPickEnd,
+                icon: const Icon(Icons.calendar_today, size: 16),
+                label: Text(endLabel),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 200,
+                child: DropdownButtonFormField<String>(
+                  initialValue: statusFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Status',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'APPROVED',
+                      child: Text('Disetujui'),
+                    ),
+                    DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
+                    DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
+                    DropdownMenuItem(
+                      value: 'APPROVED,PENDING,REJECTED',
+                      child: Text('Semua Status'),
+                    ),
+                  ],
+                  onChanged: downloading
+                      ? null
+                      : (v) {
+                          if (v != null) onChangeStatus(v);
+                        },
+                ),
+              ),
+              AppButton(
+                label: downloading ? 'Mengunduh...' : 'Download Periode',
+                icon: Icons.download,
+                isLoading: downloading,
+                onPressed: onDownload,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Default: 30 hari ke belakang • Status default: Disetujui',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  class _ReportDownloadCard extends StatelessWidget {
+class _ReportDownloadCard extends StatelessWidget {
   final DateTime selectedDate;
   final String statusFilter;
   final bool downloading;
@@ -1049,119 +962,110 @@ class _PeriodReportCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(20),
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.today,
-                    color: AppColors.info,
-                    size: 22,
-                  ),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: AppRadius.md,
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Laporan Harian', style: AppTextStyles.headlineSmall),
-                      SizedBox(height: 2),
-                      Text(
-                        'Export data order per hari ke format Excel',
-                        style: AppTextStyles.bodySmall,
-                      ),
-                    ],
-                  ),
+                child: const Icon(
+                  Icons.today,
+                  color: AppColors.primary,
+                  size: 22,
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: downloading ? null : onPickDate,
-                  icon: const Icon(Icons.calendar_today, size: 16),
-                  label: Text(dateLabel),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: statusFilter,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'APPROVED', child: Text('Disetujui')),
-                      DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
-                      DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
-                      DropdownMenuItem(
-                        value: 'APPROVED,PENDING,REJECTED',
-                        child: Text('Semua Status'),
-                      ),
-                    ],
-                    onChanged: downloading
-                        ? null
-                        : (v) {
-                            if (v != null) onChangeStatus(v);
-                          },
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: downloading ? null : onDownload,
-                  icon: downloading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.download, size: 18),
-                  label: Text(
-                    downloading ? 'Mengunduh...' : 'Download Harian',
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.info,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 18),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Status default: Disetujui',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textMuted,
               ),
-            ),
-          ],
-        ),
-      );
-    }
+              const SizedBox(width: AppSpacing.md),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Laporan Harian', style: AppTextStyles.h2),
+                    SizedBox(height: 2),
+                    Text(
+                      'Export data order per hari ke format Excel',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: downloading ? null : onPickDate,
+                icon: const Icon(Icons.calendar_today, size: 16),
+                label: Text(dateLabel),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 200,
+                child: DropdownButtonFormField<String>(
+                  initialValue: statusFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Status',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'APPROVED',
+                      child: Text('Disetujui'),
+                    ),
+                    DropdownMenuItem(value: 'PENDING', child: Text('Menunggu')),
+                    DropdownMenuItem(value: 'REJECTED', child: Text('Ditolak')),
+                    DropdownMenuItem(
+                      value: 'APPROVED,PENDING,REJECTED',
+                      child: Text('Semua Status'),
+                    ),
+                  ],
+                  onChanged: downloading
+                      ? null
+                      : (v) {
+                          if (v != null) onChangeStatus(v);
+                        },
+                ),
+              ),
+              AppButton(
+                label: downloading ? 'Mengunduh...' : 'Download Harian',
+                icon: Icons.download,
+                isLoading: downloading,
+                onPressed: onDownload,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Status default: Disetujui',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  class _SalesPerformanceCard extends StatelessWidget {
+class _SalesPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem s;
+
   /// Callback untuk klik pada bagian card. Status null = "Semua"
   /// (klik nama atau area kosong), 'APPROVED'/'PENDING'/'REJECTED' = klik
   /// section status yang sesuai di card.
@@ -1173,164 +1077,93 @@ class _PeriodReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: Container(
-        width: 340,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Name row — klik → "Semua" (no status filter)
-            GestureDetector(
-              onTap: () => onTapSection(null),
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                      child: Text(
-                        s.displayName.isNotEmpty ? s.displayName[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
+      child: ConstrainedBox(
+        // Fixed 340px bikin overflow di mobile; batasi atas saja.
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: AppCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Name row — klik → "Semua" (no status filter)
+              GestureDetector(
+                onTap: () => onTapSection(null),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppColors.primarySoft,
+                        child: Text(
+                          s.displayName.isNotEmpty
+                              ? s.displayName[0].toUpperCase()
+                              : '?',
+                          style: AppTextStyles.h2.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        s.displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          s.displayName,
+                          style: AppTextStyles.h2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            // Disetujui — klik → APPROVED
-            GestureDetector(
-              onTap: () => onTapSection('APPROVED'),
-              behavior: HitTestBehavior.opaque,
-              child: _buildStatusSection(
-                label: 'Disetujui',
-                mtdCount: s.approvedMtdCount,
-                mtdRevenue: s.approvedMtdRevenue,
-                todayCount: s.approvedTodayCount,
-                todayRevenue: s.approvedTodayRevenue,
-                color: AppColors.success,
+              const SizedBox(height: 14),
+              // Disetujui — klik → APPROVED
+              GestureDetector(
+                onTap: () => onTapSection('APPROVED'),
+                behavior: HitTestBehavior.opaque,
+                child: _StatusBreakdown(
+                  label: 'Disetujui',
+                  mtdCount: s.approvedMtdCount,
+                  mtdRevenue: s.approvedMtdRevenue,
+                  todayCount: s.approvedTodayCount,
+                  todayRevenue: s.approvedTodayRevenue,
+                  color: AppColors.success,
+                ),
               ),
-            ),
-            const Divider(height: 22),
-            // Menunggu — klik → PENDING
-            GestureDetector(
-              onTap: () => onTapSection('PENDING'),
-              behavior: HitTestBehavior.opaque,
-              child: _buildStatusSection(
-                label: 'Menunggu',
-                mtdCount: s.pendingMtdCount,
-                mtdRevenue: s.pendingMtdRevenue,
-                todayCount: s.pendingTodayCount,
-                todayRevenue: s.pendingTodayRevenue,
-                color: AppColors.warning,
+              const Divider(height: 22),
+              // Menunggu — klik → PENDING
+              GestureDetector(
+                onTap: () => onTapSection('PENDING'),
+                behavior: HitTestBehavior.opaque,
+                child: _StatusBreakdown(
+                  label: 'Menunggu',
+                  mtdCount: s.pendingMtdCount,
+                  mtdRevenue: s.pendingMtdRevenue,
+                  todayCount: s.pendingTodayCount,
+                  todayRevenue: s.pendingTodayRevenue,
+                  color: AppColors.warning,
+                ),
               ),
-            ),
-            const Divider(height: 22),
-            // Ditolak — klik → REJECTED
-            GestureDetector(
-              onTap: () => onTapSection('REJECTED'),
-              behavior: HitTestBehavior.opaque,
-              child: _buildStatusSection(
-                label: 'Ditolak',
-                mtdCount: s.rejectedMtdCount,
-                mtdRevenue: s.rejectedMtdRevenue,
-                todayCount: s.rejectedTodayCount,
-                todayRevenue: s.rejectedTodayRevenue,
-                color: AppColors.error,
+              const Divider(height: 22),
+              // Ditolak — klik → REJECTED
+              GestureDetector(
+                onTap: () => onTapSection('REJECTED'),
+                behavior: HitTestBehavior.opaque,
+                child: _StatusBreakdown(
+                  label: 'Ditolak',
+                  mtdCount: s.rejectedMtdCount,
+                  mtdRevenue: s.rejectedMtdRevenue,
+                  todayCount: s.rejectedTodayCount,
+                  todayRevenue: s.rejectedTodayRevenue,
+                  color: AppColors.error,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStatusSection({
-    required String label,
-    required int mtdCount,
-    required int mtdRevenue,
-    required int todayCount,
-    required int todayRevenue,
-    required Color color,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('MTD', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                  const SizedBox(height: 3),
-                  Text(
-                    '$mtdCount order',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    'Rp ${_fmt(mtdRevenue)}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Hari ini', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                  const SizedBox(height: 3),
-                  Text(
-                    '$todayCount order',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    'Rp ${_fmt(todayRevenue)}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -1343,14 +1176,17 @@ class _PeriodReportCard extends StatelessWidget {
 //   - Klik membuka popup dengan filter per sales / per branch
 class _BranchPerformanceCard extends StatelessWidget {
   final SalesPerformanceDashboardItem total;
+
   /// Sama semantics dengan _SalesPerformanceCard: null = semua status.
   final ValueChanged<String?> onTapSection;
   final String title;
   final String subtitle;
+
   /// Icon untuk header. Default = grup (untuk total semua cabang / sales).
   /// Untuk per-branch, override jadi business_outlined.
   final IconData headerIcon;
   final Color headerIconColor;
+
   /// true = card full-width 1 baris (untuk Total Semua Cabang).
   /// false = card size ke konten / parent constraint (untuk per-branch card
   /// di dalam Wrap, biar bisa side-by-side).
@@ -1376,7 +1212,7 @@ class _BranchPerformanceCard extends StatelessWidget {
           builder: (context, constraints) {
             final isNarrow = constraints.maxWidth < 600;
             final statusSections = <Widget>[
-              _buildStatusSection(
+              _StatusBreakdown(
                 label: 'Disetujui',
                 mtdCount: total.approvedMtdCount,
                 mtdRevenue: total.approvedMtdRevenue,
@@ -1385,7 +1221,7 @@ class _BranchPerformanceCard extends StatelessWidget {
                 color: AppColors.success,
                 onTap: () => onTapSection('APPROVED'),
               ),
-              _buildStatusSection(
+              _StatusBreakdown(
                 label: 'Menunggu',
                 mtdCount: total.pendingMtdCount,
                 mtdRevenue: total.pendingMtdRevenue,
@@ -1394,7 +1230,7 @@ class _BranchPerformanceCard extends StatelessWidget {
                 color: AppColors.warning,
                 onTap: () => onTapSection('PENDING'),
               ),
-              _buildStatusSection(
+              _StatusBreakdown(
                 label: 'Ditolak',
                 mtdCount: total.rejectedMtdCount,
                 mtdRevenue: total.rejectedMtdRevenue,
@@ -1421,7 +1257,7 @@ class _BranchPerformanceCard extends StatelessWidget {
                           height: 32,
                           decoration: BoxDecoration(
                             color: headerIconColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: AppRadius.md,
                           ),
                           child: Icon(
                             headerIcon,
@@ -1436,18 +1272,14 @@ class _BranchPerformanceCard extends StatelessWidget {
                             children: [
                               Text(
                                 title,
-                                style: const TextStyle(
+                                style: AppTextStyles.h3.copyWith(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 subtitle,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textMuted,
-                                ),
+                                style: AppTextStyles.caption,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
@@ -1497,106 +1329,86 @@ class _BranchPerformanceCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildStatusSection({
-    required String label,
-    required int mtdCount,
-    required int mtdRevenue,
-    required int todayCount,
-    required int todayRevenue,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+/// Satu blok status (Disetujui/Menunggu/Ditolak): dot + label + MTD + hari ini.
+/// Dipakai _SalesPerformanceCard & _BranchPerformanceCard.
+class _StatusBreakdown extends StatelessWidget {
+  final String label;
+  final int mtdCount;
+  final int mtdRevenue;
+  final int todayCount;
+  final int todayRevenue;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _StatusBreakdown({
+    required this.label,
+    required this.mtdCount,
+    required this.mtdRevenue,
+    required this.todayCount,
+    required this.todayRevenue,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _column('MTD', mtdCount, mtdRevenue)),
+            const SizedBox(width: 10),
+            Expanded(child: _column('Hari ini', todayCount, todayRevenue)),
+          ],
+        ),
+      ],
+    );
+
+    if (onTap == null) return content;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'MTD',
-                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$mtdCount order',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Rp ${_fmt(mtdRevenue)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Hari ini',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$todayCount order',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Rp ${_fmt(todayRevenue)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: content,
     );
   }
+
+  Widget _column(String heading, int count, int revenue) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(heading, style: AppTextStyles.caption),
+      const SizedBox(height: 3),
+      Text(
+        '$count order',
+        style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+      ),
+      Text(
+        'Rp ${_fmt(revenue)}',
+        style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+      ),
+    ],
+  );
 }
 
 // ===== Popup detail order untuk sales performance card =====
@@ -1641,18 +1453,22 @@ class _SalesOverlayDialog extends StatelessWidget {
 
 class _SalesDetailDialogBody extends StatefulWidget {
   final AdminProvider provider;
+
   /// Null = mode "Total Semua Sales" (popup dari card Performa Cabang).
   /// Saat null, user bisa filter per sales via dropdown di sidebar.
   final SalesPerformanceDashboardItem? sales;
+
   /// Null = no branch pre-filter. Saat di-set (mode per-branch dari
   /// "Masing-masing Cabang" card), orders di-filter ke branch tsb dan
   /// dropdown Branch di sidebar di-hide.
   final String? branch;
   final VoidCallback onClose;
+
   /// Status pre-applied saat dialog pertama dibuka. Null = tampilkan semua
   /// status ("Semua"). Dipakai untuk deep-link dari klik salah satu section
   /// di dashboard card (Disetujui/Menunggu/Ditolak → APPROVED/PENDING/REJECTED).
   final String? initialStatus;
+
   /// true = layout mobile (sidebar stack di atas, full-width).
   /// false = layout desktop (sidebar 220px di kiri, orders di kanan).
   final bool compact;
@@ -1687,6 +1503,11 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   void initState() {
     super.initState();
     _statusFilter = widget.initialStatus;
+    // Default = bulan berjalan (sama dengan periode card MTD di dashboard),
+    // supaya angka popup match dengan card. User tetap bisa ubah/hapus.
+    final now = DateTime.now();
+    _dateFrom = DateTime(now.year, now.month, 1);
+    _dateTo = DateTime(now.year, now.month, now.day);
     widget.provider.addListener(_onProviderUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyFilters();
@@ -1728,21 +1549,31 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
 
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
-      case 'APPROVED': return AppColors.success;
-      case 'PENDING': return AppColors.warning;
-      case 'REJECTED': return AppColors.error;
-      case 'CANCELLED': return AppColors.textMuted;
-      default: return AppColors.info;
+      case 'APPROVED':
+        return AppColors.success;
+      case 'PENDING':
+        return AppColors.warning;
+      case 'REJECTED':
+        return AppColors.error;
+      case 'CANCELLED':
+        return AppColors.textMuted;
+      default:
+        return AppColors.info;
     }
   }
 
   String _statusLabel(String status) {
     switch (status.toUpperCase()) {
-      case 'APPROVED': return 'Disetujui';
-      case 'PENDING': return 'Menunggu';
-      case 'REJECTED': return 'Ditolak';
-      case 'CANCELLED': return 'Dibatalkan';
-      default: return status;
+      case 'APPROVED':
+        return 'Disetujui';
+      case 'PENDING':
+        return 'Menunggu';
+      case 'REJECTED':
+        return 'Ditolak';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      default:
+        return status;
     }
   }
 
@@ -1810,10 +1641,12 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     final loading = provider.salesDetailLoading;
     final error = provider.salesDetailError;
 
-    final totalOrders = orders.length;
-    final totalRevenue = orders.fold<int>(0, (sum, o) => sum + o.totalAmount);
-    final totalDiscount = orders.fold<int>(0, (sum, o) => sum + o.totalDiscount);
-    final totalUpPrice = orders.fold<int>(0, (sum, o) => sum + o.totalUpPrice);
+    // Total dari server = seluruh hasil filter (bukan cuma [limit] row yang
+    // dikirim), jadi sama dengan angka card MTD.
+    final totalOrders = provider.salesDetailTotalOrders;
+    final totalRevenue = provider.salesDetailTotalRevenue;
+    final totalDiscount = provider.salesDetailTotalDiscount;
+    final totalUpPrice = provider.salesDetailTotalUpPrice;
 
     final salesList = widget.sales == null
         ? provider.dashboardPerformance
@@ -1868,11 +1701,17 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                         children: [
                           Text(
                             widget.sales!.displayName,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                           Text(
                             '@${widget.sales!.username}',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1898,11 +1737,17 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                         children: [
                           Text(
                             'Cabang ${widget.branch}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                           Text(
                             'Pesanan dari seluruh sales di cabang ini',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1928,11 +1773,17 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                         children: [
                           const Text(
                             'Total Semua Sales',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
                           Text(
                             'Pesanan dari seluruh sales di branch ini',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1959,7 +1810,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                           branchList: branchList,
                         ),
                         const Divider(height: 1, color: AppColors.border),
-                        Expanded(child: _buildOrderList(orders, loading, error)),
+                        Expanded(
+                          child: _buildOrderList(orders, loading, error),
+                        ),
                       ],
                     )
                   : Row(
@@ -1972,7 +1825,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                           salesList: salesList,
                           branchList: branchList,
                         ),
-                        Expanded(child: _buildOrderList(orders, loading, error)),
+                        Expanded(
+                          child: _buildOrderList(orders, loading, error),
+                        ),
                       ],
                     ),
             ),
@@ -2059,9 +1914,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.15),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
       ),
       child: compact
           ? Row(
@@ -2252,10 +2105,12 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
               children: [
                 summaryBox,
                 const SizedBox(width: 10),
-                ...filterButtons.map((b) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: b,
-                    )),
+                ...filterButtons.map(
+                  (b) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: b,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2278,7 +2133,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _salesMenuItem(null, 'Semua Sales'),
-                    ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
+                    ...salesList.map(
+                      (s) => _salesMenuItem(s.userId, s.displayName),
+                    ),
                   ],
                 ),
               ),
@@ -2295,7 +2152,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             ),
           if (_showDateFromPicker)
             _buildDatePicker(
-              initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+              initial:
+                  _dateFrom ??
+                  DateTime.now().subtract(const Duration(days: 30)),
               onSelect: _selectDateFrom,
               onClose: () => setState(() => _showDateFromPicker = false),
             ),
@@ -2354,7 +2213,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _salesMenuItem(null, 'Semua Sales'),
-                  ...salesList.map((s) => _salesMenuItem(s.userId, s.displayName)),
+                  ...salesList.map(
+                    (s) => _salesMenuItem(s.userId, s.displayName),
+                  ),
                 ],
               ),
             ),
@@ -2372,7 +2233,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
           ),
         if (_showDateFromPicker)
           _buildDatePicker(
-            initial: _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
+            initial:
+                _dateFrom ?? DateTime.now().subtract(const Duration(days: 30)),
             onSelect: _selectDateFrom,
             onClose: () => setState(() => _showDateFromPicker = false),
           ),
@@ -2471,7 +2333,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             border: Border.all(color: AppColors.border),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: child ??
+          child:
+              child ??
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: children,
@@ -2491,7 +2354,10 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
           children: [
             const Icon(Icons.error_outline, color: AppColors.error, size: 36),
             const SizedBox(height: 8),
-            Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+            Text(
+              error,
+              style: const TextStyle(color: AppColors.error, fontSize: 13),
+            ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: _applyFilters,
@@ -2519,7 +2385,8 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: orders.length,
-      itemBuilder: (ctx, i) => _buildOrderCard(orders[i], compact: widget.compact),
+      itemBuilder: (ctx, i) =>
+          _buildOrderCard(orders[i], compact: widget.compact),
     );
   }
 
@@ -2678,7 +2545,10 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                       ),
                       const SizedBox(height: 6),
                       // Baris 3: amount + discount + upPrice (right-aligned)
-                      Align(alignment: Alignment.centerRight, child: amountBlock),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: amountBlock,
+                      ),
                     ],
                   )
                 : Row(
@@ -2790,7 +2660,11 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, size: 14, color: AppColors.error),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: AppColors.error,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
@@ -2940,16 +2814,22 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       ],
     ];
     if (!compact) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: rows,
+      );
     }
-    // Compact: inner Column dibungkus SizedBox min-width 466px, di-scroll
-    // horizontal. Lebar Expanded(flex:2) jadi 100px min — yang sebenarnya
-    // bisa lebih kalau user scroll.
+    // Compact: inner Column dibungkus lebar pasti 466px, di-scroll horizontal.
+    // Wajib SizedBox (bukan ConstrainedBox minWidth): Expanded di dalam Row
+    // butuh width bounded, minWidth-only bikin constraint maxWidth = infinity.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 466),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
+      child: SizedBox(
+        width: 466,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: rows,
+        ),
       ),
     );
   }
@@ -2961,7 +2841,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.08)
+            : Colors.transparent,
         child: Text(
           label,
           style: TextStyle(
@@ -2981,7 +2863,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.08)
+            : Colors.transparent,
         child: Text(
           label,
           overflow: TextOverflow.ellipsis,
@@ -3010,7 +2894,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
     }
     return [
       _branchMenuItem(null, 'Semua Cabang'),
-      ...branches.map((b) => _branchMenuItem(b, b.isEmpty ? 'Tanpa branch' : b)),
+      ...branches.map(
+        (b) => _branchMenuItem(b, b.isEmpty ? 'Tanpa branch' : b),
+      ),
     ];
   }
 
@@ -3021,7 +2907,9 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.08)
+            : Colors.transparent,
         child: Text(
           label,
           overflow: TextOverflow.ellipsis,
@@ -3066,13 +2954,19 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                       });
                     },
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
                   ),
                   Expanded(
                     child: Text(
                       '${_monthName(focused.month)} ${focused.year}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -3083,7 +2977,10 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                       });
                     },
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
                   ),
                 ],
               ),
@@ -3093,60 +2990,77 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Row(
                 children: ['S', 'S', 'R', 'K', 'J', 'J', 'S']
-                    .map((d) => Expanded(
-                          child: Center(
-                            child: Text(d, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                    .map(
+                      (d) => Expanded(
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMuted,
+                            ),
                           ),
-                        ))
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
             const SizedBox(height: 4),
             // Days grid
-            Builder(builder: (ctx) {
-              final firstDay = DateTime(focused.year, focused.month, 1);
-              final lastDay = DateTime(focused.year, focused.month + 1, 0);
-              final startWeekday = firstDay.weekday % 7;
-              final days = <Widget>[];
-              for (int i = 0; i < startWeekday; i++) {
-                days.add(const SizedBox());
-              }
-              for (int d = 1; d <= lastDay.day; d++) {
-                final date = DateTime(focused.year, focused.month, d);
-                final isSelected = _dateFrom != null && date.year == _dateFrom!.year && date.month == _dateFrom!.month && date.day == _dateFrom!.day;
-                days.add(
-                  GestureDetector(
-                    onTap: () => onSelect(date),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$d',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isSelected ? Colors.white : null,
-                          fontWeight: isSelected ? FontWeight.w600 : null,
+            Builder(
+              builder: (ctx) {
+                final firstDay = DateTime(focused.year, focused.month, 1);
+                final lastDay = DateTime(focused.year, focused.month + 1, 0);
+                final startWeekday = firstDay.weekday % 7;
+                final days = <Widget>[];
+                for (int i = 0; i < startWeekday; i++) {
+                  days.add(const SizedBox());
+                }
+                for (int d = 1; d <= lastDay.day; d++) {
+                  final date = DateTime(focused.year, focused.month, d);
+                  final isSelected =
+                      _dateFrom != null &&
+                      date.year == _dateFrom!.year &&
+                      date.month == _dateFrom!.month &&
+                      date.day == _dateFrom!.day;
+                  days.add(
+                    GestureDetector(
+                      onTap: () => onSelect(date),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '$d',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isSelected ? Colors.white : null,
+                            fontWeight: isSelected ? FontWeight.w600 : null,
+                          ),
                         ),
                       ),
                     ),
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  child: GridView.count(
+                    crossAxisCount: 7,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 2,
+                    crossAxisSpacing: 2,
+                    children: days,
                   ),
                 );
-              }
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-                child: GridView.count(
-                  crossAxisCount: 7,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 2,
-                  crossAxisSpacing: 2,
-                  children: days,
-                ),
-              );
-            }),
+              },
+            ),
           ],
         ),
       ),
@@ -3154,8 +3068,20 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
   }
 
   String _monthName(int month) {
-    const names = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-                   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const names = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
     return names[month - 1];
   }
 
@@ -3169,10 +3095,7 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
             width: 70,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textMuted,
-              ),
+              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
             ),
           ),
           Expanded(
@@ -3214,7 +3137,10 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                 if (item.isFree) ...[
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.success,
                       borderRadius: BorderRadius.circular(10),
@@ -3270,20 +3196,20 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                     textAlign: TextAlign.right,
                   )
                 : item.hasDiscount
-                    ? Text(
-                        '-Rp ${_fmt(item.nominalDiskon)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.success,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.right,
-                      )
-                    : const Text(
-                        '—',
-                        style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                        textAlign: TextAlign.right,
-                      ),
+                ? Text(
+                    '-Rp ${_fmt(item.nominalDiskon)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.right,
+                  )
+                : const Text(
+                    '—',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    textAlign: TextAlign.right,
+                  ),
           ),
           SizedBox(
             width: 75,
@@ -3317,7 +3243,10 @@ class _SalesDetailDialogBodyState extends State<_SalesDetailDialogBody> {
                   )
                 : Text(
                     'Rp ${_fmt(item.subtotal)}',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                     textAlign: TextAlign.right,
                   ),
           ),

@@ -21,11 +21,11 @@ class OrderRepository {
       'skip': skip.toString(),
       'limit': limit.toString(),
     };
-    if (status != null && status.isNotEmpty) {
-      params['status'] = status;
+    if (status?.isNotEmpty ?? false) {
+      params['status'] = status!;
     }
-    if (search != null && search.isNotEmpty) {
-      params['search'] = search;
+    if (search?.isNotEmpty ?? false) {
+      params['search'] = search!;
     }
     final data = await _api.get('/orders/my', queryParams: params);
     // /orders/my returns a bare JSON array per FastAPI's response_model.
@@ -53,13 +53,18 @@ class OrderRepository {
     required List<Map<String, dynamic>> items,
     String? notes,
     required String orderType,
+    String? clientRequestId,
   }) async {
-    final data = await _api.post('/orders', body: {
+    final body = <String, dynamic>{
       'customer_id': customerId,
       'items': items,
       'notes': notes,
       'order_type': orderType,
-    });
+    };
+    if (clientRequestId != null) {
+      body['client_request_id'] = clientRequestId;
+    }
+    final data = await _api.post('/orders', body: body);
     return Order.fromJson(data as Map<String, dynamic>);
   }
 
@@ -69,14 +74,18 @@ class OrderRepository {
     String? notes,
     required String orderType,
     String? existingOrderId,
+    String? clientRequestId,
   }) async {
-    final body = {
+    final body = <String, dynamic>{
       'customer_id': customerId,
       'items': items,
       'notes': notes,
       'order_type': orderType,
       'status': 'DRAFT',
     };
+    if (clientRequestId != null) {
+      body['client_request_id'] = clientRequestId;
+    }
     final data = existingOrderId != null
         ? await _api.put('/orders/$existingOrderId', body: body)
         : await _api.post('/orders', body: body);

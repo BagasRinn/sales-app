@@ -1,17 +1,13 @@
-import 'package:intl/intl.dart';
+// Re-export shared datetime utilities with timezone support
+export 'package:datetime_utils/datetime_utils.dart';
+import 'package:datetime_utils/datetime_utils.dart' as dt_utils;
 
-/// Frontend datetime utilities.
-///
-/// NOTE: Backend sekarang mengirim semua datetime dalam format WITA (+08:00).
-/// Frontend cukup parse dan tampilkan langsung — tidak perlu konversi timezone.
-/// Helper di file ini terutama untuk format tanggal saja.
-///
-/// Contoh format datetime dari backend: "2026-10-20T10:00:00+08:00"
-/// Flutter DateTime.parse() handle ini dengan benar — time component langsung
-/// dalam WITA, tidak perlu tambahan konversi.
+/// Legacy compatibility - parse backend datetime (now uses shared package)
+/// @deprecated Use [dt_utils.parseBackendDateTime] from datetime_utils package
+DateTime parseBackendDateTime(String iso) => dt_utils.parseBackendDateTime(iso);
 
-/// Format DateTime ke string. Asumsikan input sudah dalam WITA
-/// (datang dari backend).
+/// Legacy compatibility - format for UI (now uses shared package)
+/// @deprecated Use [dt_utils.formatForUi] from datetime_utils package
 String witaFormat(DateTime wita, {String pattern = 'dd MMM yyyy HH:mm'}) {
-  return DateFormat(pattern).format(wita);
+  return dt_utils.formatForUi(wita, pattern: pattern);
 }

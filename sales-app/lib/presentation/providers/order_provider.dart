@@ -121,6 +121,7 @@ class OrderProvider extends ChangeNotifier {
     Map<String, ItemDiscount>? discounts,
     String? notes,
     String orderType = 'REGULER',
+    String? clientRequestId,
   }) async {
     _errorMessage = null;
     notifyListeners();
@@ -131,6 +132,7 @@ class OrderProvider extends ChangeNotifier {
         items: items,
         notes: notes,
         orderType: orderType,
+        clientRequestId: clientRequestId,
       );
       notifyListeners();
       return order;

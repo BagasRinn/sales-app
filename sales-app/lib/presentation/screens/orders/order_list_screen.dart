@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../providers/order_provider.dart';
 import '../../../data/models/order.dart';
 import 'order_detail_screen.dart';
@@ -59,9 +60,9 @@ class _OrderListScreenState extends State<OrderListScreen>
 
   void _refreshOrders({bool reset = true}) {
     context.read<OrderProvider>().loadOrders(
-          status: _statusFilters[_selectedFilterIndex].status,
-          reset: reset,
-        );
+      status: _statusFilters[_selectedFilterIndex].status,
+      reset: reset,
+    );
   }
 
   void _onScroll() {
@@ -73,15 +74,15 @@ class _OrderListScreenState extends State<OrderListScreen>
 
   Future<void> _refresh() async {
     context.read<OrderProvider>().loadOrders(
-          status: _statusFilters[_selectedFilterIndex].status,
-        );
+      status: _statusFilters[_selectedFilterIndex].status,
+    );
   }
 
   void _selectFilter(int index) {
     setState(() => _selectedFilterIndex = index);
     context.read<OrderProvider>().loadOrders(
-          status: _statusFilters[index].status,
-        );
+      status: _statusFilters[index].status,
+    );
   }
 
   @override
@@ -127,20 +128,10 @@ class _OrderListScreenState extends State<OrderListScreen>
               itemBuilder: (context, i) {
                 final f = _statusFilters[i];
                 final selected = i == _selectedFilterIndex;
-                return ChoiceChip(
-                  label: Text(f.label),
+                return AppChoiceChip(
+                  label: f.label,
                   selected: selected,
-                  onSelected: (_) => _selectFilter(i),
-                  selectedColor: AppColors.primaryLight,
-                  labelStyle: TextStyle(
-                    color: selected ? Colors.white : AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                  ),
-                  backgroundColor: AppColors.cardSurface,
-                  side: BorderSide(
-                    color: selected ? AppColors.primaryLight : AppColors.border,
-                  ),
+                  onSelected: () => _selectFilter(i),
                 );
               },
             ),
@@ -171,8 +162,11 @@ class _OrderListScreenState extends State<OrderListScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.inbox_outlined,
-                  size: 64, color: AppColors.textMuted),
+              const Icon(
+                Icons.inbox_outlined,
+                size: 64,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(height: 12),
               Text(
                 _searchQuery.isNotEmpty
@@ -251,18 +245,20 @@ class _OrderTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OrderDetailScreen(orderId: order.id),
-            ),
-          ).then((_) {
-            // Refresh setelah kembali dari detail — status order bisa
-            // berubah (admin approve/reject) selama halaman detail terbuka.
-            // refreshOrders() re-fetch dengan filter aktif saat ini (reset:true).
-            if (context.mounted) {
-              context.read<OrderProvider>().refreshOrders();
-            }
-          });
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (_) => OrderDetailScreen(orderId: order.id),
+                ),
+              )
+              .then((_) {
+                // Refresh setelah kembali dari detail — status order bisa
+                // berubah (admin approve/reject) selama halaman detail terbuka.
+                // refreshOrders() re-fetch dengan filter aktif saat ini (reset:true).
+                if (context.mounted) {
+                  context.read<OrderProvider>().refreshOrders();
+                }
+              });
         },
         child: Container(
           padding: const EdgeInsets.all(14),
@@ -295,58 +291,9 @@ class _OrderTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _StatusChip(status: order.status, label: order.statusLabel),
+              OrderStatusChip(status: order.status, label: order.statusLabel),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final String status;
-  final String label;
-  const _StatusChip({required this.status, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color fg;
-    switch (status) {
-      case 'DRAFT':
-        bg = AppColors.warningBg;
-        fg = AppColors.warning;
-        break;
-      case 'PENDING':
-        bg = AppColors.infoBg;
-        fg = AppColors.info;
-        break;
-      case 'APPROVED':
-        bg = AppColors.successBg;
-        fg = AppColors.success;
-        break;
-      case 'CANCELLED':
-      case 'REJECTED':
-        bg = AppColors.errorBg;
-        fg = AppColors.error;
-        break;
-      default:
-        bg = AppColors.borderLight;
-        fg = AppColors.textSecondary;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
         ),
       ),
     );
@@ -372,9 +319,10 @@ class _OrderSkeletonTileState extends State<_OrderSkeletonTile>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 0.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -406,7 +354,9 @@ class _OrderSkeletonTileState extends State<_OrderSkeletonTile>
                       width: 150,
                       height: 14,
                       decoration: BoxDecoration(
-                        color: AppColors.border.withValues(alpha: _animation.value),
+                        color: AppColors.border.withValues(
+                          alpha: _animation.value,
+                        ),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -415,7 +365,9 @@ class _OrderSkeletonTileState extends State<_OrderSkeletonTile>
                       width: 200,
                       height: 12,
                       decoration: BoxDecoration(
-                        color: AppColors.border.withValues(alpha: _animation.value * 0.7),
+                        color: AppColors.border.withValues(
+                          alpha: _animation.value * 0.7,
+                        ),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -457,9 +409,10 @@ class _LoadingMoreSkeletonState extends State<_LoadingMoreSkeleton>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 0.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:admin_web/core/design_system.dart';
@@ -5,8 +6,6 @@ import 'package:admin_web/core/responsive.dart';
 import 'package:admin_web/data/models/supplier.dart';
 import 'package:admin_web/presentation/providers/admin_provider.dart';
 import 'package:admin_web/presentation/widgets/data_card.dart';
-import 'package:admin_web/presentation/widgets/error_state.dart';
-import 'package:admin_web/presentation/widgets/loading_state.dart';
 import 'package:admin_web/presentation/widgets/responsive_action_menu.dart';
 import 'package:admin_web/presentation/widgets/supplier_create_dialog.dart';
 import 'package:admin_web/presentation/widgets/supplier_edit_order_type_dialog.dart';
@@ -23,6 +22,7 @@ class _SuppliersTabState extends State<SuppliersTab> {
   bool? _activeFilter; // null = semua
   String _search = '';
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -34,6 +34,7 @@ class _SuppliersTabState extends State<SuppliersTab> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -44,18 +45,10 @@ class _SuppliersTabState extends State<SuppliersTab> {
     final loading = provider.suppliersLoading;
     final error = provider.suppliersError;
     final isManager = provider.userRole == 'MANAGER';
-    final allRows = provider.suppliers;
-    final rows = allRows.where((s) {
-      if (_activeFilter != null && s.isActive != _activeFilter!) return false;
-      if (_search.isNotEmpty && !s.name.toLowerCase().contains(_search.toLowerCase())) {
-        return false;
-      }
-      return true;
-    }).toList();
+    final rows = provider.suppliers;
 
     return Column(
       children: [
-        // Search bar + counter pill
         Container(
           padding: const EdgeInsets.all(12),
           color: AppColors.surface,
@@ -74,109 +67,169 @@ class _SuppliersTabState extends State<SuppliersTab> {
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
+                                  _searchDebounce?.cancel();
                                   _searchController.clear();
                                   setState(() => _search = '');
+                                  provider.loadSuppliers(search: '', page: 0);
                                 },
                               )
                             : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         isDense: true,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onChanged: (v) => setState(() => _search = v),
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 400),
+                          () {
+                            setState(() => _search = v.trim());
+                            provider.loadSuppliers(search: v.trim(), page: 0);
+                          },
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Counter pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      border: Border.all(color: AppColors.border),
+                      color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Text(
-                      '${allRows.length} supplier',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                      '${provider.supplierTotal} supplier',
+                      style: AppTextStyles.bodySmall,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              // Filter chips
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _chip('Semua', _activeFilter == null, () => setState(() => _activeFilter = null)),
-                  _chip('Aktif', _activeFilter == true, () => setState(() => _activeFilter = true)),
-                  _chip('Non-Aktif', _activeFilter == false, () => setState(() => _activeFilter = false)),
-                  if (isManager)
-                    FilledButton.icon(
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Buat Supplier Baru'),
-                      onPressed: () => _onCreate(context),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ),
-                ],
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 400;
+                  final filters = Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _chip('Semua', _activeFilter == null, () {
+                        setState(() => _activeFilter = null);
+                        provider.setSupplierActiveFilter(null);
+                      }),
+                      _chip('Aktif', _activeFilter == true, () {
+                        setState(() => _activeFilter = true);
+                        provider.setSupplierActiveFilter(true);
+                      }),
+                      _chip('Non-Aktif', _activeFilter == false, () {
+                        setState(() => _activeFilter = false);
+                        provider.setSupplierActiveFilter(false);
+                      }),
+                      if (isManager)
+                        AppButton(
+                          icon: Icons.add,
+                          label: 'Buat Supplier',
+                          onPressed: () => _onCreate(context),
+                        ),
+                    ],
+                  );
+                  return isNarrow ? filters : filters;
+                },
               ),
             ],
           ),
         ),
+        const Divider(height: 1),
         Expanded(
           child: loading
-              ? const LoadingState()
+              ? const Padding(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  child: AppSkeletonList(),
+                )
               : error != null
-                  ? ErrorState(
-                      message: error,
-                      onRetry: () => provider.loadSuppliers(),
-                    )
-                  : rows.isEmpty
-                      ? _buildEmptyState()
-                      : LayoutBuilder(
-                          builder: (ctx, c) {
-                            final resp = Responsive.of(c.maxWidth);
-                            return resp.isDesktop
-                                ? _table(context, rows, isManager)
-                                : _cardList(context, rows, isManager);
-                          },
-                        ),
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: AppErrorState(
+                    message: error,
+                    onRetry: () => provider.loadSuppliers(),
+                  ),
+                )
+              : rows.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: AppEmptyState(
+                    icon: Icons.store_outlined,
+                    title: _search.isNotEmpty
+                        ? 'Supplier tidak ditemukan'
+                        : 'Belum ada supplier',
+                    message: _search.isNotEmpty
+                        ? 'Tidak ada supplier yang cocok dengan "$_search".'
+                        : 'Tambahkan supplier untuk mulai memetakan produk.',
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (ctx, c) {
+                    final resp = Responsive.of(c.maxWidth);
+                    return resp.isDesktop
+                        ? _table(context, rows, isManager)
+                        : _cardList(context, rows, isManager);
+                  },
+                ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border(top: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: provider.hasPrevSupplierPage
+                    ? provider.prevSupplierPage
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+                tooltip: 'Halaman sebelumnya',
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Halaman ${provider.supplierPage + 1} dari '
+                '${provider.supplierTotalPages == 0 ? 1 : provider.supplierTotalPages}',
+                style: AppTextStyles.bodySmall,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: provider.hasNextSupplierPage
+                    ? provider.nextSupplierPage
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+                tooltip: 'Halaman berikutnya',
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.store_outlined,
-            size: 48,
-            color: AppColors.textMuted.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _search.isNotEmpty
-                ? 'Tidak ada supplier yang cocok dengan pencarian "$_search"'
-                : 'Belum ada supplier yang terdaftar',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _chip(String label, bool selected, VoidCallback onTap) {
-    return ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap());
+    return AppChoiceChip(
+      label: label,
+      selected: selected,
+      dense: true,
+      onSelected: onTap,
+    );
   }
 
   Widget _table(BuildContext context, List<Supplier> rows, bool isManager) {
@@ -207,7 +260,9 @@ class _SuppliersTabState extends State<SuppliersTab> {
             child: Center(
               child: Text(
                 'NAMA SUPPLIER',
-                style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -216,7 +271,9 @@ class _SuppliersTabState extends State<SuppliersTab> {
             child: Center(
               child: Text(
                 'STATUS',
-                style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -225,7 +282,9 @@ class _SuppliersTabState extends State<SuppliersTab> {
             child: Center(
               child: Text(
                 'TIPE ORDER',
-                style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -234,7 +293,9 @@ class _SuppliersTabState extends State<SuppliersTab> {
             child: Center(
               child: Text(
                 'JUMLAH PRODUK',
-                style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -244,7 +305,9 @@ class _SuppliersTabState extends State<SuppliersTab> {
               child: Center(
                 child: Text(
                   'AKSI',
-                  style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -257,20 +320,29 @@ class _SuppliersTabState extends State<SuppliersTab> {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final maxWidth = constraints.maxWidth;
-        final columns = maxWidth >= 1024 ? 3 : maxWidth >= 768 ? 2 : 1;
+        final columns = maxWidth >= 1024
+            ? 3
+            : maxWidth >= 768
+            ? 2
+            : 1;
         final hPadding = 16.0;
         final gap = 16.0;
-        final cardWidth = (maxWidth - 2 * hPadding - (columns - 1) * gap) / columns;
+        final cardWidth =
+            (maxWidth - 2 * hPadding - (columns - 1) * gap) / columns;
 
         return SingleChildScrollView(
           padding: EdgeInsets.all(hPadding),
           child: Wrap(
             spacing: gap,
             runSpacing: gap,
-            children: rows.map((s) => SizedBox(
-              width: cardWidth,
-              child: _rowCard(context, s, isManager),
-            )).toList(),
+            children: rows
+                .map(
+                  (s) => SizedBox(
+                    width: cardWidth,
+                    child: _rowCard(context, s, isManager),
+                  ),
+                )
+                .toList(),
           ),
         );
       },
@@ -288,27 +360,20 @@ class _SuppliersTabState extends State<SuppliersTab> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(
                 s.name,
-                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
-          Expanded(
-            flex: 1,
-            child: Center(child: _statusBadge(s.isActive)),
-          ),
-          Expanded(
-            flex: 1,
-            child: Center(child: _orderTypeBadge(s.orderType)),
-          ),
+          Expanded(flex: 1, child: Center(child: _statusBadge(s.isActive))),
+          Expanded(flex: 1, child: Center(child: _orderTypeBadge(s.orderType))),
           Expanded(
             flex: 1,
             child: Center(
-              child: Text(
-                '${s.productCount}',
-                style: AppTextStyles.bodyMedium,
-              ),
+              child: Text('${s.productCount}', style: AppTextStyles.bodyMedium),
             ),
           ),
           if (isManager)
@@ -364,9 +429,7 @@ class _SuppliersTabState extends State<SuppliersTab> {
     return DataCard(
       title: s.name,
       badges: [_statusBadge(s.isActive), _orderTypeBadge(s.orderType)],
-      fields: [
-        DataField(label: 'Jumlah Produk', value: '${s.productCount}'),
-      ],
+      fields: [DataField(label: 'Jumlah Produk', value: '${s.productCount}')],
       actions: isManager
           ? [
               ResponsiveActionMenu(
@@ -389,35 +452,18 @@ class _SuppliersTabState extends State<SuppliersTab> {
   }
 
   Widget _statusBadge(bool isActive) {
-    final c = isActive ? AppColors.success : AppColors.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        isActive ? 'Aktif' : 'Non-Aktif',
-        style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
-      ),
+    return AppBadge(
+      label: isActive ? 'Aktif' : 'Non-Aktif',
+      variant: isActive ? AppBadgeVariant.success : AppBadgeVariant.neutral,
     );
   }
 
   Widget _orderTypeBadge(String orderType) {
-    final is4P = orderType == '4P';
-    final c = is4P ? AppColors.info : AppColors.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        orderType,
-        style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
-      ),
+    return AppBadge(
+      label: orderType,
+      variant: orderType == '4P'
+          ? AppBadgeVariant.info
+          : AppBadgeVariant.neutral,
     );
   }
 
@@ -427,23 +473,18 @@ class _SuppliersTabState extends State<SuppliersTab> {
     if (!context.mounted) return;
     try {
       await context.read<AdminProvider>().createSupplier(
-            result.name,
-            orderType: result.orderType,
-          );
+        result.name,
+        orderType: result.orderType,
+      );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Supplier "${result.name}" (${result.orderType}) berhasil dibuat',
-            ),
-          ),
+        AppSnack.success(
+          context,
+          'Supplier "${result.name}" (${result.orderType}) berhasil dibuat',
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membuat supplier: $e')),
-        );
+        AppSnack.error(context, 'Gagal membuat supplier: $e');
       }
     }
   }
@@ -456,37 +497,27 @@ class _SuppliersTabState extends State<SuppliersTab> {
       await context.read<AdminProvider>().toggleSupplierActive(s);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengubah status supplier: $e')),
-        );
+        AppSnack.error(context, 'Gagal mengubah status supplier: $e');
       }
     }
   }
 
   Future<void> _onEditOrderType(BuildContext context, Supplier s) async {
-    final newType = await showSupplierEditOrderTypeDialog(
-      context,
-      supplier: s,
-    );
+    final newType = await showSupplierEditOrderTypeDialog(context, supplier: s);
     if (newType == null || newType == s.orderType) return;
     if (!context.mounted) return;
     try {
       await context.read<AdminProvider>().updateSupplierOrderType(s, newType);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Tipe order ${s.name}: ${s.orderType} → $newType '
-              '(${s.productCount} produk ter-update)',
-            ),
-          ),
+        AppSnack.success(
+          context,
+          'Tipe order ${s.name}: ${s.orderType} → $newType '
+          '(${s.productCount} produk ter-update)',
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengubah tipe order: $e')),
-        );
+        AppSnack.error(context, 'Gagal mengubah tipe order: $e');
       }
     }
   }

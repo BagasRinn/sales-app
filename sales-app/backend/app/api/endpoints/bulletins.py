@@ -19,15 +19,6 @@ router = APIRouter(prefix="/bulletins", tags=["Bulletins"])
 WITA = timezone(timedelta(hours=8))
 
 
-def _wita_str(dt: datetime) -> str:
-    """Convert datetime to WITA ISO string with +08:00 suffix."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(WITA).isoformat()
-
-
 def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
     return {
         "id": bulletin.id,
@@ -36,8 +27,8 @@ def _build_bulletin_response(bulletin: Bulletin, is_read: bool = False) -> dict:
         "title": bulletin.title,
         "description": bulletin.description,
         "pdf_url": bulletin.pdf_url,
-        "expire_at": _wita_str(bulletin.expire_at),
-        "created_at": _wita_str(bulletin.created_at),
+        "expire_at": bulletin.expire_at,
+        "created_at": bulletin.created_at,
         "is_read": is_read,
     }
 

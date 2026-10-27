@@ -33,105 +33,189 @@ class _SyncTabState extends State<SyncTab> {
         return SingleChildScrollView(
           padding: EdgeInsets.all(resp.contentPadding),
           child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Main import card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Main import card
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.infoBg,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child:
-                            const Icon(Icons.upload_file, size: 32, color: AppColors.info),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.upload_file,
+                              size: 32,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Import Produk',
+                                  style: AppTextStyles.headlineMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Upload file .xlsx untuk import atau update data produk',
+                                  style: AppTextStyles.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Import Produk',
-                              style: AppTextStyles.headlineMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Upload file .xlsx untuk import atau update data produk',
-                              style: AppTextStyles.bodyMedium,
-                            ),
-                          ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: FilledButton.icon(
+                          onPressed: (isLoading || widget.readOnly)
+                              ? null
+                              : () => _pickAndImport(context, provider),
+                          icon: isLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.folder_open),
+                          label: Text(
+                            isLoading
+                                ? 'Mengimport...'
+                                : 'Pilih File Excel (.xlsx)',
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: FilledButton.icon(
-                      onPressed: (isLoading || widget.readOnly)
-                          ? null
-                          : () => _pickAndImport(context, provider),
-                      icon: isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.folder_open),
-                      label: Text(
-                          isLoading ? 'Mengimport...' : 'Pilih File Excel (.xlsx)'),
+                ),
+              ),
+
+              // Customer Import Card
+              _CustomerImportCard(
+                historyKey: _historyKey,
+                errorsKey: _errorsKey,
+                readOnly: widget.readOnly,
+              ),
+
+              // Sales Report Import Card
+              if (!widget.readOnly)
+                AppCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(
+                                Icons.upload_file,
+                                size: 32,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Import Laporan Penjualan',
+                                    style: AppTextStyles.headlineMedium,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  const Text(
+                                    'Upload file .xlsx berisi laporan penjualan dari sistem utama',
+                                    style: AppTextStyles.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: (isLoading || widget.readOnly)
+                                ? null
+                                : () => _pickAndImportSales(context, provider),
+                            icon: isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.folder_open),
+                            label: Text(
+                              isLoading
+                                  ? 'Mengimport...'
+                                  : 'Pilih File Laporan Penjualan (.xlsx)',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+
+              // Result cards
+              if (syncResult != null) ...[
+                const SizedBox(height: 32),
+                const Text(
+                  'Hasil Import Terakhir',
+                  style: AppTextStyles.headlineLarge,
+                ),
+                const SizedBox(height: 16),
+                _SyncResultGrid(result: syncResult),
+              ],
+
+              const SizedBox(height: 32),
+              // Import history
+              const Text('Histori Import', style: AppTextStyles.headlineLarge),
+              const SizedBox(height: 16),
+              _ImportHistorySection(key: _historyKey),
+
+              const SizedBox(height: 32),
+              // Error history
+              const Text('Riwayat Error', style: AppTextStyles.headlineLarge),
+              const SizedBox(height: 16),
+              _SyncErrorsSection(readOnly: widget.readOnly),
+            ],
           ),
-
-          // Customer Import Card
-          _CustomerImportCard(
-            historyKey: _historyKey,
-            errorsKey: _errorsKey,
-            readOnly: widget.readOnly,
-          ),
-
-          // Result cards
-          if (syncResult != null) ...[
-            const SizedBox(height: 32),
-            const Text('Hasil Import Terakhir',
-                style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 16),
-            _SyncResultGrid(result: syncResult),
-          ],
-
-          const SizedBox(height: 32),
-          // Import history
-          const Text('Histori Import', style: AppTextStyles.headlineLarge),
-          const SizedBox(height: 16),
-          _ImportHistorySection(key: _historyKey),
-
-          const SizedBox(height: 32),
-          // Error history
-          const Text('Riwayat Error', style: AppTextStyles.headlineLarge),
-          const SizedBox(height: 16),
-          _SyncErrorsSection(readOnly: widget.readOnly),
-        ],
-      ),
         );
       },
     );
   }
 
-  Future<void> _pickAndImport(BuildContext context, AdminProvider provider) async {
+  Future<void> _pickAndImport(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx'],
@@ -171,6 +255,47 @@ class _SyncTabState extends State<SyncTab> {
         ),
       );
     } else if (!success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Import gagal'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickAndImportSales(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal membaca file'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+    final success = await provider.importSalesExcel(file.bytes!, file.name);
+    if (!context.mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Import laporan penjualan berhasil'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage ?? 'Import gagal'),
@@ -330,8 +455,10 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                   ),
                   SizedBox(width: 12),
                   Expanded(
-                    child: Text('Memuat riwayat error...',
-                        style: AppTextStyles.bodyMedium),
+                    child: Text(
+                      'Memuat riwayat error...',
+                      style: AppTextStyles.bodyMedium,
+                    ),
                   ),
                 ],
               ),
@@ -344,14 +471,18 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline,
-                      size: 20, color: AppColors.error),
+                  const Icon(
+                    Icons.error_outline,
+                    size: 20,
+                    color: AppColors.error,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Gagal memuat riwayat error: ${snapshot.error}',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.error),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
                   OutlinedButton.icon(
@@ -386,7 +517,7 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                         isEmpty
                             ? 'Tidak ada import bermasalah'
                             : '${errors.length} baris bermasalah dari '
-                                '${errors.map((e) => e.fileName ?? '-').toSet().length} file',
+                                  '${errors.map((e) => e.fileName ?? '-').toSet().length} file',
                         style: AppTextStyles.bodyMedium,
                       ),
                     ),
@@ -464,7 +595,11 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
                   size: 20,
                 ),
                 const SizedBox(width: 10),
-                Text(success ? 'Error berhasil dibersihkan' : 'Gagal membersihkan error'),
+                Text(
+                  success
+                      ? 'Error berhasil dibersihkan'
+                      : 'Gagal membersihkan error',
+                ),
               ],
             ),
             backgroundColor: success ? AppColors.success : AppColors.error,
@@ -474,108 +609,123 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
     }
   }
 
-  Future<void> _showErrorsDialog(BuildContext context, List<SyncError> errors) async {
+  Future<void> _showErrorsDialog(
+    BuildContext context,
+    List<SyncError> errors,
+  ) async {
     await showDialog(
       context: context,
       builder: (ctx) => ResponsiveDialog(
         showCloseButton: true,
         child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.errorBg,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child:
-                          const Icon(Icons.error, color: AppColors.error, size: 24),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorBg,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: 14),
-                    const Expanded(
+                    child: const Icon(
+                      Icons.error,
+                      color: AppColors.error,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Error Import',
+                          style: AppTextStyles.headlineSmall,
+                        ),
+                        Text(
+                          'Baris yang dilewati saat proses import. Buka file asli dan perbaiki sesuai pesan di bawah.',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: errors.isEmpty
+                  ? Center(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Error Import',
-                              style: AppTextStyles.headlineSmall),
-                          Text(
-                            'Baris yang dilewati saat proses import. Buka file asli dan perbaiki sesuai pesan di bawah.',
-                            style: AppTextStyles.bodySmall,
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.successBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_circle,
+                              size: 40,
+                              color: AppColors.success,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Tidak ada error',
+                            style: AppTextStyles.headlineSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Semua baris berhasil diproses',
+                            style: AppTextStyles.bodyMedium,
                           ),
                         ],
                       ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: errors.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 10),
+                      itemBuilder: (context, i) => _buildErrorTile(errors[i]),
                     ),
-                  ],
-                ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Tutup'),
+                  ),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: errors.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.successBg,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.check_circle,
-                                  size: 40, color: AppColors.success),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text('Tidak ada error',
-                                style: AppTextStyles.headlineSmall),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Semua baris berhasil diproses',
-                              style: AppTextStyles.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: errors.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (context, i) =>
-                            _buildErrorTile(errors[i]),
-                      ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Tutup'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
     );
   }
 
   Widget _buildErrorTile(SyncError err) {
     final isStore = err.isStoreImport;
-    final tint = isStore ? AppColors.success : AppColors.info;
-    final tintBg = isStore ? AppColors.successBg : AppColors.infoBg;
-    final tintBorder = isStore ? AppColors.successBorder : AppColors.infoBorder;
+    final tint = isStore ? AppColors.primary : AppColors.info;
+    final tintBg = isStore ? AppColors.primarySoft : AppColors.infoBg;
+    final tintBorder = isStore ? AppColors.border : AppColors.infoBorder;
     final typeLabel = isStore ? 'Toko' : 'Produk';
 
     final tsText = err.timestamp != null
-        ? witaFormat(DateTime.parse(err.timestamp!), pattern: 'dd MMM yyyy, HH:mm')
+        ? witaFormat(
+            DateTime.parse(err.timestamp!),
+            pattern: 'dd MMM yyyy, HH:mm',
+          )
         : '-';
 
     return Container(
@@ -631,12 +781,10 @@ class _SyncErrorsSectionState extends State<_SyncErrorsSection> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.warning_amber,
-                  size: 18, color: AppColors.error),
+              const Icon(Icons.warning_amber, size: 18, color: AppColors.error),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(4),
@@ -743,9 +891,16 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.history, size: 36, color: AppColors.textMuted.withValues(alpha: 0.4)),
+                    Icon(
+                      Icons.history,
+                      size: 36,
+                      color: AppColors.textMuted.withValues(alpha: 0.4),
+                    ),
                     const SizedBox(height: 8),
-                    const Text('Belum ada histori import', style: AppTextStyles.bodyMedium),
+                    const Text(
+                      'Belum ada histori import',
+                      style: AppTextStyles.bodyMedium,
+                    ),
                   ],
                 ),
               ),
@@ -766,7 +921,11 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
                         ? _buildDesktopTable(logs)
                         : _buildMobileList(logs),
                     const SizedBox(height: 12),
-                    _paginationBar(total: allLogs.length, page: page, totalPages: totalPages),
+                    _paginationBar(
+                      total: allLogs.length,
+                      page: page,
+                      totalPages: totalPages,
+                    ),
                   ],
                 ),
               ),
@@ -792,10 +951,22 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
             children: [
               Expanded(flex: 3, child: _FlexHeaderCell(label: 'Waktu')),
               Expanded(flex: 2, child: _FlexHeaderCell(label: 'User')),
-              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Baru', align: TextAlign.right)),
-              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Update', align: TextAlign.right)),
-              Expanded(flex: 2, child: _FlexHeaderCell(label: 'Tipe', align: TextAlign.center)),
-              Expanded(flex: 1, child: _FlexHeaderCell(label: 'Error', align: TextAlign.right)),
+              Expanded(
+                flex: 1,
+                child: _FlexHeaderCell(label: 'Baru', align: TextAlign.right),
+              ),
+              Expanded(
+                flex: 1,
+                child: _FlexHeaderCell(label: 'Update', align: TextAlign.right),
+              ),
+              Expanded(
+                flex: 2,
+                child: _FlexHeaderCell(label: 'Tipe', align: TextAlign.center),
+              ),
+              Expanded(
+                flex: 1,
+                child: _FlexHeaderCell(label: 'Error', align: TextAlign.right),
+              ),
             ],
           ),
         ),
@@ -811,7 +982,11 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
     );
   }
 
-  Widget _paginationBar({required int total, required int page, required int totalPages}) {
+  Widget _paginationBar({
+    required int total,
+    required int page,
+    required int totalPages,
+  }) {
     final canPrev = page > 1;
     final canNext = page < totalPages;
     return Padding(
@@ -827,7 +1002,9 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
             mainAxisSize: MainAxisSize.min,
             children: [
               OutlinedButton(
-                onPressed: canPrev ? () => setState(() => _currentPage = page - 1) : null,
+                onPressed: canPrev
+                    ? () => setState(() => _currentPage = page - 1)
+                    : null,
                 child: const Icon(Icons.chevron_left),
               ),
               const SizedBox(width: 8),
@@ -837,7 +1014,9 @@ class _ImportHistorySectionState extends State<_ImportHistorySection> {
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: canNext ? () => setState(() => _currentPage = page + 1) : null,
+                onPressed: canNext
+                    ? () => setState(() => _currentPage = page + 1)
+                    : null,
                 child: const Icon(Icons.chevron_right),
               ),
             ],
@@ -852,10 +1031,7 @@ class _FlexHeaderCell extends StatelessWidget {
   final String label;
   final TextAlign align;
 
-  const _FlexHeaderCell({
-    required this.label,
-    this.align = TextAlign.left,
-  });
+  const _FlexHeaderCell({required this.label, this.align = TextAlign.left});
 
   @override
   Widget build(BuildContext context) {
@@ -880,7 +1056,9 @@ class _FlexImportLogRow extends StatelessWidget {
     final createdAt = log['created_at'] != null
         ? (() {
             final dt = DateTime.tryParse(log['created_at'].toString());
-            return dt != null && dt.isUtc ? dt.add(const Duration(hours: 8)) : dt;
+            return dt != null && dt.isUtc
+                ? dt.add(const Duration(hours: 8))
+                : dt;
           })()
         : null;
     final skipped = log['skipped'] as int? ?? 0;
@@ -899,7 +1077,9 @@ class _FlexImportLogRow extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-              createdAt != null ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm') : '-',
+              createdAt != null
+                  ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm')
+                  : '-',
               style: AppTextStyles.mono.copyWith(fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
@@ -925,7 +1105,9 @@ class _FlexImportLogRow extends StatelessWidget {
             child: Text(
               '${log['updated'] ?? 0}',
               textAlign: TextAlign.right,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryLight),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.primaryLight,
+              ),
             ),
           ),
           Expanded(
@@ -934,13 +1116,17 @@ class _FlexImportLogRow extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: type == 'PRODUCT' ? AppColors.infoBg : AppColors.successBg,
+                  color: type == 'PRODUCT'
+                      ? AppColors.infoBg
+                      : AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   type == 'PRODUCT' ? 'Produk' : 'Toko',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: type == 'PRODUCT' ? AppColors.info : AppColors.success,
+                    color: type == 'PRODUCT'
+                        ? AppColors.info
+                        : AppColors.primary,
                     fontSize: 11,
                   ),
                 ),
@@ -974,7 +1160,9 @@ class _ImportLogCard extends StatelessWidget {
     final createdAt = log['created_at'] != null
         ? (() {
             final dt = DateTime.tryParse(log['created_at'].toString());
-            return dt != null && dt.isUtc ? dt.add(const Duration(hours: 8)) : dt;
+            return dt != null && dt.isUtc
+                ? dt.add(const Duration(hours: 8))
+                : dt;
           })()
         : null;
     final skipped = log['skipped'] as int? ?? 0;
@@ -984,10 +1172,14 @@ class _ImportLogCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: skipped > 0 ? AppColors.errorBg.withValues(alpha: 0.3) : AppColors.surface,
+        color: skipped > 0
+            ? AppColors.errorBg.withValues(alpha: 0.3)
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: skipped > 0 ? AppColors.error.withValues(alpha: 0.3) : AppColors.border,
+          color: skipped > 0
+              ? AppColors.error.withValues(alpha: 0.3)
+              : AppColors.border,
         ),
       ),
       child: Column(
@@ -1001,13 +1193,19 @@ class _ImportLogCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      createdAt != null ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm') : '-',
-                      style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                      createdAt != null
+                          ? witaFormat(createdAt, pattern: 'dd MMM yyyy, HH:mm')
+                          : '-',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       log['nama']?.toString() ?? 'Admin',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -1015,13 +1213,17 @@ class _ImportLogCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: type == 'PRODUCT' ? AppColors.infoBg : AppColors.successBg,
+                  color: type == 'PRODUCT'
+                      ? AppColors.infoBg
+                      : AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   type == 'PRODUCT' ? 'Produk' : 'Toko',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: type == 'PRODUCT' ? AppColors.info : AppColors.success,
+                    color: type == 'PRODUCT'
+                        ? AppColors.info
+                        : AppColors.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1065,7 +1267,11 @@ class _StatItem extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatItem({required this.label, required this.value, required this.color});
+  const _StatItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1089,7 +1295,6 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-
 class _CustomerImportCard extends StatefulWidget {
   final GlobalKey<_ImportHistorySectionState> historyKey;
   final GlobalKey<_SyncErrorsSectionState> errorsKey;
@@ -1104,7 +1309,6 @@ class _CustomerImportCard extends StatefulWidget {
   @override
   State<_CustomerImportCard> createState() => _CustomerImportCardState();
 }
-
 
 class _CustomerImportCardState extends State<_CustomerImportCard> {
   bool _importing = false;
@@ -1125,18 +1329,21 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.successBg,
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.store, size: 32, color: AppColors.success),
+                  child: const Icon(
+                    Icons.store,
+                    size: 32,
+                    color: AppColors.primary,
+                  ),
                 ),
                 const SizedBox(width: 20),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Text('Import Toko',
-                          style: AppTextStyles.headlineMedium),
+                      Text('Import Toko', style: AppTextStyles.headlineMedium),
                       SizedBox(height: 4),
                       Text(
                         'Upload .xlsx untuk data toko',
@@ -1154,7 +1361,10 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
               child: FilledButton.icon(
                 onPressed: (_importing || widget.readOnly)
                     ? null
-                    : () => _pickAndImport(context, context.read<AdminProvider>()),
+                    : () => _pickAndImport(
+                        context,
+                        context.read<AdminProvider>(),
+                      ),
                 icon: _importing
                     ? const SizedBox(
                         width: 20,
@@ -1165,9 +1375,11 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
                         ),
                       )
                     : const Icon(Icons.folder_open),
-                label: Text(_importing
-                    ? 'Mengimport...'
-                    : 'Pilih File Excel Toko (.xlsx)'),
+                label: Text(
+                  _importing
+                      ? 'Mengimport...'
+                      : 'Pilih File Excel Toko (.xlsx)',
+                ),
               ),
             ),
           ],
@@ -1176,7 +1388,10 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
     );
   }
 
-  Future<void> _pickAndImport(BuildContext context, AdminProvider provider) async {
+  Future<void> _pickAndImport(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -1227,5 +1442,3 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
     }
   }
 }
-
-

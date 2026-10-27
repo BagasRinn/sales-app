@@ -29,15 +29,6 @@ logger = logging.getLogger(__name__)
 WITA = timezone(timedelta(hours=8))
 
 
-def _wita_str(dt: datetime) -> str:
-    """Convert datetime to WITA ISO string with +08:00 suffix."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(WITA).isoformat()
-
-
 def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
     """Serialize submission + lookup sales_name & reviewed_by_name + nested order."""
     sales = db.query(User).filter(User.id == submission.sales_id).first()
@@ -59,9 +50,9 @@ def _serialize(submission: CustomerRegistrationSubmission, db: Session) -> dict:
         "bareng_customer_id": submission.bareng_customer_id,
         "reviewed_by": submission.reviewed_by,
         "reviewed_by_nama": (reviewer.nama or reviewer.username) if reviewer else None,
-        "reviewed_at": _wita_str(submission.reviewed_at),
-        "created_at": _wita_str(submission.created_at),
-        "updated_at": _wita_str(submission.updated_at),
+        "reviewed_at": submission.reviewed_at,
+        "created_at": submission.created_at,
+        "updated_at": submission.updated_at,
         "nama_langganan": submission.nama_langganan,
         "nomor_id_ktp": submission.nomor_id_ktp,
         "alamat_ktp": submission.alamat_ktp,

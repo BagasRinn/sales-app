@@ -37,6 +37,12 @@ class _PerformanceTabState extends State<PerformanceTab> {
   int _supplierPage = 1;
   static const int _supplierPageSize = 10;
 
+  // Branch scope for KPI per Supplier — MANAGER only. '' = semua cabang.
+  String _branchFilter = '';
+
+  // Filter status supplier di KPI: null = semua, true = aktif, false = non-aktif.
+  bool? _supplierActiveFilter;
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +64,15 @@ class _PerformanceTabState extends State<PerformanceTab> {
     provider.loadSalesTargets(
       period: '${_fromDate.year}-${_fromDate.month.toString().padLeft(2, '0')}',
     );
-    provider.loadSupplierPerformance(yearMonth: ym);
+    if (provider.isManager) {
+      if (provider.branchOptions.isEmpty) provider.loadBranchOptions();
+      provider.loadSupplierPerformance(
+        yearMonth: ym,
+        branch: _branchFilter.isEmpty ? null : _branchFilter,
+      );
+    } else {
+      provider.loadSupplierPerformance(yearMonth: ym);
+    }
   }
 
   String _yearMonth(DateTime d) =>
@@ -136,11 +150,30 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Section: Period Filter + Sort
-                  _buildPeriodFilterSection(),
+                  _buildPeriodFilterSection(provider),
+                  if (_useCustomRange) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'KPI per Supplier dihitung per bulan — memakai '
+                      '${DateFormat('MMMM yyyy', 'id_ID').format(_fromDate)}.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // Section 1: KPI per Supplier — revenue & target with auto-rollover
                   _buildSectionTitle('KPI per Supplier'),
+                  if (provider.isManager) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _branchLabel(provider),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _buildSupplierPerformanceTable(provider),
                   const SizedBox(height: 32),
@@ -180,7 +213,17 @@ class _PerformanceTabState extends State<PerformanceTab> {
     );
   }
 
-  Widget _buildPeriodFilterSection() {
+  String _branchLabel(AdminProvider provider) {
+    if (_branchFilter.isEmpty) {
+      return 'Semua cabang (target dijumlah per supplier)';
+    }
+    for (final b in provider.branchOptions) {
+      if (b.code == _branchFilter) return b.nama;
+    }
+    return _branchFilter;
+  }
+
+  Widget _buildPeriodFilterSection(AdminProvider provider) {
     final monthLabel = DateFormat('MMMM yyyy', 'id_ID').format(_fromDate);
     final rangeLabel =
         '${DateFormat('dd MMM yyyy', 'id_ID').format(_fromDate)} - '
@@ -189,7 +232,56 @@ class _PerformanceTabState extends State<PerformanceTab> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        // Branch scope — MANAGER only (dropdown). Other roles are locked to
+        // their own branch by the backend.
+        if (provider.isManager)
+          SizedBox(
+            width: 220,
+            child: DropdownButtonFormField<String>(
+              initialValue: _branchFilter,
+              isDense: true,
+              isExpanded: true,
+              iconSize: 18,
+              selectedItemBuilder: (context) => [
+                const Text(
+                  'Semua Cabang',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                ...provider.branchOptions.map(
+                  (b) => Text(
+                    b.nama,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Cabang',
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem(value: '', child: Text('Semua Cabang')),
+                ...provider.branchOptions.map(
+                  (b) => DropdownMenuItem(
+                    value: b.code,
+                    child: Text(b.nama, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() => _branchFilter = value ?? '');
+                _loadData();
+              },
+            ),
+          ),
         // Monthly picker
         OutlinedButton.icon(
           onPressed: _pickMonth,
@@ -221,6 +313,33 @@ class _PerformanceTabState extends State<PerformanceTab> {
     );
   }
 
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(String label, bool selected, VoidCallback onTap) {
+    return AppChoiceChip(
+      label: label,
+      selected: selected,
+      dense: true,
+      onSelected: onTap,
+    );
+  }
+
   Widget _buildSupplierPerformanceTable(AdminProvider provider) {
     if (provider.supplierPerformanceLoading) {
       return Container(
@@ -234,9 +353,9 @@ class _PerformanceTabState extends State<PerformanceTab> {
       );
     }
 
-    final rows = provider.supplierPerformance;
-    if (rows.isEmpty) {
-      final err = provider.errorMessage;
+    final allRows = provider.supplierPerformance;
+    if (allRows.isEmpty) {
+      final err = provider.supplierPerformanceError;
       return Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -258,7 +377,16 @@ class _PerformanceTabState extends State<PerformanceTab> {
       );
     }
 
-    final canEdit = provider.isAdmin || provider.isSupervisor;
+    final rows = _supplierActiveFilter == null
+        ? allRows
+        : allRows.where((r) => r.isActive == _supplierActiveFilter).toList();
+
+    final canEdit = provider.isManager || provider.isSupervisor;
+    // MANAGER global (branch=null) harus pilih cabang dulu sebelum set target;
+    // SUPERVISOR selalu branch-scoped dari token.
+    final editBranch = provider.isManager
+        ? (_branchFilter.isEmpty ? null : _branchFilter)
+        : provider.userBranch;
 
     // Pagination
     final totalPages = ((rows.length - 1) / _supplierPageSize).ceil().clamp(
@@ -272,6 +400,38 @@ class _PerformanceTabState extends State<PerformanceTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _statusChip('Semua', _supplierActiveFilter == null, () {
+              setState(() {
+                _supplierActiveFilter = null;
+                _supplierPage = 1;
+              });
+            }),
+            _statusChip('Aktif', _supplierActiveFilter == true, () {
+              setState(() {
+                _supplierActiveFilter = true;
+                _supplierPage = 1;
+              });
+            }),
+            _statusChip('Non-Aktif', _supplierActiveFilter == false, () {
+              setState(() {
+                _supplierActiveFilter = false;
+                _supplierPage = 1;
+              });
+            }),
+            Text(
+              '${rows.length} dari ${allRows.length} supplier',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, tableConstraints) {
             // Desktop: full width. Mobile: min 560 so columns stay readable,
@@ -348,11 +508,45 @@ class _PerformanceTabState extends State<PerformanceTab> {
                         return TableRow(
                           children: [
                             _TableBodyCell(
-                              Text(
-                                row.supplierName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    row.supplierName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: row.isActive
+                                          ? AppColors.textPrimary
+                                          : AppColors.textMuted,
+                                    ),
+                                  ),
+                                  if (!row.isActive ||
+                                      !row.isMaster ||
+                                      row.orderType == '4P')
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Wrap(
+                                        spacing: 4,
+                                        children: [
+                                          if (!row.isActive)
+                                            _badge(
+                                              'Non-Aktif',
+                                              AppColors.error,
+                                            ),
+                                          if (!row.isMaster)
+                                            _badge(
+                                              'Tanpa Master',
+                                              AppColors.warning,
+                                            ),
+                                          if (row.orderType == '4P')
+                                            _badge(
+                                              '4P',
+                                              AppColors.primaryLight,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
                               ),
                               align: TextAlign.left,
                             ),
@@ -378,9 +572,16 @@ class _PerformanceTabState extends State<PerformanceTab> {
                               canEdit
                                   ? IconButton(
                                       icon: const Icon(Icons.edit, size: 18),
-                                      tooltip: 'Edit target',
-                                      onPressed: () =>
-                                          _openTargetDialog(provider, row),
+                                      tooltip: editBranch == null
+                                          ? 'Pilih cabang dulu untuk edit target'
+                                          : 'Edit target',
+                                      onPressed: editBranch == null
+                                          ? null
+                                          : () => _openTargetDialog(
+                                              provider,
+                                              row,
+                                              editBranch,
+                                            ),
                                     )
                                   : const SizedBox.shrink(),
                               align: TextAlign.center,
@@ -452,12 +653,14 @@ class _PerformanceTabState extends State<PerformanceTab> {
   Future<void> _openTargetDialog(
     AdminProvider provider,
     SupplierPerformanceRow row,
+    String branch,
   ) async {
     final ym = _yearMonth(_fromDate);
     await showSupplierTargetEditDialog(
       context,
       provider,
       supplierName: row.supplierName,
+      branch: branch,
       period: ym,
     );
   }
@@ -514,51 +717,17 @@ class _PerformanceTabState extends State<PerformanceTab> {
                           color: AppColors.textMuted,
                         ),
                       ),
-                      ChoiceChip(
-                        label: const Text(
-                          'Revenue',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                      AppChoiceChip(
+                        label: 'Revenue',
                         selected: sortBy == 'revenue',
-                        onSelected: (_) =>
+                        onSelected: () =>
                             provider.setPerformanceSort('revenue'),
-                        selectedColor: AppColors.primaryLight,
-                        backgroundColor: AppColors.background,
-                        side: BorderSide(
-                          color: sortBy == 'revenue'
-                              ? AppColors.primaryLight
-                              : AppColors.border,
-                        ),
-                        labelStyle: TextStyle(
-                          color: sortBy == 'revenue'
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
                       ),
-                      ChoiceChip(
-                        label: const Text(
-                          'Order',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                      AppChoiceChip(
+                        label: 'Order',
                         selected: sortBy == 'order_count',
-                        onSelected: (_) =>
+                        onSelected: () =>
                             provider.setPerformanceSort('order_count'),
-                        selectedColor: AppColors.primaryLight,
-                        backgroundColor: AppColors.background,
-                        side: BorderSide(
-                          color: sortBy == 'order_count'
-                              ? AppColors.primaryLight
-                              : AppColors.border,
-                        ),
-                        labelStyle: TextStyle(
-                          color: sortBy == 'order_count'
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
                       ),
                     ],
                   ),
@@ -862,24 +1031,16 @@ class _PerformanceTabState extends State<PerformanceTab> {
               valueListenable: selectedType,
               builder: (_, val, _) => Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text(
-                      'Order Count',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                  AppChoiceChip(
+                    label: 'Order Count',
                     selected: val == 'ORDER_COUNT',
-                    onSelected: (_) => selectedType.value = 'ORDER_COUNT',
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                    onSelected: () => selectedType.value = 'ORDER_COUNT',
                   ),
                   const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text(
-                      'Revenue',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                  AppChoiceChip(
+                    label: 'Revenue',
                     selected: val == 'REVENUE',
-                    onSelected: (_) => selectedType.value = 'REVENUE',
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
+                    onSelected: () => selectedType.value = 'REVENUE',
                   ),
                 ],
               ),

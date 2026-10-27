@@ -1,34 +1,49 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict, field_serializer
 from uuid import UUID
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta, date
 from enum import Enum
 
 
-# Backend menyimpan semua timestamp sebagai UTC di Postgres
-# (DateTime(timezone=True)). Saat di-read, SQLAlchemy strip tzinfo
-# sehingga Pydantic serialize tanpa suffix. Selain itu, business timezone
-# aplikasi ini adalah WITA (UTC+8) — semua datetime yang dikembalikan ke
-# client (Flutter mobile + web) harus dalam WITA supaya frontend cukup
-# parse + format tanpa konversi timezone sendiri.
+# Backend menyimpan dan mengirim timestamp sebagai UTC. Konversi ke WIB,
+# WITA, atau WIT dilakukan di client berdasarkan timezone device pengguna.
+UTC = timezone.utc
+# Deprecated compatibility alias. Tidak dipakai untuk serialize datetime baru.
 WITA = timezone(timedelta(hours=8))
+
+
+def _dt_to_utc_iso(v: datetime) -> str:
+    """Serialize datetime as a canonical UTC ISO string with Z suffix."""
+    if v.tzinfo is None:
+        v = v.replace(tzinfo=UTC)
+    return v.astimezone(UTC).isoformat().replace('+00:00', 'Z')
 
 
 class BaseSchema(BaseModel):
     """Base untuk semua response schema.
 
-    Validator ini: (1) re-attach tzinfo=UTC kalau datetime naive (dari
-    SQLAlchemy), lalu (2) convert ke WITA. Hasilnya ISO string selalu
-    pakai suffix "+08:00", frontend tidak perlu konversi lagi.
+    Datetime diterima sebagai instant UTC lalu diserialisasi tanpa offset lokal.
+    Tampilan device-level (WIB/WITA/WIT) ditentukan oleh client.
     """
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: _dt_to_utc_iso},
+    )
 
     @field_validator("*", mode="before")
     @classmethod
-    def _to_wita_datetime(cls, v):
+    def _to_utc_datetime(cls, v):
         if isinstance(v, datetime):
             if v.tzinfo is None:
-                v = v.replace(tzinfo=timezone.utc)
-            v = v.astimezone(WITA)
+                v = v.replace(tzinfo=UTC)
+            v = v.astimezone(UTC)
+        return v
+
+    @field_serializer("*", mode="plain")
+    def _serialize_datetime(self, v):
+        if isinstance(v, datetime):
+            return _dt_to_utc_iso(v)
         return v
 
 
@@ -212,6 +227,9 @@ class OrderCreate(BaseSchema):
     store_address: Optional[str] = None
     order_type: str = Field(default='REGULER')  # 'REGULER' atau '4P'
     invoice_number: Optional[str] = Field(None, max_length=50)
+    # Optional idempotency key. Client mengirim key yang sama saat retry request
+    # create yang gagal/timeout, supaya draft tidak terbuat dua kali.
+    client_request_id: Optional[str] = Field(None, max_length=128)
 
 
 class OrderItemResponse(BaseSchema):
@@ -463,6 +481,7 @@ class SalesUserResponse(BaseSchema):
 class SalesStatsResponse(BaseSchema):
     omset_hari_ini: int
     pending_count: int
+    pending_value: int
     selesai_bulan_ini_count: int
     selesai_bulan_ini_total: int
 
@@ -845,12 +864,20 @@ class BranchStatsResponse(BaseSchema):
 
 
 class SupplierPerformanceRow(BaseModel):
-    """One row in the KPI per Supplier table."""
+    """One row in the KPI per Supplier table.
+
+    `is_master` = nama ada di tabel `suppliers`. `is_active`/`order_type`
+    mengikuti master; supplier lama yang cuma ada di `products` dianggap
+    aktif dengan order_type REGULER.
+    """
     supplier_name: str
     target: int
     has_target: bool
     value: int
     pencapaian: Optional[float] = None
+    is_master: bool = True
+    is_active: bool = True
+    order_type: str = "REGULER"
 
 
 class SupplierTargetUpdate(BaseModel):

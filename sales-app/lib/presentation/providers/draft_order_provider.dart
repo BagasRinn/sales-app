@@ -224,6 +224,25 @@ class DraftOrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Apply up price dari [sourceLineId] ke semua line LAIN.
+  void applyUpPriceToAll(String sourceLineId) {
+    final sourceIndex = items.indexWhere((l) => l.id == sourceLineId);
+    if (sourceIndex < 0) return;
+    final source = items[sourceIndex];
+
+    items = [
+      for (int i = 0; i < items.length; i++)
+        if (i != sourceIndex)
+          items[i].copyWith(
+            upPrice: source.upPrice?.isEmpty == true ? null : source.upPrice,
+            clearUpPrice: source.upPrice == null || source.upPrice!.isEmpty,
+          )
+        else
+          items[i],
+    ];
+    notifyListeners();
+  }
+
   /// Lookup helpers.
   OrderLine? getLineById(String lineId) {
     for (final l in items) {

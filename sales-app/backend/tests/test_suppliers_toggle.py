@@ -28,8 +28,8 @@ def _make_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"TEST-USER-TOGGLE-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 

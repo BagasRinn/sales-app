@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
 import '../../providers/order_provider.dart';
@@ -22,8 +23,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   late final List<Widget> _screens;
@@ -73,10 +73,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
@@ -119,20 +116,22 @@ class _HomeScreenState extends State<HomeScreen>
   void _openOrderFlow() {
     context.read<DraftOrderProvider>().reset();
     context.read<ProductProvider>().clearFilters();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const OrderFlowScreen(),
-        fullscreenDialog: true,
-      ),
-    ).then((_) {
-      if (mounted) {
-        // Refresh khusus Orderan Terbaru + list Pesanan dengan filter aktifnya,
-        // supaya order baru langsung muncul di kedua tempat tanpa append kotor.
-        final orderProvider = context.read<OrderProvider>();
-        orderProvider.loadRecentOrders();
-        orderProvider.refreshOrders();
-      }
-    });
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => const OrderFlowScreen(),
+            fullscreenDialog: true,
+          ),
+        )
+        .then((_) {
+          if (mounted) {
+            // Refresh khusus Orderan Terbaru + list Pesanan dengan filter aktifnya,
+            // supaya order baru langsung muncul di kedua tempat tanpa append kotor.
+            final orderProvider = context.read<OrderProvider>();
+            orderProvider.loadRecentOrders();
+            orderProvider.refreshOrders();
+          }
+        });
   }
 }
 
@@ -173,7 +172,9 @@ class _BerandaTabState extends State<_BerandaTab> {
         title: Consumer<AuthProvider>(
           builder: (_, auth, _) {
             final name = auth.nama;
-            return Text(name != null && name.isNotEmpty ? 'Halo, $name' : 'Halo, Sales');
+            return Text(
+              name != null && name.isNotEmpty ? 'Halo, $name' : 'Halo, Sales',
+            );
           },
         ),
         elevation: 0,
@@ -211,13 +212,7 @@ class _StatsCards extends StatelessWidget {
     );
 
     if (loading && stats == null) {
-      return GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.1,
+      return AppResponsiveGrid(
         children: const [
           _SkeletonCard(),
           _SkeletonCard(),
@@ -229,30 +224,25 @@ class _StatsCards extends StatelessWidget {
 
     return Column(
       children: [
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.1,
+        AppResponsiveGrid(
           children: [
-            _StatCard(
-              label: 'Omset Hari Ini',
+            AppStatCard(
+              title: 'Omset Hari Ini',
               value: currency.format(stats?.omsetHariIni ?? 0),
-              icon: Icons.payments_outlined,
-              color: AppColors.success,
+              subtitle: '${stats?.approvedCountToday ?? 0} order',
+              icon: Icons.monetization_on_outlined,
+              accentColor: AppColors.success,
             ),
-            _StatCard(
-              label: 'Menunggu',
+            AppStatCard(
+              title: 'Menunggu',
               value: '${stats?.pendingCount ?? 0}',
               subtitle: 'menunggu admin',
               extraText: currency.format(stats?.pendingValue ?? 0),
               icon: Icons.hourglass_top_outlined,
-              color: AppColors.info,
+              accentColor: AppColors.info,
             ),
-            _StatCard(
-              label: 'Target Bulanan',
+            AppStatCard(
+              title: 'Target Bulanan',
               value: stats?.targetType != null
                   ? _formatTargetProgress(
                       stats?.targetType,
@@ -263,27 +253,28 @@ class _StatsCards extends StatelessWidget {
                   : '—',
               subtitle: stats?.targetType != null
                   ? (stats?.targetType == 'ORDER_COUNT'
-                      ? 'order bulan ini'
-                      : 'revenue bulan ini')
+                        ? 'order bulan ini'
+                        : 'revenue bulan ini')
                   : 'belum diset',
-              extraText: stats?.incentiveAmount != null && stats!.incentiveAmount! > 0
+              extraText:
+                  stats?.incentiveAmount != null && stats!.incentiveAmount! > 0
                   ? '+ ${currency.format(stats.incentiveAmount)}'
                   : null,
               icon: Icons.track_changes_outlined,
-              color: _targetColor(
+              accentColor: _targetColor(
                 stats?.targetType,
                 stats?.targetValue ?? 0,
                 stats?.selesaiBulanIniCount ?? 0,
                 stats?.selesaiBulanIniTotal ?? 0,
               ),
             ),
-            _StatCard(
-              label: 'Selesai (Bulan)',
+            AppStatCard(
+              title: 'Selesai (Bulan)',
               value: '${stats?.selesaiBulanIniCount ?? 0}',
               subtitle: 'order',
               extraText: currency.format(stats?.selesaiBulanIniTotal ?? 0),
               icon: Icons.check_circle_outline,
-              color: AppColors.primary,
+              accentColor: AppColors.primary,
             ),
           ],
         ),
@@ -297,12 +288,18 @@ class _StatsCards extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                const Icon(
+                  Icons.error_outline,
+                  color: AppColors.error,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Gagal memuat statistik',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.error,
+                    ),
                   ),
                 ),
                 GestureDetector(
@@ -332,7 +329,11 @@ class _StatsCards extends StatelessWidget {
     if (targetType == 'ORDER_COUNT') {
       return '$selesaiCount / $targetValue';
     }
-    final currency = NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
+    final currency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    );
     return '${currency.format(selesaiTotal)} / ${currency.format(targetValue)}';
   }
 
@@ -349,93 +350,6 @@ class _StatsCards extends StatelessWidget {
     if (progress >= 1.0) return AppColors.success;
     if (progress >= 0.5) return AppColors.warning;
     return AppColors.info;
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? subtitle;
-  final String? extraText;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.subtitle,
-    this.extraText,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 16, color: color),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: AppTextStyles.headlineSmall.copyWith(color: color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle!,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          if (extraText != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              extraText!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ],
-      ),
-    );
   }
 }
 
@@ -458,9 +372,10 @@ class _SkeletonCardState extends State<_SkeletonCard>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 0.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -490,7 +405,9 @@ class _SkeletonCardState extends State<_SkeletonCard>
                     width: 28,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: AppColors.border.withValues(alpha: _animation.value),
+                      color: AppColors.border.withValues(
+                        alpha: _animation.value,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
@@ -499,7 +416,9 @@ class _SkeletonCardState extends State<_SkeletonCard>
                     width: 80,
                     height: 12,
                     decoration: BoxDecoration(
-                      color: AppColors.border.withValues(alpha: _animation.value),
+                      color: AppColors.border.withValues(
+                        alpha: _animation.value,
+                      ),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -519,7 +438,9 @@ class _SkeletonCardState extends State<_SkeletonCard>
                 width: 60,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: AppColors.border.withValues(alpha: _animation.value * 0.7),
+                  color: AppColors.border.withValues(
+                    alpha: _animation.value * 0.7,
+                  ),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -573,8 +494,11 @@ class _RecentOrdersSection extends StatelessWidget {
             child: const Center(
               child: Column(
                 children: [
-                  Icon(Icons.receipt_long_outlined,
-                      size: 40, color: AppColors.textMuted),
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 40,
+                    color: AppColors.textMuted,
+                  ),
                   SizedBox(height: 8),
                   Text('Belum ada orderan', style: AppTextStyles.bodyMedium),
                 ],
@@ -622,18 +546,20 @@ class _RecentOrderTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OrderDetailScreen(orderId: order.id),
-          ),
-        ).then((_) {
-          if (context.mounted) {
-            // Status order bisa berubah (mis. admin approve) selama halaman
-            // detail terbuka, jadi refresh keduanya saat kembali.
-            context.read<OrderProvider>().loadRecentOrders();
-            context.read<OrderProvider>().refreshOrders();
-          }
-        });
+        Navigator.of(context)
+            .push(
+              MaterialPageRoute(
+                builder: (_) => OrderDetailScreen(orderId: order.id),
+              ),
+            )
+            .then((_) {
+              if (context.mounted) {
+                // Status order bisa berubah (mis. admin approve) selama halaman
+                // detail terbuka, jadi refresh keduanya saat kembali.
+                context.read<OrderProvider>().loadRecentOrders();
+                context.read<OrderProvider>().refreshOrders();
+              }
+            });
       },
       borderRadius: BorderRadius.circular(14),
       child: Padding(
@@ -663,58 +589,8 @@ class _RecentOrderTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            _StatusChip(status: order.status, label: order.statusLabel),
+            OrderStatusChip(status: order.status, label: order.statusLabel),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  final String status;
-  final String label;
-
-  const _StatusChip({required this.status, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color fg;
-    switch (status) {
-      case 'DRAFT':
-        bg = AppColors.warningBg;
-        fg = AppColors.warning;
-        break;
-      case 'PENDING':
-        bg = AppColors.infoBg;
-        fg = AppColors.info;
-        break;
-      case 'APPROVED':
-        bg = AppColors.successBg;
-        fg = AppColors.success;
-        break;
-      case 'CANCELLED':
-      case 'REJECTED':
-        bg = AppColors.errorBg;
-        fg = AppColors.error;
-        break;
-      default:
-        bg = AppColors.borderLight;
-        fg = AppColors.textSecondary;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
         ),
       ),
     );

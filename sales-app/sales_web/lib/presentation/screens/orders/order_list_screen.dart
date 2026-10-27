@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../core/datetime_utils.dart';
 import '../../../data/models/order.dart';
 import '../../providers/order_provider.dart';
@@ -20,7 +21,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
   String? _selectedFilter;
   final _searchController = TextEditingController();
 
-  final _filters = ['Semua', 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'];
+  final _filters = [
+    'Semua',
+    'DRAFT',
+    'PENDING',
+    'APPROVED',
+    'REJECTED',
+    'CANCELLED',
+  ];
 
   @override
   void initState() {
@@ -81,7 +89,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
                         onPressed: () {
                           _searchController.clear();
                           orders.loadOrders(
-                            status: _selectedFilter == 'Semua' ? null : _selectedFilter,
+                            status: _selectedFilter == 'Semua'
+                                ? null
+                                : _selectedFilter,
                           );
                         },
                       )
@@ -92,7 +102,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 isDense: true,
               ),
               onSubmitted: (value) {
@@ -115,23 +128,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   final isSelected = (_selectedFilter ?? 'Semua') == filter;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(filter),
+                    child: AppChoiceChip(
+                      label: filter,
                       selected: isSelected,
-                      onSelected: (_) {
+                      onSelected: () {
                         setState(() => _selectedFilter = filter);
-                        orders.loadOrders(
-                          status: _getFilterStatus(filter),
-                        );
+                        orders.loadOrders(status: _getFilterStatus(filter));
                       },
-                      selectedColor: AppColors.infoBg,
-                      checkmarkColor: AppColors.primaryLight,
-                      labelStyle: TextStyle(
-                        color: isSelected
-                            ? AppColors.primaryLight
-                            : AppColors.textSecondary,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
                     ),
                   );
                 }).toList(),
@@ -144,37 +147,38 @@ class _OrderListScreenState extends State<OrderListScreen> {
             child: orders.isLoading && orders.orders.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : orders.orders.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Belum ada pesanan',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () => orders.loadOrders(
-                          status: _selectedFilter == 'Semua'
-                              ? null
-                              : _selectedFilter,
-                        ),
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          itemCount: orders.orders.length + (orders.isLoading ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == orders.orders.length) {
-                              return const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-                            }
-                            return _OrderCard(order: orders.orders[index]);
-                          },
-                        ),
+                ? Center(
+                    child: Text(
+                      'Belum ada pesanan',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textMuted,
                       ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () => orders.loadOrders(
+                      status: _selectedFilter == 'Semua'
+                          ? null
+                          : _selectedFilter,
+                    ),
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount:
+                          orders.orders.length + (orders.isLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == orders.orders.length) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        return _OrderCard(order: orders.orders[index]);
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -207,10 +211,7 @@ class _OrderCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          order.storeName,
-                          style: AppTextStyles.labelLarge,
-                        ),
+                        Text(order.storeName, style: AppTextStyles.labelLarge),
                         const SizedBox(height: 2),
                         Text(
                           order.customerName,
@@ -227,11 +228,7 @@ class _OrderCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 14,
-                    color: AppColors.textMuted,
-                  ),
+                  Icon(Icons.access_time, size: 14, color: AppColors.textMuted),
                   const SizedBox(width: 4),
                   Text(
                     witaFormat(order.createdAt, pattern: 'dd MMM yyyy, HH:mm'),
@@ -283,11 +280,9 @@ class _OrderCard extends StatelessWidget {
   }
 
   void _showOrderDetail(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OrderDetailScreen(order: order),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)));
   }
 }
 
@@ -304,8 +299,8 @@ class OrderDetailScreen extends StatelessWidget {
       final layer = i == 0
           ? item.discount.layer1
           : i == 1
-              ? item.discount.layer2
-              : item.discount.layer3;
+          ? item.discount.layer2
+          : item.discount.layer3;
       if (layer == null) continue;
       if (layer.type.name.toUpperCase() == 'NOMINAL') {
         parts.add('Diskon ${i + 1}: Rp ${layer.value}');
@@ -393,14 +388,16 @@ class OrderDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final idr = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final idr = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
     final dateFmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Detail Order'),
-      ),
+      appBar: AppBar(title: const Text('Detail Order')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -413,7 +410,10 @@ class OrderDetailScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(_statusIcon(order.status), color: _statusColor(order.status)),
+                Icon(
+                  _statusIcon(order.status),
+                  color: _statusColor(order.status),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Status: ${_statusLabel(order.status)}',
@@ -434,17 +434,25 @@ class OrderDetailScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.errorBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, size: 16, color: AppColors.error),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.error,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Alasan penolakan: ${order.rejectReason}',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.error,
+                      ),
                     ),
                   ),
                 ],
@@ -461,15 +469,22 @@ class OrderDetailScreen extends StatelessWidget {
               children: [
                 Text(
                   'Tanggal: ${dateFmt.format(order.createdAt)}',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.infoBg,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: AppColors.primaryLight.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Text(
                     order.orderType,
@@ -500,27 +515,42 @@ class OrderDetailScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.store_outlined, size: 18, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.store_outlined,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        order.customerName.isNotEmpty ? order.customerName : order.storeName,
-                        style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                        order.customerName.isNotEmpty
+                            ? order.customerName
+                            : order.storeName,
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                if (order.storeAddress != null && order.storeAddress!.isNotEmpty) ...[
+                if (order.storeAddress != null &&
+                    order.storeAddress!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 18, color: AppColors.textSecondary),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           order.storeAddress!,
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     ],
@@ -543,7 +573,8 @@ class OrderDetailScreen extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < order.items.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  if (i > 0)
+                    const Divider(height: 1, indent: 14, endIndent: 14),
                   Padding(
                     padding: const EdgeInsets.all(14),
                     child: Row(
@@ -555,7 +586,8 @@ class OrderDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                order.items[i].namaBarang ?? order.items[i].productId,
+                                order.items[i].namaBarang ??
+                                    order.items[i].productId,
                                 style: AppTextStyles.bodyMedium,
                               ),
                               if (order.items[i].hasDiscount) ...[
@@ -572,7 +604,9 @@ class OrderDetailScreen extends StatelessWidget {
                         ),
                         Text(
                           '× ${order.items[i].qty}',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         if (order.items[i].hasDiscount)
@@ -580,7 +614,10 @@ class OrderDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                idr.format(order.items[i].hargaSatuan * order.items[i].qty),
+                                idr.format(
+                                  order.items[i].hargaSatuan *
+                                      order.items[i].qty,
+                                ),
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.textMuted,
                                   decoration: TextDecoration.lineThrough,
@@ -598,7 +635,9 @@ class OrderDetailScreen extends StatelessWidget {
                         else
                           Text(
                             idr.format(order.items[i].subtotal),
-                            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                       ],
                     ),
@@ -617,18 +656,25 @@ class OrderDetailScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.errorBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.3),
+                ),
               ),
               child: Column(
                 children: [
                   for (var i = 0; i < order.cancelledItems.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                    if (i > 0)
+                      const Divider(height: 1, indent: 14, endIndent: 14),
                     Padding(
                       padding: const EdgeInsets.all(14),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.cancel, size: 16, color: AppColors.error),
+                          const Icon(
+                            Icons.cancel,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -641,12 +687,20 @@ class OrderDetailScreen extends StatelessWidget {
                                     color: AppColors.textMuted,
                                   ),
                                 ),
-                                if (order.cancelledItems[i].reason.isNotEmpty) ...[
+                                if (order
+                                    .cancelledItems[i]
+                                    .reason
+                                    .isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.error.withValues(alpha: 0.12),
+                                      color: AppColors.error.withValues(
+                                        alpha: 0.12,
+                                      ),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -663,7 +717,9 @@ class OrderDetailScreen extends StatelessWidget {
                           ),
                           Text(
                             '× ${order.cancelledItems[i].qty}',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                            ),
                           ),
                         ],
                       ),
@@ -691,23 +747,31 @@ class OrderDetailScreen extends StatelessWidget {
                   children: [
                     Text(
                       '${order.totalQty} item',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     if (order.totalDiscount > 0)
                       Text(
                         '- ${idr.format(order.totalDiscount)}',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.success,
+                        ),
                       ),
                     if (order.totalUpPrice > 0)
                       Text(
                         '+ ${idr.format(order.totalUpPrice)}',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.warning,
+                        ),
                       ),
                   ],
                 ),
                 Text(
                   idr.format(order.totalPrice),
-                  style: AppTextStyles.headlineSmall.copyWith(color: AppColors.primaryLight),
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    color: AppColors.primaryLight,
+                  ),
                 ),
               ],
             ),
@@ -765,7 +829,9 @@ class OrderDetailScreen extends StatelessWidget {
               size: 18,
             ),
             label: Text(order.isPending ? 'Edit Order' : 'Edit Draft'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+            ),
           ),
         if (order.canDelete) ...[
           if (order.canEdit) const SizedBox(height: 8),
@@ -819,9 +885,11 @@ class OrderDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(order.isPending ? 'Batalkan Order?' : 'Hapus Draft?'),
-        content: Text(order.isPending
-            ? 'Order ini akan dibatalkan dan stok booking akan dilepas. Order yang dibatalkan tidak bisa di-edit lagi.'
-            : 'Draft ini akan dihapus permanen.'),
+        content: Text(
+          order.isPending
+              ? 'Order ini akan dibatalkan dan stok booking akan dilepas. Order yang dibatalkan tidak bisa di-edit lagi.'
+              : 'Draft ini akan dihapus permanen.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

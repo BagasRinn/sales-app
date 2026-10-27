@@ -5,7 +5,6 @@ class Customer {
   final String? kode;
   final String namaToko;
   final String? alamat;
-  /// Pengelompokan customer per area/rayon. Optional — null untuk legacy.
   final String? kodeArea;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -32,13 +31,10 @@ class Customer {
       kode: json['kode'] as String?,
       namaToko: json['nama_toko'] as String,
       alamat: json['alamat'] as String?,
-      // Toleran: backend bisa kirim 'kode_area' (snake_case) atau 'kodeArea'
-      // (camelCase, kalau pernah pakai serializer lain).
       kodeArea: (json['kode_area'] as String?) ?? (json['kodeArea'] as String?),
-      // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
       createdAt: parseWitaIso(json['created_at'] as String),
       updatedAt: parseWitaIso(json['updated_at'] as String),
-      deletedAt: parseWitaIsoOrNull(json['deleted_at'] as String),
+      deletedAt: parseWitaIsoOrNull(json['deleted_at'] as String?),
       branch: json['branch'] as String?,
       branchNama: json['branch_nama'] as String?,
     );

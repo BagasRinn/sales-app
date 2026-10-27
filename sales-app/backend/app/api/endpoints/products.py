@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer, cast, Date, or_, select
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import os
 
 from app.models.database import get_db
@@ -17,21 +17,11 @@ from app.schemas.schemas import (
     ImportLogResponse,
 )
 from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.timezone import local_day_utc_bounds
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/products", tags=["Products"])
-
-WITA = timezone(timedelta(hours=8))
-
-
-def _wita_str(dt: datetime) -> str:
-    """Convert datetime to WITA ISO string with +08:00 suffix."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(WITA).isoformat()
 
 
 def _get_4p_suppliers(db: Optional[Session] = None) -> List[str]:
@@ -448,7 +438,7 @@ def get_sync_errors(
             "reason": err.reason,
             "import_type": log.import_type if log else None,
             "file_name": log.file_name if log else None,
-            "timestamp": _wita_str(err.created_at),
+            "timestamp": err.created_at,
         }
         for err, log in rows
     ]
@@ -457,6 +447,10 @@ def get_sync_errors(
 @router.get("/stats")
 def get_admin_stats(
     date: Optional[str] = None,
+    timezone_offset_minutes: Optional[int] = Header(
+        default=None,
+        alias="X-Timezone-Offset-Minutes",
+    ),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -470,8 +464,17 @@ def get_admin_stats(
     query = apply_branch_filter(query, Order, current_user)
 
     if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Format tanggal harus YYYY-MM-DD")
+        start_utc, end_utc = local_day_utc_bounds(
+            target_date,
+            timezone_offset_minutes=timezone_offset_minutes,
+        )
         query = query.filter(
-            func.date(Order.created_at) == cast(date, Date)
+            Order.created_at >= start_utc,
+            Order.created_at < end_utc,
         )
 
     status_counts = dict(query.group_by(Order.status).all())
@@ -495,12 +498,19 @@ def get_admin_stats(
     customer_query = apply_branch_filter(customer_query, Customer, current_user)
     total_customers = customer_query.scalar() or 0
 
+    # Draft adalah bagian dari data master: jumlah keseluruhan, tidak ikut
+    # filter tanggal Pesanan Hari Ini.
+    draft_query = db.query(func.count(Order.id)).filter(Order.status == "DRAFT")
+    draft_query = apply_branch_filter(draft_query, Order, current_user)
+    draft_orders = draft_query.scalar() or 0
+
     return {
         "total_orders": total_orders,
         "pending_orders": status_counts.get("PENDING", 0),
         "approved_orders": status_counts.get("APPROVED", 0),
         "rejected_orders": status_counts.get("REJECTED", 0),
         "cancelled_orders": status_counts.get("CANCELLED", 0),
+        "draft_orders": draft_orders,
         "total_products": total_products,
         "needs_review": needs_review,
         "total_customers": total_customers,

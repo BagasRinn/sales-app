@@ -23,7 +23,7 @@ class Supplier {
         orderType: json['order_type'] as String? ?? 'REGULER',
         productCount: (json['product_count'] as num?)?.toInt() ?? 0,
         createdAt: parseWitaIsoOrNull(json['created_at'] as String?),
-        updatedAt: parseWitaIsoOrNull(json['updated_at'] as String),
+        updatedAt: parseWitaIsoOrNull(json['updated_at'] as String?),
       );
 
   Map<String, dynamic> toJson() => {

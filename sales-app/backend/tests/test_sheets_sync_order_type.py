@@ -9,8 +9,20 @@ TEST_PREFIX = "TEST-SYNC-OT-"
 
 def _cleanup():
     with engine.begin() as conn:
+        # stok_log punya FK ke (products.id, products.branch) — hapus dulu.
+        conn.execute(text(
+            f"DELETE FROM stok_log WHERE product_id LIKE '{TEST_PREFIX}%'"
+        ))
         conn.execute(text(f"DELETE FROM products WHERE id LIKE '{TEST_PREFIX}%'"))
         conn.execute(text(f"DELETE FROM suppliers WHERE name LIKE '{TEST_PREFIX}%'"))
+        # ImportLog hasil sync ikut dihapus supaya panel Riwayat admin bersih.
+        # ponytail: file_name di test selalu "test.xlsx"; kalau nanti test pakai
+        # nama file lain, ikutkan di filter ini.
+        conn.execute(text(
+            "DELETE FROM sync_validation_errors WHERE import_log_id IN "
+            "(SELECT id FROM import_logs WHERE file_name = 'test.xlsx')"
+        ))
+        conn.execute(text("DELETE FROM import_logs WHERE file_name = 'test.xlsx'"))
 
 
 def test_sync_supplier_order_type_from_db():
@@ -38,7 +50,7 @@ def test_sync_supplier_order_type_from_db():
         wb.save(out)
         excel_bytes = out.getvalue()
 
-        res = sync_products_from_excel(db, excel_bytes, "test.xlsx", user)
+        res = sync_products_from_excel(excel_bytes, db, user, "test.xlsx")
         assert res["inserted"] == 3
 
         p1 = db.execute(text(f"SELECT order_type FROM products WHERE id='{TEST_PREFIX}SKU1'")).fetchone()
@@ -59,13 +71,15 @@ def test_sync_supplier_order_type_from_db():
         _cleanup()
 
 
-def test_sync_blank_supplier_preserves_existing_supplier_and_order_type():
+def test_sync_rejects_row_without_supplier():
+    """Baris tanpa LAST SUPPLIER di-skip, tidak masuk DB, dan masuk riwayat error."""
     _cleanup()
     db = SessionLocal()
     try:
         user = {"nama": "Tester", "branch": "BANJARMASIN", "role": "ADMIN"}
         sku = f"{TEST_PREFIX}EXISTING"
         sup_orig = f"{TEST_PREFIX}ORIG-SUP"
+        sku_new = f"{TEST_PREFIX}NOSUP"
 
         conn = engine.connect()
         conn.execute(text(
@@ -79,17 +93,34 @@ def test_sync_blank_supplier_preserves_existing_supplier_and_order_type():
         ws = wb.active
         ws.append(["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"])
         ws.append([sku, "KAT1", "Existing Item Updated", 15, "PCS", 5000, ""])
+        ws.append([sku_new, "KAT1", "Produk Tanpa Supplier", 5, "PCS", 1000, ""])
         out = BytesIO()
         wb.save(out)
         excel_bytes = out.getvalue()
 
-        res = sync_products_from_excel(db, excel_bytes, "test.xlsx", user)
-        assert res["updated"] == 1
+        res = sync_products_from_excel(excel_bytes, db, user, "test.xlsx")
+        assert res["skipped"] == 2
+        assert res["inserted"] == 0
+        assert res["updated"] == 0
+        assert all("LAST SUPPLIER" in e["reason"] for e in res["errors"])
 
+        # DB tidak berubah: baris lama tetap, baris baru tidak dibuat.
         p = db.execute(text(f"SELECT stok_sistem, nama_supplier, order_type FROM products WHERE id='{sku}'")).fetchone()
-        assert p[0] == 15
+        assert p[0] == 10
         assert p[1] == sup_orig
         assert p[2] == "4P"
+        assert db.execute(text(f"SELECT count(*) FROM products WHERE id='{sku_new}'")).scalar() == 0
+
+        # Riwayat error tersimpan + import log menghitung skip.
+        err_rows = db.execute(text(
+            "SELECT count(*) FROM sync_validation_errors WHERE import_log_id = "
+            "(SELECT id FROM import_logs WHERE file_name = 'test.xlsx' ORDER BY created_at DESC LIMIT 1)"
+        )).scalar()
+        assert err_rows == 2
+        logged_skipped = db.execute(text(
+            "SELECT skipped FROM import_logs WHERE file_name = 'test.xlsx' ORDER BY created_at DESC LIMIT 1"
+        )).scalar()
+        assert logged_skipped == 2
     finally:
         db.close()
         _cleanup()

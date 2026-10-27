@@ -27,8 +27,9 @@ def _seed_product():
     will create the supplier row. (Backfill reads from products.nama_supplier.)"""
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga, nama_supplier) "
-            "VALUES (:i, :b, 'N', 1000, :s) "
+            "INSERT INTO products (id, branch, nama_barang, harga, stok_diterima, "
+            "order_type, nama_supplier) "
+            "VALUES (:i, :b, 'N', 1000, 0, 'REGULER', :s) "
             "ON CONFLICT (id, branch) DO UPDATE SET nama_supplier = EXCLUDED.nama_supplier"
         ), {"i": TEST_PROD, "b": TEST_BRANCH, "s": TEST_SUP})
 

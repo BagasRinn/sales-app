@@ -46,8 +46,8 @@ def _seed_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"{TEST_PREFIX}USER-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 
@@ -55,8 +55,9 @@ def _seed_user(role: str, branch: str | None) -> str:
 def _seed_product(pid: str, branch: str, harga: int) -> None:
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga) "
-            "VALUES (:id, :branch, :nama, :harga)"
+            "INSERT INTO products (id, branch, nama_barang, harga, "
+            "stok_sistem, stok_booking, stok_diterima, order_type) "
+            "VALUES (:id, :branch, :nama, :harga, 0, 0, 0, 'REGULER')"
         ), {"id": pid, "branch": branch, "nama": f"Test Product {pid[-6:]}", "harga": harga})
 
 
@@ -72,8 +73,8 @@ def _seed_customer(cid: str) -> None:
 def _seed_order(oid: str, branch: str, sales_id: str, customer_id: str, status: str, created_at: datetime) -> None:
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO orders (id, branch, sales_id, customer_id, status, notes, created_at) "
-            "VALUES (:id, :branch, :sid, :cid, :status, :notes, :ts)"
+            "INSERT INTO orders (id, branch, sales_id, customer_id, status, notes, created_at, order_type) "
+            "VALUES (:id, :branch, :sid, :cid, :status, :notes, :ts, 'REGULER')"
         ), {
             "id": oid, "branch": branch, "sid": sales_id, "cid": customer_id,
             "status": status, "notes": f"{TEST_PREFIX}order", "ts": created_at,
@@ -85,8 +86,13 @@ def _seed_order_item(oid: str, product_id: str, qty: int, branch: str = USER_BRA
     karena ada FK constraint (product_id, branch) -> (products.id, products.branch)."""
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO order_items (id, order_id, product_id, branch, qty) "
-            "VALUES (:id, :oid, :pid, :branch, :qty)"
+            "INSERT INTO order_items (id, order_id, product_id, branch, qty, "
+            "discount_percent, discount_type, discount_nominal, "
+            "discount2_type, discount2_percent, discount2_nominal, "
+            "discount3_type, discount3_percent, discount3_nominal, "
+            "up_price_type, up_price_percent, up_price_nominal) "
+            "VALUES (:id, :oid, :pid, :branch, :qty, "
+            "0, 'PERCENT', 0, 'PERCENT', 0, 0, 'PERCENT', 0, 0, 'NOMINAL', 0, 0)"
         ), {
             "id": str(uuid.uuid4()), "oid": oid, "pid": product_id,
             "branch": branch, "qty": qty,

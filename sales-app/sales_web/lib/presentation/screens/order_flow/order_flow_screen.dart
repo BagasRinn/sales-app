@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../data/models/customer.dart';
 import '../../../data/models/order.dart' hide ItemDiscount, DiscountLayer;
 import '../../../data/models/product.dart';
@@ -26,23 +27,39 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   int _step = 1;
   bool _isSubmitting = false;
 
+  // Idempotency key per screen session
+  final String _createRequestId =
+      '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch}';
+
   final _notesController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    if (widget.existingOrder != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final draft = context.read<DraftOrderProvider>();
-        draft.loadFromExisting(widget.existingOrder!);
-        _notesController.text = widget.existingOrder!.notes ?? '';
-      });
-    }
+    // Bersihkan state sebelumnya supaya edit draft tidak tercampur data stale.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        context.read<DraftOrderProvider>().reset();
+        if (widget.existingOrder != null) {
+          context.read<DraftOrderProvider>().loadFromExisting(
+            widget.existingOrder!,
+          );
+          _notesController.text = widget.existingOrder!.notes ?? '';
+        }
+      } catch (_) {}
+    });
+    // Jika existingOrder null, jangan reset di sinkron (post-frame sudah cukup).
   }
 
   @override
   void dispose() {
     _notesController.dispose();
+    // Ensure stale edit state tidak bocor ke flow berikutnya.
+    try {
+      context.read<DraftOrderProvider>().reset();
+    } catch (_) {
+      // context mungkin sudah tidak valid; abaikan.
+    }
     super.dispose();
   }
 
@@ -78,9 +95,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           _StepIndicator(currentStep: _step),
 
           // Content
-          Expanded(
-            child: _buildStepContent(),
-          ),
+          Expanded(child: _buildStepContent()),
 
           // Bottom bar
           _buildBottomBar(draft, onBack: _prevStep),
@@ -91,32 +106,45 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
 
   String get _stepTitle {
     switch (_step) {
-      case 1: return 'Pilih Customer';
-      case 2: return 'Tipe Order';
-      case 3: return 'Pilih Produk';
-      case 4: return 'Review Order';
-      default: return '';
+      case 1:
+        return 'Pilih Customer';
+      case 2:
+        return 'Tipe Order';
+      case 3:
+        return 'Pilih Produk';
+      case 4:
+        return 'Review Order';
+      default:
+        return '';
     }
   }
 
   Widget _buildStepContent() {
     switch (_step) {
-      case 1: return _StepPickCustomer(onNext: _nextStep);
-      case 2: return _StepPickOrderType(onNext: _nextStep, onBack: _prevStep);
-      case 3: return _StepPickProducts(onNext: _nextStep, onBack: _prevStep);
-      case 4: return _StepReview(
-        notesController: _notesController,
-        onBack: _prevStep,
-        onSubmit: () => _submitOrder(),
-        onSaveDraft: () => _saveDraft(),
-        isSubmitting: _isSubmitting,
-        existingOrder: widget.existingOrder,
-      );
-      default: return const SizedBox();
+      case 1:
+        return _StepPickCustomer(onNext: _nextStep);
+      case 2:
+        return _StepPickOrderType(onNext: _nextStep, onBack: _prevStep);
+      case 3:
+        return _StepPickProducts(onNext: _nextStep, onBack: _prevStep);
+      case 4:
+        return _StepReview(
+          notesController: _notesController,
+          onBack: _prevStep,
+          onSubmit: () => _submitOrder(),
+          onSaveDraft: () => _saveDraft(),
+          isSubmitting: _isSubmitting,
+          existingOrder: widget.existingOrder,
+        );
+      default:
+        return const SizedBox();
     }
   }
 
-  Widget _buildBottomBar(DraftOrderProvider draft, {required VoidCallback onBack}) {
+  Widget _buildBottomBar(
+    DraftOrderProvider draft, {
+    required VoidCallback onBack,
+  }) {
     if (_step == 3) {
       final idr = NumberFormat('#,###', 'id');
       return Container(
@@ -175,7 +203,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   }
 
   void _confirmClose(BuildContext context) {
-    final draft = context.watch<DraftOrderProvider>();
+    final draft = context.read<DraftOrderProvider>();
     if (draft.items.isEmpty && draft.customerId == null) {
       Navigator.pop(context);
       return;
@@ -230,6 +258,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: items,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           orderType: draft.orderType,
+          clientRequestId: _createRequestId,
         );
         orderId = result.id;
       }
@@ -282,13 +311,17 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
       final orderRepo = OrderRepository(apiService);
       final items = draft.buildItemsPayload();
 
-      await orderRepo.saveDraft(
+      final savedOrder = await orderRepo.saveDraft(
         customerId: draft.customerId!,
         items: items,
         notes: _notesController.text.isEmpty ? null : _notesController.text,
         orderType: draft.orderType,
         existingOrderId: draft.editingOrderId,
+        clientRequestId: _createRequestId,
       );
+
+      // Persist the draft id so subsequent saves update the same record.
+      draft.setEditingOrderId(savedOrder.id);
 
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -339,7 +372,9 @@ class _StepIndicator extends StatelessWidget {
             return Expanded(
               child: Container(
                 height: 2,
-                color: isDone ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+                color: isDone
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFFE2E8F0),
               ),
             );
           } else {
@@ -352,19 +387,19 @@ class _StepIndicator extends StatelessWidget {
               height: circleSize,
               decoration: BoxDecoration(
                 color: isDone || isActive
-                    ? const Color(0xFF2563EB)
-                    : const Color(0xFFE2E8F0),
+                    ? AppColors.primaryLight
+                    : AppColors.borderLight,
                 shape: BoxShape.circle,
               ),
               child: Center(
                 child: isDone
-                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    ? const Icon(Icons.check, color: AppColors.textOnPrimary, size: 18)
                     : Text(
                         '$stepNum',
                         style: TextStyle(
                           color: isActive
-                              ? Colors.white
-                              : const Color(0xFF94A3B8),
+                              ? AppColors.textOnPrimary
+                              : AppColors.textMuted,
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -457,7 +492,11 @@ class _StepPickCustomerState extends State<_StepPickCustomer> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFF059669), size: 20),
+                const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF059669),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -512,7 +551,9 @@ class _StepPickCustomerState extends State<_StepPickCustomer> {
                               )
                             : null,
                         onTap: () {
-                          context.read<DraftOrderProvider>().setCustomer(customer);
+                          context.read<DraftOrderProvider>().setCustomer(
+                            customer,
+                          );
                         },
                       ),
                     );
@@ -555,17 +596,14 @@ class _StepPickOrderType extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Pilih Tipe Order',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTextStyles.headlineMedium.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Pilih jenis order yang akan dibuat',
-            style: TextStyle(color: Color(0xFF64748B)),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
           _OrderTypeCard(
@@ -573,7 +611,7 @@ class _StepPickOrderType extends StatelessWidget {
             title: 'Order Reguler',
             description: 'Order standar dengan pengiriman normal',
             icon: Icons.shopping_cart,
-            color: const Color(0xFF2563EB),
+            color: AppColors.primaryLight,
             isSelected: draft.orderType == 'REGULER',
             onTap: () {
               context.read<DraftOrderProvider>().setOrderType('REGULER');
@@ -585,7 +623,7 @@ class _StepPickOrderType extends StatelessWidget {
             title: 'Order 4P (Program Promosi)',
             description: 'Order untuk program promosi supplier',
             icon: Icons.local_offer,
-            color: const Color(0xFFD97706),
+            color: AppColors.warning,
             isSelected: draft.orderType == '4P',
             onTap: () {
               context.read<DraftOrderProvider>().setOrderType('4P');
@@ -637,11 +675,11 @@ class _OrderTypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: isSelected ? Color.lerp(color, Colors.white, 0.9) : null,
+      color: isSelected ? Color.lerp(color, AppColors.surface, 0.9) : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isSelected ? color : const Color(0xFFE2E8F0),
+          color: isSelected ? color : AppColors.border,
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -655,7 +693,7 @@ class _OrderTypeCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Color.lerp(color, Colors.white, 0.85),
+                  color: Color.lerp(color, AppColors.surface, 0.85),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 28),
@@ -667,18 +705,12 @@ class _OrderTypeCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF64748B),
-                      ),
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -686,7 +718,7 @@ class _OrderTypeCard extends StatelessWidget {
               if (isSelected)
                 Icon(Icons.check_circle, color: color)
               else
-                Icon(Icons.circle_outlined, color: Colors.grey.shade300),
+                Icon(Icons.circle_outlined, color: AppColors.border),
             ],
           ),
         ),
@@ -734,7 +766,9 @@ class _StepPickProductsState extends State<_StepPickProducts> {
 
   TextEditingController _getQtyController(String productId, int currentQty) {
     if (!_qtyControllers.containsKey(productId)) {
-      _qtyControllers[productId] = TextEditingController(text: currentQty > 0 ? '$currentQty' : '');
+      _qtyControllers[productId] = TextEditingController(
+        text: currentQty > 0 ? '$currentQty' : '',
+      );
     } else {
       final c = _qtyControllers[productId]!;
       if (c.text.isEmpty && currentQty > 0) {
@@ -749,7 +783,9 @@ class _StepPickProductsState extends State<_StepPickProducts> {
   void _onQtyChanged(String productId, String value, dynamic product) {
     final qty = int.tryParse(value) ?? 0;
     final draft = context.read<DraftOrderProvider>();
-    final existing = draft.items.where((i) => i.productId == productId).toList();
+    final existing = draft.items
+        .where((i) => i.productId == productId)
+        .toList();
 
     if (qty <= 0) {
       if (existing.isNotEmpty) draft.removeItem(existing.first.id);
@@ -759,7 +795,9 @@ class _StepPickProductsState extends State<_StepPickProducts> {
       } else {
         draft.addItem(product);
         // adjust to target qty
-        final newly = draft.items.where((i) => i.productId == productId).toList();
+        final newly = draft.items
+            .where((i) => i.productId == productId)
+            .toList();
         if (newly.isNotEmpty && newly.first.qty > qty) {
           draft.setQty(newly.first.id, qty);
         }
@@ -796,121 +834,135 @@ class _StepPickProductsState extends State<_StepPickProducts> {
       child: Column(
         children: [
           // ── Header: Tipe + Toko ──────────────────────────────────────────────
-        Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Tipe order badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.infoBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Tipe: ${draft.orderType}',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryLight,
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tipe order badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Toko + Ganti
-              Row(
-                children: [
-                  Icon(Icons.store_outlined, size: 18, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      draft.customerName ?? '-',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  decoration: BoxDecoration(
+                    color: AppColors.infoBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Tipe: ${draft.orderType}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryLight,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: widget.onBack,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.borderLight,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                ),
+                const SizedBox(height: 10),
+                // Toko + Ganti
+                Row(
+                  children: [
+                    Icon(
+                      Icons.store_outlined,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
                       child: Text(
-                        'Ganti',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryLight,
+                        draft.customerName ?? '-',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: widget.onBack,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.borderLight,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          'Ganti',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryLight,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // ── Search bar ────────────────────────────────────────────────────────
-        Container(
-          color: AppColors.surface,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Cari kode, nama, atau supplier...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                      },
-                    )
-                  : null,
+                  ],
+                ),
+              ],
             ),
-            onChanged: (_) => setState(() {}),
           ),
-        ),
 
-        // ── Product list ──────────────────────────────────────────────────────
-        Expanded(
-          child: provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : products.isEmpty
-                  ? Center(
-                      child: Text(
-                        q.isEmpty ? 'Tidak ada produk' : 'Produk tidak ditemukan',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+          // ── Search bar ────────────────────────────────────────────────────────
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Cari kode, nama, atau supplier...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                      )
+                    : null,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+
+          // ── Product list ──────────────────────────────────────────────────────
+          Expanded(
+            child: provider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : products.isEmpty
+                ? Center(
+                    child: Text(
+                      q.isEmpty ? 'Tidak ada produk' : 'Produk tidak ditemukan',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textMuted,
                       ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final product = products[index];
-                        return _OrderProductCard(
-                          product: product,
-                          idr: idr,
-                          qtyController: _getQtyController(
-                            product.id,
-                            _getQty(draft, product.id),
-                          ),
-                          currentQty: _getQty(draft, product.id),
-                          onQtyChanged: (v) => _onQtyChanged(product.id, v, product),
-                          onCardTap: () => _showProductBottomSheet(context, product, idr),
-                        );
-                      },
                     ),
-        ),
-      ],
-    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final product = products[index];
+                      return _OrderProductCard(
+                        product: product,
+                        idr: idr,
+                        qtyController: _getQtyController(
+                          product.id,
+                          _getQty(draft, product.id),
+                        ),
+                        currentQty: _getQty(draft, product.id),
+                        onQtyChanged: (v) =>
+                            _onQtyChanged(product.id, v, product),
+                        onCardTap: () =>
+                            _showProductBottomSheet(context, product, idr),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -919,7 +971,11 @@ class _StepPickProductsState extends State<_StepPickProducts> {
     return item.isNotEmpty ? item.first.qty : 0;
   }
 
-  void _showProductBottomSheet(BuildContext context, dynamic product, NumberFormat idr) {
+  void _showProductBottomSheet(
+    BuildContext context,
+    dynamic product,
+    NumberFormat idr,
+  ) {
     final available = product.stokTersedia as int;
     final satuan = product.satuan as String? ?? 'unit';
     final id = product.id as String;
@@ -936,10 +992,7 @@ class _StepPickProductsState extends State<_StepPickProducts> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header: nama + SKU
-            Text(
-              product.namaBarang ?? '',
-              style: AppTextStyles.headlineMedium,
-            ),
+            Text(product.namaBarang ?? '', style: AppTextStyles.headlineMedium),
             const SizedBox(height: 2),
             Text(
               'SKU: $id',
@@ -953,10 +1006,20 @@ class _StepPickProductsState extends State<_StepPickProducts> {
             _bsDetailRow(Icons.qr_code_outlined, 'SKU', id),
             if (satuan.isNotEmpty && satuan != 'unit')
               _bsDetailRow(Icons.scale_outlined, 'Satuan', satuan),
-            if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty)
-              _bsDetailRow(Icons.business_outlined, 'Supplier', product.namaSupplier),
-            if (product.kategori != null && (product.kategori as String).isNotEmpty)
-              _bsDetailRow(Icons.category_outlined, 'Kategori', product.kategori),
+            if (product.namaSupplier != null &&
+                (product.namaSupplier as String).isNotEmpty)
+              _bsDetailRow(
+                Icons.business_outlined,
+                'Supplier',
+                product.namaSupplier,
+              ),
+            if (product.kategori != null &&
+                (product.kategori as String).isNotEmpty)
+              _bsDetailRow(
+                Icons.category_outlined,
+                'Kategori',
+                product.kategori,
+              ),
             const SizedBox(height: 16),
             // Harga + Stok
             Container(height: 1, color: AppColors.border),
@@ -988,7 +1051,9 @@ class _StepPickProductsState extends State<_StepPickProducts> {
                       '$available $satuan',
                       style: AppTextStyles.headlineMedium.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: available == 0 ? AppColors.error : AppColors.textPrimary,
+                        color: available == 0
+                            ? AppColors.error
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -1023,11 +1088,11 @@ class _StepPickProductsState extends State<_StepPickProducts> {
           const SizedBox(width: 8),
           Text(
             '$label: ',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
-          Expanded(
-            child: Text(value, style: AppTextStyles.bodyMedium),
-          ),
+          Expanded(child: Text(value, style: AppTextStyles.bodyMedium)),
         ],
       ),
     );
@@ -1073,7 +1138,9 @@ class _OrderProductCard extends StatelessWidget {
               // Nama barang
               Text(
                 product.namaBarang ?? '',
-                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1084,17 +1151,39 @@ class _OrderProductCard extends StatelessWidget {
               Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(text: 'SKU  ', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
-                    TextSpan(text: '$id\n', style: AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace')),
-                    TextSpan(text: 'Stok  ', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                    TextSpan(
+                      text: 'SKU  ',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    TextSpan(
+                      text: '$id\n',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'Stok  ',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
                     TextSpan(
                       text: '$available $satuan',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: available == 0 ? AppColors.error : AppColors.textPrimary,
+                        color: available == 0
+                            ? AppColors.error
+                            : AppColors.textPrimary,
                       ),
                     ),
                     if (supplier != null && supplier.isNotEmpty) ...[
-                      TextSpan(text: '\nSupplier  ', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                      TextSpan(
+                        text: '\nSupplier  ',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
                       TextSpan(text: supplier, style: AppTextStyles.bodySmall),
                     ],
                   ],
@@ -1158,7 +1247,9 @@ class _QtyStepper extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(
-              color: enabled && currentQty > 0 ? AppColors.border : AppColors.border.withValues(alpha: 0.4),
+              color: enabled && currentQty > 0
+                  ? AppColors.border
+                  : AppColors.border.withValues(alpha: 0.4),
             ),
           ),
           child: InkWell(
@@ -1202,7 +1293,9 @@ class _QtyStepper extends StatelessWidget {
         ),
         // Plus
         Material(
-          color: enabled ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4),
+          color: enabled
+              ? AppColors.primaryLight
+              : AppColors.primaryLight.withValues(alpha: 0.4),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
@@ -1210,11 +1303,7 @@ class _QtyStepper extends StatelessWidget {
             child: SizedBox(
               width: 32,
               height: 32,
-              child: Icon(
-                Icons.add,
-                size: 16,
-                color: Colors.white,
-              ),
+              child: Icon(Icons.add, size: 16, color: Colors.white),
             ),
           ),
         ),
@@ -1268,166 +1357,202 @@ class _StepReviewState extends State<_StepReview> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            children: [
-              // ── Toko section ──────────────────────────────────────────────
-              _sectionHeader('Toko'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.cardSurface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            draft.customerName ?? '-',
-                            style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          if (draft.customerAddress != null && draft.customerAddress!.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              draft.customerAddress!,
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: widget.isSubmitting ? null : widget.onBack,
-                      child: const Text('Ganti'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // ── Produk section ───────────────────────────────────────────
-              _sectionHeader('Produk (${draft.totalItems})'),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.cardSurface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  children: [
-                    for (var i = 0; i < draft.items.length; i++) ...[
-                      if (draft.items[i].qty > 0)
-                        _LineRow(
-                          line: draft.items[i],
-                          product: productMap[draft.items[i].productId],
-                        ),
-                      if (i < draft.items.length - 1 && draft.items[i].qty > 0)
-                        Container(height: 1, color: AppColors.border),
-                    ],
-                    Container(height: 1, color: AppColors.border),
-                    InkWell(
-                      onTap: widget.isSubmitting ? null : widget.onBack,
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add, size: 16, color: AppColors.textSecondary),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Tambah Produk',
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // ── Catatan ──────────────────────────────────────────────────
-              _sectionHeader('Catatan (opsional)'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: widget.notesController,
-                maxLines: 3,
-                onChanged: (v) => draft.setNotes(v),
-                decoration: InputDecoration(
-                  hintText: 'Tulis catatan untuk order ini...',
-                  filled: true,
-                  fillColor: AppColors.cardSurface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // ── Total ───────────────────────────────────────────────────
-              _OrderTotalCard(draft: draft, idr: idr),
-            ],
-          ),
-        ),
-
-        // ── Bottom buttons ──────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: BoxDecoration(
-            color: AppColors.cardSurface,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Row(
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
-                if (widget.existingOrder == null || widget.existingOrder!.isDraft) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: widget.isSubmitting ? null : widget.onSaveDraft,
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                      child: widget.isSubmitting
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Simpan Draft'),
-                    ),
+                // ── Toko section ──────────────────────────────────────────────
+                _sectionHeader('Toko'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: widget.isSubmitting ? null : widget.onSubmit,
-                    style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    child: widget.isSubmitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(widget.existingOrder?.isPending == true ? 'Simpan Perubahan' : 'Kirim Order'),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              draft.customerName ?? '-',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (draft.customerAddress != null &&
+                                draft.customerAddress!.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                draft.customerAddress!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: widget.isSubmitting ? null : widget.onBack,
+                        child: const Text('Ganti'),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 20),
+
+                // ── Produk section ───────────────────────────────────────────
+                _sectionHeader('Produk (${draft.totalItems})'),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < draft.items.length; i++) ...[
+                        if (draft.items[i].qty > 0)
+                          _LineRow(
+                            line: draft.items[i],
+                            product: productMap[draft.items[i].productId],
+                          ),
+                        if (i < draft.items.length - 1 &&
+                            draft.items[i].qty > 0)
+                          Container(height: 1, color: AppColors.border),
+                      ],
+                      Container(height: 1, color: AppColors.border),
+                      InkWell(
+                        onTap: widget.isSubmitting ? null : widget.onBack,
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add,
+                                size: 16,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Tambah Produk',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Catatan ──────────────────────────────────────────────────
+                _sectionHeader('Catatan (opsional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: widget.notesController,
+                  maxLines: 3,
+                  onChanged: (v) => draft.setNotes(v),
+                  decoration: InputDecoration(
+                    hintText: 'Tulis catatan untuk order ini...',
+                    filled: true,
+                    fillColor: AppColors.cardSurface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Total ───────────────────────────────────────────────────
+                _OrderTotalCard(draft: draft, idr: idr),
               ],
             ),
           ),
-        ),
-      ],
-    ),
+
+          // ── Bottom buttons ──────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  if (widget.existingOrder == null ||
+                      widget.existingOrder!.isDraft) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: widget.isSubmitting
+                            ? null
+                            : widget.onSaveDraft,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: widget.isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Simpan Draft'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: widget.isSubmitting ? null : widget.onSubmit,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: widget.isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              widget.existingOrder?.isPending == true
+                                  ? 'Simpan Perubahan'
+                                  : 'Kirim Order',
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1475,10 +1600,15 @@ class _OrderTotalCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total (${draft.totalItems} item)', style: AppTextStyles.bodyLarge),
+                    Text(
+                      'Total (${draft.totalItems} item)',
+                      style: AppTextStyles.bodyLarge,
+                    ),
                     Text(
                       'Rp ${idr.format(draft.totalRaw)}',
-                      style: AppTextStyles.headlineSmall.copyWith(color: AppColors.primaryLight),
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: AppColors.primaryLight,
+                      ),
                     ),
                   ],
                 ),
@@ -1500,12 +1630,21 @@ class _OrderTotalCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   _upRow('Up Price', upTotal, idr),
                 ],
-                Container(height: 1, color: AppColors.border, margin: const EdgeInsets.symmetric(vertical: 10)),
+                Container(
+                  height: 1,
+                  color: AppColors.border,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                ),
                 // Grand Total
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Grand Total', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w700)),
+                    Text(
+                      'Grand Total',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     Text(
                       'Rp ${idr.format(draft.totalPrice)}',
                       style: AppTextStyles.headlineSmall.copyWith(
@@ -1519,7 +1658,10 @@ class _OrderTotalCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Item gratis: ${draft.freeItemsCount}',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.success, fontStyle: FontStyle.italic),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.success,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ],
@@ -1533,10 +1675,16 @@ class _OrderTotalCard extends StatelessWidget {
   Widget _discRow(String label, int amount, NumberFormat idr) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.success)),
+      Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+      ),
       Text(
         '- Rp ${idr.format(amount)}',
-        style: AppTextStyles.bodySmall.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.success,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ],
   );
@@ -1544,10 +1692,16 @@ class _OrderTotalCard extends StatelessWidget {
   Widget _upRow(String label, int amount, NumberFormat idr) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning)),
+      Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
+      ),
       Text(
         '+ Rp ${idr.format(amount)}',
-        style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.warning,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ],
   );
@@ -1574,16 +1728,27 @@ class _LineRow extends StatelessWidget {
 
     // Up Price applied first (per-piece × qty ditambahkan ke base)
     final upPerPiece = up != null
-        ? (up.type == 'PERCENT' ? (price * up.value / 100).round() : up.value.toInt())
+        ? (up.type == 'PERCENT'
+              ? (price * up.value / 100).round()
+              : up.value.toInt())
         : 0;
     final base = rawSubtotal + upPerPiece * line.qty;
 
     // Calculate total cut
     int running = base;
     int d1 = 0, d2 = 0, d3 = 0;
-    if (disc.layer1 != null) { d1 = disc.layer1!.cutFrom(running); running -= d1; }
-    if (disc.layer2 != null) { d2 = disc.layer2!.cutFrom(running); running -= d2; }
-    if (disc.layer3 != null) { d3 = disc.layer3!.cutFrom(running); running -= d3; }
+    if (disc.layer1 != null) {
+      d1 = disc.layer1!.cutFrom(running);
+      running -= d1;
+    }
+    if (disc.layer2 != null) {
+      d2 = disc.layer2!.cutFrom(running);
+      running -= d2;
+    }
+    if (disc.layer3 != null) {
+      d3 = disc.layer3!.cutFrom(running);
+      running -= d3;
+    }
     final subtotal = running;
     final totalCut = d1 + d2 + d3;
 
@@ -1607,7 +1772,9 @@ class _LineRow extends StatelessWidget {
                           Flexible(
                             child: Text(
                               name,
-                              style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1615,22 +1782,40 @@ class _LineRow extends StatelessWidget {
                           if (isFree) ...[
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.15),
+                                color: AppColors.success.withValues(
+                                  alpha: 0.15,
+                                ),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+                                border: Border.all(
+                                  color: AppColors.success.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
                               ),
                               child: const Text(
                                 'GRATIS',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.success,
+                                ),
                               ),
                             ),
                           ],
                         ],
                       ),
                       if (product?.id != null)
-                        Text(product!.id, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted)),
+                        Text(
+                          product!.id,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1642,7 +1827,9 @@ class _LineRow extends StatelessWidget {
                       'Rp ${idr.format(subtotal)}',
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: totalCut > 0 ? AppColors.success : AppColors.textPrimary,
+                        color: totalCut > 0
+                            ? AppColors.success
+                            : AppColors.textPrimary,
                       ),
                     ),
                     if (totalCut > 0)
@@ -1669,7 +1856,9 @@ class _LineRow extends StatelessWidget {
                     children: [
                       Text(
                         '× ${line.qty} · Rp ${idr.format(price)}',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       if (!disc.isEmpty) ...[
                         const SizedBox(height: 2),
@@ -1697,13 +1886,17 @@ class _LineRow extends StatelessWidget {
                   const SizedBox(width: 4),
                   _iconBtn(
                     icon: Icons.discount_outlined,
-                    color: !disc.isEmpty ? AppColors.success : AppColors.textSecondary,
+                    color: !disc.isEmpty
+                        ? AppColors.success
+                        : AppColors.textSecondary,
                     onTap: () => _showDiscountSheet(context, line, product),
                   ),
                   const SizedBox(width: 2),
                   _iconBtn(
                     icon: Icons.trending_up,
-                    color: up != null ? AppColors.warning : AppColors.textSecondary,
+                    color: up != null
+                        ? AppColors.warning
+                        : AppColors.textSecondary,
                     onTap: () => _showUpPriceSheet(context, line, product),
                   ),
                   const SizedBox(width: 2),
@@ -1736,7 +1929,11 @@ class _LineRow extends StatelessWidget {
 
   Widget _activeLayersSummary(ItemDiscount disc, NumberFormat idr) {
     final parts = <String>[];
-    for (final entry in [(1, disc.layer1), (2, disc.layer2), (3, disc.layer3)]) {
+    for (final entry in [
+      (1, disc.layer1),
+      (2, disc.layer2),
+      (3, disc.layer3),
+    ]) {
       final l = entry.$2;
       if (l == null) continue;
       final label = 'Diskon ${entry.$1}';
@@ -1748,23 +1945,33 @@ class _LineRow extends StatelessWidget {
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
       parts.join(' · '),
-      style: AppTextStyles.bodySmall.copyWith(color: AppColors.success, fontWeight: FontWeight.w500),
+      style: AppTextStyles.bodySmall.copyWith(
+        color: AppColors.success,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
   Widget _upPriceChip(UpPriceLayer up, NumberFormat idr) {
     final label = up.type == 'PERCENT'
         ? (up.value == up.value.roundToDouble()
-            ? '${up.value.round()}%'
-            : '${up.value}%')
+              ? '${up.value.round()}%'
+              : '${up.value}%')
         : 'Rp ${idr.format(up.value.round())}';
     return Text(
       'Up Price: $label',
-      style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w500),
+      style: AppTextStyles.bodySmall.copyWith(
+        color: AppColors.warning,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
-  void _showDiscountSheet(BuildContext context, OrderLine line, Product? product) {
+  void _showDiscountSheet(
+    BuildContext context,
+    OrderLine line,
+    Product? product,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1773,7 +1980,11 @@ class _LineRow extends StatelessWidget {
     );
   }
 
-  void _showUpPriceSheet(BuildContext context, OrderLine line, Product? product) {
+  void _showUpPriceSheet(
+    BuildContext context,
+    OrderLine line,
+    Product? product,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1782,7 +1993,11 @@ class _LineRow extends StatelessWidget {
     );
   }
 
-  void _showGratisDialog(BuildContext context, String name, DraftOrderProvider draft) {
+  void _showGratisDialog(
+    BuildContext context,
+    String name,
+    DraftOrderProvider draft,
+  ) {
     final qtyCtl = TextEditingController(text: '1');
     showDialog(
       context: context,
@@ -1797,7 +2012,9 @@ class _LineRow extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Item duplikat akan mendapat diskon 100% (GRATIS).',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -1812,13 +2029,21 @@ class _LineRow extends StatelessWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             onPressed: () {
               final qty = int.tryParse(qtyCtl.text) ?? 0;
               if (qty <= 0) return;
               final newLine = draft.addLine(line.productId, qty: qty);
-              draft.setDiscountLayer(lineId: newLine.id, layer: 1, type: 'PERCENT', value: 100.0);
+              draft.setDiscountLayer(
+                lineId: newLine.id,
+                layer: 1,
+                type: 'PERCENT',
+                value: 100.0,
+              );
               Navigator.pop(ctx);
             },
             child: const Text('Tambah'),
@@ -1836,7 +2061,11 @@ class _ReviewQtyStepper extends StatefulWidget {
   final int max;
   final ValueChanged<int> onChanged;
 
-  const _ReviewQtyStepper({required this.qty, required this.max, required this.onChanged});
+  const _ReviewQtyStepper({
+    required this.qty,
+    required this.max,
+    required this.onChanged,
+  });
 
   @override
   State<_ReviewQtyStepper> createState() => _ReviewQtyStepperState();
@@ -1869,7 +2098,9 @@ class _ReviewQtyStepperState extends State<_ReviewQtyStepper> {
   void _commit(String text) {
     final parsed = int.tryParse(text);
     if (parsed != null && parsed >= 0) {
-      widget.onChanged(parsed == 0 ? 0 : (parsed <= widget.max ? parsed : widget.max));
+      widget.onChanged(
+        parsed == 0 ? 0 : (parsed <= widget.max ? parsed : widget.max),
+      );
     }
     setState(() => _isEditing = false);
     if (!_isEditing) {
@@ -1895,7 +2126,10 @@ class _ReviewQtyStepperState extends State<_ReviewQtyStepper> {
             onTap: () => setState(() {
               _isEditing = true;
               _ctrl.text = '${widget.qty}';
-              _ctrl.selection = TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
+              _ctrl.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _ctrl.text.length,
+              );
             }),
             child: _isEditing
                 ? TextField(
@@ -1903,8 +2137,16 @@ class _ReviewQtyStepperState extends State<_ReviewQtyStepper> {
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     autofocus: true,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 6), border: InputBorder.none),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 6),
+                      border: InputBorder.none,
+                    ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (v) => _commit(v),
                     onSubmitted: _commit,
@@ -1913,32 +2155,59 @@ class _ReviewQtyStepperState extends State<_ReviewQtyStepper> {
                 : Text(
                     '${widget.qty}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
           ),
         ),
         _stepBtn(
           icon: Icons.add,
-          onTap: widget.qty < widget.max ? () => widget.onChanged(widget.qty + 1) : null,
+          onTap: widget.qty < widget.max
+              ? () => widget.onChanged(widget.qty + 1)
+              : null,
           isPrimary: true,
         ),
       ],
     );
   }
 
-  Widget _stepBtn({required IconData icon, required VoidCallback? onTap, required bool isPrimary}) {
+  Widget _stepBtn({
+    required IconData icon,
+    required VoidCallback? onTap,
+    required bool isPrimary,
+  }) {
     return Material(
-      color: isPrimary ? (onTap != null ? AppColors.primaryLight : AppColors.primaryLight.withValues(alpha: 0.4)) : AppColors.cardSurface,
+      color: isPrimary
+          ? (onTap != null
+                ? AppColors.primaryLight
+                : AppColors.primaryLight.withValues(alpha: 0.4))
+          : AppColors.cardSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: isPrimary ? BorderSide.none : BorderSide(color: onTap != null ? AppColors.border : AppColors.border.withValues(alpha: 0.4)),
+        side: isPrimary
+            ? BorderSide.none
+            : BorderSide(
+                color: onTap != null
+                    ? AppColors.border
+                    : AppColors.border.withValues(alpha: 0.4),
+              ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: SizedBox(
-          width: 32, height: 32,
-          child: Icon(icon, size: 16, color: isPrimary ? Colors.white : (onTap != null ? AppColors.textPrimary : AppColors.textMuted)),
+          width: 32,
+          height: 32,
+          child: Icon(
+            icon,
+            size: 16,
+            color: isPrimary
+                ? Colors.white
+                : (onTap != null ? AppColors.textPrimary : AppColors.textMuted),
+          ),
         ),
       ),
     );
@@ -1973,31 +2242,72 @@ class _DiscountSheetState extends State<_DiscountSheet> {
 
   void _initLayer(int idx, DiscountLayer? layer) {
     switch (idx) {
-      case 1: _type1 = layer?.type ?? 'PERCENT'; _ctrl1 = TextEditingController(text: layer != null ? '${layer.value}' : ''); break;
-      case 2: _type2 = layer?.type ?? 'PERCENT'; _ctrl2 = TextEditingController(text: layer != null ? '${layer.value}' : ''); break;
-      case 3: _type3 = layer?.type ?? 'PERCENT'; _ctrl3 = TextEditingController(text: layer != null ? '${layer.value}' : ''); break;
+      case 1:
+        _type1 = layer?.type ?? 'PERCENT';
+        _ctrl1 = TextEditingController(
+          text: layer != null ? '${layer.value}' : '',
+        );
+        break;
+      case 2:
+        _type2 = layer?.type ?? 'PERCENT';
+        _ctrl2 = TextEditingController(
+          text: layer != null ? '${layer.value}' : '',
+        );
+        break;
+      case 3:
+        _type3 = layer?.type ?? 'PERCENT';
+        _ctrl3 = TextEditingController(
+          text: layer != null ? '${layer.value}' : '',
+        );
+        break;
     }
   }
 
   @override
   void dispose() {
-    _ctrl1.dispose(); _ctrl2.dispose(); _ctrl3.dispose();
+    _ctrl1.dispose();
+    _ctrl2.dispose();
+    _ctrl3.dispose();
     super.dispose();
   }
 
   String _typeFor(int idx) {
-    switch (idx) { case 1: return _type1; case 2: return _type2; case 3: return _type3; }
+    switch (idx) {
+      case 1:
+        return _type1;
+      case 2:
+        return _type2;
+      case 3:
+        return _type3;
+    }
     return 'PERCENT';
   }
 
   TextEditingController _ctrlFor(int idx) {
-    switch (idx) { case 1: return _ctrl1; case 2: return _ctrl2; case 3: return _ctrl3; }
+    switch (idx) {
+      case 1:
+        return _ctrl1;
+      case 2:
+        return _ctrl2;
+      case 3:
+        return _ctrl3;
+    }
     return _ctrl1;
   }
 
   void _setType(int idx, String t) {
     setState(() {
-      switch (idx) { case 1: _type1 = t; break; case 2: _type2 = t; break; case 3: _type3 = t; break; }
+      switch (idx) {
+        case 1:
+          _type1 = t;
+          break;
+        case 2:
+          _type2 = t;
+          break;
+        case 3:
+          _type3 = t;
+          break;
+      }
     });
     _ctrlFor(idx).clear();
   }
@@ -2007,12 +2317,17 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     if (v <= 0) return 0;
     final price = widget.product?.harga ?? widget.line.hargaSatuan;
     final raw = price * widget.line.qty;
-    if (idx == 1) return _typeFor(idx) == 'PERCENT' ? (raw * v / 100).round() : v.round();
+    if (idx == 1) {
+      return _typeFor(idx) == 'PERCENT' ? (raw * v / 100).round() : v.round();
+    }
     int running = raw;
     for (var i = 1; i < idx; i++) {
-      final prevV = double.tryParse(_ctrlFor(i).text.replaceAll(',', '.')) ?? 0.0;
+      final prevV =
+          double.tryParse(_ctrlFor(i).text.replaceAll(',', '.')) ?? 0.0;
       if (prevV <= 0) continue;
-      final cut = _typeFor(i) == 'PERCENT' ? (running * prevV / 100).round() : prevV.round();
+      final cut = _typeFor(i) == 'PERCENT'
+          ? (running * prevV / 100).round()
+          : prevV.round();
       running -= cut;
     }
     return _typeFor(idx) == 'PERCENT' ? (running * v / 100).round() : v.round();
@@ -2022,7 +2337,9 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     final price = widget.product?.harga ?? widget.line.hargaSatuan;
     final raw = price * widget.line.qty;
     int running = raw;
-    for (var i = 1; i <= 3; i++) { running -= _calcPreview(i); }
+    for (var i = 1; i <= 3; i++) {
+      running -= _calcPreview(i);
+    }
     return running < 0 ? 0 : running;
   }
 
@@ -2031,8 +2348,41 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     for (var idx = 1; idx <= 3; idx++) {
       final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
       final capped = _typeFor(idx) == 'PERCENT' && v > 100 ? 100.0 : v;
-      draft.setDiscountLayer(lineId: widget.line.id, layer: idx, type: _typeFor(idx), value: capped);
+      draft.setDiscountLayer(
+        lineId: widget.line.id,
+        layer: idx,
+        type: _typeFor(idx),
+        value: capped,
+      );
     }
+    Navigator.pop(context);
+  }
+
+  void _onApplyToAll() {
+    final draft = context.read<DraftOrderProvider>();
+    final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
+    if (otherCount == 0) return;
+
+    draft.applyDiscountToAll(widget.line.id);
+
+    for (var idx = 1; idx <= 3; idx++) {
+      final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+      final capped = _typeFor(idx) == 'PERCENT' && v > 100 ? 100.0 : v;
+      draft.setDiscountLayer(
+        lineId: widget.line.id,
+        layer: idx,
+        type: _typeFor(idx),
+        value: capped,
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Diskon diterapkan ke $otherCount item lainnya'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
     Navigator.pop(context);
   }
 
@@ -2044,48 +2394,123 @@ class _DiscountSheetState extends State<_DiscountSheet> {
         color: AppColors.cardSurface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 12),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.borderLight,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Edit Diskon', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                const Text(
+                  'Edit Diskon',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close, size: 20),
-                  style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border))),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: AppColors.border),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-            child: Text(name, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              name,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          for (var idx = 1; idx <= 3; idx++) _LayerCard(
-            idx: idx, type: _typeFor(idx), controller: _ctrlFor(idx),
-            preview: _calcPreview(idx), idr: _idr,
-            onTypeChanged: (t) => _setType(idx, t),
-            onChanged: (_) => setState(() {}),
-            onClear: () { _ctrlFor(idx).clear(); setState(() {}); },
+          for (var idx = 1; idx <= 3; idx++)
+            _LayerCard(
+              idx: idx,
+              type: _typeFor(idx),
+              controller: _ctrlFor(idx),
+              preview: _calcPreview(idx),
+              idr: _idr,
+              onTypeChanged: (t) => _setType(idx, t),
+              onChanged: (_) => setState(() {}),
+              onClear: () {
+                _ctrlFor(idx).clear();
+                setState(() {});
+              },
+            ),
+          Container(
+            height: 1,
+            color: AppColors.border,
+            margin: const EdgeInsets.symmetric(horizontal: 20),
           ),
-          Container(height: 1, color: AppColors.border, margin: const EdgeInsets.symmetric(horizontal: 20)),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Subtotal', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                Text('Rp ${_idr.format(_subtotal)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.success)),
+                const Text(
+                  'Subtotal',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  'Rp ${_idr.format(_subtotal)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.success,
+                  ),
+                ),
               ],
             ),
+          ),
+          Consumer<DraftOrderProvider>(
+            builder: (context, draft, _) {
+              final otherCount = draft.items
+                  .where((l) => l.id != widget.line.id)
+                  .length;
+              if (otherCount == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _onApplyToAll,
+                    icon: const Icon(Icons.done_all, size: 18),
+                    label: Text('Terapkan ke Semua Item ($otherCount)'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -2093,7 +2518,9 @@ class _DiscountSheetState extends State<_DiscountSheet> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _onSave,
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
                 child: const Text('Simpan'),
               ),
             ),
@@ -2115,9 +2542,14 @@ class _LayerCard extends StatelessWidget {
   final VoidCallback onClear;
 
   const _LayerCard({
-    required this.idx, required this.type, required this.controller,
-    required this.preview, required this.idr,
-    required this.onTypeChanged, required this.onChanged, required this.onClear,
+    required this.idx,
+    required this.type,
+    required this.controller,
+    required this.preview,
+    required this.idr,
+    required this.onTypeChanged,
+    required this.onChanged,
+    required this.onClear,
   });
 
   @override
@@ -2137,11 +2569,24 @@ class _LayerCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('DISKON $idx', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.05)),
+              Text(
+                'DISKON $idx',
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.05,
+                ),
+              ),
               if (!isEmpty)
                 GestureDetector(
                   onTap: onClear,
-                  child: Text('Hapus', style: AppTextStyles.bodySmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Hapus',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -2149,12 +2594,23 @@ class _LayerCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _chip('%', type == 'PERCENT', () => onTypeChanged('PERCENT')),
-                    _chip('Rp', type == 'NOMINAL', () => onTypeChanged('NOMINAL')),
+                    _chip(
+                      '%',
+                      type == 'PERCENT',
+                      () => onTypeChanged('PERCENT'),
+                    ),
+                    _chip(
+                      'Rp',
+                      type == 'NOMINAL',
+                      () => onTypeChanged('NOMINAL'),
+                    ),
                   ],
                 ),
               ),
@@ -2163,18 +2619,30 @@ class _LayerCard extends StatelessWidget {
                 width: 80,
                 child: TextField(
                   controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                   decoration: InputDecoration(
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
                     prefixText: type == 'NOMINAL' ? 'Rp ' : null,
                     suffixText: type == 'PERCENT' ? '%' : null,
                     hintText: '0',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+                  ],
                   onChanged: onChanged,
                   onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 ),
@@ -2184,7 +2652,10 @@ class _LayerCard extends StatelessWidget {
                 child: Text(
                   preview > 0 ? '−Rp ${idr.format(preview)}' : '',
                   textAlign: TextAlign.right,
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -2194,17 +2665,25 @@ class _LayerCard extends StatelessWidget {
     );
   }
 
-  Widget _chip(String label, bool active, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primaryLight : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : AppColors.textSecondary)),
-    ),
-  );
+  Widget _chip(String label, bool active, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: active ? AppColors.primaryLight : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : AppColors.textSecondary,
+            ),
+          ),
+        ),
+      );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -2214,7 +2693,12 @@ class _PopupMenuItem {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-  const _PopupMenuItem({required this.label, required this.icon, required this.color, required this.onTap});
+  const _PopupMenuItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 }
 
 class _PopupMenuBtn extends StatelessWidget {
@@ -2224,9 +2708,16 @@ class _PopupMenuBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: AppColors.cardSurface,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: AppColors.border)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: BorderSide(color: AppColors.border),
+    ),
     child: PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 16, color: AppColors.textSecondary),
+      icon: const Icon(
+        Icons.more_vert,
+        size: 16,
+        color: AppColors.textSecondary,
+      ),
       tooltip: 'Menu',
       onSelected: (value) => items[int.parse(value)].onTap(),
       itemBuilder: (context) => [
@@ -2246,13 +2737,26 @@ class _PopupMenuBtn extends StatelessWidget {
   );
 }
 
-Widget _iconBtn({required IconData icon, required Color color, required VoidCallback onTap}) => Material(
+Widget _iconBtn({
+  required IconData icon,
+  required Color color,
+  required VoidCallback onTap,
+}) => Material(
   color: AppColors.cardSurface,
-  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: color == AppColors.success ? color : AppColors.border)),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(8),
+    side: BorderSide(
+      color: color == AppColors.success ? color : AppColors.border,
+    ),
+  ),
   child: InkWell(
     borderRadius: BorderRadius.circular(8),
     onTap: onTap,
-    child: SizedBox(width: 32, height: 32, child: Icon(icon, size: 16, color: color)),
+    child: SizedBox(
+      width: 32,
+      height: 32,
+      child: Icon(icon, size: 16, color: color),
+    ),
   ),
 );
 
@@ -2282,8 +2786,8 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
     _ctrl = TextEditingController(
       text: initial > 0
           ? (initial == initial.roundToDouble()
-              ? '${initial.round()}'
-              : '$initial')
+                ? '${initial.round()}'
+                : '$initial')
           : '',
     );
     _harga = widget.product?.harga ?? widget.line.hargaSatuan;
@@ -2317,10 +2821,34 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
   void _onSave() {
     final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
     context.read<DraftOrderProvider>().setUpPrice(
-          lineId: widget.line.id,
-          type: _type,
-          value: value,
-        );
+      lineId: widget.line.id,
+      type: _type,
+      value: value,
+    );
+    Navigator.pop(context);
+  }
+
+  void _onApplyToAll() {
+    final draft = context.read<DraftOrderProvider>();
+    final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
+    if (otherCount == 0) return;
+
+    draft.applyUpPriceToAll(widget.line.id);
+
+    final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
+    context.read<DraftOrderProvider>().setUpPrice(
+      lineId: widget.line.id,
+      type: _type,
+      value: value,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Up Price diterapkan ke $otherCount item lainnya'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
     Navigator.pop(context);
   }
 
@@ -2342,8 +2870,13 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4, margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             Row(
@@ -2356,7 +2889,9 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
             const SizedBox(height: 4),
             Text(
               'Penambah per-piece (×${widget.line.qty}). Ditambahkan ke base sebelum diskon.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -2369,10 +2904,16 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+              ],
               decoration: InputDecoration(
-                labelText: _type == 'PERCENT' ? 'Persen (%)' : 'Nominal per-piece (Rp)',
+                labelText: _type == 'PERCENT'
+                    ? 'Persen (%)'
+                    : 'Nominal per-piece (Rp)',
                 hintText: _type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
                 prefixText: _type == 'PERCENT' ? null : 'Rp ',
                 border: const OutlineInputBorder(),
@@ -2396,23 +2937,58 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Per-piece: Rp ${idr.format(_perPiece)}', style: AppTextStyles.bodySmall),
+                  Text(
+                    'Per-piece: Rp ${idr.format(_perPiece)}',
+                    style: AppTextStyles.bodySmall,
+                  ),
                   Text(
                     'Total: + Rp ${idr.format(_total)}',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+            Consumer<DraftOrderProvider>(
+              builder: (context, draft, _) {
+                final otherCount = draft.items
+                    .where((l) => l.id != widget.line.id)
+                    .length;
+                if (otherCount == 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _onApplyToAll,
+                      icon: const Icon(Icons.done_all, size: 18),
+                      label: Text('Terapkan ke Semua Item ($otherCount)'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
             Row(
               children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal'))),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Batal'),
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
                     onPressed: _onSave,
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                    ),
                     child: const Text('Simpan'),
                   ),
                 ),
@@ -2425,15 +3001,11 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
   }
 
   Widget _typeChip(String label, bool selected) {
-    return ChoiceChip(
-      label: Text(label),
+    return AppChoiceChip(
+      label: label,
       selected: selected,
-      onSelected: (_) => setState(() => _type = label == '%' ? 'PERCENT' : 'NOMINAL'),
-      selectedColor: AppColors.warning.withValues(alpha: 0.2),
-      labelStyle: TextStyle(
-        color: selected ? AppColors.warning : AppColors.textSecondary,
-        fontWeight: FontWeight.w600,
-      ),
+      onSelected: () =>
+          setState(() => _type = label == '%' ? 'PERCENT' : 'NOMINAL'),
     );
   }
 }

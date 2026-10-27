@@ -1,277 +1,25 @@
 import 'package:flutter/material.dart';
 
-class AppColors {
-  AppColors._();
+import 'design_system/app_colors.dart';
+import 'design_system/widgets/app_badge.dart';
 
-  static const Color primary = Color(0xFF1E3A5F);
-  static const Color primaryLight = Color(0xFF2563EB);
-  static const Color primaryDark = Color(0xFF152C4A);
-
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color background = Color(0xFFF4F7FB);
-  static const Color sidebarBg = Color(0xFF1E3A5F);
-
-  static const Color success = Color(0xFF059669);
-  static const Color successBg = Color(0xFFECFDF5);
-  static const Color successBorder = Color(0xFF6EE7B7);
-
-  static const Color warning = Color(0xFFD97706);
-  static const Color warningBg = Color(0xFFFFFBEB);
-  static const Color warningBorder = Color(0xFFFCD34D);
-
-  static const Color error = Color(0xFFDC2626);
-  static const Color errorBg = Color(0xFFFEF2F2);
-  static const Color errorBorder = Color(0xFFFECACA);
-
-  static const Color info = Color(0xFF2563EB);
-  static const Color infoBg = Color(0xFFEFF6FF);
-  static const Color infoBorder = Color(0xFFBFDBFE);
-
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF475569);
-  static const Color textMuted = Color(0xFF94A3B8);
-  static const Color textOnPrimary = Color(0xFFFFFFFF);
-
-  static const Color border = Color(0xFFE2E8F0);
-  static const Color borderLight = Color(0xFFF1F5F9);
-}
-
-class AppTextStyles {
-  AppTextStyles._();
-
-  static const String fontFamily = 'Plus Jakarta Sans';
-
-  static const TextStyle displayLarge = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 32,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -0.5,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle displayMedium = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 28,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle headlineLarge = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 24,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.2,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle headlineMedium = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle headlineSmall = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle titleLarge = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 16,
-    fontWeight: FontWeight.w700,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyLarge = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle bodyMedium = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textSecondary,
-  );
-
-  static const TextStyle bodySmall = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textMuted,
-  );
-
-  static const TextStyle caption = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 10,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textMuted,
-  );
-
-  static const TextStyle labelLarge = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textPrimary,
-  );
-
-  static const TextStyle labelMedium = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 12,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.3,
-    color: AppColors.textSecondary,
-  );
-
-  static const TextStyle labelSmall = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.3,
-    color: AppColors.textSecondary,
-  );
-
-  static const TextStyle mono = TextStyle(
-    fontFamily: 'JetBrains Mono',
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
-    color: AppColors.textMuted,
-  );
-}
-
-class AppTheme {
-  AppTheme._();
-
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      fontFamily: AppTextStyles.fontFamily,
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryLight,
-        onPrimary: AppColors.textOnPrimary,
-        primaryContainer: AppColors.primary,
-        onPrimaryContainer: AppColors.textOnPrimary,
-        secondary: AppColors.primary,
-        onSecondary: AppColors.textOnPrimary,
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
-        error: AppColors.error,
-        onError: AppColors.textOnPrimary,
-      ),
-      appBarTheme: const AppBarTheme(
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.textOnPrimary,
-        titleTextStyle: TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textOnPrimary,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.border),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-        labelStyle: AppTextStyles.labelMedium,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          foregroundColor: AppColors.textOnPrimary,
-          backgroundColor: AppColors.primaryLight,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          elevation: 0,
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          foregroundColor: AppColors.textOnPrimary,
-          backgroundColor: AppColors.primaryLight,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          elevation: 0,
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryLight,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          side: const BorderSide(color: AppColors.primaryLight),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryLight,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
-      dataTableTheme: DataTableThemeData(
-        headingRowColor: WidgetStateProperty.all(AppColors.borderLight),
-        dataRowColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.hovered)) {
-            return AppColors.infoBg.withValues(alpha: 0.3);
-          }
-          return null;
-        }),
-        headingTextStyle: AppTextStyles.labelMedium.copyWith(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
-        ),
-        dataTextStyle: AppTextStyles.bodyMedium,
-        dividerThickness: 1,
-      ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.border,
-        thickness: 1,
-        space: 1,
-      ),
-      snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.textPrimary,
-        contentTextStyle: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        behavior: SnackBarBehavior.floating,
-     ),
-    );
-  }
-}
+export 'design_system/app_colors.dart';
+export 'design_system/app_tokens.dart';
+export 'design_system/app_theme.dart';
+export 'design_system/app_responsive.dart';
+export 'design_system/widgets/app_card.dart';
+export 'design_system/widgets/app_stat_card.dart';
+export 'design_system/widgets/app_button.dart';
+export 'design_system/widgets/app_input.dart';
+export 'design_system/widgets/app_badge.dart';
+export 'design_system/widgets/app_choice_chip.dart';
+export 'design_system/widgets/app_page_header.dart';
+export 'design_system/widgets/app_adaptive_table.dart';
+export 'design_system/widgets/app_shell.dart';
+export 'design_system/widgets/app_filter_bar.dart';
+export 'design_system/widgets/app_states.dart';
+export 'design_system/widgets/app_pagination.dart';
+export 'design_system/widgets/app_feedback.dart';
 
 // ─── Shared status helpers ────────────────────────────────────────────────────
 
@@ -299,6 +47,18 @@ Color statusBgColor(StockStatus s) {
   }
 }
 
+/// Versi gelap untuk teks chip di atas soft background (kontras ≥ 4.5:1).
+Color statusTextColor(StockStatus s) {
+  switch (s) {
+    case StockStatus.available:
+      return AppColors.successText;
+    case StockStatus.low:
+      return AppColors.warningText;
+    case StockStatus.outOfStock:
+      return AppColors.dangerText;
+  }
+}
+
 String stockStatusLabel(StockStatus s) {
   switch (s) {
     case StockStatus.available:
@@ -323,30 +83,24 @@ class StockChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = stockStatusFromValue(available);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: statusBgColor(status),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: statusColor(status).withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        stockStatusLabel(status),
-        style: TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: statusColor(status),
-        ),
-      ),
+    return AppBadge(
+      label: stockStatusLabel(status),
+      variant: switch (status) {
+        StockStatus.available => AppBadgeVariant.success,
+        StockStatus.low => AppBadgeVariant.warning,
+        StockStatus.outOfStock => AppBadgeVariant.danger,
+      },
+      compact: true,
     );
   }
 }
 
-enum OrderStatus { pending, approved, rejected, cancelled }
+enum OrderStatus { draft, pending, approved, rejected, cancelled }
 
 Color orderStatusColor(OrderStatus s) {
   switch (s) {
+    case OrderStatus.draft:
+      return AppColors.textMuted;
     case OrderStatus.pending:
       return AppColors.info;
     case OrderStatus.approved:
@@ -354,12 +108,30 @@ Color orderStatusColor(OrderStatus s) {
     case OrderStatus.rejected:
       return AppColors.error;
     case OrderStatus.cancelled:
-      return AppColors.textMuted;
+      return AppColors.textSubtle;
+  }
+}
+
+/// Versi gelap untuk teks chip di atas soft background (kontras ≥ 4.5:1).
+Color orderStatusTextColor(OrderStatus s) {
+  switch (s) {
+    case OrderStatus.draft:
+      return AppColors.textSecondary;
+    case OrderStatus.pending:
+      return AppColors.infoText;
+    case OrderStatus.approved:
+      return AppColors.successText;
+    case OrderStatus.rejected:
+      return AppColors.dangerText;
+    case OrderStatus.cancelled:
+      return AppColors.textSecondary;
   }
 }
 
 Color orderStatusBgColor(OrderStatus s) {
   switch (s) {
+    case OrderStatus.draft:
+      return AppColors.border;
     case OrderStatus.pending:
       return AppColors.infoBg;
     case OrderStatus.approved:
@@ -373,6 +145,8 @@ Color orderStatusBgColor(OrderStatus s) {
 
 String orderStatusLabel(String status) {
   switch (status.toUpperCase()) {
+    case 'DRAFT':
+      return 'Draft';
     case 'PENDING':
       return 'Menunggu';
     case 'APPROVED':
@@ -389,6 +163,8 @@ String orderStatusLabel(String status) {
 OrderStatus? orderStatusFromString(String? s) {
   if (s == null) return null;
   switch (s.toUpperCase()) {
+    case 'DRAFT':
+      return OrderStatus.draft;
     case 'PENDING':
       return OrderStatus.pending;
     case 'APPROVED':
@@ -410,67 +186,15 @@ class OrderStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = orderStatusFromString(status);
     if (s == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: orderStatusBgColor(s),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: orderStatusColor(s).withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        orderStatusLabel(status),
-        style: TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: orderStatusColor(s),
-        ),
-      ),
-    );
-  }
-}
-
-/// Reusable card widget with subtle gray border
-class AppCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final EdgeInsetsGeometry? margin;
-  final Color? color;
-  final double? elevation;
-
-  const AppCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.margin,
-    this.color,
-    this.elevation,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: margin,
-      decoration: BoxDecoration(
-        color: color ?? AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.border.withValues(alpha: 0.5),
-          width: 1,
-        ),
-        boxShadow: elevation != null && elevation! > 0
-            ? [
-                BoxShadow(
-                  color: AppColors.textMuted.withValues(alpha: 0.08),
-                  blurRadius: elevation!,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
-      child: padding != null
-          ? Padding(padding: padding!, child: child)
-          : child,
+    return AppBadge(
+      label: orderStatusLabel(status),
+      variant: switch (s) {
+        OrderStatus.draft || OrderStatus.cancelled => AppBadgeVariant.neutral,
+        OrderStatus.pending => AppBadgeVariant.info,
+        OrderStatus.approved => AppBadgeVariant.success,
+        OrderStatus.rejected => AppBadgeVariant.danger,
+      },
+      compact: true,
     );
   }
 }

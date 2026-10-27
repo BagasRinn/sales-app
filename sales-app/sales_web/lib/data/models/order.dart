@@ -17,7 +17,10 @@ class DiscountLayer {
     }
   }
 
-  Map<String, dynamic> toJson() => {'type': type.name.toUpperCase(), 'value': value};
+  Map<String, dynamic> toJson() => {
+    'type': type.name.toUpperCase(),
+    'value': value,
+  };
 
   factory DiscountLayer.fromJson(Map<String, dynamic> json) {
     return DiscountLayer(
@@ -64,9 +67,15 @@ class ItemDiscount {
   factory ItemDiscount.fromJson(Map<String, dynamic>? json) {
     if (json == null) return ItemDiscount();
     return ItemDiscount(
-      layer1: json['layer1'] != null ? DiscountLayer.fromJson(json['layer1']) : null,
-      layer2: json['layer2'] != null ? DiscountLayer.fromJson(json['layer2']) : null,
-      layer3: json['layer3'] != null ? DiscountLayer.fromJson(json['layer3']) : null,
+      layer1: json['layer1'] != null
+          ? DiscountLayer.fromJson(json['layer1'])
+          : null,
+      layer2: json['layer2'] != null
+          ? DiscountLayer.fromJson(json['layer2'])
+          : null,
+      layer3: json['layer3'] != null
+          ? DiscountLayer.fromJson(json['layer3'])
+          : null,
     );
   }
 }
@@ -135,7 +144,11 @@ class OrderItem {
         json['harga_setelah_diskon'] as int? ?? hargaSatuan;
     final subtotal = json['subtotal'] as int? ?? (hargaSetelahDiskon * qty);
 
-    DiscountLayer? makeLayer(String typeKey, String percentKey, String nominalKey) {
+    DiscountLayer? makeLayer(
+      String typeKey,
+      String percentKey,
+      String nominalKey,
+    ) {
       final typeVal = json[typeKey] as String?;
       if (typeVal == null) return null;
       if (typeVal.toUpperCase() == 'NOMINAL') {
@@ -145,7 +158,10 @@ class OrderItem {
       } else {
         final percent = (json[percentKey] as num?)?.toDouble() ?? 0;
         if (percent <= 0) return null;
-        return DiscountLayer(type: DiscountType.percent, value: percent.toInt());
+        return DiscountLayer(
+          type: DiscountType.percent,
+          value: percent.toInt(),
+        );
       }
     }
 
@@ -156,9 +172,21 @@ class OrderItem {
       qty: qty,
       hargaSatuan: hargaSatuan,
       discount: ItemDiscount(
-        layer1: makeLayer('discount_type', 'discount_percent', 'discount_nominal'),
-        layer2: makeLayer('discount2_type', 'discount2_percent', 'discount2_nominal'),
-        layer3: makeLayer('discount3_type', 'discount3_percent', 'discount3_nominal'),
+        layer1: makeLayer(
+          'discount_type',
+          'discount_percent',
+          'discount_nominal',
+        ),
+        layer2: makeLayer(
+          'discount2_type',
+          'discount2_percent',
+          'discount2_nominal',
+        ),
+        layer3: makeLayer(
+          'discount3_type',
+          'discount3_percent',
+          'discount3_nominal',
+        ),
       ),
       hargaSetelahDiskon: hargaSetelahDiskon,
       subtotal: subtotal,
@@ -186,7 +214,8 @@ class CancelledItem {
     required this.reason,
   });
 
-  String get displayLabel => namaBarang.isNotEmpty ? namaBarang : 'Item dibatalkan';
+  String get displayLabel =>
+      namaBarang.isNotEmpty ? namaBarang : 'Item dibatalkan';
 
   factory CancelledItem.fromJson(Map<String, dynamic> json) {
     return CancelledItem(
@@ -237,12 +266,18 @@ class Order {
 
   String get statusLabel {
     switch (status.toUpperCase()) {
-      case 'PENDING': return 'Menunggu';
-      case 'APPROVED': return 'Disetujui';
-      case 'REJECTED': return 'Ditolak';
-      case 'CANCELLED': return 'Dibatalkan';
-      case 'DRAFT': return 'Draft';
-      default: return status;
+      case 'PENDING':
+        return 'Menunggu';
+      case 'APPROVED':
+        return 'Disetujui';
+      case 'REJECTED':
+        return 'Ditolak';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      case 'DRAFT':
+        return 'Draft';
+      default:
+        return status;
     }
   }
 
@@ -259,12 +294,14 @@ class Order {
     return items.fold(0, (sum, item) {
       // Nominal diskon saja (tidak termasuk up price — lihat [totalUpPrice]).
       // raw - subtotal = disk - up, jadi kurangi up untuk dapat diskon saja.
-      int itemDiscount = (item.hargaSatuan * item.qty) - item.subtotal - item.nominalUpPrice;
+      int itemDiscount =
+          (item.hargaSatuan * item.qty) - item.subtotal - item.nominalUpPrice;
       return sum + itemDiscount;
     });
   }
 
-  int get totalUpPrice => items.fold(0, (sum, item) => sum + item.nominalUpPrice);
+  int get totalUpPrice =>
+      items.fold(0, (sum, item) => sum + item.nominalUpPrice);
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
@@ -279,12 +316,16 @@ class Order {
       storeContact: json['store_contact'] as String?,
       storeAddress: json['store_address'] as String?,
       orderType: json['order_type'] as String? ?? 'REGULER',
-      items: (json['items'] as List<dynamic>?)
-          ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [],
-      cancelledItems: (json['cancelled_items'] as List<dynamic>?)
-          ?.map((e) => CancelledItem.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [],
+      items:
+          (json['items'] as List<dynamic>?)
+              ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      cancelledItems:
+          (json['cancelled_items'] as List<dynamic>?)
+              ?.map((e) => CancelledItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       rejectReason: json['reject_reason'] as String?,
       invoiceNumber: json['invoice_number'] as String?,
     );

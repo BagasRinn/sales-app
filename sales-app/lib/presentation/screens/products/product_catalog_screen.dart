@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../data/models/product.dart';
 import '../../providers/product_provider.dart';
 
@@ -169,32 +170,48 @@ class _CatalogHeader extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    _StatusFilterChip(
+                    AppChoiceChip(
                       label: 'Semua',
                       count: provider.countByStatusAll(ProductStatusFilter.all),
-                      isSelected: provider.statusFilter == ProductStatusFilter.all,
-                      onTap: () => provider.setStatusFilter(ProductStatusFilter.all),
+                      selected:
+                          provider.statusFilter == ProductStatusFilter.all,
+                      onSelected: () =>
+                          provider.setStatusFilter(ProductStatusFilter.all),
                     ),
                     const SizedBox(width: 8),
-                    _StatusFilterChip(
+                    AppChoiceChip(
                       label: 'Tersedia',
-                      count: provider.countByStatusAll(ProductStatusFilter.available),
-                      isSelected: provider.statusFilter == ProductStatusFilter.available,
-                      onTap: () => provider.setStatusFilter(ProductStatusFilter.available),
+                      count: provider.countByStatusAll(
+                        ProductStatusFilter.available,
+                      ),
+                      selected:
+                          provider.statusFilter ==
+                          ProductStatusFilter.available,
+                      onSelected: () => provider.setStatusFilter(
+                        ProductStatusFilter.available,
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    _StatusFilterChip(
+                    AppChoiceChip(
                       label: 'Stok Rendah',
                       count: provider.countByStatusAll(ProductStatusFilter.low),
-                      isSelected: provider.statusFilter == ProductStatusFilter.low,
-                      onTap: () => provider.setStatusFilter(ProductStatusFilter.low),
+                      selected:
+                          provider.statusFilter == ProductStatusFilter.low,
+                      onSelected: () =>
+                          provider.setStatusFilter(ProductStatusFilter.low),
                     ),
                     const SizedBox(width: 8),
-                    _StatusFilterChip(
+                    AppChoiceChip(
                       label: 'Habis',
-                      count: provider.countByStatusAll(ProductStatusFilter.outOfStock),
-                      isSelected: provider.statusFilter == ProductStatusFilter.outOfStock,
-                      onTap: () => provider.setStatusFilter(ProductStatusFilter.outOfStock),
+                      count: provider.countByStatusAll(
+                        ProductStatusFilter.outOfStock,
+                      ),
+                      selected:
+                          provider.statusFilter ==
+                          ProductStatusFilter.outOfStock,
+                      onSelected: () => provider.setStatusFilter(
+                        ProductStatusFilter.outOfStock,
+                      ),
                     ),
                   ],
                 ),
@@ -239,73 +256,6 @@ class _CatalogHeader extends StatelessWidget {
   }
 }
 
-class _StatusFilterChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _StatusFilterChip({
-    required this.label,
-    required this.count,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? AppColors.primaryLight : AppColors.background,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? AppColors.primaryLight : AppColors.border,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white.withValues(alpha: 0.25)
-                      : AppColors.border,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CategoryDropdown extends StatelessWidget {
   final List<String> categories;
   final String? selectedCategory;
@@ -343,10 +293,7 @@ class _CategoryDropdown extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Filter Kategori',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.textMuted),
               ),
             ],
           ),
@@ -357,23 +304,22 @@ class _CategoryDropdown extends StatelessWidget {
               value: null,
               child: Text(
                 'Semua Kategori',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
+            ),
+            ...categories.map(
+              (cat) => DropdownMenuItem<String>(
+                value: cat,
+                child: Text(
+                  cat,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
-            ...categories.map((cat) => DropdownMenuItem<String>(
-                  value: cat,
-                  child: Text(
-                    cat,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                )),
           ],
           onChanged: onChanged,
         ),
@@ -539,9 +485,10 @@ class _SkeletonBoxState extends State<_SkeletonBox>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 0.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -587,12 +534,23 @@ class _ErrorState extends StatelessWidget {
                 color: AppColors.errorBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.cloud_off, size: 40, color: AppColors.error),
+              child: const Icon(
+                Icons.cloud_off,
+                size: 40,
+                color: AppColors.error,
+              ),
             ),
             const SizedBox(height: 20),
-            const Text('Gagal memuat produk', style: AppTextStyles.headlineSmall),
+            const Text(
+              'Gagal memuat produk',
+              style: AppTextStyles.headlineSmall,
+            ),
             const SizedBox(height: 8),
-            Text(message, style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
+            Text(
+              message,
+              style: AppTextStyles.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: onRetry,
@@ -618,9 +576,11 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined,
-                size: 56,
-                color: AppColors.textMuted.withValues(alpha: 0.5)),
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 56,
+              color: AppColors.textMuted.withValues(alpha: 0.5),
+            ),
             const SizedBox(height: 16),
             Text(
               searchQuery.isNotEmpty
@@ -706,7 +666,12 @@ class _ProductCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          _StockStatusChip(status: status),
+                          StockStatusChip(
+                            status: status,
+                            label: status == StockStatus.outOfStock
+                                ? 'Habis'
+                                : null,
+                          ),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
@@ -719,11 +684,16 @@ class _ProductCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (product.namaSupplier != null && product.namaSupplier!.isNotEmpty) ...[
+                      if (product.namaSupplier != null &&
+                          product.namaSupplier!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.business, size: 12, color: AppColors.textMuted),
+                            Icon(
+                              Icons.business,
+                              size: 12,
+                              color: AppColors.textMuted,
+                            ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
@@ -816,8 +786,13 @@ class _ProductCard extends StatelessWidget {
               if (product.satuan != null)
                 _detailRow(Icons.scale_outlined, 'Satuan', product.satuan!),
               if (product.kategori != null)
-                _detailRow(Icons.category_outlined, 'Kategori', product.kategori!),
-              if (product.namaSupplier != null && product.namaSupplier!.isNotEmpty)
+                _detailRow(
+                  Icons.category_outlined,
+                  'Kategori',
+                  product.kategori!,
+                ),
+              if (product.namaSupplier != null &&
+                  product.namaSupplier!.isNotEmpty)
                 _detailRow(Icons.business, 'Supplier', product.namaSupplier!),
               const Divider(height: 24),
               Row(
@@ -846,7 +821,12 @@ class _ProductCard extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _StockStatusChip(status: status),
+                          StockStatusChip(
+                            status: status,
+                            label: status == StockStatus.outOfStock
+                                ? 'Habis'
+                                : null,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             '$available',
@@ -936,58 +916,61 @@ class _FilterBottomSheet extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               // Status filter section
-              const Text(
-                'Status Stok',
-                style: AppTextStyles.labelLarge,
-              ),
+              const Text('Status Stok', style: AppTextStyles.labelLarge),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _FilterChip(
+                  AppChoiceChip(
                     label: 'Semua',
-                    isSelected: provider.statusFilter == ProductStatusFilter.all,
-                    onTap: () => provider.setStatusFilter(ProductStatusFilter.all),
+                    selected: provider.statusFilter == ProductStatusFilter.all,
+                    onSelected: () =>
+                        provider.setStatusFilter(ProductStatusFilter.all),
                   ),
-                  _FilterChip(
+                  AppChoiceChip(
                     label: 'Tersedia',
-                    isSelected: provider.statusFilter == ProductStatusFilter.available,
-                    onTap: () => provider.setStatusFilter(ProductStatusFilter.available),
+                    selected:
+                        provider.statusFilter == ProductStatusFilter.available,
+                    onSelected: () =>
+                        provider.setStatusFilter(ProductStatusFilter.available),
                   ),
-                  _FilterChip(
+                  AppChoiceChip(
                     label: 'Stok Rendah',
-                    isSelected: provider.statusFilter == ProductStatusFilter.low,
-                    onTap: () => provider.setStatusFilter(ProductStatusFilter.low),
+                    selected: provider.statusFilter == ProductStatusFilter.low,
+                    onSelected: () =>
+                        provider.setStatusFilter(ProductStatusFilter.low),
                   ),
-                  _FilterChip(
+                  AppChoiceChip(
                     label: 'Habis',
-                    isSelected: provider.statusFilter == ProductStatusFilter.outOfStock,
-                    onTap: () => provider.setStatusFilter(ProductStatusFilter.outOfStock),
+                    selected:
+                        provider.statusFilter == ProductStatusFilter.outOfStock,
+                    onSelected: () => provider.setStatusFilter(
+                      ProductStatusFilter.outOfStock,
+                    ),
                   ),
                 ],
               ),
               if (provider.availableCategories.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                const Text(
-                  'Kategori',
-                  style: AppTextStyles.labelLarge,
-                ),
+                const Text('Kategori', style: AppTextStyles.labelLarge),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _FilterChip(
+                    AppChoiceChip(
                       label: 'Semua',
-                      isSelected: provider.categoryFilter == null,
-                      onTap: () => provider.setCategoryFilter(null),
+                      selected: provider.categoryFilter == null,
+                      onSelected: () => provider.setCategoryFilter(null),
                     ),
-                    ...provider.availableCategories.map((cat) => _FilterChip(
-                          label: cat,
-                          isSelected: provider.categoryFilter == cat,
-                          onTap: () => provider.setCategoryFilter(cat),
-                        )),
+                    ...provider.availableCategories.map(
+                      (cat) => AppChoiceChip(
+                        label: cat,
+                        selected: provider.categoryFilter == cat,
+                        onSelected: () => provider.setCategoryFilter(cat),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1008,83 +991,6 @@ class _FilterBottomSheet extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? AppColors.primaryLight : AppColors.background,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? AppColors.primaryLight : AppColors.border,
-              width: 1.5,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StockStatusChip extends StatelessWidget {
-  final StockStatus status;
-  const _StockStatusChip({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (status) {
-      StockStatus.available => AppColors.success,
-      StockStatus.low => AppColors.warning,
-      StockStatus.outOfStock => AppColors.error,
-    };
-    final label = switch (status) {
-      StockStatus.available => 'Tersedia',
-      StockStatus.low => 'Stok Rendah',
-      StockStatus.outOfStock => 'Habis',
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }

@@ -13,34 +13,24 @@ import '../../data/models/user_item.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
+import '../../data/models/branch_report.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../data/models/supplier.dart';
 import '../../core/api_exception.dart';
 
 enum AdminState { initial, loading, loaded, error }
 
-/// Cache durations - mengatur berapa lama data di-cache sebelum perlu di-refresh.
-/// Nilai ini di-tune untuk balance antara fresh data dan penghematan request.
+/// Cache durations
 class CacheConfig {
-  /// Cache untuk data yang sering berubah (pending orders).
   static const pendingOrders = Duration(minutes: 1);
-  /// Cache untuk dashboard stats.
   static const dashboardStats = Duration(minutes: 5);
-  /// Cache untuk customer submissions.
   static const customerSubmissions = Duration(minutes: 2);
-  /// Cache untuk daftar customer (paginated).
   static const customers = Duration(minutes: 5);
-  /// Cache untuk products (paginated).
   static const products = Duration(minutes: 5);
-  /// Cache untuk supplier list.
   static const suppliers = Duration(minutes: 10);
-  /// Cache untuk sales performance (manager view).
   static const salesPerformance = Duration(minutes: 5);
-  /// Cache untuk bulletins.
   static const bulletins = Duration(minutes: 10);
-  /// Cache untuk users list.
   static const users = Duration(minutes: 10);
-  /// Cache untuk orders (paginated, filtered).
   static const orders = Duration(minutes: 2);
 }
 
@@ -54,17 +44,21 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   List<Order> _pendingOrders = [];
   List<Order> _allOrders = [];
+  List<Order> _draftOrders = [];
   List<Product> _products = [];
   List<Customer> _customers = [];
   List<CustomerSubmission> _customerSubmissions = [];
-  String? _customerSubmissionsStatus; // filter aktif: null = semua
+  String? _customerSubmissionsStatus;
   SyncResult? _lastSyncResult;
+  Map<String, dynamic>? _importedSalesSummary;
+  bool _importedSalesLoading = false;
+  String? _importedSalesError;
+  Map<String, dynamic>? _salesImportResult;
   Map<String, int> _stats = {};
   String? _loadingMessage;
   bool _hasNewPending = false;
 
-  /// Cache timestamps untuk tracking kapan data terakhir di-fetch.
-  /// Ini adalah kunci untuk menentukan apakah perlu fetch ulang atau tidak.
+  /// Cache timestamps
   DateTime? _pendingOrdersCacheTime;
   DateTime? _statsCacheTime;
   DateTime? _customersCacheTime;
@@ -97,14 +91,14 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Filters
   String? _selectedSupplier;
   String? _selectedStatus;
-  String? _selectedOrderType; // filter produk by order_type (REGULER / 4P)
-  String? _orderFilter; // persists filter across approve/reject actions
+  String? _selectedOrderType;
+  String? _orderFilter = 'APPROVED,REJECTED,CANCELLED';
   DateTime? _orderDateFrom;
   DateTime? _orderDateTo;
-  String? _orderSearch; // search by store name or sales name
-  int _orderSkip = 0; // pagination offset
-  int _orderLimit = 20; // pagination page size
-  int _orderTotal = 0; // total pesanan yang match filter (untuk pagination)
+  String? _orderSearch;
+  int _orderSkip = 0;
+  int _orderLimit = 20;
+  int _orderTotal = 0;
 
   // Debounce timer for search
   Timer? _searchDebounceTimer;
@@ -124,6 +118,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _loadCancelToken = token;
     return token;
   }
+
   void cancelInFlightLoads() {
     _loadCancelToken?.cancel('Cancelled by user');
     _loadCancelToken = null;
@@ -158,18 +153,44 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<Supplier> _suppliers = [];
   bool _suppliersLoading = false;
   String? _suppliersError;
+  int _supplierPage = 0;
+  final int _supplierLimit = 20;
+  int _supplierTotal = 0;
+  bool? _supplierActiveFilter;
+  String _supplierSearch = '';
 
   List<Supplier> get suppliers => _suppliers;
   bool get suppliersLoading => _suppliersLoading;
   String? get suppliersError => _suppliersError;
+  int get supplierPage => _supplierPage;
+  int get supplierLimit => _supplierLimit;
+  int get supplierTotal => _supplierTotal;
+  int get supplierTotalPages => (_supplierTotal / _supplierLimit).ceil();
+  bool get hasPrevSupplierPage => _supplierPage > 0;
+  bool get hasNextSupplierPage => _supplierPage < supplierTotalPages - 1;
 
-  Future<void> loadSuppliers({bool? active}) async {
+  Future<void> loadSuppliers({bool? active, String? search, int? page}) async {
     _suppliersLoading = true;
     _suppliersError = null;
     notifyListeners();
     try {
-      _suppliers = await _repo.getSuppliers(active: active);
-      _suppliersCacheTime = DateTime.now(); // Update cache timestamp
+      if (active != null || search != null || page != null) {
+        if (active != null) _supplierActiveFilter = active;
+        if (search != null) {
+          _supplierSearch = search;
+          _supplierPage = 0;
+        }
+        if (page != null) _supplierPage = page;
+      }
+      final result = await _repo.getSuppliers(
+        active: _supplierActiveFilter,
+        search: _supplierSearch,
+        skip: _supplierPage * _supplierLimit,
+        limit: _supplierLimit,
+      );
+      _suppliers = result.suppliers;
+      _supplierTotal = result.total;
+      _suppliersCacheTime = DateTime.now();
     } catch (e) {
       _suppliersError = e.toString();
     } finally {
@@ -178,7 +199,43 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> createSupplier(String name, {String orderType = 'REGULER'}) async {
+  Future<void> setSupplierActiveFilter(bool? active) async {
+    _suppliersLoading = true;
+    _supplierActiveFilter = active;
+    _supplierPage = 0;
+    notifyListeners();
+    try {
+      final result = await _repo.getSuppliers(
+        active: active,
+        search: _supplierSearch,
+        skip: 0,
+        limit: _supplierLimit,
+      );
+      _suppliers = result.suppliers;
+      _supplierTotal = result.total;
+      _suppliersError = null;
+    } catch (e) {
+      _suppliersError = e.toString();
+    } finally {
+      _suppliersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> nextSupplierPage() async {
+    if (!hasNextSupplierPage) return;
+    await loadSuppliers(page: _supplierPage + 1);
+  }
+
+  Future<void> prevSupplierPage() async {
+    if (!hasPrevSupplierPage) return;
+    await loadSuppliers(page: _supplierPage - 1);
+  }
+
+  Future<void> createSupplier(
+    String name, {
+    String orderType = 'REGULER',
+  }) async {
     await _repo.createSupplier(name, orderType: orderType);
     await loadSuppliers();
   }
@@ -188,9 +245,6 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     await loadSuppliers();
   }
 
-  /// Update order_type supplier (REGULER/4P). Backend cascade ke products.
-  /// Update local state optimistically supaya UI tidak flash kosong saat
-  /// loadSuppliers() berjalan.
   Future<void> updateSupplierOrderType(Supplier s, String orderType) async {
     if (s.orderType == orderType) return;
     final updated = await _repo.updateSupplierOrderType(s.name, orderType);
@@ -209,6 +263,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get errorMessage => _errorMessage;
   List<Order> get pendingOrders => _pendingOrders;
   List<Order> get allOrders => _allOrders;
+  List<Order> get draftOrders => _draftOrders;
   List<Product> get products => _products;
   List<Customer> get customers => _customers;
   List<CustomerSubmission> get customerSubmissions => _customerSubmissions;
@@ -216,6 +271,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get customerSubmissionsPendingCount =>
       _customerSubmissions.where((s) => s.status == 'PENDING').length;
   SyncResult? get lastSyncResult => _lastSyncResult;
+  Map<String, dynamic>? get importedSalesSummary => _importedSalesSummary;
+  bool get importedSalesLoading => _importedSalesLoading;
+  String? get importedSalesError => _importedSalesError;
+  Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
   bool get isLoading => _state == AdminState.loading;
@@ -252,7 +311,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get performanceLoading => _performanceLoading;
   List<SalesTarget> get salesTargets => _salesTargets;
   bool get targetsLoading => _targetsLoading;
-  List<SalesPerformanceDashboardItem> get dashboardPerformance => _dashboardPerformance;
+  List<SalesPerformanceDashboardItem> get dashboardPerformance =>
+      _dashboardPerformance;
   bool get dashboardPerformanceLoading => _dashboardPerformanceLoading;
 
   // ===== Bulletins =====
@@ -262,7 +322,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String _userRole = 'ADMIN';
   String get userRole => _userRole;
   bool get isAdmin => _userRole == 'ADMIN';
-  bool get isManager => _userRole == 'MANAGER';
+  bool get isManager =>
+      _userRole == 'ADMIN' ||
+      _userRole == 'SUPERVISOR' ||
+      _userRole == 'MANAGER';
   bool get isSupervisor => _userRole == 'SUPERVISOR';
 
   String? _userBranch;
@@ -301,7 +364,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool needsRefresh = false;
     switch (_activeTabIndex) {
       case 0: // Dashboard
-        needsRefresh = !_isCacheValid(_pendingOrdersCacheTime, CacheConfig.pendingOrders) ||
+        needsRefresh =
+            !_isCacheValid(
+              _pendingOrdersCacheTime,
+              CacheConfig.pendingOrders,
+            ) ||
             !_isCacheValid(_statsCacheTime, CacheConfig.dashboardStats);
         break;
       case 1: // Pesanan
@@ -309,23 +376,36 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         break;
       case 2: // Toko
       case 3: // Pengajuan Customer
-        needsRefresh = !_isCacheValid(_customersCacheTime, CacheConfig.customers) ||
-            !_isCacheValid(_customerSubmissionsCacheTime, CacheConfig.customerSubmissions);
+        needsRefresh =
+            !_isCacheValid(_customersCacheTime, CacheConfig.customers) ||
+            !_isCacheValid(
+              _customerSubmissionsCacheTime,
+              CacheConfig.customerSubmissions,
+            );
         break;
       case 4: // Produk & Stok
         needsRefresh = !_isCacheValid(_productsCacheTime, CacheConfig.products);
         break;
       case 5: // Supplier
-        needsRefresh = !_isCacheValid(_suppliersCacheTime, CacheConfig.suppliers);
+        needsRefresh = !_isCacheValid(
+          _suppliersCacheTime,
+          CacheConfig.suppliers,
+        );
         break;
       case 7: // User
         needsRefresh = !_isCacheValid(_usersCacheTime, CacheConfig.users);
         break;
       case 8: // Performa Sales
-        needsRefresh = !_isCacheValid(_salesPerformanceCacheTime, CacheConfig.salesPerformance);
+        needsRefresh = !_isCacheValid(
+          _salesPerformanceCacheTime,
+          CacheConfig.salesPerformance,
+        );
         break;
       case 10: // Bulletin
-        needsRefresh = !_isCacheValid(_bulletinsCacheTime, CacheConfig.bulletins);
+        needsRefresh = !_isCacheValid(
+          _bulletinsCacheTime,
+          CacheConfig.bulletins,
+        );
         break;
     }
 
@@ -431,6 +511,46 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
+    }
+  }
+
+  /// Load draft orders (status DRAFT)
+  Future<void> loadDraftOrders() async {
+    try {
+      _draftOrders = await _repo.getDraftOrders();
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Release (delete) a draft order
+  Future<void> releaseDraftOrder(String id, String reason) async {
+    try {
+      await _repo.deleteDraftOrder(id, reason);
+      // remove locally
+      _draftOrders.removeWhere((o) => o.id == id);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Delete draft order (alias used by UI)
+  Future<bool> deleteDraftOrder(String orderId) async {
+    _setLoading(true, 'Releasing draft...');
+    try {
+      await releaseDraftOrder(orderId, '');
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
@@ -541,7 +661,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _customersCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e.toString();
+      }
     }
   }
 
@@ -639,7 +761,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _customerSearch = query;
     _customerPage = 0;
     _searchDebounceTimer?.cancel();
-    _searchDebounceTimer = Timer(_searchDebounceDuration, () => loadCustomers());
+    _searchDebounceTimer = Timer(
+      _searchDebounceDuration,
+      () => loadCustomers(),
+    );
   }
 
   Future<void> clearCustomerSearch() async {
@@ -672,7 +797,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Assignment management untuk tab "Penugasan Sales".
-  Future<List<SalesAssignment>> getCustomerAssignments(String customerId) async {
+  Future<List<SalesAssignment>> getCustomerAssignments(
+    String customerId,
+  ) async {
     return await _repo.getCustomerAssignments(customerId);
   }
 
@@ -723,7 +850,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> updateCustomer(String customerId, Map<String, dynamic> body) async {
+  Future<bool> updateCustomer(
+    String customerId,
+    Map<String, dynamic> body,
+  ) async {
     _setLoading(true, 'Menyimpan perubahan...');
     try {
       await _repo.updateCustomer(customerId, body);
@@ -846,23 +976,26 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _loadStats({DateTime? date, CancelToken? cancelToken}) async {
     try {
-      // Default: hitung per hari ini (WIT) supaya cards dashboard = aktivitas hari ini,
+      // Default: hitung berdasarkan tanggal local perangkat (WIB/WITA/WIT).
       // bukan total sepanjang masa di database.
       final effectiveDate = date ?? _todayWita();
-      _stats = await _repo.getDashboardStats(date: effectiveDate, cancelToken: cancelToken);
+      _stats = await _repo.getDashboardStats(
+        date: effectiveDate,
+        cancelToken: cancelToken,
+      );
       _statsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
       // Tangkap SEMUA error — Dio network errors throw di luar ApiException.
       // _stats = {} default, dashboard tampil 0 bukan blank/crash.
-      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e.toString();
+      }
     }
   }
 
   DateTime _todayWita() {
-    // WITA = UTC+8. Dashboard "hari ini" mengikuti jam WITA biar konsisten
-    // dengan sales app mobile (sudah pakai WITA di semua laporan).
-    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
 
@@ -874,32 +1007,51 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       bool cacheValid = false;
       switch (tab) {
         case 0: // Dashboard
-          cacheValid = _isCacheValid(_pendingOrdersCacheTime, CacheConfig.pendingOrders) &&
+          cacheValid =
+              _isCacheValid(
+                _pendingOrdersCacheTime,
+                CacheConfig.pendingOrders,
+              ) &&
               _isCacheValid(_statsCacheTime, CacheConfig.dashboardStats);
           break;
         case 1: // Pesanan
           cacheValid = _isCacheValid(_ordersCacheTime, CacheConfig.orders);
           break;
         case 2: // Toko
-          cacheValid = _isCacheValid(_customersCacheTime, CacheConfig.customers);
+          cacheValid = _isCacheValid(
+            _customersCacheTime,
+            CacheConfig.customers,
+          );
           break;
         case 3: // Pengajuan Customer
-          cacheValid = _isCacheValid(_customerSubmissionsCacheTime, CacheConfig.customerSubmissions);
+          cacheValid = _isCacheValid(
+            _customerSubmissionsCacheTime,
+            CacheConfig.customerSubmissions,
+          );
           break;
         case 4: // Produk & Stok
           cacheValid = _isCacheValid(_productsCacheTime, CacheConfig.products);
           break;
         case 5: // Supplier
-          cacheValid = _isCacheValid(_suppliersCacheTime, CacheConfig.suppliers);
+          cacheValid = _isCacheValid(
+            _suppliersCacheTime,
+            CacheConfig.suppliers,
+          );
           break;
         case 7: // User
           cacheValid = _isCacheValid(_usersCacheTime, CacheConfig.users);
           break;
         case 8: // Performa Sales (Manager & Supervisor)
-          cacheValid = _isCacheValid(_salesPerformanceCacheTime, CacheConfig.salesPerformance);
+          cacheValid = _isCacheValid(
+            _salesPerformanceCacheTime,
+            CacheConfig.salesPerformance,
+          );
           break;
         case 10: // Bulletin (Manager & Supervisor)
-          cacheValid = _isCacheValid(_bulletinsCacheTime, CacheConfig.bulletins);
+          cacheValid = _isCacheValid(
+            _bulletinsCacheTime,
+            CacheConfig.bulletins,
+          );
           break;
         default:
           cacheValid = false;
@@ -922,8 +1074,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           _loadPendingOrders(cancelToken),
           if (isAdmin || isManager || isSupervisor)
             _loadStats(date: date, cancelToken: cancelToken),
-          if (isManager || isSupervisor)
-            _loadSalesPerformanceDashboard(),
+          if (isManager || isSupervisor) _loadSalesPerformanceDashboard(),
         ]);
       } else if (tab == 1) {
         // Pesanan: orders + pending
@@ -979,7 +1130,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pendingOrdersCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e.toString();
+      }
     }
   }
 
@@ -1034,7 +1187,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _productsCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e.toString();
+      }
     }
   }
 
@@ -1051,7 +1206,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pendingOrders = _pendingOrders.where((o) => o.id != orderId).toList();
       if (_stats.isNotEmpty && _stats['pending_orders'] != null) {
         _stats = Map<String, int>.from(_stats);
-        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
+        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(
+          0,
+          1 << 30,
+        );
         _stats['approved_orders'] = (_stats['approved_orders'] ?? 0) + 1;
       }
       // Update cache timestamp after write operation
@@ -1079,7 +1237,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _pendingOrders = _pendingOrders.where((o) => o.id != orderId).toList();
       if (_stats.isNotEmpty && _stats['pending_orders'] != null) {
         _stats = Map<String, int>.from(_stats);
-        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(0, 1 << 30);
+        _stats['pending_orders'] = (_stats['pending_orders']! - 1).clamp(
+          0,
+          1 << 30,
+        );
         _stats['rejected_orders'] = (_stats['rejected_orders'] ?? 0) + 1;
       }
       // Update cache timestamp after write operation
@@ -1096,12 +1257,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> cancelOrderItem(String orderId, int qty, String reason, String itemId) async {
+  Future<bool> cancelOrderItem(
+    String orderId,
+    int qty,
+    String reason,
+    String itemId,
+  ) async {
     _setLoading(true, 'Membatalkan item...');
     try {
-      await _repo.cancelOrderItems(orderId, items: [
-        {'item_id': itemId, 'qty': qty, 'reason': reason},
-      ]);
+      await _repo.cancelOrderItems(
+        orderId,
+        items: [
+          {'item_id': itemId, 'qty': qty, 'reason': reason},
+        ],
+      );
       // Local state update — tambahkan entry ke cancelledItems di order tsb.
       _allOrders = _allOrders.map((o) {
         if (o.id != orderId) return o;
@@ -1186,10 +1355,43 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> importCustomersExcel(List<int> fileBytes, String fileName) async {
+  Future<bool> importCustomersExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
     _setLoading(true, 'Mengimport data toko...');
     try {
       _lastSyncResult = await _repo.importCustomersExcel(fileBytes, fileName);
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loadImportedSalesSummary({String? month}) async {
+    _importedSalesLoading = true;
+    _importedSalesError = null;
+    try {
+      final data = await _repo.getImportedSalesSummary(month: month);
+      _importedSalesSummary = data;
+      return true;
+    } catch (e) {
+      _importedSalesError = e is ApiException ? e.message : e.toString();
+      return false;
+    } finally {
+      _importedSalesLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> importSalesExcel(List<int> fileBytes, String fileName) async {
+    _setLoading(true, 'Mengimport laporan penjualan...');
+    try {
+      _salesImportResult = await _repo.importSalesExcel(fileBytes, fileName);
       _setLoading(false);
       return true;
     } catch (e) {
@@ -1233,7 +1435,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _productSalesStatsYearMonth = yearMonth;
     notifyListeners();
     try {
-      _productSalesStats = await _repo.getProductSalesStats(yearMonth: yearMonth);
+      _productSalesStats = await _repo.getProductSalesStats(
+        yearMonth: yearMonth,
+      );
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -1247,28 +1451,63 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<SupplierPerformanceRow> _supplierPerformance = [];
   bool _supplierPerformanceLoading = false;
   String? _supplierPerformanceYearMonth;
+  String? _supplierPerformanceBranch;
+  String? _supplierPerformanceError;
+  List<BranchOption> _branchOptions = [];
+  bool _branchOptionsLoading = false;
 
   List<SupplierPerformanceRow> get supplierPerformance => _supplierPerformance;
   bool get supplierPerformanceLoading => _supplierPerformanceLoading;
   String? get supplierPerformanceYearMonth => _supplierPerformanceYearMonth;
+  String? get supplierPerformanceBranch => _supplierPerformanceBranch;
 
-  Future<void> loadSupplierPerformance({String? yearMonth}) async {
+  /// Error khusus KPI supplier — supaya tabel KPI tidak menampilkan error
+  /// dari request lain (leaderboard, target sales, dsb).
+  String? get supplierPerformanceError => _supplierPerformanceError;
+  List<BranchOption> get branchOptions => _branchOptions;
+
+  /// Load the active branch list for the MANAGER branch picker (cached per
+  /// session; call again only after branch master data changes).
+  Future<void> loadBranchOptions() async {
+    if (_branchOptionsLoading) return;
+    _branchOptionsLoading = true;
+    try {
+      _branchOptions = await _repo.getBranches();
+    } catch (e) {
+      // Picker is optional — KPI keeps working with the current scope.
+      _errorMessage = e is ApiException ? e.message : e.toString();
+    } finally {
+      _branchOptionsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadSupplierPerformance({
+    String? yearMonth,
+    String? branch,
+  }) async {
     _supplierPerformanceLoading = true;
     _supplierPerformanceYearMonth = yearMonth;
+    _supplierPerformanceBranch = branch;
+    _supplierPerformanceError = null;
+    // Kosongkan list supaya error/refresh tidak menyisakan baris periode lama.
+    _supplierPerformance = [];
     notifyListeners();
     try {
-      _supplierPerformance =
-          await _repo.getSupplierPerformance(yearMonth: yearMonth);
+      _supplierPerformance = await _repo.getSupplierPerformance(
+        yearMonth: yearMonth,
+        branch: branch,
+      );
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e is ApiException ? e.message : e.toString();
+      _supplierPerformanceError = e is ApiException ? e.message : e.toString();
     } finally {
       _supplierPerformanceLoading = false;
       notifyListeners();
     }
   }
 
-  /// Upsert a supplier's monthly target. Backend: ADMIN/SUPERVISOR only.
+  /// Upsert a supplier's monthly target. Backend: SUPERVISOR / MANAGER only.
   /// Throws on failure (caller shows SnackBar).
   Future<void> updateSupplierTarget({
     required String branch,
@@ -1306,7 +1545,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _performanceDateTo = to;
     notifyListeners();
     try {
-      _performanceList = await _repo.getSalesPerformance(fromDate: from, toDate: to);
+      _performanceList = await _repo.getSalesPerformance(
+        fromDate: from,
+        toDate: to,
+      );
       _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
@@ -1325,7 +1567,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
       _errorMessage = null;
     } catch (e) {
-      if (e is! DioException || !CancelToken.isCancel(e)) _errorMessage = e.toString();
+      if (e is! DioException || !CancelToken.isCancel(e)) {
+        _errorMessage = e.toString();
+      }
     } finally {
       _dashboardPerformanceLoading = false;
       notifyListeners();
@@ -1334,6 +1578,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // ===== Popup detail order untuk dashboard sales =====
   List<Order> _salesDetailOrders = [];
+  int _salesDetailTotalOrders = 0;
+  int _salesDetailTotalRevenue = 0;
+  int _salesDetailTotalDiscount = 0;
+  int _salesDetailTotalUpPrice = 0;
   bool _salesDetailLoading = false;
   String? _salesDetailError;
   String? _salesDetailStatus;
@@ -1341,6 +1589,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _salesDetailDateTo;
 
   List<Order> get salesDetailOrders => _salesDetailOrders;
+
+  /// Total dari server untuk SELURUH hasil filter (bukan cuma page yang dikirim).
+  int get salesDetailTotalOrders => _salesDetailTotalOrders;
+  int get salesDetailTotalRevenue => _salesDetailTotalRevenue;
+  int get salesDetailTotalDiscount => _salesDetailTotalDiscount;
+  int get salesDetailTotalUpPrice => _salesDetailTotalUpPrice;
   bool get salesDetailLoading => _salesDetailLoading;
   String? get salesDetailError => _salesDetailError;
   String? get salesDetailStatus => _salesDetailStatus;
@@ -1361,13 +1615,18 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _salesDetailDateTo = dateTo;
     notifyListeners();
     try {
-      _salesDetailOrders = await _repo.getOrdersBySales(
+      final res = await _repo.getOrdersBySales(
         salesId: salesId,
         branch: branch,
         status: status,
         dateFrom: dateFrom,
         dateTo: dateTo,
       );
+      _salesDetailOrders = res.orders;
+      _salesDetailTotalOrders = res.total;
+      _salesDetailTotalRevenue = res.totalAmount;
+      _salesDetailTotalDiscount = res.totalDiscount;
+      _salesDetailTotalUpPrice = res.totalUpPrice;
     } catch (e) {
       _salesDetailError = e is ApiException ? e.message : e.toString();
     } finally {
@@ -1378,6 +1637,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void clearSalesDetailOrders() {
     _salesDetailOrders = [];
+    _salesDetailTotalOrders = 0;
+    _salesDetailTotalRevenue = 0;
+    _salesDetailTotalDiscount = 0;
+    _salesDetailTotalUpPrice = 0;
     _salesDetailError = null;
     _salesDetailStatus = null;
     _salesDetailDateFrom = null;
@@ -1508,9 +1771,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         pdfUrl: pdfUrl,
         expireAt: expireAt,
       );
-      _bulletins = [
-        for (final b in _bulletins) b.id == id ? updated : b,
-      ];
+      _bulletins = [for (final b in _bulletins) b.id == id ? updated : b];
       _setLoading(false);
       return true;
     } catch (e) {

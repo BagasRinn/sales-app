@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,11 +23,19 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
   late int _step;
   bool _isSubmitting = false;
 
+  // Satu ID per sesi OrderFlowScreen. Dipakai sebagai Idempotency-Key saat
+  // create, jadi retry setelah timeout tidak membuat draft baru.
+  final String _createRequestId =
+      '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+
   @override
   void initState() {
     super.initState();
-    // Jika sudah ada customer (edit existing order), langsung ke step review.
+    // Bersihkan state sebelumnya kecuali saat sedang edit order existing.
     final draft = context.read<DraftOrderProvider>();
+    if (!draft.isEditing) {
+      draft.reset();
+    }
     _step = draft.hasCustomer ? 4 : 1;
   }
 
@@ -170,6 +180,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
               items: draft.buildItemsPayload(),
               notes: draft.notes,
               orderType: draft.orderType,
+              clientRequestId: _createRequestId,
             );
       _hideLoading();
 
@@ -220,6 +231,7 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: draft.buildItemsPayload(),
           notes: draft.notes,
           orderType: draft.orderType,
+          clientRequestId: _createRequestId,
         );
       }
 
@@ -350,7 +362,7 @@ class _StepIndicator extends StatelessWidget {
               ? Icon(
                   step < currentStep ? Icons.check : null,
                   size: 14,
-                  color: Colors.white,
+                  color: AppColors.textOnPrimary,
                 )
               : null,
         ),

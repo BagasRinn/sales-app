@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -59,14 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 64,
                     decoration: BoxDecoration(
                       color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                        borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.local_shipping_outlined,
@@ -89,20 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 40),
 
                   // Form card
-                  Container(
+                  AppCard(
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.06),
-                          blurRadius: 24,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -116,14 +98,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: AppTextStyles.bodySmall,
                         ),
                         const SizedBox(height: 24),
-                        TextFormField(
+                        AppInput(
+                          label: 'Username',
                           controller: _usernameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Username',
-                            prefixIcon: Icon(Icons.person_outline),
-                          ),
+                          prefixIcon: const Icon(Icons.person_outline),
                           textInputAction: TextInputAction.next,
-                          style: AppTextStyles.bodyLarge,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Username wajib diisi';
@@ -132,28 +111,25 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
+                        AppInput(
+                          label: 'Password',
                           controller: _passwordController,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                                color: AppColors.textMuted,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: AppColors.textMuted,
                             ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                           ),
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
-                          style: AppTextStyles.bodyLarge,
                           onFieldSubmitted: (_) => _handleLogin(),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -197,22 +173,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         Consumer<AuthProvider>(
                           builder: (context, auth, _) {
                             final isLoading = auth.state == AuthState.loading;
-                            return SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: FilledButton(
-                                onPressed: isLoading ? null : _handleLogin,
-                                child: isLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text('Masuk'),
-                              ),
+                            return AppButton(
+                              label: 'Masuk',
+                              isLoading: isLoading,
+                              isFullWidth: true,
+                              onPressed: isLoading ? null : _handleLogin,
                             );
                           },
                         ),
