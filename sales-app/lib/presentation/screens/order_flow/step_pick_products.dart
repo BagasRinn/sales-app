@@ -548,7 +548,9 @@ class _QtyStepperState extends State<_QtyStepper> {
           onTap: currentQty > 0
               ? () {
                   final newQty = (currentQty - 1).clamp(0, widget.available);
-                  _controller.text = '$newQty';
+                  setState(() {
+                    _controller.text = '$newQty';
+                  });
                   context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
                 }
               : null,
@@ -610,7 +612,9 @@ class _QtyStepperState extends State<_QtyStepper> {
               ? () {
                   final currentQty = int.tryParse(_controller.text) ?? widget.qty;
                   final newQty = (currentQty + 1).clamp(0, widget.available);
-                  _controller.text = '$newQty';
+                  setState(() {
+                    _controller.text = '$newQty';
+                  });
                   context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
                 }
               : null,
