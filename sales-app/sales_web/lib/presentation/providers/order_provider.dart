@@ -106,4 +106,72 @@ class OrderProvider with ChangeNotifier {
       return false;
     }
   }
+
+  Future<Order?> createOrder({
+    required String customerId,
+    required List<OrderItem> items,
+    required String orderType,
+    String? notes,
+    String? clientRequestId,
+  }) async {
+    try {
+      final order = await _orderRepo.createOrder(
+        customerId: customerId,
+        items: _itemsToMaps(items),
+        orderType: orderType,
+        notes: notes,
+        clientRequestId: clientRequestId,
+      );
+      await loadOrders(status: _currentStatus);
+      return order;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<Order?> saveDraft({
+    required String customerId,
+    required List<OrderItem> items,
+    required String orderType,
+    String? notes,
+    String? clientRequestId,
+  }) async {
+    try {
+      final order = await _orderRepo.saveDraft(
+        customerId: customerId,
+        items: _itemsToMaps(items),
+        orderType: orderType,
+        notes: notes,
+        clientRequestId: clientRequestId,
+      );
+      return order;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _itemsToMaps(List<OrderItem> items) {
+    return items.map((item) {
+      final d = item.discount;
+      final l1 = d.layer1;
+      final l2 = d.layer2;
+      final l3 = d.layer3;
+      return {
+        'product_id': item.productId,
+        'qty': item.qty,
+        'discount_type': (l1?.type.name.toUpperCase() ?? 'PERCENT'),
+        'discount_percent': l1?.type == DiscountType.percent ? (l1?.value ?? 0) : 0,
+        'discount_nominal': l1?.type == DiscountType.nominal ? (l1?.value ?? 0) : 0,
+        'discount2_type': (l2?.type.name.toUpperCase() ?? 'PERCENT'),
+        'discount2_percent': l2?.type == DiscountType.percent ? (l2?.value ?? 0) : 0,
+        'discount2_nominal': l2?.type == DiscountType.nominal ? (l2?.value ?? 0) : 0,
+        'discount3_type': (l3?.type.name.toUpperCase() ?? 'PERCENT'),
+        'discount3_percent': l3?.type == DiscountType.percent ? (l3?.value ?? 0) : 0,
+        'discount3_nominal': l3?.type == DiscountType.nominal ? (l3?.value ?? 0) : 0,
+        'up_price_type': item.upPriceType,
+        'up_price_percent': item.upPricePercent,
+        'up_price_nominal': item.upPriceNominal,
+      };
+    }).toList();
+  }
 }

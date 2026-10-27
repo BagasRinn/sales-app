@@ -50,17 +50,19 @@ class _CustomersTabState extends State<CustomersTab> {
     final isLoading = context.select<AdminProvider, bool>((p) => p.isLoading);
     final total = context.select<AdminProvider, int>((p) => p.customerTotal);
     final page = context.select<AdminProvider, int>((p) => p.customerPage);
-    final totalPages =
-        context.select<AdminProvider, int>((p) => p.customerTotalPages);
-    final hasPrev =
-        context.select<AdminProvider, bool>((p) => p.hasPrevCustomerPage);
-    final hasNext =
-        context.select<AdminProvider, bool>((p) => p.hasNextCustomerPage);
+    final totalPages = context.select<AdminProvider, int>(
+      (p) => p.customerTotalPages,
+    );
+    final hasPrev = context.select<AdminProvider, bool>(
+      (p) => p.hasPrevCustomerPage,
+    );
+    final hasNext = context.select<AdminProvider, bool>(
+      (p) => p.hasNextCustomerPage,
+    );
     final provider = context.read<AdminProvider>();
 
     return Column(
       children: [
-        // Search bar
         Container(
           padding: const EdgeInsets.all(12),
           color: AppColors.surface,
@@ -83,10 +85,13 @@ class _CustomersTabState extends State<CustomersTab> {
                           )
                         : null,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     isDense: true,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onChanged: (v) {
                     setState(() => _searchQuery = v);
@@ -97,16 +102,15 @@ class _CustomersTabState extends State<CustomersTab> {
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Text(
-                  '$total toko',
-                  style: AppTextStyles.bodySmall,
-                ),
+                child: Text('$total toko', style: AppTextStyles.bodySmall),
               ),
             ],
           ),
@@ -115,34 +119,31 @@ class _CustomersTabState extends State<CustomersTab> {
         // Table
         Expanded(
           child: isLoading && customers.isEmpty
-              ? const Center(child: CircularProgressIndicator())
+              ? const Padding(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  child: AppSkeletonList(),
+                )
               : customers.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.store_outlined,
-                              size: 48,
-                              color:
-                                  AppColors.textMuted.withValues(alpha: 0.4)),
-                          const SizedBox(height: 16),
-                          Text(
-                            _searchQuery.isNotEmpty
-                                ? 'Toko tidak ditemukan'
-                                : 'Belum ada toko',
-                            style: AppTextStyles.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final resp = Responsive.of(constraints.maxWidth);
-                        return resp.isMobile
-                            ? _buildCardList(customers)
-                            : _buildTable(customers);
-                      },
-                    ),
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: AppEmptyState(
+                    icon: Icons.store_outlined,
+                    title: _searchQuery.isNotEmpty
+                        ? 'Toko tidak ditemukan'
+                        : 'Belum ada toko',
+                    message: _searchQuery.isNotEmpty
+                        ? 'Coba kata kunci lain atau bersihkan pencarian.'
+                        : 'Data toko akan muncul setelah ditambahkan.',
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final resp = Responsive.of(constraints.maxWidth);
+                    return resp.isMobile
+                        ? _buildCardList(customers)
+                        : _buildTable(customers);
+                  },
+                ),
         ),
         // Pagination
         Container(
@@ -155,7 +156,7 @@ class _CustomersTabState extends State<CustomersTab> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                onPressed: hasPrev ? () => provider.prevCustomerPage() : null,
+                onPressed: hasPrev ? provider.prevCustomerPage : null,
                 icon: const Icon(Icons.chevron_left),
                 tooltip: 'Halaman sebelumnya',
               ),
@@ -166,7 +167,7 @@ class _CustomersTabState extends State<CustomersTab> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: hasNext ? () => provider.nextCustomerPage() : null,
+                onPressed: hasNext ? provider.nextCustomerPage : null,
                 icon: const Icon(Icons.chevron_right),
                 tooltip: 'Halaman berikutnya',
               ),
@@ -183,12 +184,16 @@ class _CustomersTabState extends State<CustomersTab> {
         final resp = Responsive.of(constraints.maxWidth);
         // 1 kolom di compact, 2 di medium, 3 di expanded — biar whitespace
         // di landscape phone / tablet / desktop tidak nganggur.
-        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        final columns = resp.isMobile
+            ? 1
+            : resp.isTablet
+            ? 2
+            : 3;
         const gap = 12.0;
         const hPadding = 12.0;
         final cardWidth =
             (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
-                columns;
+            columns;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(hPadding),
           child: Wrap(
@@ -255,36 +260,28 @@ class _CustomersTabState extends State<CustomersTab> {
         final colWidths = [kodeW, namaW, kodeAreaW, alamatW, aksiW];
         final totalW = avail;
 
-        return Column(
-          children: [
-            // Header
-            SizedBox(
-              height: _headerHeight,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                child: _buildHeader(colWidths, totalW),
-              ),
-            ),
-            const Divider(height: 1),
-            // Rows
-            Expanded(
-              child: SingleChildScrollView(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Column(
-                    children: [
-                      for (int i = 0; i < customers.length; i++) ...[
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: totalW,
+            child: Column(
+              children: [
+                SizedBox(
+                  height: _headerHeight,
+                  child: _buildHeader(colWidths, totalW),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: customers.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) =>
                         _buildRow(customers[i], colWidths, totalW),
-                        if (i < customers.length - 1)
-                          const Divider(height: 1),
-                      ],
-                    ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -329,28 +326,54 @@ class _CustomersTabState extends State<CustomersTab> {
             width: colWidths[0],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.kode ?? '-', style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(
+                c.kode ?? '-',
+                style: AppTextStyles.mono.copyWith(fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
           SizedBox(
             width: colWidths[1],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.namaToko, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(
+                c.namaToko,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
           SizedBox(
             width: colWidths[2],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.kodeArea ?? '-', style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(
+                c.kodeArea ?? '-',
+                style: AppTextStyles.mono.copyWith(fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
           SizedBox(
             width: colWidths[3],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(c.alamat ?? '-', style: AppTextStyles.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+              child: Text(
+                c.alamat ?? '-',
+                style: AppTextStyles.bodySmall,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
           SizedBox(
@@ -366,7 +389,10 @@ class _CustomersTabState extends State<CustomersTab> {
                       icon: const Icon(Icons.visibility_outlined, size: 18),
                       color: AppColors.primaryLight,
                       tooltip: 'Lihat',
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                       padding: EdgeInsets.zero,
                     ),
                     if (!widget.readOnly)
@@ -375,7 +401,10 @@ class _CustomersTabState extends State<CustomersTab> {
                         icon: const Icon(Icons.delete_outline, size: 18),
                         color: AppColors.error,
                         tooltip: 'Hapus toko',
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
                         padding: EdgeInsets.zero,
                       ),
                   ],
@@ -444,8 +473,7 @@ class _CustomersTabState extends State<CustomersTab> {
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-              provider.errorMessage ?? 'Gagal menghapus toko'),
+          content: Text(provider.errorMessage ?? 'Gagal menghapus toko'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -457,7 +485,11 @@ class _CustomerDetailDialog extends StatefulWidget {
   final String customerId;
   final AdminProvider provider;
   final bool readOnly;
-  const _CustomerDetailDialog({required this.customerId, required this.provider, this.readOnly = false});
+  const _CustomerDetailDialog({
+    required this.customerId,
+    required this.provider,
+    this.readOnly = false,
+  });
 
   @override
   State<_CustomerDetailDialog> createState() => _CustomerDetailDialogState();
@@ -523,8 +555,9 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
     if (_namaC.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Nama toko wajib diisi'),
-            backgroundColor: AppColors.error),
+          content: Text('Nama toko wajib diisi'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
@@ -534,7 +567,8 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
       'nama_toko': _namaC.text.trim(),
       if (_kodeC.text.trim().isNotEmpty) 'kode': _kodeC.text.trim(),
       'alamat': _alamatC.text.trim().isEmpty ? null : _alamatC.text.trim(),
-      if (_kodeAreaC.text.trim().isNotEmpty) 'kode_area': _kodeAreaC.text.trim(),
+      if (_kodeAreaC.text.trim().isNotEmpty)
+        'kode_area': _kodeAreaC.text.trim(),
     };
     final ok = await provider.updateCustomer(_customer!.id, body);
     if (!mounted) return;
@@ -556,8 +590,9 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(provider.errorMessage ?? 'Gagal menyimpan'),
-            backgroundColor: AppColors.error),
+          content: Text(provider.errorMessage ?? 'Gagal menyimpan'),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -575,8 +610,8 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
             child: _loadingDetail
                 ? const Center(child: CircularProgressIndicator())
                 : _loadError != null
-                    ? _buildError()
-                    : _buildForm(),
+                ? _buildError()
+                : _buildForm(),
           ),
           const Divider(height: 1),
           _buildFooter(),
@@ -593,18 +628,20 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.successBg,
+              color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.store, color: AppColors.success, size: 24),
+            child: const Icon(Icons.store, color: AppColors.primary, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_customer?.namaToko ?? 'Detail Toko',
-                    style: AppTextStyles.headlineSmall),
+                Text(
+                  _customer?.namaToko ?? 'Detail Toko',
+                  style: AppTextStyles.headlineSmall,
+                ),
                 Text(
                   _customer == null
                       ? 'Memuat...'
@@ -629,8 +666,10 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
         children: [
           const Icon(Icons.error_outline, size: 40, color: AppColors.error),
           const SizedBox(height: 12),
-          const Text('Gagal memuat detail toko',
-              style: AppTextStyles.headlineSmall),
+          const Text(
+            'Gagal memuat detail toko',
+            style: AppTextStyles.headlineSmall,
+          ),
           const SizedBox(height: 4),
           Flexible(
             child: SingleChildScrollView(
@@ -644,10 +683,7 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
             ),
           ),
           const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _loadDetail,
-            child: const Text('Coba lagi'),
-          ),
+          FilledButton(onPressed: _loadDetail, child: const Text('Coba lagi')),
         ],
       ),
     );
@@ -722,7 +758,9 @@ class _CustomerDetailDialogState extends State<_CustomerDetailDialog> {
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.save, size: 18),
             label: Text(_saving ? 'Menyimpan...' : 'Simpan'),

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_system.dart';
 import '../../core/branch.dart';
@@ -57,7 +57,9 @@ class _UsersTabState extends State<UsersTab> {
 
   @override
   Widget build(BuildContext context) {
-    final allUsers = context.select<AdminProvider, List<UserItem>>((p) => p.users);
+    final allUsers = context.select<AdminProvider, List<UserItem>>(
+      (p) => p.users,
+    );
     final isLoading = context.select<AdminProvider, bool>((p) => p.isLoading);
     final provider = context.read<AdminProvider>();
 
@@ -66,126 +68,97 @@ class _UsersTabState extends State<UsersTab> {
       ..sort((a, b) {
         final roleCompare = a.role.compareTo(b.role);
         if (roleCompare != 0) return roleCompare;
-        return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+        return a.displayName.toLowerCase().compareTo(
+          b.displayName.toLowerCase(),
+        );
       });
 
     return Column(
       children: [
-        // Search bar + filter chips role
-        Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.surface,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Cari user (nama / username)...',
-                            prefixIcon: const Icon(Icons.search, size: 20),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() => _searchQuery = '');
-                                      provider.searchUsers('');
-                                    },
-                                  )
-                                : null,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            isDense: true,
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onChanged: (v) {
-                            setState(() => _searchQuery = v);
-                            provider.searchUsers(v);
-                          },
-                        ),
-                      ),
-                      if (!widget.readOnly) ...[
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: !widget.readOnly
-                              ? () => _openCreateDialog(context)
-                              : null,
-                          icon: const Icon(Icons.person_add, size: 18),
-                          label: const Text('Tambah'),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 18),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _roleChip(null, 'Semua'),
-                      _roleChip('ADMIN', 'Admin'),
-                      _roleChip('SUPERVISOR', 'Supervisor'),
-                      _roleChip('MANAGER', 'Manager'),
-                      _roleChip('SALES', 'Sales'),
-                    ],
-                  ),
-                ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.sm,
+          ),
+          child: AppFilterBar(
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380, minWidth: 220),
+                child: AppSearchField(
+                  controller: _searchController,
+                  hint: 'Cari user (nama / username)…',
+                  onChanged: (v) {
+                    setState(() => _searchQuery = v);
+                    provider.searchUsers(v);
+                  },
+                  onClear: () {
+                    setState(() => _searchQuery = '');
+                    provider.searchUsers('');
+                  },
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            // Table
-            Expanded(
-              child: isLoading && users.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : users.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.people_outline,
-                                  size: 48,
-                                  color: AppColors.textMuted
-                                      .withValues(alpha: 0.4)),
-                              const SizedBox(height: 16),
-                              Text(
-                                _searchQuery.isNotEmpty || _roleFilter != null
-                                    ? 'User tidak ditemukan'
-                                    : 'Belum ada user',
-                                style: AppTextStyles.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final resp = Responsive.of(constraints.maxWidth);
-                            return resp.isMobile
-                                ? _buildCardList(users)
-                                : _buildTable(users);
-                          },
-                        ),
-            ),
-          ],
-        );
-      }
+              if (!widget.readOnly)
+                AppButton(
+                  icon: Icons.person_add,
+                  label: 'Tambah',
+                  onPressed: () => _openCreateDialog(context),
+                ),
+              _roleChip(null, 'Semua'),
+              _roleChip('ADMIN', 'Admin'),
+              _roleChip('SUPERVISOR', 'Supervisor'),
+              _roleChip('MANAGER', 'Manager'),
+              _roleChip('SALES', 'Sales'),
+            ],
+          ),
+        ),
+        // Table
+        Expanded(
+          child: isLoading && users.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  child: AppSkeletonList(),
+                )
+              : users.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: AppEmptyState(
+                    icon: Icons.people_outline,
+                    title: _searchQuery.isNotEmpty || _roleFilter != null
+                        ? 'User tidak ditemukan'
+                        : 'Belum ada user',
+                    message:
+                        'Ubah kata kunci/filter, atau tambahkan user baru.',
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final resp = Responsive.of(constraints.maxWidth);
+                    return resp.isMobile
+                        ? _buildCardList(users)
+                        : _buildTable(users);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildCardList(List<UserItem> users) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final resp = Responsive.of(constraints.maxWidth);
-        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        final columns = resp.isMobile
+            ? 1
+            : resp.isTablet
+            ? 2
+            : 3;
         const gap = 12.0;
         const hPadding = 12.0;
         final cardWidth =
             (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
-                columns;
+            columns;
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(hPadding, hPadding, hPadding, 16),
           child: Wrap(
@@ -242,7 +215,7 @@ class _UsersTabState extends State<UsersTab> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final avail = constraints.maxWidth;
-        const roleW = 100.0;
+        const roleW = 150.0;
         const statusW = 90.0;
         const aksiW = 90.0;
         final remaining = avail - roleW - statusW - aksiW;
@@ -344,8 +317,9 @@ class _UsersTabState extends State<UsersTab> {
   }
 
   Widget _buildRow(UserItem user, List<double> colWidths, double totalW) {
-    final initial =
-        user.displayName.isNotEmpty ? user.displayName[0].toUpperCase() : '?';
+    final initial = user.displayName.isNotEmpty
+        ? user.displayName[0].toUpperCase()
+        : '?';
     final color = switch (user.role) {
       'ADMIN' => AppColors.error,
       'SUPERVISOR' => AppColors.warning,
@@ -390,15 +364,17 @@ class _UsersTabState extends State<UsersTab> {
                       children: [
                         Text(
                           user.displayName,
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
                           '@${user.username}',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textMuted),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -477,27 +453,18 @@ class _UsersTabState extends State<UsersTab> {
 
   Widget _roleChip(String? role, String label) {
     final selected = _roleFilter == role;
-    return ChoiceChip(
-      label: Text(label),
+    return AppChoiceChip(
+      label: label,
       selected: selected,
-      onSelected: (_) {
+      dense: true,
+      onSelected: () {
         setState(() => _roleFilter = role);
         context.read<AdminProvider>().loadUsers(role: role ?? '');
       },
-      selectedColor: AppColors.primaryLight.withValues(alpha: 0.15),
-      backgroundColor: AppColors.background,
-      side: BorderSide(
-        color: selected ? AppColors.primaryLight : AppColors.border,
-      ),
-      labelStyle: TextStyle(
-        color: selected ? AppColors.primaryLight : AppColors.textSecondary,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-        fontSize: 12,
-      ),
-      visualDensity: VisualDensity.compact,
     );
   }
 }
+
 /// Chip kecil untuk label cabang pada card list. Memakai style mirip
 /// _RoleBadge/_StatusBadge tapi dengan warna netral (info) karena branch
 /// bukan indikator status.
@@ -507,53 +474,23 @@ class _BranchChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = AppColors.info;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
-        ),
-      ),
-    );
+    return AppBadge(label: label, variant: AppBadgeVariant.info);
   }
 }
+
 class _RoleBadge extends StatelessWidget {
   final String role;
   const _RoleBadge({required this.role});
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (role) {
-      'ADMIN' => AppColors.error,
-      'SUPERVISOR' => AppColors.warning,
-      'MANAGER' => AppColors.info,
-      _ => AppColors.success,
+    final variant = switch (role) {
+      'ADMIN' => AppBadgeVariant.danger,
+      'SUPERVISOR' => AppBadgeVariant.warning,
+      'MANAGER' => AppBadgeVariant.info,
+      _ => AppBadgeVariant.success,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        role,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
-      ),
-    );
+    return AppBadge(label: role, variant: variant, compact: true);
   }
 }
 
@@ -563,23 +500,10 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AppColors.success : AppColors.textMuted;
-    final label = active ? 'Aktif' : 'Nonaktif';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 11,
-        ),
-      ),
+    return AppBadge(
+      label: active ? 'Aktif' : 'Nonaktif',
+      variant: active ? AppBadgeVariant.success : AppBadgeVariant.neutral,
+      compact: true,
     );
   }
 }
@@ -650,32 +574,36 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     if (!_isEdit && (username.isEmpty || password.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Username dan password wajib diisi'),
-            backgroundColor: AppColors.error),
+          content: Text('Username dan password wajib diisi'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
     if (!_isEdit && password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Password minimal 6 karakter'),
-            backgroundColor: AppColors.error),
+          content: Text('Password minimal 6 karakter'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
     if (username.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Username wajib diisi'),
-            backgroundColor: AppColors.error),
+          content: Text('Username wajib diisi'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
     if (_isEdit && password.isNotEmpty && password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Password baru minimal 6 karakter'),
-            backgroundColor: AppColors.error),
+          content: Text('Password baru minimal 6 karakter'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
@@ -725,7 +653,9 @@ class _UserEditDialogState extends State<_UserEditDialog> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              Text(_isEdit ? 'User berhasil diperbarui' : 'User berhasil dibuat'),
+              Text(
+                _isEdit ? 'User berhasil diperbarui' : 'User berhasil dibuat',
+              ),
             ],
           ),
           backgroundColor: AppColors.success,
@@ -735,10 +665,11 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(unexpectedError ??
-                provider.errorMessage ??
-                'Gagal menyimpan'),
-            backgroundColor: AppColors.error),
+          content: Text(
+            unexpectedError ?? provider.errorMessage ?? 'Gagal menyimpan',
+          ),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -805,7 +736,9 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                 controller: _passwordC,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: _isEdit ? 'Password Baru (opsional)' : 'Password *',
+                  labelText: _isEdit
+                      ? 'Password Baru (opsional)'
+                      : 'Password *',
                   hintText: _isEdit
                       ? 'Kosongkan jika tidak diubah'
                       : 'Min. 6 karakter',
@@ -833,7 +766,10 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                 ),
                 items: const [
                   DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
-                  DropdownMenuItem(value: 'SUPERVISOR', child: Text('Supervisor')),
+                  DropdownMenuItem(
+                    value: 'SUPERVISOR',
+                    child: Text('Supervisor'),
+                  ),
                   DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
                   DropdownMenuItem(value: 'SALES', child: Text('Sales')),
                 ],
@@ -854,10 +790,12 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                       : null,
                 ),
                 items: BranchCode.all
-                    .map((code) => DropdownMenuItem(
-                          value: code,
-                          child: Text(BranchLabel.display(code) ?? code),
-                        ))
+                    .map(
+                      (code) => DropdownMenuItem(
+                        value: code,
+                        child: Text(BranchLabel.display(code) ?? code),
+                      ),
+                    )
                     .toList(),
                 onChanged: _isBranchLocked
                     ? null
@@ -870,7 +808,8 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                   onChanged: (v) => setState(() => _isActive = v),
                   title: const Text('Aktif'),
                   subtitle: const Text(
-                      'Nonaktifkan untuk blokir login tanpa menghapus data'),
+                    'Nonaktifkan untuk blokir login tanpa menghapus data',
+                  ),
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),
@@ -892,7 +831,9 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Icon(Icons.save, size: 18),
                       label: Text(_saving ? 'Menyimpan...' : 'Simpan'),

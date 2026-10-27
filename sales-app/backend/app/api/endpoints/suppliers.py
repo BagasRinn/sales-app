@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -18,10 +18,14 @@ from app.core.security import require_auth, apply_branch_filter, require_manager
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
 
-@router.get("", response_model=list[SupplierResponse])
+@router.get("")
 def list_suppliers(
+    response: Response,
     active: Optional[bool] = Query(None, description="Filter by is_active"),
     order_type: Optional[str] = Query(None, description="Filter by order_type ('REGULER' / '4P')"),
+    search: Optional[str] = Query(None, description="Cari nama supplier"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -50,9 +54,13 @@ def list_suppliers(
     if order_type is not None:
         norm_ot = order_type.strip().upper()
         query = query.filter(Supplier.order_type == norm_ot)
+    if search:
+        query = query.filter(Supplier.name.ilike(f"%{search.strip()}%"))
 
-    rows = query.order_by(Supplier.name).all()
-    return [
+    total = query.order_by(None).count()
+    response.headers["X-Total-Count"] = str(total)
+    rows = query.order_by(Supplier.name).offset(skip).limit(limit).all()
+    suppliers = [
         SupplierResponse(
             name=sup.name,
             is_active=sup.is_active,
@@ -63,6 +71,10 @@ def list_suppliers(
         )
         for sup, product_count in rows
     ]
+    return {
+        "suppliers": [supplier.model_dump(mode="json") for supplier in suppliers],
+        "total": total,
+    }
 
 
 @router.post("", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)

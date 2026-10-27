@@ -57,3 +57,15 @@ class BranchStockSummary {
     );
   }
 }
+
+/// Minimal branch option from GET /branches — used to populate branch pickers.
+class BranchOption {
+  final String code;
+  final String nama;
+  const BranchOption({required this.code, required this.nama});
+
+  factory BranchOption.fromJson(Map<String, dynamic> json) => BranchOption(
+    code: json['code'] as String? ?? '',
+    nama: json['nama'] as String? ?? '',
+  );
+}

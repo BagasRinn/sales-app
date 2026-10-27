@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../providers/product_provider.dart';
 
 class ProductCatalogScreen extends StatefulWidget {
@@ -39,9 +40,7 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Katalog Produk'),
-      ),
+      appBar: AppBar(title: const Text('Katalog Produk')),
       body: Column(
         children: [
           // Search
@@ -74,18 +73,18 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ['Semua', 'Tersedia', 'Stok Rendah', 'Habis'].map((filter) {
+                children: ['Semua', 'Tersedia', 'Stok Rendah', 'Habis'].map((
+                  filter,
+                ) {
                   final isSelected = _stockFilter == filter;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(filter),
+                    child: AppChoiceChip(
+                      label: filter,
                       selected: isSelected,
-                      onSelected: (_) {
+                      onSelected: () {
                         setState(() => _stockFilter = filter);
                       },
-                      selectedColor: AppColors.primaryLight,
-                      checkmarkColor: AppColors.primaryLight,
                     ),
                   );
                 }).toList(),
@@ -100,15 +99,15 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
             child: provider.isLoading && provider.allProducts.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : provider.allProducts.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Produk tidak ditemukan',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      )
-                    : _buildProductList(provider, idr),
+                ? Center(
+                    child: Text(
+                      'Produk tidak ditemukan',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  )
+                : _buildProductList(provider, idr),
           ),
         ],
       ),
@@ -121,16 +120,22 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
     // Apply search filter
     if (_searchController.text.isNotEmpty) {
       final q = _searchController.text.toLowerCase();
-      products = products.where((p) =>
-          p.namaBarang.toLowerCase().contains(q) ||
-          (p.kategori?.toLowerCase().contains(q) ?? false)).toList();
+      products = products
+          .where(
+            (p) =>
+                p.namaBarang.toLowerCase().contains(q) ||
+                (p.kategori?.toLowerCase().contains(q) ?? false),
+          )
+          .toList();
     }
 
     // Apply stock filter
     if (_stockFilter == 'Tersedia') {
       products = products.where((p) => p.stokTersedia > 5).toList();
     } else if (_stockFilter == 'Stok Rendah') {
-      products = products.where((p) => p.stokTersedia > 0 && p.stokTersedia <= 5).toList();
+      products = products
+          .where((p) => p.stokTersedia > 0 && p.stokTersedia <= 5)
+          .toList();
     } else if (_stockFilter == 'Habis') {
       products = products.where((p) => p.stokTersedia <= 0).toList();
     }
@@ -185,18 +190,21 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     TextSpan(
                       text: 'SKU  ',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textMuted),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
                     ),
                     TextSpan(
                       text: '${product.id}\n',
-                      style:
-                          AppTextStyles.bodySmall.copyWith(fontFamily: 'monospace'),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontFamily: 'monospace',
+                      ),
                     ),
                     TextSpan(
                       text: 'Stok  ',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textMuted),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
                     ),
                     TextSpan(
                       text: '$available $satuan',
@@ -207,13 +215,15 @@ class _ProductCard extends StatelessWidget {
                       TextSpan(text: '\n'),
                       TextSpan(
                         text: 'Supplier  ',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textMuted),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                        ),
                       ),
                       TextSpan(
                         text: '${product.namaSupplier}',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ],
@@ -252,10 +262,7 @@ class _ProductCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              product.namaBarang ?? '',
-              style: AppTextStyles.headlineMedium,
-            ),
+            Text(product.namaBarang ?? '', style: AppTextStyles.headlineMedium),
             const SizedBox(height: 2),
             Text(
               'SKU: ${product.id}',
@@ -270,7 +277,8 @@ class _ProductCard extends StatelessWidget {
               _detailRow(Icons.scale_outlined, 'Satuan', product.satuan),
             if (product.kategori != null)
               _detailRow(Icons.category_outlined, 'Kategori', product.kategori),
-            if (product.namaSupplier != null && (product.namaSupplier as String).isNotEmpty)
+            if (product.namaSupplier != null &&
+                (product.namaSupplier as String).isNotEmpty)
               _detailRow(Icons.business, 'Supplier', product.namaSupplier),
             const Divider(height: 24),
             Row(
@@ -300,7 +308,9 @@ class _ProductCard extends StatelessWidget {
                       '$available',
                       style: AppTextStyles.headlineMedium.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: available == 0 ? AppColors.error : AppColors.textPrimary,
+                        color: available == 0
+                            ? AppColors.error
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -339,12 +349,7 @@ class _ProductCard extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: AppTextStyles.bodyMedium,
-            ),
-          ),
+          Expanded(child: Text(value, style: AppTextStyles.bodyMedium)),
         ],
       ),
     );

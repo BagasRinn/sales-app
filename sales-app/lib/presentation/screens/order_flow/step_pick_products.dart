@@ -319,16 +319,16 @@ class _ProductRow extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade50,
+                              color: AppColors.successBg,
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.green.shade300),
+                              border: Border.all(color: AppColors.success),
                             ),
                             child: Text(
                               '4P',
-                              style: TextStyle(
+                              style: AppTextStyles.bodySmall.copyWith(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.green.shade700,
+                                color: AppColors.success,
                               ),
                             ),
                           ),
@@ -654,7 +654,7 @@ class _StepperButton extends StatelessWidget {
             icon,
             size: 14,
             color: primary
-                ? Colors.white
+                ? AppColors.textOnPrimary
                 : (isInactive ? AppColors.textMuted : AppColors.textPrimary),
           ),
         ),

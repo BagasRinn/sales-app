@@ -6,7 +6,9 @@ import 'jwt_utils.dart';
 
 class TokenExpiredException implements Exception {
   final String message;
-  TokenExpiredException([this.message = 'Sesi login berakhir. Silakan masuk kembali.']);
+  TokenExpiredException([
+    this.message = 'Sesi login berakhir. Silakan masuk kembali.',
+  ]);
   @override
   String toString() => message;
 }
@@ -27,6 +29,8 @@ class ApiService {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Timezone-Offset-Minutes': DateTime.now().timeZoneOffset.inMinutes
+          .toString(),
     };
     if (_accessToken != null) {
       headers['Authorization'] = 'Bearer $_accessToken';
@@ -59,13 +63,13 @@ class ApiService {
       message = body['detail'] ?? body['message'] ?? message;
     } catch (_) {}
 
-    throw ApiException(
-      statusCode: response.statusCode,
-      message: message,
-    );
+    throw ApiException(statusCode: response.statusCode, message: message);
   }
 
-  Future<dynamic> get(String endpoint, {Map<String, String>? queryParams}) async {
+  Future<dynamic> get(
+    String endpoint, {
+    Map<String, String>? queryParams,
+  }) async {
     await _checkTokenExpiry();
     var uri = Uri.parse('${AppConfig.baseUrl}$endpoint');
     if (queryParams != null) {
@@ -104,10 +108,7 @@ class ApiService {
   Future<dynamic> delete(String endpoint) async {
     await _checkTokenExpiry();
     final response = await http
-        .delete(
-          Uri.parse('${AppConfig.baseUrl}$endpoint'),
-          headers: _headers,
-        )
+        .delete(Uri.parse('${AppConfig.baseUrl}$endpoint'), headers: _headers)
         .timeout(AppConfig.requestTimeout);
     return _handleResponse(response);
   }

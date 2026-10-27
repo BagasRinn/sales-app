@@ -49,8 +49,8 @@ def _seed_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"{TEST_PREFIX}USER-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 
@@ -106,12 +106,16 @@ def _seed_dataset() -> int:
             })
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO orders (id, branch, sales_id, customer_id, status, notes, created_at) "
-            "VALUES (:id, :branch, :sid, :cid, :status, :notes, :ts)"
+            "INSERT INTO orders (id, branch, sales_id, customer_id, status, notes, created_at, order_type) "
+            "VALUES (:id, :branch, :sid, :cid, :status, :notes, :ts, 'REGULER')"
         ), orders)
         conn.execute(text(
-            "INSERT INTO order_items (id, order_id, product_id, branch, qty) "
-            "VALUES (:id, :oid, :pid, :branch, :qty)"
+            "INSERT INTO order_items (id, order_id, product_id, branch, qty, "
+            "discount2_type, discount2_percent, discount2_nominal, "
+            "discount3_type, discount3_percent, discount3_nominal, "
+            "up_price_type, up_price_percent, up_price_nominal) "
+            "VALUES (:id, :oid, :pid, :branch, :qty, "
+            "'PERCENT', 0, 0, 'PERCENT', 0, 0, 'NOMINAL', 0, 0)"
         ), items)
     return len(orders)
 

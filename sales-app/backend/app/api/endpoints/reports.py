@@ -1,5 +1,6 @@
 """Daily and period order reports - Excel export untuk admin & manager."""
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from io import BytesIO
 from typing import List, Optional
 
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm import aliased
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget
+from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier
 from app.core.security import require_admin_or_supervisor, require_manager_global, require_auth, apply_branch_filter
 from app.core import branch as branch_constants
 from app.schemas.schemas import (
@@ -37,7 +38,8 @@ def _layer_cut_value(type_val: str, percent: int, nominal: int, running: int) ->
     """Potongan untuk 1 layer (sequential). NOMINAL di-cap ke running; PERCENT dari running."""
     if (type_val or "PERCENT").upper() == "NOMINAL":
         return min(max(0, nominal or 0), running)
-    return int(round(running * max(0, min(100, percent or 0)) / 100))
+    # half-up, samakan dengan SQL round() (round() Python = banker's)
+    return int(running * max(Decimal(0), min(Decimal(100), Decimal(percent or 0))) / 100 + Decimal("0.5"))
 
 
 def _three_layer_subtotal_expr():
@@ -87,7 +89,8 @@ def _three_layer_breakdown(item) -> tuple[int, int, int, int, int, int]:
     raw = harga_satuan * qty
     up_t = (item.up_price_type or 'NOMINAL').upper()
     if up_t == 'PERCENT':
-        up_per_piece = int(round(max(0, harga_satuan) * max(0, float(item.up_price_percent or 0)) / 100))
+        # half-up, samakan dengan SQL round() (round() Python = banker's)
+        up_per_piece = int(max(0, harga_satuan) * max(0, float(item.up_price_percent or 0)) / 100 + 0.5)
     else:
         up_per_piece = int(max(0, item.up_price_nominal or 0))
     up_total = up_per_piece * qty
@@ -715,6 +718,16 @@ def sales_performance_dashboard(
     rejected_today_count, rejected_today_rev = _aggregate(
         _split_by_status(today_orders, "REJECTED"))
 
+    # Order bulan ini bisa berasal dari sales yang sudah dinonaktifkan. Kalau
+    # user-nya tidak ada di list, angka cabang/perusahaan jadi lebih kecil dari
+    # total order sebenarnya → ikutkan mereka (hanya yang punya order periode
+    # ini), supaya card == popup == laporan bulanan.
+    active_ids = {u.id for u in sales_users}
+    stale_ids = {o.sales_id for o in mtd_orders if o.sales_id not in active_ids}
+    if stale_ids:
+        stale_q = db.query(User).filter(User.id.in_(stale_ids))
+        sales_users = sales_users + apply_branch_filter(stale_q, User, current_user).all()
+
     items = []
     for u in sales_users:
         uid = u.id
@@ -748,12 +761,27 @@ def cross_branch_sales_summary(
     current_user: dict = Depends(require_manager_global),
 ):
     """Per-branch approved count, revenue, pending count, customer count, sales count.
-    Global MANAGER only.
+    Global MANAGER only. Angka order = MTD (bulan berjalan, WITA) — sama
+    periode dengan card dashboard & popup detail, jadi konsisten untuk
+    laporan cabang/perusahaan.
 
     4 query fixed (bukan 5×N): order counts, revenue, customer count, sales
     count — masing-masing di-GROUP BY branch dalam 1 query.
     """
     from app.core import branch as branch_constants
+
+    wita = timezone(timedelta(hours=8))
+    today = datetime.now(wita).date()
+    month_start_dt = (
+        datetime.combine(today.replace(day=1), datetime.min.time())
+        .replace(tzinfo=wita)
+        .astimezone(timezone.utc)
+    )
+    today_end = (
+        datetime.combine(today + timedelta(days=1), datetime.min.time())
+        .replace(tzinfo=wita)
+        .astimezone(timezone.utc)
+    )
 
     # Query 1: order counts (approved + pending) per branch
     order_stats = (
@@ -762,6 +790,7 @@ def cross_branch_sales_summary(
             func.sum(case((Order.status == "APPROVED", 1), else_=0)).label("approved_count"),
             func.sum(case((Order.status == "PENDING", 1), else_=0)).label("pending_count"),
         )
+        .filter(Order.created_at >= month_start_dt, Order.created_at < today_end)
         .group_by(Order.branch)
         .all()
     )
@@ -775,8 +804,17 @@ def cross_branch_sales_summary(
             func.coalesce(func.sum(final_subtotal_expr), 0).label("revenue"),
         )
         .join(OrderItem, OrderItem.order_id == Order.id)
-        .join(Product, Product.id == OrderItem.product_id)
-        .filter(Order.status == "APPROVED")
+        # Product PK = (id, branch) → wajib join pakai branch, kalau tidak
+        # produk id sama di cabang lain bikin row fan-out & revenue membengkak.
+        .join(
+            Product,
+            (Product.id == OrderItem.product_id) & (Product.branch == OrderItem.branch),
+        )
+        .filter(
+            Order.status == "APPROVED",
+            Order.created_at >= month_start_dt,
+            Order.created_at < today_end,
+        )
         .group_by(Order.branch)
         .all()
     )
@@ -871,6 +909,13 @@ def cross_branch_stock_summary(
 @router.get("/supplier-performance", response_model=List[SupplierPerformanceRow])
 def get_supplier_performance(
     year_month: str = Query(..., description="YYYY-MM"),
+    branch: Optional[str] = Query(
+        None,
+        description=(
+            "Filter cabang. Hanya MANAGER yang boleh memilih cabang lain; "
+            "kosong = semua cabang (MANAGER) / cabang sendiri (role lain)."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_auth),
 ):
@@ -878,19 +923,55 @@ def get_supplier_performance(
 
     Revenue = sum of approved-order final subtotals (qty*harga + up_price - 3
     sequential discounts) for products with `nama_supplier` = the supplier,
-    in the requested month, in the user's branch.
+    in the requested month, in scope.
+
+    Scope:
+      - MANAGER + `branch` → that branch only.
+      - MANAGER without `branch` → all branches, targets summed per supplier
+        (latest row per branch, then added).
+      - Other roles → own branch; `branch` param must match or 403.
 
     Target resolution:
       1. Look up `supplier_targets` for (branch, supplier, year_month).
       2. If none, look up the most recent prior period for the same
          (branch, supplier) — this is the auto-rollover carry-over.
       3. If still none, has_target=false and pencapaian is null.
+
+    Rows come from `products` ∪ `supplier_targets` in scope ∪ supplier master
+    yang belum punya produk sama sekali (supplier baru, supaya targetnya bisa
+    diset dari KPI). `is_master`/`is_active`/`order_type` mengikuti tabel
+    `suppliers`; nama supplier di-trim di semua sisi.
     """
+    role = current_user.get("role")
+    user_branch = current_user.get("branch")
+    if role == "MANAGER":
+        if branch and not branch_constants.is_valid_branch(branch):
+            raise HTTPException(status_code=400, detail="Cabang tidak dikenal")
+        scope_branch = branch or None  # None = semua cabang
+    else:
+        if branch and branch != user_branch:
+            raise HTTPException(
+                status_code=403,
+                detail="Akses ditolak. Tidak bisa melihat KPI cabang lain.",
+            )
+        scope_branch = user_branch
+
     year, month = map(int, year_month.split("-"))
     month_start = datetime(year, month, 1)
     month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
 
-    # 1. Distinct supplier names from products in user's branch.
+    # 1. Supplier master (global — tabel `suppliers` tidak punya kolom branch).
+    #    Sumber nama + status aktif/order_type.
+    master_meta = {
+        (name or "").strip(): (bool(is_active), order_type or "REGULER")
+        for name, is_active, order_type in db.query(
+            Supplier.name, Supplier.is_active, Supplier.order_type
+        ).all()
+        if (name or "").strip()
+    }
+
+    # 2. Distinct supplier names from products in scope. Nama di-trim supaya
+    #    cocok dengan revenue_map yang juga di-trim.
     #    (Product table has no soft-delete column — products are hard-deleted
     #    on import or via admin tools. Filter empty/null suppliers only.)
     product_query = db.query(Product.nama_supplier).filter(
@@ -898,43 +979,83 @@ def get_supplier_performance(
         Product.nama_supplier != "",
     )
     product_query = apply_branch_filter(product_query, Product, current_user)
-    product_suppliers = {row[0] for row in product_query.distinct().all()}
+    if scope_branch:
+        product_query = product_query.filter(Product.branch == scope_branch)
+    product_suppliers = {
+        (row[0] or "").strip() for row in product_query.distinct().all()
+    } - {""}
 
-    # 2. Distinct supplier names that have any target row in the user's branch.
+    # 3. Distinct supplier names that have any target row in scope.
     target_branch_q = db.query(SupplierTarget.supplier_name)
-    if current_user.get("branch"):
+    if scope_branch:
         target_branch_q = target_branch_q.filter(
-            SupplierTarget.branch == current_user["branch"]
+            SupplierTarget.branch == scope_branch
         )
-    target_suppliers = {row[0] for row in target_branch_q.distinct().all()}
+    target_suppliers = {
+        (row[0] or "").strip() for row in target_branch_q.distinct().all()
+    } - {""}
 
-    all_suppliers = sorted(product_suppliers | target_suppliers)
+    # 4. Supplier master baru (belum punya produk di cabang mana pun) tetap
+    #    tampil supaya targetnya bisa diset dari halaman ini. Supplier
+    #    non-aktif tanpa produk/target tidak perlu jadi baris kosong.
+    new_masters: set = set()
+    if master_meta:
+        global_product_names = {
+            (row[0] or "").strip()
+            for row in db.query(Product.nama_supplier)
+            .filter(Product.nama_supplier.isnot(None), Product.nama_supplier != "")
+            .distinct()
+            .all()
+        }
+        new_masters = {
+            name
+            for name, (is_active, _order_type) in master_meta.items()
+            if is_active and name not in global_product_names
+        }
 
-    # 3. Target resolution — batched to avoid N+1 queries. For each
+    all_suppliers = sorted(product_suppliers | target_suppliers | new_masters)
+
+    # 5. Target resolution — batched to avoid N+1 queries. For each
     #    supplier, we want the most recent target with period <= year_month.
     #    One query returns all candidates; the per-supplier pick is in Python.
+    #    Nama di-trim karena `supplier_targets.supplier_name` bisa menyimpan spasi.
     target_by_supplier: dict = {}
+    latest_period: dict = {}
     if all_suppliers:
         target_query = db.query(SupplierTarget).filter(
-            SupplierTarget.supplier_name.in_(all_suppliers),
+            func.trim(SupplierTarget.supplier_name).in_(all_suppliers),
             SupplierTarget.period <= year_month,
         )
-        if current_user.get("branch"):
+        if scope_branch:
             target_query = target_query.filter(
-                SupplierTarget.branch == current_user["branch"]
+                SupplierTarget.branch == scope_branch
             )
-        for t in target_query.all():
-            existing = target_by_supplier.get(t.supplier_name)
-            if existing is None or t.period > existing.period:
-                target_by_supplier[t.supplier_name] = t
+            for t in target_query.all():
+                name = t.supplier_name.strip()
+                existing_period = latest_period.get(name)
+                if existing_period is None or t.period > existing_period:
+                    latest_period[name] = t.period
+                    target_by_supplier[name] = int(t.target_value)
+        else:
+            # MANAGER all branches: latest row per (branch, supplier), then sum.
+            latest_per_branch: dict = {}
+            for t in target_query.all():
+                key = (t.branch, t.supplier_name.strip())
+                existing = latest_per_branch.get(key)
+                if existing is None or t.period > existing.period:
+                    latest_per_branch[key] = t
+            for (_, name), t in latest_per_branch.items():
+                target_by_supplier[name] = (
+                    target_by_supplier.get(name, 0) + int(t.target_value)
+                )
 
     def resolve_target(name: str) -> tuple[int, bool]:
-        t = target_by_supplier.get(name)
-        if t is None:
+        target = target_by_supplier.get(name)
+        if target is None:
             return 0, False
-        return int(t.target_value), True
+        return target, True
 
-    # 4. Revenue per supplier using _three_layer_breakdown (Python iteration
+    # 6. Revenue per supplier using _three_layer_breakdown (Python iteration
     #    matches the rest of the app and avoids duplicating the SQL expression).
     orders_with_items = (
         db.query(Order)
@@ -946,6 +1067,8 @@ def get_supplier_performance(
         )
     )
     orders_with_items = apply_branch_filter(orders_with_items, Order, current_user)
+    if scope_branch:
+        orders_with_items = orders_with_items.filter(Order.branch == scope_branch)
     orders_with_items = orders_with_items.all()
 
     revenue_map: dict = {}
@@ -966,12 +1089,16 @@ def get_supplier_performance(
         else:
             # No target (or target=0) → no percentage to render.
             pencapaian = None
+        is_active, order_type = master_meta.get(name, (True, "REGULER"))
         rows.append(SupplierPerformanceRow(
             supplier_name=name,
             target=target,
             has_target=has_target,
             value=value,
             pencapaian=pencapaian,
+            is_master=name in master_meta,
+            is_active=is_active,
+            order_type=order_type,
         ))
 
     rows.sort(key=lambda r: (-r.value, r.supplier_name))

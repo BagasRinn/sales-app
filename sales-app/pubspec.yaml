@@ -28,6 +28,10 @@ dependencies:
   # URL launcher
   url_launcher: ^6.3.1
 
+  # Shared datetime utilities with timezone support
+  datetime_utils:
+    path: packages/datetime_utils
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

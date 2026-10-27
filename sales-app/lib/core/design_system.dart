@@ -4,29 +4,30 @@ class AppColors {
   AppColors._();
 
   // Primary brand
-  static const Color primary = Color(0xFF1E3A5F);       // deep navy
-  static const Color primaryLight = Color(0xFF2563EB);   // electric blue (CTA)
-  static const Color primaryDark = Color(0xFF152C4A);
+  static const Color primary = Color(0xFF183558);
+  static const Color primaryLight = Color(0xFF234B7A);
+  static const Color primaryDark = Color(0xFF122844);
+  static const Color primarySoft = Color(0xFFE8EFF7);
 
   // Surface
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color background = Color(0xFFF4F7FB);    // cool off-white
+  static const Color background = Color(0xFFF8FAFC);
   static const Color cardSurface = Color(0xFFFFFFFF);
 
   // Semantic
-  static const Color success = Color(0xFF059669);       // stock available, approved
+  static const Color success = Color(0xFF059669); // stock available, approved
   static const Color successBg = Color(0xFFECFDF5);
   static const Color successBorder = Color(0xFF6EE7B7);
 
-  static const Color warning = Color(0xFFD97706);       // low stock, perlu ditinjau
+  static const Color warning = Color(0xFFD97706); // low stock, perlu ditinjau
   static const Color warningBg = Color(0xFFFFFBEB);
   static const Color warningBorder = Color(0xFFFCD34D);
 
-  static const Color error = Color(0xFFDC2626);         // out of stock, rejected
+  static const Color error = Color(0xFFDC2626); // out of stock, rejected
   static const Color errorBg = Color(0xFFFEF2F2);
   static const Color errorBorder = Color(0xFFFECACA);
 
-  static const Color info = Color(0xFF2563EB);           // pending, informational
+  static const Color info = Color(0xFF2563EB); // pending, informational
   static const Color infoBg = Color(0xFFEFF6FF);
   static const Color infoBorder = Color(0xFFBFDBFE);
 
@@ -161,10 +162,10 @@ class AppTheme {
       fontFamily: AppTextStyles.fontFamily,
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primaryLight,
+        primary: AppColors.primary,
         onPrimary: AppColors.textOnPrimary,
-        primaryContainer: AppColors.primary,
-        onPrimaryContainer: AppColors.textOnPrimary,
+        primaryContainer: AppColors.primarySoft,
+        onPrimaryContainer: AppColors.primary,
         secondary: AppColors.primary,
         onSecondary: AppColors.textOnPrimary,
         surface: AppColors.surface,
@@ -177,6 +178,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 1,
         backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
         titleTextStyle: TextStyle(
           fontFamily: AppTextStyles.fontFamily,
@@ -189,9 +191,10 @@ class AppTheme {
         elevation: 0,
         color: AppColors.cardSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: AppColors.border, width: 1),
         ),
+        surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -213,8 +216,13 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.textMuted,
+        ),
         labelStyle: AppTextStyles.labelMedium,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -222,8 +230,12 @@ class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           backgroundColor: AppColors.primaryLight,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: AppTextStyles.labelLarge.copyWith(color: AppColors.textOnPrimary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: AppTextStyles.labelLarge.copyWith(
+            color: AppColors.textOnPrimary,
+          ),
           elevation: 0,
         ),
       ),
@@ -232,8 +244,12 @@ class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           backgroundColor: AppColors.primaryLight,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: AppTextStyles.labelLarge.copyWith(color: AppColors.textOnPrimary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: AppTextStyles.labelLarge.copyWith(
+            color: AppColors.textOnPrimary,
+          ),
           elevation: 0,
         ),
       ),
@@ -241,7 +257,9 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primaryLight,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           side: const BorderSide(color: AppColors.primaryLight, width: 1.5),
           textStyle: AppTextStyles.labelLarge,
         ),
@@ -256,7 +274,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.infoBg,
+        indicatorColor: AppColors.primarySoft,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return AppTextStyles.labelMedium.copyWith(
@@ -277,7 +295,9 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+        contentTextStyle: AppTextStyles.bodyMedium.copyWith(
+          color: Colors.white,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         behavior: SnackBarBehavior.floating,
       ),
@@ -285,6 +305,11 @@ class AppTheme {
         color: AppColors.border,
         thickness: 1,
         space: 1,
+      ),
+      dialogTheme: const DialogThemeData(surfaceTintColor: Colors.transparent),
+      bottomSheetTheme: const BottomSheetThemeData(
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: AppColors.surface,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surface,
@@ -340,71 +365,137 @@ StockStatus stockStatusFromValue(int available) {
   return StockStatus.available;
 }
 
-class StockChip extends StatelessWidget {
-  final int available;
-  final bool showCount;
+enum AppBadgeVariant { success, warning, danger, info, neutral }
 
-  const StockChip({
+AppBadgeVariant stockStatusBadgeVariant(StockStatus status) => switch (status) {
+  StockStatus.available => AppBadgeVariant.success,
+  StockStatus.low => AppBadgeVariant.warning,
+  StockStatus.outOfStock => AppBadgeVariant.danger,
+};
+
+class AppBadge extends StatelessWidget {
+  final String label;
+  final AppBadgeVariant variant;
+  final IconData? icon;
+  final bool showDot;
+
+  const AppBadge({
     super.key,
-    required this.available,
-    this.showCount = true,
+    required this.label,
+    this.variant = AppBadgeVariant.neutral,
+    this.icon,
+    this.showDot = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final status = stockStatusFromValue(available);
+    final (background, foreground) = switch (variant) {
+      AppBadgeVariant.success => (AppColors.successBg, AppColors.success),
+      AppBadgeVariant.warning => (AppColors.warningBg, AppColors.warning),
+      AppBadgeVariant.danger => (AppColors.errorBg, AppColors.error),
+      AppBadgeVariant.info => (AppColors.infoBg, AppColors.info),
+      AppBadgeVariant.neutral => (
+        AppColors.borderLight,
+        AppColors.textSecondary,
+      ),
+    };
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: statusBgColor(status),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: statusColor(status).withValues(alpha: 0.4)),
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: foreground.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              color: statusColor(status),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            showCount ? statusLabel(status) : statusLabel(status).replaceAll(' ($available)', ''),
-            style: TextStyle(
-              fontFamily: AppTextStyles.fontFamily,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: statusColor(status),
-            ),
-          ),
-          if (showCount) ...[
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: foreground),
             const SizedBox(width: 4),
-            Text(
-              '($available)',
-              style: TextStyle(
-                fontFamily: AppTextStyles.fontFamily,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: statusColor(status).withValues(alpha: 0.8),
+          ],
+          if (showDot) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: foreground,
+                shape: BoxShape.circle,
               ),
             ),
+            const SizedBox(width: 6),
           ],
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+String stockStatusDisplayLabel(StockStatus status) => switch (status) {
+  StockStatus.available => 'Tersedia',
+  StockStatus.low => 'Stok Rendah',
+  StockStatus.outOfStock => 'Stok Habis',
+};
+
+class StockStatusChip extends StatelessWidget {
+  final StockStatus status;
+  final String? label;
+
+  const StockStatusChip({super.key, required this.status, this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBadge(
+      label: label ?? stockStatusDisplayLabel(status),
+      variant: stockStatusBadgeVariant(status),
+    );
+  }
+}
+
+class StockChip extends StatelessWidget {
+  final int available;
+  final bool showCount;
+
+  const StockChip({super.key, required this.available, this.showCount = true});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = stockStatusFromValue(available);
+    return StockStatusChip(
+      status: status,
+      label: showCount
+          ? '${statusLabel(status)} ($available)'
+          : statusLabel(status),
+    );
+  }
+}
+
 // ─── Order status chip ────────────────────────────────────────────────────────
 
-enum OrderStatus { pending, approved, rejected, cancelled }
+enum OrderStatus { draft, pending, approved, rejected, cancelled }
+
+AppBadgeVariant orderStatusBadgeVariant(OrderStatus status) => switch (status) {
+  OrderStatus.draft => AppBadgeVariant.neutral,
+  OrderStatus.pending => AppBadgeVariant.info,
+  OrderStatus.approved => AppBadgeVariant.success,
+  OrderStatus.rejected => AppBadgeVariant.danger,
+  OrderStatus.cancelled => AppBadgeVariant.neutral,
+};
 
 Color orderStatusColor(OrderStatus s) {
   switch (s) {
+    case OrderStatus.draft:
+      return AppColors.textMuted;
     case OrderStatus.pending:
       return AppColors.info;
     case OrderStatus.approved:
@@ -418,6 +509,8 @@ Color orderStatusColor(OrderStatus s) {
 
 Color orderStatusBgColor(OrderStatus s) {
   switch (s) {
+    case OrderStatus.draft:
+      return AppColors.borderLight;
     case OrderStatus.pending:
       return AppColors.infoBg;
     case OrderStatus.approved:
@@ -449,6 +542,8 @@ String orderStatusLabel(String status) {
 OrderStatus? orderStatusFromString(String? s) {
   if (s == null) return null;
   switch (s.toUpperCase()) {
+    case 'DRAFT':
+      return OrderStatus.draft;
     case 'PENDING':
       return OrderStatus.pending;
     case 'APPROVED':
@@ -464,29 +559,17 @@ OrderStatus? orderStatusFromString(String? s) {
 
 class OrderStatusChip extends StatelessWidget {
   final String status;
+  final String? label;
 
-  const OrderStatusChip({super.key, required this.status});
+  const OrderStatusChip({super.key, required this.status, this.label});
 
   @override
   Widget build(BuildContext context) {
     final s = orderStatusFromString(status);
     if (s == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: orderStatusBgColor(s),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: orderStatusColor(s).withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        orderStatusLabel(status),
-        style: TextStyle(
-          fontFamily: AppTextStyles.fontFamily,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: orderStatusColor(s),
-        ),
-      ),
+    return AppBadge(
+      label: label ?? orderStatusLabel(status),
+      variant: orderStatusBadgeVariant(s),
     );
   }
 }

@@ -1,8 +1,6 @@
 class AppConfig {
-  // [ACTIVE — PRODUCTION] Deploy di Railway
   static const String baseUrl = 'https://sales-app-production-1872.up.railway.app/api/v1';
 
-  // [LOCAL DEV] Android Emulator — comment baris di atas, uncomment ini
   // static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
 
   static const Duration requestTimeout = Duration(seconds: 30);

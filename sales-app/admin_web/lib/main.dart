@@ -6,11 +6,16 @@ import 'core/navigator_key.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/dashboard_screen.dart';
 
+// Shared datetime utilities
+import 'package:datetime_utils/datetime_utils.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Initialize intl locale data sebelum DateFormat/NumberFormat dipakai.
   // Tanpa ini, `intl` throw LocaleDataException di release mode.
   await initializeDateFormatting('id_ID', null);
+  // Initialize timezone database for datetime_utils
+  initTimezone();
 
   final storage = AuthStorage();
   final tokens = await storage.getTokens();

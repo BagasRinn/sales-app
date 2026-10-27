@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../data/repositories/customer_repository.dart';
 import '../../../core/api_service.dart';
 import '../../providers/auth_provider.dart';
@@ -11,10 +12,12 @@ class CustomerRegistrationScreen extends StatefulWidget {
   const CustomerRegistrationScreen({super.key});
 
   @override
-  State<CustomerRegistrationScreen> createState() => _CustomerRegistrationScreenState();
+  State<CustomerRegistrationScreen> createState() =>
+      _CustomerRegistrationScreenState();
 }
 
-class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen> {
+class _CustomerRegistrationScreenState
+    extends State<CustomerRegistrationScreen> {
   // Section 1: Identitas
   final _namaCtl = TextEditingController();
   final _ktpCtl = TextEditingController();
@@ -56,17 +59,33 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   bool _isSubmitting = false;
 
   static const _channelOptions = [
-    'GT', 'FOSR', 'MTKA', 'MTI', 'BABYSHOP', 'COSMETICS',
-    'PHARMA', 'B2B NON FOOD', 'MATERIAL BANGUNAN', 'LANGGANAN KANTOR',
+    'GT',
+    'FOSR',
+    'MTKA',
+    'MTI',
+    'BABYSHOP',
+    'COSMETICS',
+    'PHARMA',
+    'B2B NON FOOD',
+    'MATERIAL BANGUNAN',
+    'LANGGANAN KANTOR',
   ];
 
   static const _tipeLanggananKategoriOptions = ['PASAR', 'NON PASAR'];
   static const _tipeBayarOptions = ['TUNAI', 'KREDIT'];
   static const _siklusKunjunganOptions = [
-    'W (Mingguan)', 'W1 W3 (Minggu Ganjil)', 'W2 W4 (Minggu Genap)',
+    'W (Mingguan)',
+    'W1 W3 (Minggu Ganjil)',
+    'W2 W4 (Minggu Genap)',
   ];
   static const _hariKunjunganOptions = [
-    'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+    'Senin',
+    'Selasa',
+    'Rabu',
+    'Kamis',
+    'Jumat',
+    'Sabtu',
+    'Minggu',
   ];
 
   @override
@@ -77,10 +96,13 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       if (auth.username != null) _kodeSalesmanCtl.text = auth.username!;
       if (auth.nama != null) _namaSalesmanCtl.text = auth.nama!;
       // Load kode area options silently
-      CustomerRepository(context.read<ApiService>()).getKodeAreas().then((areas) {
-        if (!mounted) return;
-        setState(() => _kodeAreaOptions = areas);
-      }).catchError((_) {});
+      CustomerRepository(context.read<ApiService>())
+          .getKodeAreas()
+          .then((areas) {
+            if (!mounted) return;
+            setState(() => _kodeAreaOptions = areas);
+          })
+          .catchError((_) {});
     });
   }
 
@@ -119,9 +141,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     }
 
     final tipeLangganan =
-        _tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isNotEmpty
-            ? 'PASAR (${_namaPasarCtl.text.trim()})'
-            : _tipeLanggananKategori;
+        _tipeLanggananKategori == 'PASAR' &&
+            _namaPasarCtl.text.trim().isNotEmpty
+        ? 'PASAR (${_namaPasarCtl.text.trim()})'
+        : _tipeLanggananKategori;
 
     final isKredit = _tipePembayaran == 'KREDIT';
 
@@ -142,12 +165,18 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       'tipe_pembayaran': _tipePembayaran,
       'nama_pasar': _orNull(_namaPasarCtl.text),
       'jangka_kredit_hari': isKredit ? 14 : null,
-      'batas_kredit_rupiah': isKredit ? parseIntOrNull(_batasKreditCtl.text) : null,
+      'batas_kredit_rupiah': isKredit
+          ? parseIntOrNull(_batasKreditCtl.text)
+          : null,
       'channel_kategori': _channelKategori,
       'key_account_ref_id': _orNull(_keyAccountCtl.text),
       'cluster_langganan': _clusterLangganan,
-      'kode_salesman': _kodeSalesmanCtl.text.trim().isEmpty ? null : _kodeSalesmanCtl.text.trim(),
-      'nama_salesman': _namaSalesmanCtl.text.trim().isEmpty ? null : _namaSalesmanCtl.text.trim(),
+      'kode_salesman': _kodeSalesmanCtl.text.trim().isEmpty
+          ? null
+          : _kodeSalesmanCtl.text.trim(),
+      'nama_salesman': _namaSalesmanCtl.text.trim().isEmpty
+          ? null
+          : _namaSalesmanCtl.text.trim(),
       'siklus_kunjungan': _siklusKunjungan,
       'hari_kunjungan': _hariKunjungan,
       'bareng_order': _barengOrder,
@@ -155,23 +184,63 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   }
 
   Future<void> _submit() async {
-    if (_namaCtl.text.trim().isEmpty) { _snack('Nama langganan wajib diisi'); return; }
-    if (_kontakCtl.text.trim().isEmpty) { _snack('Nama kontak/pemilik wajib diisi'); return; }
-    if (_telponCtl.text.trim().isEmpty) { _snack('Telpon/HP wajib diisi'); return; }
-    if (_alamatKirimCtl.text.trim().isEmpty) { _snack('Alamat kirim wajib diisi'); return; }
-    if (_propinsiCtl.text.trim().isEmpty) { _snack('Propinsi wajib diisi'); return; }
-    if (_kecamatanCtl.text.trim().isEmpty) { _snack('Kecamatan wajib diisi'); return; }
-    if (_kotaCtl.text.trim().isEmpty) { _snack('Kota wajib diisi'); return; }
-    if (_kelurahanCtl.text.trim().isEmpty) { _snack('Kelurahan wajib diisi'); return; }
-    if (_tipeLanggananKategori == null) { _snack('Tipe langganan wajib dipilih'); return; }
-    if (_tipeLanggananKategori == 'PASAR' && _namaPasarCtl.text.trim().isEmpty) {
+    if (_namaCtl.text.trim().isEmpty) {
+      _snack('Nama langganan wajib diisi');
+      return;
+    }
+    if (_kontakCtl.text.trim().isEmpty) {
+      _snack('Nama kontak/pemilik wajib diisi');
+      return;
+    }
+    if (_telponCtl.text.trim().isEmpty) {
+      _snack('Telpon/HP wajib diisi');
+      return;
+    }
+    if (_alamatKirimCtl.text.trim().isEmpty) {
+      _snack('Alamat kirim wajib diisi');
+      return;
+    }
+    if (_propinsiCtl.text.trim().isEmpty) {
+      _snack('Propinsi wajib diisi');
+      return;
+    }
+    if (_kecamatanCtl.text.trim().isEmpty) {
+      _snack('Kecamatan wajib diisi');
+      return;
+    }
+    if (_kotaCtl.text.trim().isEmpty) {
+      _snack('Kota wajib diisi');
+      return;
+    }
+    if (_kelurahanCtl.text.trim().isEmpty) {
+      _snack('Kelurahan wajib diisi');
+      return;
+    }
+    if (_tipeLanggananKategori == null) {
+      _snack('Tipe langganan wajib dipilih');
+      return;
+    }
+    if (_tipeLanggananKategori == 'PASAR' &&
+        _namaPasarCtl.text.trim().isEmpty) {
       _snack('Nama pasar wajib diisi');
       return;
     }
-    if (_tipePembayaran == null) { _snack('Tipe pembayaran wajib dipilih'); return; }
-    if (_channelKategori == null) { _snack('Channel/kategori wajib dipilih'); return; }
-    if (_siklusKunjungan == null) { _snack('Siklus kunjungan wajib dipilih'); return; }
-    if (_hariKunjungan == null) { _snack('Hari kunjungan wajib dipilih'); return; }
+    if (_tipePembayaran == null) {
+      _snack('Tipe pembayaran wajib dipilih');
+      return;
+    }
+    if (_channelKategori == null) {
+      _snack('Channel/kategori wajib dipilih');
+      return;
+    }
+    if (_siklusKunjungan == null) {
+      _snack('Siklus kunjungan wajib dipilih');
+      return;
+    }
+    if (_hariKunjungan == null) {
+      _snack('Hari kunjungan wajib dipilih');
+      return;
+    }
     if (_tipePembayaran == 'KREDIT' && _batasKreditCtl.text.trim().isEmpty) {
       _snack('Batas kredit wajib diisi untuk pembayaran Kredit');
       return;
@@ -199,7 +268,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       if (_barengOrder && result.barengCustomerId != null) {
         final draft = context.read<DraftOrderProvider>();
         draft.reset();
-        draft.setCustomerDirect(id: result.barengCustomerId!, namaToko: _namaCtl.text.trim());
+        draft.setCustomerDirect(
+          id: result.barengCustomerId!,
+          namaToko: _namaCtl.text.trim(),
+        );
         if (!mounted) return;
         await Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const OrderFlowScreen()),
@@ -226,9 +298,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Pengajuan Customer Baru'),
-      ),
+      appBar: AppBar(title: const Text('Pengajuan Customer Baru')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
@@ -245,7 +315,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.shopping_cart_outlined, size: 18, color: AppColors.info),
+                    Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 18,
+                      color: AppColors.info,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Langsung buat order juga?',
@@ -259,15 +333,27 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    _toggleChip(label: 'Ya', selected: _barengOrder, onSelected: () => setState(() => _barengOrder = true)),
+                    _toggleChip(
+                      label: 'Ya',
+                      selected: _barengOrder,
+                      onSelected: () => setState(() => _barengOrder = true),
+                    ),
                     const SizedBox(width: 8),
-                    _toggleChip(label: 'Tidak', selected: !_barengOrder, onSelected: () => setState(() => _barengOrder = false)),
+                    _toggleChip(
+                      label: 'Tidak',
+                      selected: !_barengOrder,
+                      onSelected: () => setState(() => _barengOrder = false),
+                    ),
                   ],
                 ),
                 if (_barengOrder) ...[
                   const SizedBox(height: 8),
-                  Text('Setelah customer disubmit, akan langsung diarahkan ke langkah order.',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.info)),
+                  Text(
+                    'Setelah customer disubmit, akan langsung diarahkan ke langkah order.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.info,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -292,27 +378,46 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           _fieldLabel('Kode Area'),
           _kodeAreaDropdown(),
           _fieldLabel('Tipe Langganan'),
-          _choiceRow(_tipeLanggananKategoriOptions, _tipeLanggananKategori,
-              (v) => setState(() => _tipeLanggananKategori = v)),
+          _choiceRow(
+            _tipeLanggananKategoriOptions,
+            _tipeLanggananKategori,
+            (v) => setState(() => _tipeLanggananKategori = v),
+          ),
           if (_tipeLanggananKategori == 'PASAR') ...[
             const SizedBox(height: 4),
-            _field('Nama pasar *', _namaPasarCtl, hintText: 'Contoh: pasar Senen'),
+            _field(
+              'Nama pasar *',
+              _namaPasarCtl,
+              hintText: 'Contoh: pasar Senen',
+            ),
           ],
           const SizedBox(height: 20),
 
           // Section 2: Pembayaran
           _sectionHeader('2. Tipe Pembayaran'),
           const SizedBox(height: 8),
-          _choiceRow(_tipeBayarOptions, _tipePembayaran,
-              (v) => setState(() => _tipePembayaran = v)),
+          _choiceRow(
+            _tipeBayarOptions,
+            _tipePembayaran,
+            (v) => setState(() => _tipePembayaran = v),
+          ),
           if (_tipePembayaran == 'KREDIT') ...[
             const SizedBox(height: 8),
-            _field('Batas Kredit *', _batasKreditCtl, keyboardType: TextInputType.number),
+            _field(
+              'Batas Kredit *',
+              _batasKreditCtl,
+              keyboardType: TextInputType.number,
+            ),
           ],
           if (_tipePembayaran == null) ...[
             const SizedBox(height: 8),
-            Text('Pilih tipe pembayaran di atas.',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic)),
+            Text(
+              'Pilih tipe pembayaran di atas.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ],
           const SizedBox(height: 20),
 
@@ -320,8 +425,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           _sectionHeader('3. Channel / Kategori'),
           const SizedBox(height: 8),
           _fieldLabel('Tipe Channel'),
-          _choiceWrap(_channelOptions, _channelKategori,
-              (v) => setState(() => _channelKategori = v)),
+          _choiceWrap(
+            _channelOptions,
+            _channelKategori,
+            (v) => setState(() => _channelKategori = v),
+          ),
           _field('Key Account (REF ID)', _keyAccountCtl),
           _fieldLabel('Cluster Langganan'),
           _clusterField(),
@@ -333,11 +441,17 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           _readOnlyField('Kode Salesman', _kodeSalesmanCtl.text),
           _readOnlyField('Nama Salesman', _namaSalesmanCtl.text),
           _fieldLabel('Siklus Kunjungan'),
-          _choiceWrap(_siklusKunjunganOptions, _siklusKunjungan,
-              (v) => setState(() => _siklusKunjungan = v)),
+          _choiceWrap(
+            _siklusKunjunganOptions,
+            _siklusKunjungan,
+            (v) => setState(() => _siklusKunjungan = v),
+          ),
           _fieldLabel('Hari Kunjungan'),
-          _choiceWrap(_hariKunjunganOptions, _hariKunjungan,
-              (v) => setState(() => _hariKunjungan = v)),
+          _choiceWrap(
+            _hariKunjunganOptions,
+            _hariKunjungan,
+            (v) => setState(() => _hariKunjungan = v),
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -351,17 +465,29 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
               minimumSize: const Size.fromHeight(48),
             ),
             icon: _isSubmitting
-                ? const SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.send),
-            label: Text(_barengOrder ? 'Submit & Buat Order' : 'Submit Pengajuan'),
+            label: Text(
+              _barengOrder ? 'Submit & Buat Order' : 'Submit Pengajuan',
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _toggleChip({required String label, required bool selected, required VoidCallback onSelected}) {
+  Widget _toggleChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
     return GestureDetector(
       onTap: onSelected,
       child: Container(
@@ -369,7 +495,9 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         decoration: BoxDecoration(
           color: selected ? AppColors.info : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AppColors.info : AppColors.border),
+          border: Border.all(
+            color: selected ? AppColors.info : AppColors.border,
+          ),
         ),
         child: Text(
           label,
@@ -473,8 +601,13 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           hint: const Text('Pilih kode area'),
           isExpanded: true,
           items: [
-            ..._kodeAreaOptions.map((a) => DropdownMenuItem(value: a, child: Text(a))),
-            const DropdownMenuItem(value: '__custom__', child: Text('Lainnya (ketik manual)…')),
+            ..._kodeAreaOptions.map(
+              (a) => DropdownMenuItem(value: a, child: Text(a)),
+            ),
+            const DropdownMenuItem(
+              value: '__custom__',
+              child: Text('Lainnya (ketik manual)…'),
+            ),
           ],
           onChanged: (v) {
             setState(() {
@@ -492,28 +625,30 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     ),
   );
 
-  Widget _choiceRow(List<String> options, String? selected, ValueChanged<String> onSelected) {
+  Widget _choiceRow(
+    List<String> options,
+    String? selected,
+    ValueChanged<String> onSelected,
+  ) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: options.map((o) {
         final isSel = o == selected;
-        return ChoiceChip(
-          label: Text(o),
+        return AppChoiceChip(
+          label: o,
           selected: isSel,
-          onSelected: (sel) { if (sel) onSelected(o); },
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: isSel ? Colors.white : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
+          onSelected: () => onSelected(o),
         );
       }).toList(),
     );
   }
 
-  Widget _choiceWrap(List<String> options, String? selected, ValueChanged<String> onSelected) {
+  Widget _choiceWrap(
+    List<String> options,
+    String? selected,
+    ValueChanged<String> onSelected,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Wrap(
@@ -521,16 +656,10 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         runSpacing: 8,
         children: options.map((o) {
           final isSel = o == selected;
-          return ChoiceChip(
-            label: Text(o),
+          return AppChoiceChip(
+            label: o,
             selected: isSel,
-            onSelected: (sel) { if (sel) onSelected(o); },
-            selectedColor: AppColors.primaryLight,
-            labelStyle: TextStyle(
-              color: isSel ? Colors.white : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
+            onSelected: () => onSelected(o),
           );
         }).toList(),
       ),
@@ -544,16 +673,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       runSpacing: 8,
       children: ['STOCKIEST', 'SUBDIST', 'NO CLUSTER'].map((o) {
         final isSel = o == _clusterLangganan;
-        return ChoiceChip(
-          label: Text(o),
+        return AppChoiceChip(
+          label: o,
           selected: isSel,
-          onSelected: (sel) => setState(() => _clusterLangganan = sel ? o : null),
-          selectedColor: AppColors.primaryLight,
-          labelStyle: TextStyle(
-            color: isSel ? Colors.white : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
+          onSelected: () =>
+              setState(() => _clusterLangganan = isSel ? null : o),
         );
       }).toList(),
     ),

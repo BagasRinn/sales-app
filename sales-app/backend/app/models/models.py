@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, ForeignKey, ForeignKeyConstraint, DateTime, Index, Boolean, Text, BigInteger, JSON, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, ForeignKeyConstraint, Date, DateTime, Index, Boolean, Text, BigInteger, JSON, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -223,6 +223,8 @@ class Order(Base):
     reject_reason = Column(Text, nullable=True)
     # Nomor invoice untuk tracking order dengan invoice yang sama.
     invoice_number = Column(String(50), nullable=True, index=True)
+    # Idempotency key from client for duplicate prevention
+    client_request_id = Column(String(128), nullable=True, index=True)
 
     __table_args__ = (
         Index("ix_orders_status", "status"),
@@ -289,7 +291,7 @@ class StokLog(Base):
     nilai_sebelum = Column(Integer)
     nilai_sesudah = Column(Integer)
     actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -380,6 +382,51 @@ class ImportLog(Base):
     # import_logs endpoint sudah filter by current_user.branch.
     branch = Column(String(20), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ImportedSale(Base):
+    """Baris transaksi penjualan dari file Excel laporan penjualan (import berkala admin).
+
+    Disimpan terpisah dari tabel `orders`/`order_items` karena aplikasi ini
+    merupakan sistem terpisah dari sistem utama. Sumber file: laporan penjualan
+    (rekap detail) yang di-import admin via admin_web.
+
+    Kolom keuangan: `net_per_unit` = N. Jual - Discount (per satuan),
+    `total_amount` = Total Harga Jual (per-satuan x qty — diambil dari kolom
+    template, bukan dihitung ulang di sisi import).
+    """
+    __tablename__ = "imported_sales"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    import_log_id = Column(UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=False, index=True)
+    branch = Column(String(20), nullable=True, index=True)
+    trans_no = Column(String(50), nullable=True, index=True)
+    # Tanggal penjualan (dari kolom `Penjualan` pada template).
+    sale_date = Column(Date, nullable=True, index=True)
+    customer_kode = Column(String(50), nullable=True)
+    customer_nama = Column(String(200), nullable=True)
+    # Channel = tipe langganan (bukan channel sales).
+    channel = Column(String(50), nullable=True)
+    kategori = Column(String(50), nullable=True)
+    # Group = pengelompokan customer (descriptive field).
+    customer_group = Column(String(50), nullable=True)
+    area = Column(String(50), nullable=True)
+    alamat = Column(String(500), nullable=True)
+    product_kode = Column(String(50), nullable=True)
+    product_nama = Column(String(200), nullable=True)
+    qty = Column(Integer, nullable=True)
+    satuan_jual = Column(String(50), nullable=True)
+    qtyi = Column(Integer, nullable=True)
+    satuani = Column(String(50), nullable=True)
+    diskon = Column(Integer, nullable=True)
+    net_per_unit = Column(Integer, nullable=True)
+    total_amount = Column(Integer, nullable=True)
+    sales_kode = Column(String(50), nullable=True)
+    sales_nama = Column(String(200), nullable=True)
+    supplier = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    import_log = relationship("ImportLog")
 
 
 class SalesTarget(Base):

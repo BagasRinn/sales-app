@@ -18,21 +18,45 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Panel admin Sales Order — kelola pesanan, produk, dan performa sales.">
+  <meta name="theme-color" content="#183558">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="admin_web">
+  <meta name="apple-mobile-web-app-title" content="Sales Order Admin">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>admin_web</title>
+  <title>Sales Order — Admin</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Hilangkan flash putih sebelum Flutter selesai boot. */
+    html, body { margin: 0; height: 100%; background: #F8FAFC; }
+    #boot-splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+      color: #183558; background: #F8FAFC;
+    }
+    #boot-splash .mark {
+      width: 44px; height: 44px; border-radius: 12px; background: #183558;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 800; font-size: 18px;
+    }
+    #boot-splash .label { font-size: 13px; font-weight: 600; letter-spacing: .2px; }
+    #boot-splash .hint { font-size: 12px; color: #64748B; }
+  </style>
 </head>
 <body>
+  <div id="boot-splash">
+    <div class="mark">SO</div>
+    <div class="label">Sales Order Admin</div>
+    <div class="hint">Memuat panel…</div>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -42,5 +66,12 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Splash dibuang setelah frame pertama Flutter tampil (canvas terpasang).
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('boot-splash');
+      if (el) el.remove();
+    });
+  </script>
 </body>
 </html>

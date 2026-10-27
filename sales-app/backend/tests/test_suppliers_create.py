@@ -28,8 +28,10 @@ def _make_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            # token_version & is_active pakai nilai kolom karena column default
+            # SQLAlchemy hanya jalan lewat ORM, bukan raw SQL.
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"TEST-USER-CREATE-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 

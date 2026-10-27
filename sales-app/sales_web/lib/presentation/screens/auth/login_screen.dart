@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -41,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error ?? 'Login gagal. Silakan coba lagi.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -50,122 +52,96 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Logo / Icon
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.shopping_cart_outlined,
-                        color: Colors.white,
-                        size: 40,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Title
-                    const Text(
-                      'Sales App',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Masuk untuk mengelola pesanan',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF475569),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Username
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Username wajib diisi';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Password
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
-                          },
+                    Center(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.shopping_cart_outlined,
+                          color: Colors.white,
+                          size: 32,
                         ),
                       ),
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _handleLogin(),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Password wajib diisi';
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: 24),
-
-                    // Login Button
-                    SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Masuk',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                    Text(
+                      'Sales App',
+                      style: AppTextStyles.headlineLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Masuk untuk mengelola pesanan',
+                      style: AppTextStyles.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 28),
+                    AppCard(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AppInput(
+                            label: 'Username',
+                            controller: _usernameController,
+                            prefixIcon: const Icon(Icons.person_outline),
+                            textInputAction: TextInputAction.next,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Username wajib diisi';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          AppInput(
+                            label: 'Password',
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
                               ),
+                              onPressed: () {
+                                setState(() => _obscurePassword = !_obscurePassword);
+                              },
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _handleLogin(),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Password wajib diisi';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          AppButton(
+                            label: 'Masuk',
+                            isLoading: _isLoading,
+                            isFullWidth: true,
+                            onPressed: _isLoading ? null : _handleLogin,
+                          ),
+                        ],
                       ),
                     ),
                   ],

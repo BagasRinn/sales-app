@@ -1,18 +1,39 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+class _TZFormatter(logging.Formatter):
+    def converter(self, timestamp):
+        return datetime.fromtimestamp(timestamp, tz=ZoneInfo("Asia/Makassar")).timetuple()
+
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=ZoneInfo("Asia/Makassar"))
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.isoformat()
+
+_tz_formatter = _TZFormatter(
+    fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(_tz_formatter)
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[handler],
 )
 logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports
 from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -84,12 +105,9 @@ app = FastAPI(
 )
 
 _allowed_origins = os.getenv("CORS_ORIGINS", "").split(",")
+print(f"CORS YANG AKTIF: {_allowed_origins}")
 if not _allowed_origins or _allowed_origins == [""]:
-    _allowed_origins = ["*"]  # dev fallback — set CORS_ORIGINS in production
-    # Per CORS spec, browsers reject the wildcard when allow_credentials=True.
-    # That means any web call carrying the Authorization header (i.e. almost
-    # every call once the user logs in) will be blocked with a CORS error.
-    # Log loudly so this can't slip past on the next deploy.
+    _allowed_origins = ["*"]
     logger.warning(
         "[CORS] CORS_ORIGINS is unset — falling back to '*'. "
         "Browsers will REJECT credentialed requests, so the web app cannot "
@@ -102,6 +120,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],
 )
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -117,6 +136,7 @@ app.include_router(sales.router, prefix="/api/v1")
 app.include_router(branches.router, prefix="/api/v1")
 app.include_router(supplier_targets.router, prefix="/api/v1")
 app.include_router(suppliers.router, prefix="/api/v1")
+app.include_router(sales_imports.router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -127,3 +147,8 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/v1/models")
+def list_models():
+    return {"models": []}

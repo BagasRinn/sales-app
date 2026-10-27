@@ -22,6 +22,9 @@ def _cleanup():
         conn.execute(text(
             "DELETE FROM suppliers WHERE name = :a OR name = :i"
         ), {"a": SUP_ACTIVE, "i": SUP_INACTIVE})
+        conn.execute(text(
+            "DELETE FROM users WHERE username LIKE 'TEST-USER-FILTER-%'"
+        ))
 
 
 def _seed():
@@ -31,21 +34,23 @@ def _seed():
     _cleanup()
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO suppliers (name, is_active) VALUES (:n, :a) "
+            "INSERT INTO suppliers (name, is_active, order_type) VALUES (:n, :a, 'REGULER') "
             "ON CONFLICT (name) DO UPDATE SET is_active = EXCLUDED.is_active"
         ), [{"n": SUP_ACTIVE, "a": True}, {"n": SUP_INACTIVE, "a": True}])
         # Use exact test_suppliers_list.py SQL — no ON CONFLICT
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga, nama_supplier) "
-            "VALUES (:id, :branch, :nama, 1000, :sup)"
+            "INSERT INTO products (id, branch, nama_barang, harga, stok_diterima, "
+            "order_type, nama_supplier) "
+            "VALUES (:id, :branch, :nama, 1000, 0, 'REGULER', :sup)"
         ), [
             {"id": "TEST-PROD-A", "branch": USER_BRANCH, "nama": "A", "sup": SUP_ACTIVE},
             {"id": "TEST-PROD-I", "branch": USER_BRANCH, "nama": "I", "sup": SUP_INACTIVE},
         ])
         # NOSUP product with NULL supplier
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga, nama_supplier) "
-            "VALUES ('TEST-P-FILTER-NOSUP', :b, 'N', 1000, NULL)"
+            "INSERT INTO products (id, branch, nama_barang, harga, stok_diterima, "
+            "order_type, nama_supplier) "
+            "VALUES ('TEST-P-FILTER-NOSUP', :b, 'N', 1000, 0, 'REGULER', NULL)"
         ), {"b": USER_BRANCH})
 
 
@@ -53,8 +58,8 @@ def _make_user(role: str, branch):
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"TEST-USER-FILTER-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 

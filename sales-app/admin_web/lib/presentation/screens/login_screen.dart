@@ -157,104 +157,83 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 40),
 
                     // Login card
-                    Container(
+                    AppCard(
                       padding: EdgeInsets.all(cardPadding),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.06),
-                            blurRadius: 24,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text('Masuk', style: AppTextStyles.headlineMedium),
-                          const SizedBox(height: 4),
-                          const Text(
+                          Text('Masuk', style: AppTextStyles.h1),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
                             'Gunakan akun administrator Anda',
-                            style: AppTextStyles.bodySmall,
+                            style: AppTextStyles.bodyMuted,
                           ),
-                          const SizedBox(height: 28),
-                          TextFormField(
+                          const SizedBox(height: AppSpacing.lg),
+                          AppInput(
                             controller: _usernameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Username',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
+                            label: 'Username',
+                            prefixIcon: const Icon(Icons.person_outline, size: 18),
                             textInputAction: TextInputAction.next,
                             validator: (v) =>
                                 v == null || v.isEmpty ? 'Username wajib diisi' : null,
                           ),
-                          const SizedBox(height: 16),
-                          TextFormField(
+                          const SizedBox(height: AppSpacing.md),
+                          AppInput(
                             controller: _passwordController,
+                            label: 'Password',
                             obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: AppColors.textMuted,
-                                  size: 20,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _obscurePassword = !_obscurePassword),
+                            prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 18,
                               ),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
                             ),
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _login(),
-                            validator: (v) =>
-                                v == null || v.isEmpty ? 'Password wajib diisi' : null,
+                            validator: (v) => v == null || v.isEmpty
+                                ? 'Password wajib diisi'
+                                : null,
                           ),
                           if (_error != null) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.md),
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(AppSpacing.md),
                               decoration: BoxDecoration(
-                                color: AppColors.errorBg,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.errorBorder),
+                                color: AppColors.dangerSoft,
+                                borderRadius: AppRadius.md,
+                                border: Border.all(
+                                  color: AppColors.dangerText.withValues(alpha: 0.3),
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(Icons.error_outline,
-                                      color: AppColors.error, size: 18),
-                                  const SizedBox(width: 10),
+                                      color: AppColors.dangerText, size: 18),
+                                  const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(
                                       _error!,
-                                      style: AppTextStyles.bodySmall
-                                          .copyWith(color: AppColors.error),
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: AppColors.dangerText,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ],
-                          const SizedBox(height: 28),
-                          SizedBox(
-                            height: 50,
-                            child: FilledButton.icon(
-                              onPressed: _isLoading ? null : _login,
-                              icon: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : const Icon(Icons.login),
-                              label: Text(_isLoading ? 'Masuk...' : 'Masuk'),
-                            ),
+                          const SizedBox(height: AppSpacing.lg),
+                          AppButton(
+                            label: _isLoading ? 'Masuk…' : 'Masuk',
+                            icon: Icons.login,
+                            isLoading: _isLoading,
+                            isFullWidth: true,
+                            onPressed: _login,
                           ),
                         ],
                       ),

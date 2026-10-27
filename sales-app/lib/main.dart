@@ -20,10 +20,16 @@ import 'presentation/providers/bulletin_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/bulletin/bulletin_screen.dart';
+
+// Shared datetime utilities
+import 'package:datetime_utils/datetime_utils.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Locale data harus diinisialisasi sebelum NumberFormat/DateFormat dengan locale kustom.
+  // Initialize locale data for intl
   await initializeDateFormatting('id_ID', null);
+  // Initialize timezone database for datetime_utils
+  initTimezone();
   runApp(const SalesApp());
 }
 

@@ -109,11 +109,15 @@ def _read_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
     return rows
 
 
-def _validate_row(row_num: int, sku: str, nama_produk: str, harga: Any, good: Any) -> str | None:
+def _validate_row(
+    row_num: int, sku: str, nama_produk: str, harga: Any, good: Any, supplier: str | None
+) -> str | None:
     if not sku or not str(sku).strip():
         return "Kolom 'CCODE' kosong. Wajib diisi dengan kode produk unik."
     if not nama_produk or not str(nama_produk).strip():
         return "Kolom 'NAME ITEM' kosong. Wajib diisi dengan nama produk."
+    if not supplier:
+        return "Kolom 'LAST SUPPLIER' kosong. Produk tanpa supplier ditolak."
     if harga is not None:
         try:
             int(harga)
@@ -197,7 +201,7 @@ def sync_products_from_excel(
 
         nama_supplier_norm = normalize_supplier_name(row.get("LAST SUPPLIER"))
 
-        error = _validate_row(row_num, sku, nama_produk, harga_raw, good_raw)
+        error = _validate_row(row_num, sku, nama_produk, harga_raw, good_raw, nama_supplier_norm)
         if error:
             validation_errors.append({"row": row_num, "sku": sku, "reason": error})
             skipped += 1

@@ -32,7 +32,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _loading = true;
       _error = null;
     });
-    final order = await context.read<OrderProvider>().getOrderDetail(widget.orderId);
+    final order = await context.read<OrderProvider>().getOrderDetail(
+      widget.orderId,
+    );
     if (!mounted) return;
     setState(() {
       _order = order;
@@ -50,13 +52,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       body: _loading
           ? const _OrderDetailSkeleton()
           : _order == null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error ?? 'Order tidak ditemukan'),
-                  ),
-                )
-              : _OrderDetailContent(order: _order!),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error ?? 'Order tidak ditemukan'),
+              ),
+            )
+          : _OrderDetailContent(order: _order!),
     );
   }
 }
@@ -80,9 +82,10 @@ class _OrderDetailSkeletonState extends State<_OrderDetailSkeleton>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 0.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -179,7 +182,8 @@ class _OrderDetailContent extends StatelessWidget {
     }
     if (item.hasUpPrice) {
       if ((item.upPriceType).toUpperCase() == 'PERCENT') {
-        final label = (item.upPricePercent == item.upPricePercent.roundToDouble())
+        final label =
+            (item.upPricePercent == item.upPricePercent.roundToDouble())
             ? '${item.upPricePercent.round()}%'
             : '${item.upPricePercent}%';
         parts.add('Up Price: $label');
@@ -192,7 +196,11 @@ class _OrderDetailContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final currency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
     final dateFmt = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
     return ListView(
@@ -207,7 +215,10 @@ class _OrderDetailContent extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(_statusIcon(order.status), color: _statusFgColor(order.status)),
+              Icon(
+                _statusIcon(order.status),
+                color: _statusFgColor(order.status),
+              ),
               const SizedBox(width: 8),
               Text(
                 'Status: ${order.statusLabel}',
@@ -219,7 +230,9 @@ class _OrderDetailContent extends StatelessWidget {
             ],
           ),
         ),
-        if (order.status == 'REJECTED' && order.rejectReason != null && order.rejectReason!.isNotEmpty) ...[
+        if (order.status == 'REJECTED' &&
+            order.rejectReason != null &&
+            order.rejectReason!.isNotEmpty) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
@@ -231,12 +244,18 @@ class _OrderDetailContent extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline, size: 16, color: AppColors.error),
+                const Icon(
+                  Icons.info_outline,
+                  size: 16,
+                  color: AppColors.error,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Alasan penolakan: ${order.rejectReason}',
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.error,
+                    ),
                   ),
                 ),
               ],
@@ -250,7 +269,9 @@ class _OrderDetailContent extends StatelessWidget {
             children: [
               Text(
                 'Tanggal: ${dateFmt.format(order.createdAt)}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(width: 8),
               _OrderTypeChip(orderType: order.orderType),
@@ -274,26 +295,39 @@ class _OrderDetailContent extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.store_outlined, size: 18, color: AppColors.textSecondary),
+                  const Icon(
+                    Icons.store_outlined,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       order.customerName ?? order.storeName ?? '—',
-                      style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
-              if (order.storeAddress != null && order.storeAddress!.isNotEmpty) ...[
+              if (order.storeAddress != null &&
+                  order.storeAddress!.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 18, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         order.storeAddress!,
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -328,7 +362,8 @@ class _OrderDetailContent extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              order.items![i].namaBarang ?? order.items![i].productId,
+                              order.items![i].namaBarang ??
+                                  order.items![i].productId,
                               style: AppTextStyles.bodyMedium,
                             ),
                             if (order.items![i].hasDiscount)
@@ -341,8 +376,12 @@ class _OrderDetailContent extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Text('× ${order.items![i].qty}',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        '× ${order.items![i].qty}',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       if (order.items![i].hasDiscount)
                         Column(
@@ -350,7 +389,9 @@ class _OrderDetailContent extends StatelessWidget {
                           children: [
                             Text(
                               currency.format(
-                                  (order.items![i].hargaSatuan ?? 0) * order.items![i].qty),
+                                (order.items![i].hargaSatuan ?? 0) *
+                                    order.items![i].qty,
+                              ),
                               style: AppTextStyles.bodySmall.copyWith(
                                 color: AppColors.textMuted,
                                 decoration: TextDecoration.lineThrough,
@@ -368,7 +409,9 @@ class _OrderDetailContent extends StatelessWidget {
                       else
                         Text(
                           currency.format(order.items![i].subtotal),
-                          style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                     ],
                   ),
@@ -393,13 +436,18 @@ class _OrderDetailContent extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < order.cancelledItems.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, indent: 14, endIndent: 14),
+                  if (i > 0)
+                    const Divider(height: 1, indent: 14, endIndent: 14),
                   Padding(
                     padding: const EdgeInsets.all(14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.cancel, size: 16, color: AppColors.error),
+                        const Icon(
+                          Icons.cancel,
+                          size: 16,
+                          color: AppColors.error,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -427,9 +475,14 @@ class _OrderDetailContent extends StatelessWidget {
                               ],
                               const SizedBox(height: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.error.withValues(alpha: 0.12),
+                                  color: AppColors.error.withValues(
+                                    alpha: 0.12,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -472,7 +525,9 @@ class _OrderDetailContent extends StatelessWidget {
                         const Text('Diskon', style: AppTextStyles.bodyMedium),
                         Text(
                           '- ${currency.format(order.totalDiscount)}',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.success,
+                          ),
                         ),
                       ],
                     ),
@@ -486,7 +541,9 @@ class _OrderDetailContent extends StatelessWidget {
                         const Text('Up Price', style: AppTextStyles.bodyMedium),
                         Text(
                           '+ ${currency.format(order.totalUpPrice)}',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.warning),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.warning,
+                          ),
                         ),
                       ],
                     ),
@@ -510,7 +567,9 @@ class _OrderDetailContent extends StatelessWidget {
               const Text('Total', style: AppTextStyles.bodyLarge),
               Text(
                 currency.format(order.totalPrice),
-                style: AppTextStyles.headlineSmall.copyWith(color: AppColors.primaryLight),
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.primaryLight,
+                ),
               ),
             ],
           ),
@@ -540,7 +599,9 @@ class _OrderDetailContent extends StatelessWidget {
             onPressed: () => _enterEditFlow(context, order),
             icon: const Icon(Icons.edit_outlined, size: 18),
             label: Text(order.isPending ? 'Edit Order' : 'Edit Draft'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+            ),
           ),
         if (order.canDelete) ...[
           const SizedBox(height: 8),
@@ -553,9 +614,7 @@ class _OrderDetailContent extends StatelessWidget {
               size: 18,
               color: AppColors.error,
             ),
-            label: Text(
-              order.isPending ? 'Batalkan Order' : 'Hapus Order',
-            ),
+            label: Text(order.isPending ? 'Batalkan Order' : 'Hapus Order'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.error,
               minimumSize: const Size.fromHeight(44),
@@ -574,13 +633,15 @@ class _OrderDetailContent extends StatelessWidget {
     int idx = 0;
     if (order.items != null) {
       for (final item in order.items!) {
-        lines.add(OrderLine(
-          id: 'rehydrated_${idx++}',
-          productId: item.productId,
-          qty: item.qty,
-          discount: ItemDiscount.fromOrderItem(item),
-          upPrice: ItemUpPrice.fromOrderItem(item),
-        ));
+        lines.add(
+          OrderLine(
+            id: 'rehydrated_${idx++}',
+            productId: item.productId,
+            qty: item.qty,
+            discount: ItemDiscount.fromOrderItem(item),
+            upPrice: ItemUpPrice.fromOrderItem(item),
+          ),
+        );
         // Simpan harga ke cache supaya total di review step terhitung.
         if (item.hargaSatuan != null && item.hargaSatuan! > 0) {
           prices[item.productId] = item.hargaSatuan!;
@@ -588,22 +649,30 @@ class _OrderDetailContent extends StatelessWidget {
       }
     }
     context.read<DraftOrderProvider>().loadFromExisting(
-          orderId: order.id,
-          customerId: order.customerId ?? '',
-          customerName: order.customerName ?? order.storeName ?? '',
-          customerAddress: order.storeAddress,
-          existingLines: lines,
-          existingNotes: order.notes ?? '',
-          existingStatus: order.status,
-          existingOrderType: order.orderType,
-          prices: prices,
-        );
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const OrderFlowScreen(),
-        fullscreenDialog: true,
-      ),
+      orderId: order.id,
+      customerId: order.customerId ?? '',
+      customerName: order.customerName ?? order.storeName ?? '',
+      customerAddress: order.storeAddress,
+      existingLines: lines,
+      existingNotes: order.notes ?? '',
+      existingStatus: order.status,
+      existingOrderType: order.orderType,
+      prices: prices,
     );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => const OrderFlowScreen(),
+            fullscreenDialog: true,
+          ),
+        )
+        .then((_) {
+          // Refresh state setelah route popped sehingga banner/summary sesuai backend
+          // dan tidak ada data stale.
+          if (context.mounted) {
+            context.read<OrderProvider>().loadOrders();
+          }
+        });
   }
 
   Future<void> _confirmAndDelete(BuildContext context, Order order) async {
@@ -712,34 +781,49 @@ class _OrderDetailContent extends StatelessWidget {
 
   Color _statusBgColor(String status) {
     switch (status) {
-      case 'DRAFT': return AppColors.warningBg;
-      case 'PENDING': return AppColors.infoBg;
-      case 'APPROVED': return AppColors.successBg;
+      case 'DRAFT':
+        return AppColors.warningBg;
+      case 'PENDING':
+        return AppColors.infoBg;
+      case 'APPROVED':
+        return AppColors.successBg;
       case 'CANCELLED':
-      case 'REJECTED': return AppColors.errorBg;
-      default: return AppColors.borderLight;
+      case 'REJECTED':
+        return AppColors.errorBg;
+      default:
+        return AppColors.borderLight;
     }
   }
 
   Color _statusFgColor(String status) {
     switch (status) {
-      case 'DRAFT': return AppColors.warning;
-      case 'PENDING': return AppColors.info;
-      case 'APPROVED': return AppColors.success;
+      case 'DRAFT':
+        return AppColors.warning;
+      case 'PENDING':
+        return AppColors.info;
+      case 'APPROVED':
+        return AppColors.success;
       case 'CANCELLED':
-      case 'REJECTED': return AppColors.error;
-      default: return AppColors.textSecondary;
+      case 'REJECTED':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondary;
     }
   }
 
   IconData _statusIcon(String status) {
     switch (status) {
-      case 'DRAFT': return Icons.edit_note;
-      case 'PENDING': return Icons.hourglass_top;
-      case 'APPROVED': return Icons.check_circle;
+      case 'DRAFT':
+        return Icons.edit_note;
+      case 'PENDING':
+        return Icons.hourglass_top;
+      case 'APPROVED':
+        return Icons.check_circle;
       case 'CANCELLED':
-      case 'REJECTED': return Icons.cancel;
-      default: return Icons.info_outline;
+      case 'REJECTED':
+        return Icons.cancel;
+      default:
+        return Icons.info_outline;
     }
   }
 }
@@ -751,22 +835,9 @@ class _OrderTypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final is4P = orderType == '4P';
-    final color = is4P ? AppColors.warning : AppColors.info;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        orderType,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-        ),
-      ),
+    return AppBadge(
+      label: orderType,
+      variant: is4P ? AppBadgeVariant.warning : AppBadgeVariant.info,
     );
   }
 }

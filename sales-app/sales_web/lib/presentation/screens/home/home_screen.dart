@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/branch.dart';
 import '../../../core/design_system.dart';
+import '../../../core/design_system/widgets/app_components.dart';
 import '../../../core/datetime_utils.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_stats_provider.dart';
@@ -56,7 +57,9 @@ class HomeScreen extends StatelessWidget {
                             ),
                             if (auth.branchNama != null || auth.branch != null)
                               Text(
-                                auth.branchNama ?? BranchLabel.display(auth.branch) ?? '',
+                                auth.branchNama ??
+                                    BranchLabel.display(auth.branch) ??
+                                    '',
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: AppColors.primaryLight,
                                 ),
@@ -83,10 +86,9 @@ class HomeScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Order Terbaru', style: AppTextStyles.headlineSmall),
+                  child: AppPageHeader(
+                    title: 'Order Terbaru',
+                    actions: [
                       TextButton(
                         onPressed: () {},
                         child: const Text('Lihat Semua'),
@@ -124,13 +126,10 @@ class HomeScreen extends StatelessWidget {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final order = orders.recentOrders[index];
-                        return _buildOrderCard(context, order);
-                      },
-                      childCount: orders.recentOrders.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final order = orders.recentOrders[index];
+                      return _buildOrderCard(context, order);
+                    }, childCount: orders.recentOrders.length),
                   ),
                 ),
 
@@ -158,7 +157,10 @@ class HomeScreen extends StatelessWidget {
               child: _StatCard(
                 title: 'Omset Hari Ini',
                 value: s != null ? 'Rp ${idr.format(s.omsetHariIni)}' : '-',
-                icon: Icons.payments_outlined,
+                subtitle: s != null
+                    ? '${s.approvedCountToday} order'
+                    : null,
+                icon: Icons.monetization_on_outlined,
                 color: AppColors.success,
                 bgColor: AppColors.successBg,
               ),
@@ -168,7 +170,10 @@ class HomeScreen extends StatelessWidget {
               child: _StatCard(
                 title: 'Menunggu',
                 value: s != null ? '${s.pendingCount}' : '-',
-                icon: Icons.hourglass_empty,
+                extra: s != null
+                    ? 'Rp ${idr.format(s.pendingValue)}'
+                    : null,
+                icon: Icons.hourglass_top_outlined,
                 color: AppColors.info,
                 bgColor: AppColors.infoBg,
               ),
@@ -220,9 +225,7 @@ class HomeScreen extends StatelessWidget {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OrderDetailScreen(order: order),
-            ),
+            MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
           );
         },
         borderRadius: BorderRadius.circular(16),

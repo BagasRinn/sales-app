@@ -62,9 +62,7 @@ class _ProductsTabState extends State<ProductsTab> {
     final products = context.select<AdminProvider, List<Product>>(
       (p) => p.products,
     );
-    final isLoading = context.select<AdminProvider, bool>(
-      (p) => p.isLoading,
-    );
+    final isLoading = context.select<AdminProvider, bool>((p) => p.isLoading);
     final productTotal = context.select<AdminProvider, int>(
       (p) => p.productTotal,
     );
@@ -108,7 +106,9 @@ class _ProductsTabState extends State<ProductsTab> {
                               )
                             : null,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         isDense: true,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -122,7 +122,10 @@ class _ProductsTabState extends State<ProductsTab> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.background,
                       borderRadius: BorderRadius.circular(8),
@@ -143,14 +146,26 @@ class _ProductsTabState extends State<ProductsTab> {
                   if (isNarrow) {
                     return Column(
                       children: [
-                        _buildFilterDropdowns(provider, selectedSupplier, selectedStatus, selectedOrderType),
+                        _buildFilterDropdowns(
+                          provider,
+                          selectedSupplier,
+                          selectedStatus,
+                          selectedOrderType,
+                        ),
                       ],
                     );
                   }
-                  return _buildFilterDropdowns(provider, selectedSupplier, selectedStatus, selectedOrderType);
+                  return _buildFilterDropdowns(
+                    provider,
+                    selectedSupplier,
+                    selectedStatus,
+                    selectedOrderType,
+                  );
                 },
               ),
-              if (selectedSupplier != null || selectedStatus != null || selectedOrderType != null) ...[
+              if (selectedSupplier != null ||
+                  selectedStatus != null ||
+                  selectedOrderType != null) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
@@ -163,7 +178,8 @@ class _ProductsTabState extends State<ProductsTab> {
                     if (selectedStatus != null)
                       _FilterChip(
                         label: _statusOptions.firstWhere(
-                            (s) => s['value'] == selectedStatus)['label']!,
+                          (s) => s['value'] == selectedStatus,
+                        )['label']!,
                         onClear: () => provider.setStatusFilter(null),
                       ),
                     if (selectedOrderType != null)
@@ -183,31 +199,33 @@ class _ProductsTabState extends State<ProductsTab> {
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : products.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.inventory_2_outlined,
-                              size: 48,
-                              color: AppColors.textMuted.withValues(alpha: 0.4)),
-                          const SizedBox(height: 16),
-                          Text(
-                            _searchQuery.isNotEmpty
-                                ? 'Produk tidak ditemukan'
-                                : 'Tidak ada produk',
-                            style: AppTextStyles.bodyMedium,
-                          ),
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 48,
+                        color: AppColors.textMuted.withValues(alpha: 0.4),
                       ),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final resp = Responsive.of(constraints.maxWidth);
-                        return resp.isMobile
-                            ? _buildCardList(products)
-                            : _buildTable(products);
-                      },
-                    ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'Produk tidak ditemukan'
+                            : 'Tidak ada produk',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ],
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final resp = Responsive.of(constraints.maxWidth);
+                    return resp.isMobile
+                        ? _buildCardList(products)
+                        : _buildTable(products);
+                  },
+                ),
         ),
         // Pagination
         Container(
@@ -258,7 +276,9 @@ class _ProductsTabState extends State<ProductsTab> {
             decoration: InputDecoration(
               hintText: 'Supplier',
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+                horizontal: 12,
+                vertical: 10,
+              ),
               isDense: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -267,11 +287,15 @@ class _ProductsTabState extends State<ProductsTab> {
             isExpanded: true,
             items: [
               const DropdownMenuItem(
-                  value: null, child: Text('Semua Supplier')),
-              ..._supplierList.map((s) => DropdownMenuItem(
-                    value: s,
-                    child: Text(s, overflow: TextOverflow.ellipsis),
-                  )),
+                value: null,
+                child: Text('Semua Supplier'),
+              ),
+              ..._supplierList.map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(s, overflow: TextOverflow.ellipsis),
+                ),
+              ),
             ],
             onChanged: (v) => provider.setSupplierFilter(v),
           ),
@@ -284,7 +308,9 @@ class _ProductsTabState extends State<ProductsTab> {
             decoration: InputDecoration(
               hintText: 'Status',
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+                horizontal: 12,
+                vertical: 10,
+              ),
               isDense: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -292,12 +318,13 @@ class _ProductsTabState extends State<ProductsTab> {
             ),
             isExpanded: true,
             items: [
-              const DropdownMenuItem(
-                  value: null, child: Text('Semua Status')),
-              ..._statusOptions.map((s) => DropdownMenuItem(
-                    value: s['value'],
-                    child: Text(s['label']!),
-                  )),
+              const DropdownMenuItem(value: null, child: Text('Semua Status')),
+              ..._statusOptions.map(
+                (s) => DropdownMenuItem(
+                  value: s['value'],
+                  child: Text(s['label']!),
+                ),
+              ),
             ],
             onChanged: (v) => provider.setStatusFilter(v),
           ),
@@ -310,7 +337,9 @@ class _ProductsTabState extends State<ProductsTab> {
             decoration: InputDecoration(
               hintText: 'Tipe Order',
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+                horizontal: 12,
+                vertical: 10,
+              ),
               isDense: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -318,12 +347,13 @@ class _ProductsTabState extends State<ProductsTab> {
             ),
             isExpanded: true,
             items: [
-              const DropdownMenuItem(
-                  value: null, child: Text('Semua Tipe')),
-              ..._orderTypeOptions.map((s) => DropdownMenuItem(
-                    value: s['value'],
-                    child: Text(s['label']!),
-                  )),
+              const DropdownMenuItem(value: null, child: Text('Semua Tipe')),
+              ..._orderTypeOptions.map(
+                (s) => DropdownMenuItem(
+                  value: s['value'],
+                  child: Text(s['label']!),
+                ),
+              ),
             ],
             onChanged: (v) => provider.setOrderTypeFilter(v),
           ),
@@ -332,20 +362,26 @@ class _ProductsTabState extends State<ProductsTab> {
     );
   }
 
-
   Widget _buildCardList(List<Product> products) {
     final fmtCurrency = NumberFormat.currency(
-        locale: 'id_ID', symbol: '', decimalDigits: 0);
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final resp = Responsive.of(constraints.maxWidth);
         // 1 kolom di compact, 2 di medium, 3 di expanded.
-        final columns = resp.isMobile ? 1 : resp.isTablet ? 2 : 3;
+        final columns = resp.isMobile
+            ? 1
+            : resp.isTablet
+            ? 2
+            : 3;
         const gap = 12.0;
         const hPadding = 12.0;
         final cardWidth =
             (constraints.maxWidth - 2 * hPadding - (columns - 1) * gap) /
-                columns;
+            columns;
         return SingleChildScrollView(
           padding: const EdgeInsets.all(hPadding),
           child: Wrap(
@@ -382,8 +418,8 @@ class _ProductsTabState extends State<ProductsTab> {
             status == 'habis'
                 ? 'Habis'
                 : status == 'rendah'
-                    ? 'Rendah'
-                    : 'Tersedia',
+                ? 'Rendah'
+                : 'Tersedia',
             style: TextStyle(
               color: statusColor,
               fontSize: 11,
@@ -393,14 +429,8 @@ class _ProductsTabState extends State<ProductsTab> {
         ),
       ],
       fields: [
-        DataField(
-          label: 'Harga',
-          value: 'Rp ${fmtCurrency.format(p.harga)}',
-        ),
-        DataField(
-          label: 'Stok Tersedia',
-          value: '${p.stokTersedia}',
-        ),
+        DataField(label: 'Harga', value: 'Rp ${fmtCurrency.format(p.harga)}'),
+        DataField(label: 'Stok Tersedia', value: '${p.stokTersedia}'),
         DataField(
           label: 'Supplier',
           value: (p.namaSupplier != null && p.namaSupplier!.isNotEmpty)
@@ -441,7 +471,19 @@ class _ProductsTabState extends State<ProductsTab> {
         final availW = constraints.maxWidth;
         // Kolom: SKU | Nama | Kategori | Tipe | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
         // fixedW tanpa aksi = [sku, ktgr, tipe, harga, stok, stok, stok, stok, sat, supp, cabang]
-        const fixedW = [140.0, 120.0, 80.0, 100.0, 100.0, 100.0, 100.0, 70.0, 200.0, 130.0, 90.0];
+        const fixedW = [
+          140.0,
+          120.0,
+          80.0,
+          100.0,
+          100.0,
+          100.0,
+          100.0,
+          70.0,
+          200.0,
+          130.0,
+          90.0,
+        ];
         // Total fixed tanpa aksi
         const fixedTotal = 1420.0; // sum of first 11 items
         const aksiWidth = 90.0;
@@ -486,7 +528,10 @@ class _ProductsTabState extends State<ProductsTab> {
                   child: ListView.separated(
                     itemCount: products.length,
                     separatorBuilder: (ctx, idx) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) => _DataRow(products[i], colW, totalW,
+                    itemBuilder: (ctx, i) => _DataRow(
+                      products[i],
+                      colW,
+                      totalW,
                       onShowStock: (p) => _showStockDialog(context, p),
                       onShowEdit: (p) => _showEditDialog(context, p),
                       onConfirmDelete: (p) => _confirmDelete(context, p),
@@ -503,8 +548,9 @@ class _ProductsTabState extends State<ProductsTab> {
   }
 
   Future<void> _showStockDialog(BuildContext context, Product product) async {
-    final controller =
-        TextEditingController(text: product.stokSistem.toString());
+    final controller = TextEditingController(
+      text: product.stokSistem.toString(),
+    );
 
     final result = await showDialog<int>(
       context: context,
@@ -531,10 +577,14 @@ class _ProductsTabState extends State<ProductsTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Ubah Stok Sistem',
-                            style: AppTextStyles.headlineSmall),
-                        Text('Manual override stok produk',
-                            style: AppTextStyles.bodySmall),
+                        Text(
+                          'Ubah Stok Sistem',
+                          style: AppTextStyles.headlineSmall,
+                        ),
+                        Text(
+                          'Manual override stok produk',
+                          style: AppTextStyles.bodySmall,
+                        ),
                       ],
                     ),
                   ),
@@ -577,13 +627,22 @@ class _ProductsTabState extends State<ProductsTab> {
                 child: Row(
                   children: [
                     _infoPill(
-                        'Booking', '${product.stokBooking}', AppColors.info),
+                      'Booking',
+                      '${product.stokBooking}',
+                      AppColors.info,
+                    ),
                     const SizedBox(width: 8),
-                    _infoPill('Diterima',
-                        '${product.stokDiterima}', AppColors.info),
+                    _infoPill(
+                      'Diterima',
+                      '${product.stokDiterima}',
+                      AppColors.info,
+                    ),
                     const SizedBox(width: 8),
-                    _infoPill('Tersedia',
-                        '${product.stokTersedia}', AppColors.warning),
+                    _infoPill(
+                      'Tersedia',
+                      '${product.stokTersedia}',
+                      AppColors.warning,
+                    ),
                   ],
                 ),
               ),
@@ -604,7 +663,8 @@ class _ProductsTabState extends State<ProductsTab> {
                         if (value == null || value < 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Masukkan angka yang valid')),
+                              content: Text('Masukkan angka yang valid'),
+                            ),
                           );
                           return;
                         }
@@ -622,9 +682,10 @@ class _ProductsTabState extends State<ProductsTab> {
     );
 
     if (result != null && context.mounted) {
-      final success = await context
-          .read<AdminProvider>()
-          .overrideStock(product.id, result);
+      final success = await context.read<AdminProvider>().overrideStock(
+        product.id,
+        result,
+      );
       if (success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -667,16 +728,20 @@ class _ProductsTabState extends State<ProductsTab> {
                         color: AppColors.infoBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.edit_outlined,
-                          color: AppColors.info),
+                      child: const Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.info,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Edit Produk',
-                              style: AppTextStyles.headlineSmall),
+                          Text(
+                            'Edit Produk',
+                            style: AppTextStyles.headlineSmall,
+                          ),
                           Text(
                             '${product.namaBarang} (SKU: ${product.id})',
                             style: AppTextStyles.bodySmall,
@@ -713,29 +778,28 @@ class _ProductsTabState extends State<ProductsTab> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('Tipe Order',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary)),
+                Text(
+                  'Tipe Order',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     Expanded(
-                      child: ChoiceChip(
-                        label: const Text('REGULER'),
+                      child: AppChoiceChip(
+                        label: 'REGULER',
                         selected: orderType == 'REGULER',
-                        onSelected: (sel) {
-                          if (sel) setState(() => orderType = 'REGULER');
-                        },
+                        onSelected: () => setState(() => orderType = 'REGULER'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: ChoiceChip(
-                        label: const Text('4P'),
+                      child: AppChoiceChip(
+                        label: '4P',
                         selected: orderType == '4P',
-                        onSelected: (sel) {
-                          if (sel) setState(() => orderType = '4P');
-                        },
+                        onSelected: () => setState(() => orderType = '4P'),
                       ),
                     ),
                   ],
@@ -768,13 +832,17 @@ class _ProductsTabState extends State<ProductsTab> {
     if (saved != true || !context.mounted) return;
 
     try {
-      final updated = await context.read<AdminProvider>().adminRepository.updateProduct(
+      final updated = await context
+          .read<AdminProvider>()
+          .adminRepository
+          .updateProduct(
             product.id,
             kategori: kategoriCtl.text.trim().isEmpty
                 ? null
                 : kategoriCtl.text.trim(),
-            satuan:
-                satuanCtl.text.trim().isEmpty ? null : satuanCtl.text.trim(),
+            satuan: satuanCtl.text.trim().isEmpty
+                ? null
+                : satuanCtl.text.trim(),
             namaSupplier: supplierCtl.text.trim().isEmpty
                 ? null
                 : supplierCtl.text.trim(),
@@ -787,9 +855,7 @@ class _ProductsTabState extends State<ProductsTab> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text('Produk ${updated.id} diperbarui'),
-              ),
+              Expanded(child: Text('Produk ${updated.id} diperbarui')),
             ],
           ),
           backgroundColor: AppColors.success,
@@ -821,9 +887,7 @@ class _ProductsTabState extends State<ProductsTab> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Hapus'),
           ),
         ],
@@ -832,8 +896,9 @@ class _ProductsTabState extends State<ProductsTab> {
 
     if (confirmed != true || !context.mounted) return;
 
-    final success =
-        await context.read<AdminProvider>().deleteProduct(product.id);
+    final success = await context.read<AdminProvider>().deleteProduct(
+      product.id,
+    );
     if (success && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -850,8 +915,10 @@ class _ProductsTabState extends State<ProductsTab> {
     } else if (!success && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.read<AdminProvider>().errorMessage ??
-              'Gagal menghapus produk'),
+          content: Text(
+            context.read<AdminProvider>().errorMessage ??
+                'Gagal menghapus produk',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -894,8 +961,35 @@ class _TableHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     // Urutan: SKU | Nama | Kategori | Harga | Stok Sistem | Stok Booking | Stok Diterima | Stok Tersedia | Satuan | Supplier | Cabang | Aksi
     final labels = readOnly
-        ? ['SKU', 'Nama', 'Kategori', 'Tipe', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang']
-        : ['SKU', 'Nama', 'Kategori', 'Tipe', 'Harga', 'Stok Sistem', 'Stok Booking', 'Stok Diterima', 'Stok Tersedia', 'Satuan', 'Supplier', 'Cabang', 'Aksi'];
+        ? [
+            'SKU',
+            'Nama',
+            'Kategori',
+            'Tipe',
+            'Harga',
+            'Stok Sistem',
+            'Stok Booking',
+            'Stok Diterima',
+            'Stok Tersedia',
+            'Satuan',
+            'Supplier',
+            'Cabang',
+          ]
+        : [
+            'SKU',
+            'Nama',
+            'Kategori',
+            'Tipe',
+            'Harga',
+            'Stok Sistem',
+            'Stok Booking',
+            'Stok Diterima',
+            'Stok Tersedia',
+            'Satuan',
+            'Supplier',
+            'Cabang',
+            'Aksi',
+          ];
     final colsToRender = readOnly ? colW.length - 1 : colW.length;
     return SizedBox(
       width: totalW,
@@ -937,16 +1031,26 @@ class _DataRow extends StatelessWidget {
   final void Function(Product) onConfirmDelete;
   final bool readOnly;
 
-  const _DataRow(this.product, this.colW, this.totalW,
-      {required this.onShowStock,
-      required this.onShowEdit,
-      required this.onConfirmDelete,
-      this.readOnly = false});
+  const _DataRow(
+    this.product,
+    this.colW,
+    this.totalW, {
+    required this.onShowStock,
+    required this.onShowEdit,
+    required this.onConfirmDelete,
+    this.readOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = stockStatusColor(stockStatusFromValue(product.stokTersedia));
-    final fmtCurrency = NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
+    final statusColor = stockStatusColor(
+      stockStatusFromValue(product.stokTersedia),
+    );
+    final fmtCurrency = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    );
     final isReadOnly = readOnly;
 
     final cells = <Widget>[
@@ -955,7 +1059,13 @@ class _DataRow extends StatelessWidget {
         width: colW[0],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.id, style: AppTextStyles.mono.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+          child: Text(
+            product.id,
+            style: AppTextStyles.mono.copyWith(fontSize: 12),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
       // 1: Nama
@@ -963,7 +1073,15 @@ class _DataRow extends StatelessWidget {
         width: colW[1],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.namaBarang, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600), maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+          child: Text(
+            product.namaBarang,
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
       // 2: Kategori
@@ -971,7 +1089,12 @@ class _DataRow extends StatelessWidget {
         width: colW[2],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.kategori ?? '-', maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+          child: Text(
+            product.kategori ?? '-',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
       // 3: Tipe Order (REGULER / 4P)
@@ -983,10 +1106,11 @@ class _DataRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: (product.orderType == '4P'
-                        ? AppColors.info
-                        : AppColors.textMuted)
-                    .withValues(alpha: 0.12),
+                color:
+                    (product.orderType == '4P'
+                            ? AppColors.info
+                            : AppColors.textMuted)
+                        .withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -1008,7 +1132,17 @@ class _DataRow extends StatelessWidget {
         width: colW[4],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Text(fmtCurrency.format(product.harga), textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AppColors.primaryLight, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+          child: Text(
+            fmtCurrency.format(product.harga),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.primaryLight,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
       // 5: Stok Sistem
@@ -1016,7 +1150,19 @@ class _DataRow extends StatelessWidget {
         width: colW[5],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text('${product.stokSistem}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: product.stokSistem < (product.stokBooking + product.stokDiterima) ? AppColors.error : null), maxLines: 2),
+          child: Text(
+            '${product.stokSistem}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color:
+                  product.stokSistem <
+                      (product.stokBooking + product.stokDiterima)
+                  ? AppColors.error
+                  : null,
+            ),
+            maxLines: 2,
+          ),
         ),
       ),
       // 6: Stok Booking
@@ -1024,7 +1170,12 @@ class _DataRow extends StatelessWidget {
         width: colW[6],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text('${product.stokBooking}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+          child: Text(
+            '${product.stokBooking}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+            maxLines: 2,
+          ),
         ),
       ),
       // 7: Stok Diterima
@@ -1032,7 +1183,12 @@ class _DataRow extends StatelessWidget {
         width: colW[7],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text('${product.stokDiterima}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+          child: Text(
+            '${product.stokDiterima}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+            maxLines: 2,
+          ),
         ),
       ),
       // 8: Stok Tersedia
@@ -1040,7 +1196,16 @@ class _DataRow extends StatelessWidget {
         width: colW[8],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text('${product.stokTersedia}', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: statusColor, fontWeight: FontWeight.w600), maxLines: 2),
+          child: Text(
+            '${product.stokTersedia}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: statusColor,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 2,
+          ),
         ),
       ),
       // 9: Satuan
@@ -1048,7 +1213,12 @@ class _DataRow extends StatelessWidget {
         width: colW[9],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.satuan ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13), maxLines: 2),
+          child: Text(
+            product.satuan ?? '-',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+            maxLines: 2,
+          ),
         ),
       ),
       // 10: Supplier
@@ -1056,7 +1226,13 @@ class _DataRow extends StatelessWidget {
         width: colW[10],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.namaSupplier ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12), maxLines: 3, overflow: TextOverflow.ellipsis),
+          child: Text(
+            product.namaSupplier ?? '-',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
       // 11: Cabang
@@ -1064,7 +1240,13 @@ class _DataRow extends StatelessWidget {
         width: colW[11],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(product.branchNama ?? product.branch ?? '-', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11), maxLines: 3, overflow: TextOverflow.ellipsis),
+          child: Text(
+            product.branchNama ?? product.branch ?? '-',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
     ];
@@ -1111,40 +1293,9 @@ class _DataRow extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final VoidCallback onClear;
-  const _FilterChip({required this.label, required this.onClear});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: AppColors.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onClear,
-            child: Icon(Icons.close, size: 14, color: AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
+class _FilterChip extends AppRemovableChip {
+  const _FilterChip({required super.label, required VoidCallback onClear})
+    : super(onRemove: onClear);
 }
 
 Color stockStatusColor(String status) {

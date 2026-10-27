@@ -30,7 +30,7 @@ class Bulletin {
       description: json['description'] as String?,
       pdfUrl: json['pdf_url'] as String?,
       // Backend sudah kirim datetime dalam WITA (+08:00), langsung parse
-      expireAt: parseWitaIsoOrNull(json['expire_at'] as String),
+      expireAt: parseWitaIsoOrNull(json['expire_at'] as String?),
       createdAt: parseWitaIso(json['created_at'] as String),
       isRead: json['is_read'] as bool? ?? false,
       branch: json['branch'] as String?,

@@ -59,10 +59,11 @@ class Responsive {
   double get contentPadding => isMobile ? 12 : isTablet ? 16 : 24;
 
   /// Lebar sidebar tetap (desktop) atau nol (compact, karena nav pindah ke drawer).
-  double get sidebarWidth => isDesktop ? 240 : 0;
+  /// Harus sama dengan `AppShell` supaya konten tidak "geser" 16px.
+  double get sidebarWidth => isDesktop ? 256 : 0;
 
   /// Tinggi top bar. Mobile lebih pendek supaya tidak makan ruang layar kecil.
-  double get topBarHeight => isMobile ? 56 : 64;
+  double get topBarHeight => isMobile ? 56 : 60;
 
   /// Padding internal kartu. Lebih kecil di mobile supaya konten tidak terlalu
   /// sesak; lebih besar di desktop supaya kartu "bernapas".

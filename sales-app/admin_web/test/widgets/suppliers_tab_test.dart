@@ -12,27 +12,53 @@ class _FakeRepo extends AdminRepository {
   _FakeRepo() : super(ApiService());
   List<Supplier> data = [];
   @override
-  Future<List<Supplier>> getSuppliers({bool? active}) async => data;
+  Future<({List<Supplier> suppliers, int total})> getSuppliers({
+    bool? active,
+    String? search,
+    int skip = 0,
+    int limit = 20,
+  }) async {
+    var filtered = data;
+    if (active != null) {
+      filtered = filtered.where((s) => s.isActive == active).toList();
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      filtered = filtered
+          .where((s) => s.name.toLowerCase().contains(search.toLowerCase()))
+          .toList();
+    }
+    final total = filtered.length;
+    return (suppliers: filtered.skip(skip).take(limit).toList(), total: total);
+  }
+
   @override
-  Future<Supplier> createSupplier(String name, {String orderType = 'REGULER'}) async {
+  Future<Supplier> createSupplier(
+    String name, {
+    String orderType = 'REGULER',
+  }) async {
     final s = Supplier(name: name, isActive: true, orderType: orderType);
     data.add(s);
     return s;
   }
+
   @override
   Future<Supplier> updateSupplierActive(String name, bool isActive) async {
     final i = data.indexWhere((s) => s.name == name);
-    data[i] = Supplier(name: name, isActive: isActive, productCount: data[i].productCount);
+    data[i] = Supplier(
+      name: name,
+      isActive: isActive,
+      productCount: data[i].productCount,
+    );
     return data[i];
   }
 }
 
 Widget _harness(AdminProvider p) => MaterialApp(
-      home: ChangeNotifierProvider<AdminProvider>.value(
-        value: p,
-        child: const Scaffold(body: SuppliersTab()),
-      ),
-    );
+  home: ChangeNotifierProvider<AdminProvider>.value(
+    value: p,
+    child: const Scaffold(body: SuppliersTab()),
+  ),
+);
 
 void _setDesktop(WidgetTester tester) {
   tester.view.physicalSize = const Size(1400, 900);
@@ -58,16 +84,21 @@ void main() {
     expect(find.textContaining('Belum ada supplier'), findsOneWidget);
   });
 
-  testWidgets('empty state shows different message when search has no result',
-      (tester) async {
+  testWidgets('empty state shows different message when search has no result', (
+    tester,
+  ) async {
     final repo = _FakeRepo();
     final p = AdminProvider(repo);
     await tester.pumpWidget(_harness(p));
     await tester.pumpAndSettle();
     // Type a query that matches nothing.
     await tester.enterText(find.byType(TextField).first, 'zzzzz');
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Tidak ada supplier yang cocok'), findsOneWidget);
+    expect(
+      find.textContaining('Tidak ada supplier yang cocok'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Belum ada supplier'), findsNothing);
   });
 
@@ -81,12 +112,9 @@ void main() {
   testWidgets('counter pill shows total count', (tester) async {
     final repo = _FakeRepo();
     repo.data = List.generate(
-        122,
-        (i) => Supplier(
-              name: 'S$i',
-              isActive: true,
-              productCount: 0,
-            ));
+      122,
+      (i) => Supplier(name: 'S$i', isActive: true, productCount: 0),
+    );
     final p = AdminProvider(repo);
     await tester.pumpWidget(_harness(p));
     await tester.pumpAndSettle();
@@ -100,11 +128,14 @@ void main() {
     expect(find.byIcon(Icons.clear), findsNothing);
     await tester.enterText(find.byType(TextField).first, 'mulia');
     await tester.pumpAndSettle();
+    // AppSearchField uses IconButton with Icon(Icons.clear) inside suffixIcon.
+    // The clear icon becomes visible when text is non-empty.
     expect(find.byIcon(Icons.clear), findsOneWidget);
   });
 
-  testWidgets('filter chips (Semua / Aktif / Non-Aktif) are present',
-      (tester) async {
+  testWidgets('filter chips (Semua / Aktif / Non-Aktif) are present', (
+    tester,
+  ) async {
     final p = AdminProvider(_FakeRepo());
     await tester.pumpWidget(_harness(p));
     await tester.pumpAndSettle();
@@ -142,8 +173,9 @@ void main() {
     expect(find.text('Mulia'), findsOneWidget);
   });
 
-  testWidgets('desktop table header uses labelLarge + textSecondary',
-      (tester) async {
+  testWidgets('desktop table header uses labelLarge + textSecondary', (
+    tester,
+  ) async {
     _setDesktop(tester);
     final repo = _FakeRepo();
     repo.data = const [
@@ -175,8 +207,9 @@ void main() {
     expect(find.text('AKSI'), findsNothing);
   });
 
-  testWidgets('desktop table shows AKSI IconButton for MANAGER (not kebab)',
-      (tester) async {
+  testWidgets('desktop table shows AKSI IconButton for MANAGER (not kebab)', (
+    tester,
+  ) async {
     _setDesktop(tester);
     final repo = _FakeRepo();
     repo.data = const [
@@ -205,8 +238,9 @@ void main() {
     expect(hasRow60, isTrue);
   });
 
-  testWidgets('desktop table row text uses maxLines: 2 and ellipsis',
-      (tester) async {
+  testWidgets('desktop table row text uses maxLines: 2 and ellipsis', (
+    tester,
+  ) async {
     _setDesktop(tester);
     final repo = _FakeRepo();
     repo.data = const [

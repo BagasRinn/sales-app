@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import '../../core/config.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth_interceptor.dart';
@@ -14,12 +15,18 @@ class ApiService {
   Dio get dio => _dio;
 
   ApiService() {
-    _dio = Dio(BaseOptions(
-      baseUrl: AppConfig.baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      headers: {'Content-Type': 'application/json'},
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: AppConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Timezone-Offset-Minutes': DateTime.now().timeZoneOffset.inMinutes
+              .toString(),
+        },
+      ),
+    );
     _dio.interceptors.add(_authInterceptor);
   }
 
@@ -29,7 +36,9 @@ class ApiService {
   static const Duration _importReceiveTimeout = Duration(seconds: 180);
 
   void setTokens({String? access, String? refresh}) {
-    _dio.options.headers['Authorization'] = access != null ? 'Bearer $access' : null;
+    _dio.options.headers['Authorization'] = access != null
+        ? 'Bearer $access'
+        : null;
     _refreshToken = refresh;
   }
 
@@ -44,15 +53,25 @@ class ApiService {
   }
 
   bool get hasToken => _dio.options.headers['Authorization'] != null;
-  String? get accessToken => _dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '');
+  String? get accessToken => _dio.options.headers['Authorization']
+      ?.toString()
+      .replaceFirst('Bearer ', '');
   String? get refreshToken => _refreshToken;
 
-  Future<dynamic> get(String endpoint, {CancelToken? cancelToken, Duration? receiveTimeout}) async {
+  Future<dynamic> get(
+    String endpoint, {
+    CancelToken? cancelToken,
+    Duration? receiveTimeout,
+  }) async {
     try {
       final opts = receiveTimeout != null
           ? Options(receiveTimeout: receiveTimeout)
           : null;
-      final resp = await _dio.get(endpoint, cancelToken: cancelToken, options: opts);
+      final resp = await _dio.get(
+        endpoint,
+        cancelToken: cancelToken,
+        options: opts,
+      );
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -65,7 +84,11 @@ class ApiService {
     CancelToken? cancelToken,
   }) async {
     try {
-      final resp = await _dio.post(endpoint, data: body, cancelToken: cancelToken);
+      final resp = await _dio.post(
+        endpoint,
+        data: body,
+        cancelToken: cancelToken,
+      );
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -78,7 +101,11 @@ class ApiService {
     CancelToken? cancelToken,
   }) async {
     try {
-      final resp = await _dio.put(endpoint, data: body, cancelToken: cancelToken);
+      final resp = await _dio.put(
+        endpoint,
+        data: body,
+        cancelToken: cancelToken,
+      );
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -91,7 +118,11 @@ class ApiService {
     CancelToken? cancelToken,
   }) async {
     try {
-      final resp = await _dio.patch(endpoint, data: body, cancelToken: cancelToken);
+      final resp = await _dio.patch(
+        endpoint,
+        data: body,
+        cancelToken: cancelToken,
+      );
       return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -106,10 +137,7 @@ class ApiService {
   }) async {
     try {
       final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
-          fileBytes,
-          filename: fileName,
-        ),
+        'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
       });
       // Override Content-Type for multipart
       final resp = await _dio.post(
@@ -118,7 +146,9 @@ class ApiService {
         cancelToken: cancelToken,
         options: Options(
           headers: {'Content-Type': 'multipart/form-data'},
-          receiveTimeout: endpoint.contains('/import-excel')
+          receiveTimeout:
+              (endpoint.contains('/import-excel') ||
+                  endpoint.contains('/sales-imports'))
               ? _importReceiveTimeout
               : null,
         ),
@@ -129,9 +159,23 @@ class ApiService {
     }
   }
 
-  Future<void> delete(String endpoint, {CancelToken? cancelToken}) async {
+  Future<dynamic> importSalesExcel(List<int> fileBytes, String fileName) async {
+    return postFile('/sales-imports/excel', fileBytes, fileName);
+  }
+
+  Future<Map<String, dynamic>> getImportedSalesSummary({String? month}) async {
+    final m = month ?? DateFormat('yyyy-MM').format(DateTime.now());
+    final data = await get('/sales-imports/summary?month=$m');
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<void> delete(
+    String endpoint, {
+    Map<String, dynamic>? data,
+    CancelToken? cancelToken,
+  }) async {
     try {
-      await _dio.delete(endpoint, cancelToken: cancelToken);
+      await _dio.delete(endpoint, data: data, cancelToken: cancelToken);
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -149,9 +193,15 @@ class ApiService {
     if (e.response != null) {
       final data = e.response!.data;
       if (data is Map) {
-        return ApiException(data['detail'] ?? data['message'] ?? 'Request gagal', statusCode: e.response!.statusCode);
+        return ApiException(
+          data['detail'] ?? data['message'] ?? 'Request gagal',
+          statusCode: e.response!.statusCode,
+        );
       }
-      return ApiException('Request gagal (${e.response!.statusCode})', statusCode: e.response!.statusCode);
+      return ApiException(
+        'Request gagal (${e.response!.statusCode})',
+        statusCode: e.response!.statusCode,
+      );
     }
     return ApiException('Terjadi kesalahan: ${e.message}');
   }

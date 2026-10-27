@@ -41,8 +41,8 @@ def _make_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, branch, is_active) "
-            "VALUES (:id, :u, 'test-hash', :r, :b, true)"
+            "INSERT INTO users (id, username, password_hash, role, branch, is_active, token_version) "
+            "VALUES (:id, :u, 'test-hash', :r, :b, true, 0)"
         ), {"id": user_id, "u": f"TEST-USER-LIST-{role}-{user_id[:8]}", "r": role, "b": branch})
     return user_id
 
@@ -51,12 +51,13 @@ def _seed():
     _cleanup_suppliers()
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO suppliers (name, is_active) VALUES (:n, :a) "
+            "INSERT INTO suppliers (name, is_active, order_type) VALUES (:n, :a, 'REGULER') "
             "ON CONFLICT (name) DO UPDATE SET is_active = EXCLUDED.is_active"
         ), [{"n": TEST_SUP_ACTIVE, "a": True}, {"n": TEST_SUP_INACTIVE, "a": False}])
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga, nama_supplier) "
-            "VALUES (:id, :branch, :nama, 1000, :sup)"
+            "INSERT INTO products (id, branch, nama_barang, harga, stok_diterima, "
+            "order_type, nama_supplier) "
+            "VALUES (:id, :branch, :nama, 1000, 0, 'REGULER', :sup)"
         ), [
             {"id": "TEST-PROD-A", "branch": USER_BRANCH, "nama": "A", "sup": TEST_SUP_ACTIVE},
             {"id": "TEST-PROD-I", "branch": USER_BRANCH, "nama": "I", "sup": TEST_SUP_INACTIVE},
@@ -66,8 +67,9 @@ def _seed():
 def _seed_other_branch():
     with engine.begin() as conn:
         conn.execute(text(
-            "INSERT INTO products (id, branch, nama_barang, harga, nama_supplier) "
-            "VALUES ('TEST-PROD-OTHER', :b, 'O', 1000, :sup)"
+            "INSERT INTO products (id, branch, nama_barang, harga, stok_diterima, "
+            "order_type, nama_supplier) "
+            "VALUES ('TEST-PROD-OTHER', :b, 'O', 1000, 0, 'REGULER', :sup)"
         ), {"b": OTHER_BRANCH, "sup": TEST_SUP_ACTIVE})
 
 

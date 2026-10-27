@@ -15,10 +15,16 @@ def upgrade():
             CREATE TABLE IF NOT EXISTS suppliers (
                 name VARCHAR PRIMARY KEY,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                order_type VARCHAR(10) NOT NULL DEFAULT 'REGULER',
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
+        ))
+        # Tabel yang dibuat sebelum kolom order_type ada (model sudah NOT NULL).
+        conn.execute(text(
+            "ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS "
+            "order_type VARCHAR(10) NOT NULL DEFAULT 'REGULER'"
         ))
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_suppliers_is_active "
@@ -27,8 +33,8 @@ def upgrade():
         # Backfill: distinct nama_supplier dari products yang sudah ada
         conn.execute(text(
             """
-            INSERT INTO suppliers (name, is_active)
-            SELECT DISTINCT nama_supplier, TRUE
+            INSERT INTO suppliers (name, is_active, order_type)
+            SELECT DISTINCT nama_supplier, TRUE, 'REGULER'
             FROM products
             WHERE nama_supplier IS NOT NULL AND nama_supplier != ''
             ON CONFLICT (name) DO NOTHING

@@ -11,13 +11,19 @@ import '../providers/admin_provider.dart';
 import '../widgets/responsive_action_menu.dart';
 import '../../data/models/order.dart';
 
-String _fmt(int amount) =>
-    NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(amount);
+String _fmt(int amount) => NumberFormat.currency(
+  locale: 'id_ID',
+  symbol: 'Rp ',
+  decimalDigits: 0,
+).format(amount);
 
 class OrdersTab extends StatefulWidget {
   /// Kalau true, sembunyikan tombol Approve/Reject (untuk MANAGER).
   final bool readOnly;
-  const OrdersTab({super.key, this.readOnly = false});
+
+  /// Tab awal yang ditampilkan (0=Menunggu,1=Draft,2=Semua).
+  final int initialTabIndex;
+  const OrdersTab({super.key, this.readOnly = false, this.initialTabIndex = 0});
 
   @override
   State<OrdersTab> createState() => _OrdersTabState();
@@ -28,7 +34,10 @@ class OrdersTab extends StatefulWidget {
 /// keluar dari tab ini, filter dianggap selesai dan direset.
 enum _DatePreset { all, today, thisWeek, thisMonth, custom }
 
-class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMixin {
+class _OrdersTabState extends State<OrdersTab>
+    with SingleTickerProviderStateMixin {
+  static const _respondedStatuses = 'APPROVED,REJECTED,CANCELLED';
+
   late TabController _tabController;
   String? _filterStatus;
 
@@ -47,14 +56,25 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+    _tabController.addListener(_onTabChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _applyFilters();
+      if (mounted) {
+        final provider = context.read<AdminProvider>();
+        provider.loadPendingOrders();
+        provider.loadDraftOrders();
+        _loadActiveTab();
+      }
     });
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
     _searchDebounce?.cancel();
@@ -70,8 +90,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         final t = DateTime(now.year, now.month, now.day);
         return (from: t, to: t);
       case _DatePreset.thisWeek:
-        final start = DateTime(now.year, now.month, now.day)
-            .subtract(Duration(days: (now.weekday - 1)));
+        final start = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).subtract(Duration(days: (now.weekday - 1)));
         return (from: start, to: now);
       case _DatePreset.thisMonth:
         final start = DateTime(now.year, now.month, 1);
@@ -81,42 +104,65 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
     }
   }
 
-  void _applyFilters({bool resetPage = true}) {
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    _loadActiveTab();
+  }
+
+  void _loadActiveTab() {
     final provider = context.read<AdminProvider>();
     final range = _resolveDateRange();
-    if (resetPage) _currentPage = 1;
     final search = _searchController.text.trim().isEmpty
         ? null
         : _searchController.text.trim();
-    provider.loadAllOrders(
-      status: _filterStatus,
-      search: search,
-      dateFrom: range.from,
-      dateTo: range.to,
-      skip: (_currentPage - 1) * _pageSize,
-      limit: _pageSize,
-    );
-    // Juga refresh tab "Menunggu Persetujuan" dengan search yang sama —
-    // kalau tidak, list pending tidak ikut ter-filter waktu user ngetik di
-    // search box (provider hanya re-fetch semua pesanan, bukan pending).
-    provider.loadPendingOrders(search: search);
+
+    switch (_tabController.index) {
+      case 0:
+        provider.loadPendingOrders(search: search);
+        break;
+      case 1:
+        provider.loadDraftOrders();
+        break;
+      case 2:
+        provider.loadAllOrders(
+          status: _filterStatus ?? _respondedStatuses,
+          search: search,
+          dateFrom: range.from,
+          dateTo: range.to,
+          skip: (_currentPage - 1) * _pageSize,
+          limit: _pageSize,
+        );
+        break;
+    }
+  }
+
+  void _applyFilters({bool resetPage = true}) {
+    if (resetPage) _currentPage = 1;
+    _loadActiveTab();
   }
 
   void _onSearchChanged(String value) {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      final provider = context.read<AdminProvider>();
+      final search = value.trim().isEmpty ? null : value.trim();
+      provider.loadPendingOrders(search: search);
+      provider.loadDraftOrders();
       _applyFilters();
     });
   }
 
   void _goToPage(int page) {
     final provider = context.read<AdminProvider>();
-    final totalPages = (provider.orderTotal / _pageSize).ceil().clamp(1, 1 << 30);
+    final totalPages = (provider.orderTotal / _pageSize).ceil().clamp(
+      1,
+      1 << 30,
+    );
     if (page < 1 || page > totalPages) return;
     _currentPage = page;
     final range = _resolveDateRange();
     provider.loadAllOrders(
-      status: _filterStatus,
+      status: _filterStatus ?? _respondedStatuses,
       dateFrom: range.from,
       dateTo: range.to,
       skip: (_currentPage - 1) * _pageSize,
@@ -182,102 +228,98 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
             Container(
               color: AppColors.surface,
               padding: EdgeInsets.fromLTRB(
-                  resp.contentPadding, 12, resp.contentPadding, 0),
-          child: Column(
-            children: [
-              // Search field
-              TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Cari nama toko atau sales...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            _applyFilters();
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: AppColors.background,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.primaryLight),
-                  ),
-                  isDense: true,
-                ),
+                resp.contentPadding,
+                12,
+                resp.contentPadding,
+                0,
               ),
-              const SizedBox(height: 8),
-              TabBar(
-            controller: _tabController,
-            labelColor: AppColors.primaryLight,
-            unselectedLabelColor: AppColors.textMuted,
-            labelStyle: AppTextStyles.labelLarge,
-            indicatorColor: AppColors.primaryLight,
-            indicatorWeight: 3,
-            dividerColor: AppColors.border,
-            tabs: [
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Menunggu Persetujuan',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (provider.pendingOrders.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningBg,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${provider.pendingOrders.length}',
-                          style: const TextStyle(
-                            color: AppColors.warning,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
+              child: Column(
+                children: [
+                  // Search field
+                  AppInput(
+                    hint: 'Cari nama toko atau sales...',
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              _applyFilters();
+                            },
                           ),
+                  ),
+                  const SizedBox(height: 8),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.textMuted,
+                    labelStyle: AppTextStyles.labelLarge,
+                    indicatorColor: AppColors.primary,
+                    indicatorWeight: 3,
+                    dividerColor: AppColors.border,
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Menunggu',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (provider.pendingOrders.isNotEmpty) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              AppBadge(
+                                label: '${provider.pendingOrders.length}',
+                                variant: AppBadgeVariant.warning,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Draft',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (provider.draftOrders.isNotEmpty) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              AppBadge(
+                                label: '${provider.draftOrders.length}',
+                                variant: AppBadgeVariant.info,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const Tab(child: SelectableText('Semua')),
                     ],
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Tab(child: SelectableText('Semua Pesanan')),
-            ],
-          ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildPendingOrders(provider, isLoading),
-              _buildAllOrders(provider, isLoading, resp),
-            ],
-          ),
-        ),
-      ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPendingOrders(provider, isLoading),
+                  _buildDraftOrders(provider, isLoading),
+                  _buildAllOrders(provider, isLoading, resp),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -293,21 +335,17 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.successBg,
-                shape: BoxShape.circle,
-              ),
-              child:
-                  const Icon(Icons.check_circle, size: 48, color: AppColors.success),
+            const Icon(
+              Icons.check_circle_outline,
+              size: 56,
+              color: AppColors.success,
             ),
-            const SizedBox(height: 20),
-            const Text('Tidak ada pesanan menunggu', style: AppTextStyles.headlineSmall),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.md),
+            const Text('Tidak ada pesanan menunggu', style: AppTextStyles.h3),
+            const SizedBox(height: AppSpacing.xs),
             const Text(
               'Semua pesanan sudah diproses',
-              style: AppTextStyles.bodyMedium,
+              style: AppTextStyles.bodyMuted,
             ),
           ],
         ),
@@ -321,13 +359,19 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         order: orders[i],
         onApprove: widget.readOnly ? null : () => _approveOrder(orders[i].id),
         onReject: widget.readOnly ? null : () => _rejectOrder(orders[i].id),
-        onCancelItem: widget.readOnly ? null : (item) => _cancelItem(orders[i].id, item),
+        onCancelItem: widget.readOnly
+            ? null
+            : (item) => _cancelItem(orders[i].id, item),
         readOnly: widget.readOnly,
       ),
     );
   }
 
-  Widget _buildAllOrders(AdminProvider provider, bool isLoading, Responsive resp) {
+  Widget _buildAllOrders(
+    AdminProvider provider,
+    bool isLoading,
+    Responsive resp,
+  ) {
     final orders = provider.allOrders;
     final total = provider.orderTotal;
     final totalPages = total == 0 ? 1 : (total / _pageSize).ceil();
@@ -360,11 +404,22 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                         hint: const SelectableText('Semua'),
                         isDense: true,
                         items: const [
-                          DropdownMenuItem(value: null, child: SelectableText('Semua')),
-                          DropdownMenuItem(value: 'PENDING', child: SelectableText('Menunggu')),
-                          DropdownMenuItem(value: 'APPROVED', child: SelectableText('Disetujui')),
-                          DropdownMenuItem(value: 'REJECTED', child: SelectableText('Ditolak')),
-                          DropdownMenuItem(value: 'CANCELLED', child: SelectableText('Dibatalkan')),
+                          DropdownMenuItem(
+                            value: null,
+                            child: SelectableText('Semua hasil'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'APPROVED',
+                            child: SelectableText('Disetujui'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'REJECTED',
+                            child: SelectableText('Ditolak'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'CANCELLED',
+                            child: SelectableText('Dibatalkan'),
+                          ),
                         ],
                         onChanged: (v) {
                           setState(() => _filterStatus = v);
@@ -375,9 +430,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   ),
                   const Spacer(),
                   Text(
-                    total == 0
-                        ? '0 pesanan'
-                        : '$total pesanan',
+                    total == 0 ? '0 pesanan' : '$total pesanan',
                     style: AppTextStyles.bodySmall,
                   ),
                 ],
@@ -402,8 +455,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   padding: const EdgeInsets.only(top: 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.date_range,
-                          size: 14, color: AppColors.textMuted),
+                      const Icon(
+                        Icons.date_range,
+                        size: 14,
+                        color: AppColors.textMuted,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '${_formatDate(_customDateFrom!)} → ${_formatDate(_customDateTo!)}',
@@ -432,39 +488,39 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : orders.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.receipt_long_outlined,
-                              size: 48,
-                              color: AppColors.textMuted
-                                  .withValues(alpha: 0.4)),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Tidak ada pesanan untuk filter ini',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.receipt_long_outlined,
+                        size: 48,
+                        color: AppColors.textMuted,
                       ),
-                    )
-                  : ListView.builder(
-                      padding: EdgeInsets.all(resp.contentPadding),
-                      itemCount: orders.length,
-                      itemBuilder: (ctx, i) => _OrderCard(order: orders[i], readOnly: widget.readOnly),
-                    ),
+                      const SizedBox(height: AppSpacing.sm + 4),
+                      const Text(
+                        'Tidak ada pesanan untuk filter ini',
+                        style: AppTextStyles.bodyMuted,
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: EdgeInsets.all(resp.contentPadding),
+                  itemCount: orders.length,
+                  itemBuilder: (ctx, i) =>
+                      _OrderCard(order: orders[i], readOnly: widget.readOnly),
+                ),
         ),
         if (total > 0)
           Container(
             padding: EdgeInsets.symmetric(
-                horizontal: resp.contentPadding, vertical: 10),
+              horizontal: resp.contentPadding,
+              vertical: 10,
+            ),
             decoration: const BoxDecoration(
               color: AppColors.surface,
-              border: Border(
-                top: BorderSide(color: AppColors.border),
-              ),
+              border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: Row(
               children: [
@@ -486,15 +542,17 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: AppRadius.sm,
                   ),
                   child: Text(
                     '$_currentPage / $totalPages',
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.primaryLight,
+                      color: AppColors.primary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -514,10 +572,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
   Widget _dateChip(_DatePreset preset, String label) {
     final selected = _datePreset == preset;
-    return ChoiceChip(
-      label: Text(label),
+    return AppChoiceChip(
+      label: label,
       selected: selected,
-      onSelected: (_) async {
+      dense: true,
+      onSelected: () async {
         if (preset == _DatePreset.custom) {
           await _pickCustomRange();
           return;
@@ -525,16 +584,6 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
         setState(() => _datePreset = preset);
         _applyFilters();
       },
-      selectedColor: AppColors.primaryLight,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppColors.textPrimary,
-        fontWeight: FontWeight.w500,
-        fontSize: 12,
-      ),
-      backgroundColor: AppColors.background,
-      side: BorderSide(
-        color: selected ? AppColors.primaryLight : AppColors.border,
-      ),
     );
   }
 
@@ -560,8 +609,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   color: AppColors.successBg,
                   shape: BoxShape.circle,
                 ),
-                child:
-                    const Icon(Icons.check_circle, size: 40, color: AppColors.success),
+                child: const Icon(
+                  Icons.check_circle,
+                  size: 40,
+                  color: AppColors.success,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -635,7 +687,11 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
                   color: AppColors.errorBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.cancel, size: 40, color: AppColors.error),
+                child: const Icon(
+                  Icons.cancel,
+                  size: 40,
+                  color: AppColors.error,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -663,9 +719,7 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Tolak'),
           ),
         ],
@@ -718,7 +772,12 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
 
     try {
       final provider = context.read<AdminProvider>();
-      final success = await provider.cancelOrderItem(orderId, result.qty, result.reason, item.id);
+      final success = await provider.cancelOrderItem(
+        orderId,
+        result.qty,
+        result.reason,
+        item.id,
+      );
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -747,6 +806,74 @@ class _OrdersTabState extends State<OrdersTab> with SingleTickerProviderStateMix
       }
     }
   }
+
+  Widget _buildDraftOrders(AdminProvider provider, bool isLoading) {
+    final orders = provider.draftOrders;
+    if (isLoading) return const Center(child: CircularProgressIndicator());
+    if (orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.drafts_outlined,
+              size: 56,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Text('Tidak ada draft pesanan', style: AppTextStyles.h3),
+          ],
+        ),
+      );
+    }
+    final canRelease =
+        provider.userRole == 'ADMIN' ||
+        provider.userRole == 'SUPERVISOR' ||
+        provider.userRole == 'MANAGER';
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: orders.length,
+      itemBuilder: (ctx, i) => _OrderCard(
+        order: orders[i],
+        readOnly: widget.readOnly || !canRelease,
+        onRelease: canRelease ? () => _showReleaseDialog(orders[i]) : null,
+      ),
+    );
+  }
+
+  void _showReleaseDialog(Order order) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Release Draft?'),
+        content: Text(
+          'Are you sure you want to release draft #${order.id.substring(0, 8)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final provider = context.read<AdminProvider>();
+              await provider.deleteDraftOrder(order.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Draft released'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Release'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _OrderCard extends StatefulWidget {
@@ -754,6 +881,7 @@ class _OrderCard extends StatefulWidget {
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
   final void Function(OrderItem item)? onCancelItem;
+  final VoidCallback? onRelease;
   final bool readOnly;
 
   const _OrderCard({
@@ -761,6 +889,7 @@ class _OrderCard extends StatefulWidget {
     this.onApprove,
     this.onReject,
     this.onCancelItem,
+    this.onRelease,
     this.readOnly = false,
   });
 
@@ -840,9 +969,13 @@ class _OrderCardState extends State<_OrderCard> {
             // Up Price — kirim nilai existing supaya tidak ter-reset ke default
             // saat admin hanya edit diskon.
             'up_price_type': item.upPriceType,
-            'up_price_percent': item.upPriceType.toUpperCase() == 'PERCENT' ? item.upPricePercent : 0,
-            'up_price_nominal': item.upPriceType.toUpperCase() == 'NOMINAL' ? item.upPriceNominal : 0,
-          }
+            'up_price_percent': item.upPriceType.toUpperCase() == 'PERCENT'
+                ? item.upPricePercent
+                : 0,
+            'up_price_nominal': item.upPriceType.toUpperCase() == 'NOMINAL'
+                ? item.upPriceNominal
+                : 0,
+          },
         ],
       );
       _onDiscountSaved(updated);
@@ -889,21 +1022,35 @@ class _OrderCardState extends State<_OrderCard> {
             'item_id': item.id,
             // Layer 1 — kirim nilai existing supaya tidak ter-reset
             'discount_type': item.discountType,
-            'discount_percent': item.discountType == 'PERCENT' ? item.discountPercent : 0,
-            'discount_nominal': item.discountType == 'NOMINAL' ? item.discountNominal : 0,
+            'discount_percent': item.discountType == 'PERCENT'
+                ? item.discountPercent
+                : 0,
+            'discount_nominal': item.discountType == 'NOMINAL'
+                ? item.discountNominal
+                : 0,
             // Layer 2
             'discount2_type': item.discount2Type,
-            'discount2_percent': item.discount2Type == 'PERCENT' ? item.discount2Percent : 0,
-            'discount2_nominal': item.discount2Type == 'NOMINAL' ? item.discount2Nominal : 0,
+            'discount2_percent': item.discount2Type == 'PERCENT'
+                ? item.discount2Percent
+                : 0,
+            'discount2_nominal': item.discount2Type == 'NOMINAL'
+                ? item.discount2Nominal
+                : 0,
             // Layer 3
             'discount3_type': item.discount3Type,
-            'discount3_percent': item.discount3Type == 'PERCENT' ? item.discount3Percent : 0,
-            'discount3_nominal': item.discount3Type == 'NOMINAL' ? item.discount3Nominal : 0,
-            // Up Price — yang baru
+            'discount3_percent': item.discount3Type == 'PERCENT'
+                ? item.discount3Percent
+                : 0,
+            'discount3_nominal': item.discount3Type == 'NOMINAL'
+                ? item.discount3Nominal
+                : 0,
+            // Up Price
             'up_price_type': result.type,
             'up_price_percent': result.type == 'PERCENT' ? result.value : 0,
-            'up_price_nominal': result.type == 'NOMINAL' ? result.value.toInt() : 0,
-          }
+            'up_price_nominal': result.type == 'NOMINAL'
+                ? result.value.toInt()
+                : 0,
+          },
         ],
       );
       _onDiscountSaved(updated);
@@ -929,14 +1076,17 @@ class _OrderCardState extends State<_OrderCard> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat =
-        NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
+    final currencyFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    );
     final s = orderStatusFromString(_order.status);
     final statusColor = s != null ? orderStatusColor(s) : AppColors.textMuted;
     final statusBgColor = s != null ? orderStatusBgColor(s) : AppColors.border;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm + 4),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: Container(
@@ -944,7 +1094,7 @@ class _OrderCardState extends State<_OrderCard> {
           height: 44,
           decoration: BoxDecoration(
             color: statusBgColor,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: AppRadius.md,
           ),
           child: Icon(Icons.store, color: statusColor, size: 22),
         ),
@@ -961,7 +1111,8 @@ class _OrderCardState extends State<_OrderCard> {
                 'Order #${_order.id.substring(0, 8)}',
                 style: AppTextStyles.mono,
               ),
-              if (_order.invoiceNumber != null && _order.invoiceNumber!.isNotEmpty)
+              if (_order.invoiceNumber != null &&
+                  _order.invoiceNumber!.isNotEmpty)
                 SelectableText(
                   'Invoice: ${_order.invoiceNumber}',
                   style: AppTextStyles.mono.copyWith(
@@ -993,6 +1144,14 @@ class _OrderCardState extends State<_OrderCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             OrderStatusChip(status: _order.status),
+            if (_order.status == 'DRAFT' && widget.onRelease != null) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Release draft',
+                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                onPressed: widget.onRelease,
+              ),
+            ],
             if (_order.status == 'PENDING' &&
                 (widget.onApprove != null || widget.onReject != null) &&
                 !widget.readOnly) ...[
@@ -1034,186 +1193,232 @@ class _OrderCardState extends State<_OrderCard> {
                 children: [
                   const Divider(),
                   const SizedBox(height: 8),
-                // Info toko
-                if (_order.storeName != null ||
-                    _order.storeContact != null ||
-                    _order.storeAddress != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.infoBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.infoBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.store,
-                                size: 16, color: AppColors.info),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Info Toko',
-                              style: AppTextStyles.labelMedium.copyWith(
+                  // Info toko
+                  if (_order.storeName != null ||
+                      _order.storeContact != null ||
+                      _order.storeAddress != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.infoBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.infoBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.store,
+                                size: 16,
                                 color: AppColors.info,
-                                fontWeight: FontWeight.w700,
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        if (_order.customerKode != null &&
-                            _order.customerKode!.isNotEmpty)
-                          _infoRow(Icons.tag, 'Kode Toko', _order.customerKode!),
-                        if (_order.storeName != null &&
-                            _order.storeName!.isNotEmpty)
-                          _infoRow(Icons.business, 'Nama Toko', _order.storeName!),
-                        if (_order.storeContact != null &&
-                            _order.storeContact!.isNotEmpty)
-                          _infoRow(Icons.phone, 'Kontak', _order.storeContact!),
-                        if (_order.storeAddress != null &&
-                            _order.storeAddress!.isNotEmpty)
-                          _infoRow(
-                              Icons.location_on, 'Alamat', _order.storeAddress!),
-                        if (_order.salesUsername != null || _order.salesNama != null)
-                          _infoRow(Icons.person, 'Sales', _order.salesDisplayName),
-                        // Customer di master data: beda dari storeName kalau
-                        // customer di-rename setelah order dibuat — berguna untuk
-                        // audit. Skip kalau null atau sama persis dengan storeName
-                        // supaya tidak duplicate.
-                        if (_order.customerName != null &&
-                            _order.customerName!.isNotEmpty &&
-                            _order.customerName != _order.storeName)
-                          _infoRow(Icons.contacts, 'Customer', _order.customerName!),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                // Catatan dari sales (jika ada). Disembunyikan kalau null/kosong
-                // supaya tidak menambah visual noise untuk order tanpa catatan.
-                if (_order.notes != null && _order.notes!.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.warningBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.sticky_note_2_outlined,
-                                size: 16, color: AppColors.warning),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Catatan dari Sales',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.warning,
-                                fontWeight: FontWeight.w700,
+                              const SizedBox(width: 6),
+                              Text(
+                                'Info Toko',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.info,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          if (_order.customerKode != null &&
+                              _order.customerKode!.isNotEmpty)
+                            _infoRow(
+                              Icons.tag,
+                              'Kode Toko',
+                              _order.customerKode!,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        SelectableText(
-                          _order.notes!,
-                          style: AppTextStyles.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                // Alasan penolakan dari admin (saat order di-reject). Sales
-                // bisa lihat ini di mobile; admin web juga supaya konsisten
-                // dan tidak perlu buka app lain untuk audit.
-                if (_order.status == 'REJECTED' &&
-                    _order.rejectReason != null &&
-                    _order.rejectReason!.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.errorBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.block, size: 16, color: AppColors.error),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Alasan Penolakan',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.error,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          if (_order.storeName != null &&
+                              _order.storeName!.isNotEmpty)
+                            _infoRow(
+                              Icons.business,
+                              'Nama Toko',
+                              _order.storeName!,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        SelectableText(
-                          _order.rejectReason!,
-                          style: AppTextStyles.bodyMedium,
-                        ),
-                      ],
+                          if (_order.storeContact != null &&
+                              _order.storeContact!.isNotEmpty)
+                            _infoRow(
+                              Icons.phone,
+                              'Kontak',
+                              _order.storeContact!,
+                            ),
+                          if (_order.storeAddress != null &&
+                              _order.storeAddress!.isNotEmpty)
+                            _infoRow(
+                              Icons.location_on,
+                              'Alamat',
+                              _order.storeAddress!,
+                            ),
+                          if (_order.salesUsername != null ||
+                              _order.salesNama != null)
+                            _infoRow(
+                              Icons.person,
+                              'Sales',
+                              _order.salesDisplayName,
+                            ),
+                          // Customer di master data: beda dari storeName kalau
+                          // customer di-rename setelah order dibuat — berguna untuk
+                          // audit. Skip kalau null atau sama persis dengan storeName
+                          // supaya tidak duplicate.
+                          if (_order.customerName != null &&
+                              _order.customerName!.isNotEmpty &&
+                              _order.customerName != _order.storeName)
+                            _infoRow(
+                              Icons.contacts,
+                              'Customer',
+                              _order.customerName!,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                // Detail item
-                Row(
-                  children: [
-                    const Text('Detail Item:',
-                        style: AppTextStyles.labelLarge),
-                    const Spacer(),
+                    const SizedBox(height: 16),
                   ],
-                ),
-                const SizedBox(height: 10),
-                ..._order.items.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final item = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: _OrderItemRow(
-                      index: index + 1,
-                      item: item,
-                      currencyFormat: currencyFormat,
-                      canEdit: _order.status == 'PENDING' && !widget.readOnly,
-                      onEdit: () => _openItemDiscountDialog(item),
-                      onEditUpPrice: () => _openItemUpPriceDialog(item),
-                      onCancel: !widget.readOnly && widget.onCancelItem != null
-                          ? () => widget.onCancelItem!(item)
-                          : null,
+                  // Catatan dari sales (jika ada). Disembunyikan kalau null/kosong
+                  // supaya tidak menambah visual noise untuk order tanpa catatan.
+                  if (_order.notes != null && _order.notes!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.sticky_note_2_outlined,
+                                size: 16,
+                                color: AppColors.warning,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Catatan dari Sales',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SelectableText(
+                            _order.notes!,
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                }),
-                // Cancelled items
-                if (_order.cancelledItems.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Item Dibatalkan:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: AppColors.error,
+                    const SizedBox(height: 16),
+                  ],
+                  // Alasan penolakan dari admin (saat order di-reject). Sales
+                  // bisa lihat ini di mobile; admin web juga supaya konsisten
+                  // dan tidak perlu buka app lain untuk audit.
+                  if (_order.status == 'REJECTED' &&
+                      _order.rejectReason != null &&
+                      _order.rejectReason!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.errorBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.block,
+                                size: 16,
+                                color: AppColors.error,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Alasan Penolakan',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SelectableText(
+                            _order.rejectReason!,
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+                  // Detail item
+                  Row(
+                    children: [
+                      const Text(
+                        'Detail Item:',
+                        style: AppTextStyles.labelLarge,
+                      ),
+                      const Spacer(),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  ..._order.cancelledItems.map((ci) => Padding(
+                  const SizedBox(height: 10),
+                  ..._order.items.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: _OrderItemRow(
+                        index: index + 1,
+                        item: item,
+                        currencyFormat: currencyFormat,
+                        canEdit: _order.status == 'PENDING' && !widget.readOnly,
+                        onEdit: () => _openItemDiscountDialog(item),
+                        onEditUpPrice: () => _openItemUpPriceDialog(item),
+                        onCancel:
+                            !widget.readOnly && widget.onCancelItem != null
+                            ? () => widget.onCancelItem!(item)
+                            : null,
+                      ),
+                    );
+                  }),
+                  // Cancelled items
+                  if (_order.cancelledItems.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Item Dibatalkan:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.error,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._order.cancelledItems.map(
+                      (ci) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.cancel, size: 14, color: AppColors.error),
+                            const Icon(
+                              Icons.cancel,
+                              size: 14,
+                              color: AppColors.error,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -1230,7 +1435,8 @@ class _OrderCardState extends State<_OrderCard> {
                                   // Harga + subtotal (kalau backend menyuplai).
                                   // Null untuk legacy data yang dicancel sebelum
                                   // field ini ada.
-                                  if (ci.hargaSatuan != null && ci.subtotal != null) ...[
+                                  if (ci.hargaSatuan != null &&
+                                      ci.subtotal != null) ...[
                                     const SizedBox(height: 2),
                                     SelectableText(
                                       '${_fmt(ci.hargaSatuan!)} × ${ci.qty} = ${_fmt(ci.subtotal!)}',
@@ -1244,7 +1450,10 @@ class _OrderCardState extends State<_OrderCard> {
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.errorBg,
                                 borderRadius: BorderRadius.circular(4),
@@ -1260,12 +1469,13 @@ class _OrderCardState extends State<_OrderCard> {
                             ),
                           ],
                         ),
-                      )),
-                ],
-                const Divider(),
+                      ),
+                    ),
+                  ],
+                  const Divider(),
 
-                // Ringkasan harga
-                _buildPriceSummary(),
+                  // Ringkasan harga
+                  _buildPriceSummary(),
                 ],
               ),
             ),
@@ -1297,10 +1507,7 @@ class _OrderCardState extends State<_OrderCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Diskon',
-                style: AppTextStyles.bodySmall,
-              ),
+              const Text('Diskon', style: AppTextStyles.bodySmall),
               SelectableText(
                 '- ${_fmt(discount)}',
                 style: AppTextStyles.bodySmall.copyWith(
@@ -1316,10 +1523,7 @@ class _OrderCardState extends State<_OrderCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Up Price',
-                style: AppTextStyles.bodySmall,
-              ),
+              const Text('Up Price', style: AppTextStyles.bodySmall),
               SelectableText(
                 '+ ${_fmt(upPrice)}',
                 style: AppTextStyles.bodySmall.copyWith(
@@ -1338,7 +1542,7 @@ class _OrderCardState extends State<_OrderCard> {
             SelectableText(
               _fmt(amount),
               style: AppTextStyles.headlineMedium.copyWith(
-                color: AppColors.primaryLight,
+                color: AppColors.primary,
               ),
             ),
           ],
@@ -1357,14 +1561,20 @@ class _OrderCardState extends State<_OrderCard> {
           const SizedBox(width: 6),
           SizedBox(
             width: 72,
-            child: Text('$label:',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+            child: Text(
+              '$label:',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: SelectableText(value,
-                style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w500)),
+            child: SelectableText(
+              value,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -1406,10 +1616,7 @@ class _OrderItemRow extends StatelessWidget {
           // Numbering
           SizedBox(
             width: 24,
-            child: Text(
-              '$index.',
-              style: AppTextStyles.bodyMedium,
-            ),
+            child: Text('$index.', style: AppTextStyles.bodyMedium),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1477,7 +1684,9 @@ class _OrderItemRow extends StatelessWidget {
                   ),
                 if (onEditUpPrice != null)
                   MenuAction(
-                    label: item.hasUpPrice ? 'Edit up price' : 'Tambah up price',
+                    label: item.hasUpPrice
+                        ? 'Edit up price'
+                        : 'Tambah up price',
                     icon: item.hasUpPrice
                         ? Icons.edit_outlined
                         : Icons.trending_up,
@@ -1508,7 +1717,9 @@ class _OrderItemRow extends StatelessWidget {
                   currencyFormat.format(item.subtotal),
                   style: AppTextStyles.labelLarge.copyWith(
                     fontSize: 13,
-                    color: item.hasDiscount ? AppColors.success : AppColors.warning,
+                    color: item.hasDiscount
+                        ? AppColors.success
+                        : AppColors.warning,
                   ),
                 ),
               ],
@@ -1641,11 +1852,14 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
     _type2 = widget.type2;
     _type3 = widget.type3;
     _ctrl1 = TextEditingController(
-        text: widget.value1 > 0 ? widget.value1.toString() : '');
+      text: widget.value1 > 0 ? widget.value1.toString() : '',
+    );
     _ctrl2 = TextEditingController(
-        text: widget.value2 > 0 ? widget.value2.toString() : '');
+      text: widget.value2 > 0 ? widget.value2.toString() : '',
+    );
     _ctrl3 = TextEditingController(
-        text: widget.value3 > 0 ? widget.value3.toString() : '');
+      text: widget.value3 > 0 ? widget.value3.toString() : '',
+    );
   }
 
   @override
@@ -1676,7 +1890,8 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
     return s < 0 ? 0 : s;
   }
 
-  double _parseOr0(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.')) ?? 0.0;
+  double _parseOr0(TextEditingController c) =>
+      double.tryParse(c.text.trim().replaceAll(',', '.')) ?? 0.0;
 
   bool _validateAndSave() {
     final values = <double>[];
@@ -1697,21 +1912,24 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
         final running = _runningAfter(i);
         if (v > running) {
           _snack(
-              'Layer ${i + 1}: nominal (Rp $v) melebihi sisa subtotal (Rp $running)');
+            'Layer ${i + 1}: nominal (Rp $v) melebihi sisa subtotal (Rp $running)',
+          );
           return false;
         }
       }
       values.add(v);
     }
 
-    Navigator.of(context).pop(_DiscountEditResult(
-      type1: types[0],
-      value1: values[0],
-      type2: types[1],
-      value2: values[1],
-      type3: types[2],
-      value3: values[2],
-    ));
+    Navigator.of(context).pop(
+      _DiscountEditResult(
+        type1: types[0],
+        value1: values[0],
+        type2: types[1],
+        value2: values[1],
+        type3: types[2],
+        value3: values[2],
+      ),
+    );
     return true;
   }
 
@@ -1754,13 +1972,16 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           children: [
             Text(
               'Subtotal: Rp ${widget.maxNominal}',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               'Layer diskon dipotong berurutan dari sisa subtotal.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
             const SizedBox(height: 16),
             _LayerField(
@@ -1794,10 +2015,7 @@ class _DiscountEditDialogState extends State<_DiscountEditDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Batal'),
         ),
-        FilledButton(
-          onPressed: _validateAndSave,
-          child: const Text('Simpan'),
-        ),
+        FilledButton(onPressed: _validateAndSave, child: const Text('Simpan')),
       ],
     );
   }
@@ -1835,10 +2053,14 @@ class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
   void initState() {
     super.initState();
     _type = widget.upPriceType.toUpperCase();
-    final initial = _type == 'PERCENT' ? widget.upPricePercent : widget.upPriceNominal.toDouble();
+    final initial = _type == 'PERCENT'
+        ? widget.upPricePercent
+        : widget.upPriceNominal.toDouble();
     _ctrl = TextEditingController(
       text: initial > 0
-          ? (initial == initial.roundToDouble() ? '${initial.round()}' : '$initial')
+          ? (initial == initial.roundToDouble()
+                ? '${initial.round()}'
+                : '$initial')
           : '',
     );
   }
@@ -1895,11 +2117,17 @@ class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+              ],
               autofocus: true,
               decoration: InputDecoration(
-                labelText: _type == 'PERCENT' ? 'Persen (%)' : 'Nominal per-piece (Rp)',
+                labelText: _type == 'PERCENT'
+                    ? 'Persen (%)'
+                    : 'Nominal per-piece (Rp)',
                 hintText: _type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
                 prefixText: _type == 'PERCENT' ? null : 'Rp ',
                 border: const OutlineInputBorder(),
@@ -1908,7 +2136,9 @@ class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
             const SizedBox(height: 4),
             Text(
               'Isi 0 atau kosong untuk menghapus up price.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
           ],
         ),
@@ -1928,14 +2158,11 @@ class _UpPriceEditDialogState extends State<_UpPriceEditDialog> {
   }
 
   Widget _typeChip(String label, bool selected) {
-    return ChoiceChip(
-      label: Text(label),
+    return AppChoiceChip(
+      label: label,
       selected: selected,
-      onSelected: (_) => setState(() => _type = label == '%' ? 'PERCENT' : 'NOMINAL'),
-      selectedColor: AppColors.warning.withValues(alpha: 0.2),
-      labelStyle: TextStyle(
-        color: selected ? AppColors.warning : AppColors.textSecondary,
-        fontWeight: FontWeight.w600,
+      onSelected: () => setState(
+        () => _type = label == '%' ? 'PERCENT' : 'NOMINAL',
       ),
     );
   }
@@ -1975,15 +2202,13 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
     super.dispose();
   }
 
-  bool get _isValid =>
-      _qty > 0 && _reasonController.text.trim().length >= 3;
+  bool get _isValid => _qty > 0 && _reasonController.text.trim().length >= 3;
 
   void _submit() {
     if (!_isValid) return;
-    Navigator.of(context).pop(_CancelItemResult(
-      qty: _qty,
-      reason: _reasonController.text.trim(),
-    ));
+    Navigator.of(
+      context,
+    ).pop(_CancelItemResult(qty: _qty, reason: _reasonController.text.trim()));
   }
 
   @override
@@ -2003,7 +2228,11 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber, color: AppColors.error, size: 20),
+                  const Icon(
+                    Icons.warning_amber,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2017,7 +2246,10 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Jumlah yang dibatalkan:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text(
+              'Jumlah yang dibatalkan:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -2025,15 +2257,26 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
                   onPressed: _qty > 1 ? () => setState(() => _qty--) : null,
                   icon: const Icon(Icons.remove),
                 ),
-                Text('$_qty', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                Text(
+                  '$_qty',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
                 IconButton(
-                  onPressed: _qty < widget.qty ? () => setState(() => _qty++) : null,
+                  onPressed: _qty < widget.qty
+                      ? () => setState(() => _qty++)
+                      : null,
                   icon: const Icon(Icons.add),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            const Text('Alasan pembatalan *:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text(
+              'Alasan pembatalan *:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _reasonController,
@@ -2047,7 +2290,9 @@ class _CancelItemDialogState extends State<_CancelItemDialog> {
             const SizedBox(height: 8),
             Text(
               'Minimal 3 karakter. Sales akan melihat alasan ini.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
           ],
         ),
@@ -2090,20 +2335,23 @@ class _LayerField extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(label,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(fontWeight: FontWeight.w600)),
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            ChoiceChip(
-              label: const Text('%'),
+            AppChoiceChip(
+              label: '%',
               selected: type == 'PERCENT',
-              onSelected: (sel) => sel ? onTypeChanged('PERCENT') : null,
+              onSelected: () => onTypeChanged('PERCENT'),
             ),
             const SizedBox(width: 4),
-            ChoiceChip(
-              label: const Text('Rp'),
+            AppChoiceChip(
+              label: 'Rp',
               selected: type == 'NOMINAL',
-              onSelected: (sel) => sel ? onTypeChanged('NOMINAL') : null,
+              onSelected: () => onTypeChanged('NOMINAL'),
             ),
           ],
         ),

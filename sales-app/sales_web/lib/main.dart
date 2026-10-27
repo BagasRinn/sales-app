@@ -19,12 +19,17 @@ import 'presentation/providers/bulletin_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/home/app_shell.dart';
 
+// Shared datetime utilities
+import 'package:datetime_utils/datetime_utils.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Locale data harus diinisialisasi sebelum DateFormat dengan locale kustom
   // dipanggil — kalau tidak, DateFormat('dd MMM ...', 'id') melempar
   // LocaleDataException dan order tidak bisa di-render.
   await initializeDateFormatting('id', null);
+  // Initialize timezone database for datetime_utils
+  initTimezone();
   runApp(const SalesWebApp());
 }
 

@@ -11,13 +11,31 @@ class _FakeAdminRepository extends AdminRepository {
   Exception? failWith;
 
   @override
-  Future<List<Supplier>> getSuppliers({bool? active}) async {
+  Future<({List<Supplier> suppliers, int total})> getSuppliers({
+    bool? active,
+    String? search,
+    int skip = 0,
+    int limit = 20,
+  }) async {
     if (failWith != null) throw failWith!;
-    return suppliers;
+    var filtered = suppliers;
+    if (active != null) {
+      filtered = filtered.where((s) => s.isActive == active).toList();
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      filtered = filtered
+          .where((s) => s.name.toLowerCase().contains(search.toLowerCase()))
+          .toList();
+    }
+    final total = filtered.length;
+    return (suppliers: filtered.skip(skip).take(limit).toList(), total: total);
   }
 
   @override
-  Future<Supplier> createSupplier(String name, {String orderType = 'REGULER'}) async {
+  Future<Supplier> createSupplier(
+    String name, {
+    String orderType = 'REGULER',
+  }) async {
     final s = Supplier(name: name, isActive: true, orderType: orderType);
     suppliers.add(s);
     return s;
@@ -60,7 +78,9 @@ void main() {
 
   test('toggleSupplierActive flips isActive and refreshes', () async {
     final repo = _FakeAdminRepository();
-    repo.suppliers = [const Supplier(name: 'A', isActive: true, productCount: 0)];
+    repo.suppliers = [
+      const Supplier(name: 'A', isActive: true, productCount: 0),
+    ];
     final p = AdminProvider(repo);
     await p.loadSuppliers();
     await p.toggleSupplierActive(p.suppliers.first);

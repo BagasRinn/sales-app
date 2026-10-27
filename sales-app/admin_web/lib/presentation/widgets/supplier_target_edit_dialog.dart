@@ -14,6 +14,7 @@ Future<void> showSupplierTargetEditDialog(
   AdminProvider provider, {
   required String supplierName,
   required String period,
+  required String branch,
 }) async {
   // Find the current row to use its resolved target as the prefill.
   // If the supplier isn't in the list (e.g. no product yet), default to 0.
@@ -36,28 +37,19 @@ Future<void> showSupplierTargetEditDialog(
   );
   if (result == null) return; // user cancelled
 
-  if (provider.userBranch == null) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Branch tidak terdeteksi. Coba login ulang.')),
-      );
-    }
-    return;
-  }
-
   try {
     await provider.updateSupplierTarget(
-      branch: provider.userBranch!,
+      branch: branch,
       supplierName: supplierName,
       period: period,
       targetValue: result,
     );
-    await provider.loadSupplierPerformance(yearMonth: period);
+    await provider.loadSupplierPerformance(yearMonth: period, branch: branch);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan target: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyimpan target: $e')));
     }
   }
 }

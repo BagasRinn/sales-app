@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, func, case, or_
-from uuid import UUID
+from uuid import UUID, NAMESPACE_URL, uuid4, uuid5
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from uuid import uuid4
 from typing import List, Optional
 import logging
 
@@ -152,8 +152,9 @@ def _layer_cut(type_val: str, percent: float | Decimal, nominal: int, running: i
     """Potongan untuk 1 layer. NOMINAL di-cap ke running; PERCENT dari running."""
     if type_val == "NOMINAL":
         return min(max(0, nominal), running)
-    # PERCENT
-    return int(round(running * max(0, percent) / 100))
+    # PERCENT — half-up (int(x+0.5)), samakan dengan SQL round(); round() Python
+    # memakai banker's rounding sehingga total bisa beda 1 rupiah per item.
+    return int(running * max(0, percent) / 100 + 0.5)
 
 
 def _apply_3_layers(
@@ -184,7 +185,8 @@ def _up_price_per_piece(harga_satuan: int, up_price_type: str, up_price_percent:
     Dipakai sebagai penambah sebelum 3-layer diskon berjalan."""
     t = (up_price_type or "NOMINAL").upper()
     if t == "PERCENT":
-        return int(round(max(0, harga_satuan) * max(0, float(up_price_percent or 0)) / 100))
+        # half-up, samakan dengan SQL round() (round() Python = banker's)
+        return int(max(0, harga_satuan) * max(0, float(up_price_percent or 0)) / 100 + 0.5)
     return int(max(0, up_price_nominal or 0))
 
 
@@ -199,15 +201,7 @@ def _layer_cut_sql(type_col, percent_col, nominal_col, base):
     return case((type_col == "NOMINAL", nominal_cut), else_=percent_cut)
 
 
-def _wita_str(dt: datetime) -> str:
-    """Convert datetime to WITA ISO string with +08:00 suffix."""
-    if dt is None:
-        return None
-    # Ensure UTC if naive, then convert to WITA
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    wita_dt = dt.astimezone(WITA)
-    return wita_dt.isoformat()
+
 
 
 def _build_order_response(order: Order) -> dict:
@@ -281,7 +275,7 @@ def _build_order_response(order: Order) -> dict:
         "customer_kode": order.customer.kode if order.customer else None,
         "status": order.status,
         "notes": order.notes,
-        "created_at": _wita_str(order.created_at),
+        "created_at": order.created_at,
         "items": items_data,
         "store_name": order.store_name,
         "store_contact": order.store_contact,
@@ -517,8 +511,23 @@ def create_order(
                 detail=f"Produk '{product.nama_barang}' tidak tersedia di branch ini",
             )
 
+    # Idempotency: client boleh mengirim client_request_id yang sama saat retry
+    # create (mis. timeout). ID order diturunkan deterministik dari key itu,
+    # jadi retry mengembalikan draft yang sama, bukan membuat draft baru.
+    order_id = uuid4()
+    request_key = (order_req.client_request_id or "").strip()
+    if request_key:
+        order_id = uuid5(NAMESPACE_URL, f"sales-order:{sales_id}:{request_key}")
+        existing = (
+            db.query(Order)
+            .filter(Order.id == order_id, Order.sales_id == sales_id)
+            .first()
+        )
+        if existing:
+            return _build_order_response(existing)
+
     order = Order(
-        id=uuid4(),
+        id=order_id,
         sales_id=sales_id,
         customer_id=customer.id,
         branch=user_branch,
@@ -586,9 +595,22 @@ def create_order(
     # DRAFT sekarang langsung booking stok (sebelumnya: validation only, booking
     # di submit). Kalau stok tidak cukup, _book_items panggil db.rollback()
     # yang discard Order+OrderItems di session ini, lalu raise 409.
-    _book_items(order_req.items, db, sales_id, order.id, sumber="DRAFT", branch=user_branch)
-
-    db.commit()
+    try:
+        _book_items(order_req.items, db, sales_id, order.id, sumber="DRAFT", branch=user_branch)
+        db.commit()
+    except IntegrityError:
+        # Retry bersamaan dengan client_request_id yang sama: request kalah
+        # race harus mengembalikan order pemenang, bukan error 500/duplikat.
+        db.rollback()
+        if request_key:
+            existing = (
+                db.query(Order)
+                .filter(Order.id == order_id, Order.sales_id == sales_id)
+                .first()
+            )
+            if existing:
+                return _build_order_response(existing)
+        raise
     db.refresh(order)
 
     # DRAFT tidak di-sync ke sheets. Sync hanya saat submit.
@@ -687,12 +709,39 @@ def get_my_stats(
     omset_today_q = apply_branch_filter(omset_today_q, Order, current_user)
     omset_today_val = omset_today_q.scalar() or 0
 
+    approved_count_today_q = db.query(func.count(Order.id)).filter(
+        Order.sales_id == sales_id,
+        Order.status == "APPROVED",
+        Order.created_at >= start_of_day_utc,
+        Order.created_at < end_of_day_utc,
+    )
+    approved_count_today_q = apply_branch_filter(
+        approved_count_today_q, Order, current_user
+    )
+    approved_count_today = approved_count_today_q.scalar() or 0
+
     pending_count_q = db.query(func.count(Order.id)).filter(
         Order.sales_id == sales_id,
         Order.status == "PENDING",
     )
     pending_count_q = apply_branch_filter(pending_count_q, Order, current_user)
     pending_count = pending_count_q.scalar() or 0
+
+    pending_value_q = (
+        db.query(func.coalesce(func.sum(final_subtotal_expr), 0))
+        .join(Order, Order.id == OrderItem.order_id)
+        .join(
+            Product,
+            (Product.id == OrderItem.product_id)
+            & (Product.branch == OrderItem.branch),
+        )
+        .filter(
+            Order.sales_id == sales_id,
+            Order.status == "PENDING",
+        )
+    )
+    pending_value_q = apply_branch_filter(pending_value_q, Order, current_user)
+    pending_value = pending_value_q.scalar() or 0
 
     selesai_count_q = db.query(func.count(Order.id)).filter(
         Order.sales_id == sales_id,
@@ -717,7 +766,9 @@ def get_my_stats(
 
     result = {
         "omset_hari_ini": int(omset_today_val),
+        "approved_count_today": int(approved_count_today),
         "pending_count": int(pending_count),
+        "pending_value": int(pending_value),
         "selesai_bulan_ini_count": int(selesai_count),
         "selesai_bulan_ini_total": int(selesai_total),
     }
@@ -971,6 +1022,31 @@ def delete_draft_order(
     items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
     sales_id = UUID(current_user["user_id"])
     for item in items:
+        product = db.execute(
+            text(
+                "SELECT stok_booking FROM products "
+                "WHERE id = :pid AND branch = :branch FOR UPDATE"
+            ),
+            {"pid": item.product_id, "branch": item.branch},
+        ).first()
+        if product is None:
+            # Defensive: stok_booking sudah 0 (legacy DRAFT). Lanjut saja,
+            # delete tetap dilakukan. Log warning supaya operator tahu.
+            print(
+                f"[WARN] delete_draft_order: order={order_id} product={item.product_id} "
+                "tidak ditemukan, skip release"
+            )
+            continue
+
+        old_booking = max(int(product.stok_booking or 0), 0)
+        release_qty = min(old_booking, max(int(item.qty or 0), 0))
+        if release_qty == 0:
+            print(
+                f"[WARN] delete_draft_order: order={order_id} product={item.product_id} "
+                "stok_booking sudah 0, skip release (kemungkinan legacy DRAFT)"
+            )
+            continue
+
         result = db.execute(
             text(
                 "UPDATE products "
@@ -978,24 +1054,21 @@ def delete_draft_order(
                 "WHERE id = :pid AND branch = :branch "
                 "RETURNING stok_booking"
             ),
-            {"pid": item.product_id, "branch": item.branch, "qty": item.qty},
+            {
+                "pid": item.product_id,
+                "branch": item.branch,
+                "qty": release_qty,
+            },
         ).first()
         if result is None:
-            # Defensive: stok_booking sudah 0 (legacy DRAFT). Lanjut saja,
-            # delete tetap dilakukan. Log warning supaya operator tahu.
-            print(
-                f"[WARN] delete_draft_order: order={order_id} product={item.product_id} "
-                f"stok_booking sudah 0, skip release (kemungkinan legacy DRAFT)"
-            )
             continue
         new_booking = result[0]
-        old_booking = new_booking + item.qty
         log_stock_change(
             db=db,
             product_id=item.product_id,
             sumber="DRAFT_DELETE",
             field_terdampak="stok_booking",
-            delta=-item.qty,
+            delta=-release_qty,
             nilai_sebelum=old_booking,
             nilai_sesudah=new_booking,
             actor_id=sales_id,
@@ -1003,6 +1076,21 @@ def delete_draft_order(
             branch=order.branch,
         )
 
+    # Flush log yang baru dibuat agar update SQL di bawah juga melepas referensi
+    # log DRAFT_DELETE yang masih pending di session.
+    db.flush()
+
+    # FK stok_log.order_id di DB prod masih NO ACTION (migration SET NULL lama
+    # tidak ada di repo), jadi NULL-kan manual sebelum delete. Setara dengan
+    # ON DELETE SET NULL: audit trail tetap ada, referensi order dilepas.
+    db.execute(
+        text("UPDATE stok_log SET order_id = NULL WHERE order_id = :oid"),
+        {"oid": order_id},
+    )
+
+    db.query(OrderItem).filter(OrderItem.order_id == order_id).delete(
+        synchronize_session=False
+    )
     db.delete(order)
     db.commit()
     return None
@@ -1081,7 +1169,7 @@ def cancel_order(
 @router.get("/pending")
 def list_pending_orders(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 10000,
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
@@ -1153,8 +1241,14 @@ def list_all_orders(
     query = apply_branch_filter(query, Order, current_user)
     count_query = apply_branch_filter(count_query, Order, current_user)
     if status_filter:
-        query = query.filter(Order.status == status_filter.upper())
-        count_query = count_query.filter(Order.status == status_filter.upper())
+        statuses = [
+            value.strip().upper()
+            for value in status_filter.split(',')
+            if value.strip()
+        ]
+        if statuses:
+            query = query.filter(Order.status.in_(statuses))
+            count_query = count_query.filter(Order.status.in_(statuses))
 
     if sales_id:
         try:
@@ -1227,8 +1321,39 @@ def list_all_orders(
         )
 
     total = count_query.count()
+
+    # Aggregate uang untuk SELURUH hasil filter (bukan cuma page ini) supaya
+    # summary popup dashboard tidak terpotong `limit` row.
+    final_expr, disc_expr = _three_layer_subtotal_expr()
+    # count_query punya filter identik tapi tanpa joinedload (kalau pakai `query`,
+    # join eager-load items bikin subquery duplikat per item → sum membengkak).
+    ids_subq = count_query.with_entities(Order.id).subquery()
+    sums = (
+        db.query(
+            func.coalesce(func.sum(Product.harga * OrderItem.qty), 0).label("raw"),
+            func.coalesce(func.sum(final_expr), 0).label("final"),
+            func.coalesce(func.sum(disc_expr), 0).label("disc"),
+        )
+        .select_from(ids_subq)
+        .outerjoin(OrderItem, OrderItem.order_id == ids_subq.c.id)
+        # Product PK = (id, branch) → join wajib pakai branch, kalau tidak
+        # product id yang sama di branch lain bikin row fan-out & sum membengkak.
+        .outerjoin(
+            Product,
+            (Product.id == OrderItem.product_id) & (Product.branch == OrderItem.branch),
+        )
+        .one()
+    )
+
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
-    return {"orders": [_build_order_response(o) for o in orders], "total": total}
+    return {
+        "orders": [_build_order_response(o) for o in orders],
+        "total": total,
+        "total_amount": int(sums.final or 0),
+        "total_discount": int(sums.disc or 0),
+        # up_price_total = base - raw = (final + disc) - raw
+        "total_up_price": max(0, int((sums.final or 0) + (sums.disc or 0) - (sums.raw or 0))),
+    }
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
