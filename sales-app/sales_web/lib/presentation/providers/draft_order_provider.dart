@@ -365,6 +365,30 @@ class DraftOrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Apply up price from [sourceLineId] to ALL other lines.
+  void applyUpPriceToAll(String sourceLineId) {
+    final sourceIndex = _items.indexWhere((l) => l.id == sourceLineId);
+    if (sourceIndex < 0) return;
+    final source = _items[sourceIndex];
+
+    _items = [
+      for (int i = 0; i < _items.length; i++)
+        if (i != sourceIndex)
+          OrderLine(
+            id: _items[i].id,
+            productId: _items[i].productId,
+            namaBarang: _items[i].namaBarang,
+            hargaSatuan: _items[i].hargaSatuan,
+            qty: _items[i].qty,
+            discount: _items[i].discount,
+            upPrice: source.upPrice,
+          )
+        else
+          _items[i],
+    ];
+    notifyListeners();
+  }
+
   /// Update the editing order id after a successful draft save (POST creates new draft).
   void setEditingOrderId(String id) {
     _editingOrderId = id;

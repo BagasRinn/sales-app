@@ -2828,6 +2828,30 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
     Navigator.pop(context);
   }
 
+  void _onApplyToAll() {
+    final draft = context.read<DraftOrderProvider>();
+    final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
+    if (otherCount == 0) return;
+
+    draft.applyUpPriceToAll(widget.line.id);
+
+    final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
+    context.read<DraftOrderProvider>().setUpPrice(
+      lineId: widget.line.id,
+      type: _type,
+      value: value,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Up Price diterapkan ke $otherCount item lainnya'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final idr = NumberFormat('#,###', 'id');
@@ -2928,6 +2952,28 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
               ),
             ),
             const SizedBox(height: 16),
+            Consumer<DraftOrderProvider>(
+              builder: (context, draft, _) {
+                final otherCount = draft.items
+                    .where((l) => l.id != widget.line.id)
+                    .length;
+                if (otherCount == 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _onApplyToAll,
+                      icon: const Icon(Icons.done_all, size: 18),
+                      label: Text('Terapkan ke Semua Item ($otherCount)'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
             Row(
               children: [
                 Expanded(
