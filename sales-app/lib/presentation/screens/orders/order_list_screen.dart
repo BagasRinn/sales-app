@@ -146,6 +146,46 @@ class _OrderListScreenState extends State<OrderListScreen>
   Widget _buildList() {
     final orderProvider = context.watch<OrderProvider>();
     final orders = _filterOrders(orderProvider.orders);
+    final errorMessage = orderProvider.errorMessage;
+
+    if (errorMessage != null && orders.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.error,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Gagal memuat pesanan',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                errorMessage,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.error,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => _refreshOrders(reset: true),
+                child: const Text('Coba lagi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     if (orderProvider.isLoading && orders.isEmpty) {
       return ListView.builder(
