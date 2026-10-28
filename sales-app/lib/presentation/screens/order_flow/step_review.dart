@@ -827,7 +827,11 @@ class _LineRow extends StatelessWidget {
           : entry.$1 == 2
               ? 'Diskon 2'
               : 'Diskon 3';
-      parts.add('$label: -${currency.format(cut)}');
+      if (l.type.toUpperCase() == 'PERCENT') {
+        parts.add('$label: ${l.value}%');
+      } else {
+        parts.add('$label: -${currency.format(cut)}');
+      }
     }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
