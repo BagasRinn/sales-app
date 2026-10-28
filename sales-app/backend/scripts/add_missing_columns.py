@@ -26,6 +26,8 @@ url = DEST_DATABASE_URL.replace("postgresql+psycopg://", "postgresql://")
 ADDITIONS = [
     ("orders", "order_discount_type", "VARCHAR(10)", "DEFAULT 'PERCENT'"),
     ("orders", "order_discount_nominal", "INTEGER", "DEFAULT 0"),
+    ("orders", "order_up_price_type", "VARCHAR(10)", "DEFAULT 'NOMINAL'"),
+    ("orders", "order_up_price_nominal", "INTEGER", "DEFAULT 0"),
     ("customer_registration_submissions", "kode_nama_salesman", "VARCHAR(200)", "NULL"),
 ]
 

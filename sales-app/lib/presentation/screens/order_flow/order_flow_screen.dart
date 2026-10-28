@@ -174,6 +174,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
               items: draft.buildItemsPayload(),
               notes: draft.notes,
               orderType: draft.orderType,
+              orderDiscountType: draft.orderDiscountType,
+              orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+              orderUpPriceType: draft.orderUpPriceType,
+              orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
             )
           : await orderProvider.createOrder(
               customerId: draft.customerId!,
@@ -181,6 +185,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
               notes: draft.notes,
               orderType: draft.orderType,
               clientRequestId: _createRequestId,
+              orderDiscountType: draft.orderDiscountType,
+              orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+              orderUpPriceType: draft.orderUpPriceType,
+              orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
             );
       _hideLoading();
 
@@ -224,6 +232,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: draft.buildItemsPayload(),
           notes: draft.notes,
           orderType: draft.orderType,
+          orderDiscountType: draft.orderDiscountType,
+          orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+          orderUpPriceType: draft.orderUpPriceType,
+          orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
         );
       } else {
         result = await orderProvider.createOrder(
@@ -232,6 +244,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           notes: draft.notes,
           orderType: draft.orderType,
           clientRequestId: _createRequestId,
+          orderDiscountType: draft.orderDiscountType,
+          orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+          orderUpPriceType: draft.orderUpPriceType,
+          orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
         );
       }
 

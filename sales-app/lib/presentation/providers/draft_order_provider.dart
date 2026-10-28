@@ -18,6 +18,14 @@ class DraftOrderProvider extends ChangeNotifier {
 
   String orderType = 'REGULER';
 
+  // Order-level (global) discount — applied to total after item-level discounts
+  String orderDiscountType = 'PERCENT';
+  double orderDiscountNominal = 0;
+
+  // Order-level (global) up price — applied to total before order-level discount
+  String orderUpPriceType = 'NOMINAL';
+  double orderUpPriceNominal = 0;
+
   Map<String, int> _priceCache = {};
 
   void setPricingCache(Map<String, int> prices) {
@@ -172,6 +180,48 @@ class DraftOrderProvider extends ChangeNotifier {
         else
           items[i],
     ];
+    notifyListeners();
+  }
+
+  /// Set order-level (global) discount. Applied to total after item-level discounts.
+  /// [type] harus 'PERCENT' atau 'NOMINAL'. [value] adalah nominal IDR (kalau NOMINAL)
+  /// atau percent 0-100 (kalau PERCENT).
+  void setOrderDiscount({
+    required String type,
+    required double value,
+  }) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError(
+          'discount type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    if (type == 'PERCENT') {
+      orderDiscountType = type;
+      orderDiscountNominal = value > 100 ? 100.0 : value;
+    } else {
+      orderDiscountType = type;
+      orderDiscountNominal = value;
+    }
+    notifyListeners();
+  }
+
+  /// Set order-level (global) up price. Applied to total before order-level discount.
+  /// [type] harus 'PERCENT' atau 'NOMINAL'. [value] adalah nominal IDR (kalau NOMINAL)
+  /// atau percent (kalau PERCENT).
+  void setOrderUpPrice({
+    required String type,
+    required double value,
+  }) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError(
+          'up_price type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    if (type == 'PERCENT') {
+      orderUpPriceType = type;
+      orderUpPriceNominal = value;
+    } else {
+      orderUpPriceType = type;
+      orderUpPriceNominal = value;
+    }
     notifyListeners();
   }
 
@@ -331,7 +381,8 @@ class DraftOrderProvider extends ChangeNotifier {
   }
 
   /// Total harga setelah 3-layer diskon sequential per-line (up_price applied first, lalu diskon).
-  int get totalPrice {
+  /// Ini adalah total item-level, BELUM termasuk order-level discount/up price.
+  int get totalItemPrice {
     int total = 0;
     for (final line in items) {
       final price = _priceCache[line.productId] ?? 0;
@@ -343,6 +394,27 @@ class DraftOrderProvider extends ChangeNotifier {
     }
     return total;
   }
+
+  /// Order-level (global) up price amount (IDR), dihitung dari totalItemPrice.
+  int get totalOrderUpPrice {
+    final base = totalItemPrice;
+    if (orderUpPriceType.toUpperCase() == 'PERCENT') {
+      return (base * orderUpPriceNominal / 100).round();
+    }
+    return orderUpPriceNominal.toInt();
+  }
+
+  /// Order-level (global) discount amount (IDR), dihitung dari (totalItemPrice + orderUpPrice).
+  int get totalOrderDiscount {
+    final base = totalItemPrice + totalOrderUpPrice;
+    if (orderDiscountType.toUpperCase() == 'PERCENT') {
+      return (base * orderDiscountNominal / 100).round().clamp(0, base);
+    }
+    return orderDiscountNominal.toInt().clamp(0, base);
+  }
+
+  /// Total harga setelah SEMUA diskon & up price (item-level + order-level).
+  int get totalPrice => totalItemPrice + totalOrderUpPrice - totalOrderDiscount;
 
   int get discountLayer1Total {
     int total = 0;
@@ -383,7 +455,7 @@ class DraftOrderProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Total Up Price (semua line, IDR).
+  /// Total Up Price item-level (semua line, IDR) — tidak termasuk order-level.
   int get totalUpPrice {
     int total = 0;
     for (final line in items) {
@@ -393,7 +465,7 @@ class DraftOrderProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Estimasi hemat — selisih totalRaw dan totalPrice.
+  /// Estimasi hemat — selisih totalRaw dan totalPrice (termasuk order-level discount).
   int get totalDiscount => totalRaw - totalPrice - totalUpPrice;
 
   /// Jumlah line yang adalah "GRATIS" (layer1 >= 100%).
@@ -423,6 +495,11 @@ class DraftOrderProvider extends ChangeNotifier {
     /// Harga per productId — supaya total di review step terhitung benar.
     /// Kalau null, harga dari order items dipakai.
     Map<String, int>? prices,
+    /// Order-level discount/up price dari existing order.
+    String? existingOrderDiscountType,
+    double? existingOrderDiscountNominal,
+    String? existingOrderUpPriceType,
+    double? existingOrderUpPriceNominal,
   }) {
     editingOrderId = orderId;
     editingOriginalStatus = existingStatus;
@@ -432,6 +509,11 @@ class DraftOrderProvider extends ChangeNotifier {
     this.customerAddress = customerAddress;
     items = List<OrderLine>.from(existingLines);
     notes = existingNotes;
+    // Rehydrate order-level discount/up price
+    orderDiscountType = existingOrderDiscountType ?? 'PERCENT';
+    orderDiscountNominal = existingOrderDiscountNominal ?? 0;
+    orderUpPriceType = existingOrderUpPriceType ?? 'NOMINAL';
+    orderUpPriceNominal = existingOrderUpPriceNominal ?? 0;
     if (prices != null && prices.isNotEmpty) {
       _priceCache = Map.from(prices);
     }
@@ -447,6 +529,10 @@ class DraftOrderProvider extends ChangeNotifier {
     editingOrderId = null;
     editingOriginalStatus = null;
     orderType = 'REGULER';
+    orderDiscountType = 'PERCENT';
+    orderDiscountNominal = 0;
+    orderUpPriceType = 'NOMINAL';
+    orderUpPriceNominal = 0;
     notifyListeners();
   }
 
@@ -479,6 +565,16 @@ class DraftOrderProvider extends ChangeNotifier {
       result.add(base);
     }
     return result;
+  }
+
+  /// Bangun payload order-level (global) discount & up price untuk submit ke backend.
+  Map<String, dynamic> buildOrderLevelPayload() {
+    return {
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal.toInt(),
+      'order_up_price_type': orderUpPriceType,
+      'order_up_price_nominal': orderUpPriceNominal.toInt(),
+    };
   }
 
   String _generateId() {

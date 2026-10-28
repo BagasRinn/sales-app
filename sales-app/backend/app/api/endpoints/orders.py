@@ -287,6 +287,11 @@ def _build_order_response(order: Order) -> dict:
         "cancelled_items": order.cancelled_items,
         "reject_reason": order.reject_reason,
         "invoice_number": order.invoice_number,
+        # Order-level (global) discount & up price
+        "order_discount_type": order.order_discount_type or 'PERCENT',
+        "order_discount_nominal": int(order.order_discount_nominal or 0),
+        "order_up_price_type": order.order_up_price_type or 'NOMINAL',
+        "order_up_price_nominal": int(order.order_up_price_nominal or 0),
     }
 
 
@@ -540,6 +545,11 @@ def create_order(
         store_contact=order_req.store_contact,
         store_address=order_req.store_address or customer.alamat,
         order_type=order_type,
+        # Order-level (global) discount & up price
+        order_discount_type=order_req.order_discount_type,
+        order_discount_nominal=order_req.order_discount_nominal,
+        order_up_price_type=order_req.order_up_price_type,
+        order_up_price_nominal=order_req.order_up_price_nominal,
     )
     db.add(order)
 
@@ -923,6 +933,11 @@ def update_draft_order(
     order.store_contact = None
     order.store_address = customer.alamat
     order.order_type = new_order_type
+    # Order-level (global) discount & up price
+    order.order_discount_type = order_update.order_discount_type
+    order.order_discount_nominal = order_update.order_discount_nominal
+    order.order_up_price_type = order_update.order_up_price_type
+    order.order_up_price_nominal = order_update.order_up_price_nominal
 
     # DRAFT dan PENDING keduanya sekarang punya stok_booking terisi - rebalance
     # setelah items berubah. Kalau rebalance raise 409, db.rollback() di helper

@@ -137,6 +137,10 @@ class OrderProvider extends ChangeNotifier {
     String? notes,
     String orderType = 'REGULER',
     String? clientRequestId,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     _errorMessage = null;
     notifyListeners();
@@ -148,6 +152,10 @@ class OrderProvider extends ChangeNotifier {
         notes: notes,
         orderType: orderType,
         clientRequestId: clientRequestId,
+        orderDiscountType: orderDiscountType,
+        orderDiscountNominal: orderDiscountNominal,
+        orderUpPriceType: orderUpPriceType,
+        orderUpPriceNominal: orderUpPriceNominal,
       );
       notifyListeners();
       return order;
@@ -170,6 +178,10 @@ class OrderProvider extends ChangeNotifier {
     Map<String, ItemDiscount>? discounts,
     String? notes,
     String orderType = 'REGULER',
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     _errorMessage = null;
     notifyListeners();
@@ -181,6 +193,10 @@ class OrderProvider extends ChangeNotifier {
         items: items,
         notes: notes,
         orderType: orderType,
+        orderDiscountType: orderDiscountType,
+        orderDiscountNominal: orderDiscountNominal,
+        orderUpPriceType: orderUpPriceType,
+        orderUpPriceNominal: orderUpPriceNominal,
       );
       notifyListeners();
       return order;

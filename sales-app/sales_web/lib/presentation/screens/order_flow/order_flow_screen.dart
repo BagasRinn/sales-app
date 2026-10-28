@@ -250,6 +250,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           items: items,
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           orderType: draft.orderType,
+          orderDiscountType: draft.orderDiscountType,
+          orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+          orderUpPriceType: draft.orderUpPriceType,
+          orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
         );
         orderId = result.id;
       } else {
@@ -259,6 +263,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
           notes: _notesController.text.isEmpty ? null : _notesController.text,
           orderType: draft.orderType,
           clientRequestId: _createRequestId,
+          orderDiscountType: draft.orderDiscountType,
+          orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+          orderUpPriceType: draft.orderUpPriceType,
+          orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
         );
         orderId = result.id;
       }
@@ -318,6 +326,10 @@ class _OrderFlowScreenState extends State<OrderFlowScreen> {
         orderType: draft.orderType,
         existingOrderId: draft.editingOrderId,
         clientRequestId: _createRequestId,
+        orderDiscountType: draft.orderDiscountType,
+        orderDiscountNominal: draft.orderDiscountNominal.toInt(),
+        orderUpPriceType: draft.orderUpPriceType,
+        orderUpPriceNominal: draft.orderUpPriceNominal.toInt(),
       );
 
       // Persist the draft id so subsequent saves update the same record.
@@ -1480,6 +1492,152 @@ class _StepReviewState extends State<_StepReview> {
                 ),
                 const SizedBox(height: 20),
 
+                // ── Diskon & Up Price Order ───────────────────────────────────
+                _sectionHeader('Diskon & Up Price Order'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Order-level Discount
+                      Row(
+                        children: [
+                          const Text('Diskon Order: ',
+                              style: AppTextStyles.bodyMedium),
+                          const SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value: draft.orderDiscountType,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'PERCENT', child: Text('%')),
+                              DropdownMenuItem(
+                                  value: 'NOMINAL', child: Text('Rp')),
+                            ],
+                            onChanged: (v) =>
+                                draft.setOrderDiscount(type: v!,
+                                    value: draft.orderDiscountNominal),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 120,
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                hintText: '0',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding:
+                                    EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                              onChanged: (v) {
+                                final val = double.tryParse(v) ?? 0;
+                                draft.setOrderDiscount(
+                                    type: draft.orderDiscountType,
+                                    value: val);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Order-level Up Price
+                      Row(
+                        children: [
+                          const Text('Up Price Order: ',
+                              style: AppTextStyles.bodyMedium),
+                          const SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value: draft.orderUpPriceType,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'PERCENT', child: Text('%')),
+                              DropdownMenuItem(
+                                  value: 'NOMINAL', child: Text('Rp')),
+                            ],
+                            onChanged: (v) =>
+                                draft.setOrderUpPrice(type: v!,
+                                    value: draft.orderUpPriceNominal),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 120,
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                hintText: '0',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding:
+                                    EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                              onChanged: (v) {
+                                final val = double.tryParse(v) ?? 0;
+                                draft.setOrderUpPrice(
+                                    type: draft.orderUpPriceType,
+                                    value: val);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (draft.totalOrderDiscount > 0 ||
+                          draft.totalOrderUpPrice > 0) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total Diskon Order:',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '- Rp ${idr.format(draft.totalOrderDiscount)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (draft.totalOrderUpPrice > 0) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Total Up Price Order:',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                '+ Rp ${idr.format(draft.totalOrderUpPrice)}',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
                 // ── Total ───────────────────────────────────────────────────
                 _OrderTotalCard(draft: draft, idr: idr),
               ],
@@ -1583,6 +1741,8 @@ class _OrderTotalCard extends StatelessWidget {
     final l2 = draft.discountLayer2Total;
     final l3 = draft.discountLayer3Total;
     final upTotal = draft.totalUpPrice;
+    final orderUpPrice = draft.totalOrderUpPrice;
+    final orderDiscount = draft.totalOrderDiscount;
 
     return Container(
       decoration: BoxDecoration(
@@ -1630,6 +1790,16 @@ class _OrderTotalCard extends StatelessWidget {
                 if (upTotal > 0) ...[
                   const SizedBox(height: 4),
                   _upRow('Up Price', upTotal, idr),
+                ],
+                // Order-level (global) discount row
+                if (orderDiscount > 0) ...[
+                  const SizedBox(height: 4),
+                  _discRow('Diskon Order', orderDiscount, idr),
+                ],
+                // Order-level (global) up price row
+                if (orderUpPrice > 0) ...[
+                  const SizedBox(height: 4),
+                  _upRow('Up Price Order', orderUpPrice, idr),
                 ],
                 Container(
                   height: 1,

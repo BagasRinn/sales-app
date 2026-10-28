@@ -177,6 +177,152 @@ class _StepReviewState extends State<StepReview> {
               ),
               const SizedBox(height: 20),
 
+              // Order-level (global) discount & up price input
+              _sectionTitle('Diskon & Up Price Order'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.cardSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Order-level Discount
+                    Row(
+                      children: [
+                        const Text('Diskon Order: ',
+                            style: AppTextStyles.bodyMedium),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: draft.orderDiscountType,
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'PERCENT', child: Text('%')),
+                            DropdownMenuItem(
+                                value: 'NOMINAL', child: Text('Rp')),
+                          ],
+                          onChanged: (v) =>
+                              draft.setOrderDiscount(type: v!,
+                                  value: draft.orderDiscountNominal),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              hintText: '0',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            onChanged: (v) {
+                              final val = double.tryParse(v) ?? 0;
+                              draft.setOrderDiscount(
+                                  type: draft.orderDiscountType,
+                                  value: val);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Order-level Up Price
+                    Row(
+                      children: [
+                        const Text('Up Price Order: ',
+                            style: AppTextStyles.bodyMedium),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          value: draft.orderUpPriceType,
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'PERCENT', child: Text('%')),
+                            DropdownMenuItem(
+                                value: 'NOMINAL', child: Text('Rp')),
+                          ],
+                          onChanged: (v) =>
+                              draft.setOrderUpPrice(type: v!,
+                                  value: draft.orderUpPriceNominal),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              hintText: '0',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            onChanged: (v) {
+                              final val = double.tryParse(v) ?? 0;
+                              draft.setOrderUpPrice(
+                                  type: draft.orderUpPriceType,
+                                  value: val);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (draft.totalOrderDiscount > 0 ||
+                        draft.totalOrderUpPrice > 0) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Total Diskon Order:',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '- ${currency.format(draft.totalOrderDiscount)}',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (draft.totalOrderUpPrice > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total Up Price Order:',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '+ ${currency.format(draft.totalOrderUpPrice)}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
               // Total + Diskon
               _OrderTotalCard(draft: draft, currency: currency),
             ],
@@ -256,6 +402,8 @@ class _OrderTotalCard extends StatelessWidget {
     final l2 = draft.discountLayer2Total;
     final l3 = draft.discountLayer3Total;
     final upTotal = draft.totalUpPrice;
+    final orderUpPrice = draft.totalOrderUpPrice;
+    final orderDiscount = draft.totalOrderDiscount;
 
     return Container(
       decoration: BoxDecoration(
@@ -305,6 +453,18 @@ class _OrderTotalCard extends StatelessWidget {
                 if (upTotal > 0) ...[
                   const SizedBox(height: 4),
                   _upPriceRow('Up Price', upTotal),
+                ],
+
+                // Order-level (global) discount — tampil jika > 0
+                if (orderDiscount > 0) ...[
+                  const SizedBox(height: 4),
+                  _discountRow('Diskon Order', orderDiscount),
+                ],
+
+                // Order-level (global) up price — tampil jika > 0
+                if (orderUpPrice > 0) ...[
+                  const SizedBox(height: 4),
+                  _upPriceRow('Up Price Order', orderUpPrice),
                 ],
 
                 const Divider(height: 20),

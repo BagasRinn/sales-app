@@ -12,6 +12,10 @@ class OrderRepository {
     String? notes,
     String orderType = 'REGULER',
     String? clientRequestId,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     final data = await _api.post(
       '/orders',
@@ -21,6 +25,10 @@ class OrderRepository {
         'notes': notes ?? '',
         'order_type': orderType,
         'client_request_id': ?clientRequestId,
+        'order_discount_type': orderDiscountType,
+        'order_discount_nominal': orderDiscountNominal,
+        'order_up_price_type': orderUpPriceType,
+        'order_up_price_nominal': orderUpPriceNominal,
       },
     );
     return Order.fromJson(data);
@@ -32,6 +40,10 @@ class OrderRepository {
     required List<Map<String, dynamic>> items,
     String? notes,
     String orderType = 'REGULER',
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     final data = await _api.put(
       '/orders/$orderId',
@@ -40,6 +52,10 @@ class OrderRepository {
         'items': items,
         'notes': notes ?? '',
         'order_type': orderType,
+        'order_discount_type': orderDiscountType,
+        'order_discount_nominal': orderDiscountNominal,
+        'order_up_price_type': orderUpPriceType,
+        'order_up_price_nominal': orderUpPriceNominal,
       },
     );
     return Order.fromJson(data);

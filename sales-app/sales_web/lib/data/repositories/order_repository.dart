@@ -54,12 +54,20 @@ class OrderRepository {
     String? notes,
     required String orderType,
     String? clientRequestId,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     final body = <String, dynamic>{
       'customer_id': customerId,
       'items': items,
       'notes': notes,
       'order_type': orderType,
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal,
+      'order_up_price_type': orderUpPriceType,
+      'order_up_price_nominal': orderUpPriceNominal,
     };
     if (clientRequestId != null) {
       body['client_request_id'] = clientRequestId;
@@ -75,6 +83,10 @@ class OrderRepository {
     required String orderType,
     String? existingOrderId,
     String? clientRequestId,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     final body = <String, dynamic>{
       'customer_id': customerId,
@@ -82,6 +94,10 @@ class OrderRepository {
       'notes': notes,
       'order_type': orderType,
       'status': 'DRAFT',
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal,
+      'order_up_price_type': orderUpPriceType,
+      'order_up_price_nominal': orderUpPriceNominal,
     };
     if (clientRequestId != null) {
       body['client_request_id'] = clientRequestId;
@@ -98,12 +114,20 @@ class OrderRepository {
     required List<Map<String, dynamic>> items,
     String? notes,
     required String orderType,
+    String orderDiscountType = 'PERCENT',
+    int orderDiscountNominal = 0,
+    String orderUpPriceType = 'NOMINAL',
+    int orderUpPriceNominal = 0,
   }) async {
     final data = await _api.put('/orders/$orderId', body: {
       'customer_id': customerId,
       'items': items,
       'notes': notes,
       'order_type': orderType,
+      'order_discount_type': orderDiscountType,
+      'order_discount_nominal': orderDiscountNominal,
+      'order_up_price_type': orderUpPriceType,
+      'order_up_price_nominal': orderUpPriceNominal,
     });
     return Order.fromJson(data as Map<String, dynamic>);
   }

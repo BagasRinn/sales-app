@@ -230,6 +230,12 @@ class OrderCreate(BaseSchema):
     # Optional idempotency key. Client mengirim key yang sama saat retry request
     # create yang gagal/timeout, supaya draft tidak terbuat dua kali.
     client_request_id: Optional[str] = Field(None, max_length=128)
+    # Order-level (global) discount — applied to total after item-level discounts
+    order_discount_type: str = Field(default='PERCENT', description="'PERCENT' atau 'NOMINAL'")
+    order_discount_nominal: int = Field(default=0, ge=0, description="Dalam IDR")
+    # Order-level (global) up price — applied to total before order-level discount
+    order_up_price_type: str = Field(default='NOMINAL', description="'PERCENT' atau 'NOMINAL'")
+    order_up_price_nominal: int = Field(default=0, ge=0, description="Dalam IDR")
 
 
 class OrderItemResponse(BaseSchema):
@@ -333,6 +339,12 @@ class OrderResponse(BaseSchema):
     cancelled_items: Optional[List[CancelledItemResponse]] = None
     reject_reason: Optional[str] = None
     invoice_number: Optional[str] = None
+    # Order-level (global) discount
+    order_discount_type: str = Field(default='PERCENT')
+    order_discount_nominal: int = Field(default=0)
+    # Order-level (global) up price
+    order_up_price_type: str = Field(default='NOMINAL')
+    order_up_price_nominal: int = Field(default=0)
 
     class Config:
         from_attributes = True
@@ -379,6 +391,12 @@ class OrderListWithItemsResponse(BaseSchema):
     order_type: str = 'REGULER'
     invoice_number: Optional[str] = None
     reject_reason: Optional[str] = None
+    # Order-level (global) discount
+    order_discount_type: str = Field(default='PERCENT')
+    order_discount_nominal: int = Field(default=0)
+    # Order-level (global) up price
+    order_up_price_type: str = Field(default='NOMINAL')
+    order_up_price_nominal: int = Field(default=0)
 
     class Config:
         from_attributes = True

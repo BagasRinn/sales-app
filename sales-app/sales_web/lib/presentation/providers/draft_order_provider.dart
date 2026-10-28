@@ -104,6 +104,14 @@ class DraftOrderProvider with ChangeNotifier {
   String _orderType = 'REGULER';
   String? _editingOrderId;
 
+  // Order-level (global) discount — applied to total after item-level discounts
+  String _orderDiscountType = 'PERCENT';
+  double _orderDiscountNominal = 0;
+
+  // Order-level (global) up price — applied to total before order-level discount
+  String _orderUpPriceType = 'NOMINAL';
+  double _orderUpPriceNominal = 0;
+
   String? get customerId => _customerId;
   String? get customerName => _customerName;
   String? get customerAddress => _customerAddress;
@@ -112,8 +120,30 @@ class DraftOrderProvider with ChangeNotifier {
   String get orderType => _orderType;
   String? get editingOrderId => _editingOrderId;
 
+  // Order-level getters
+  String get orderDiscountType => _orderDiscountType;
+  double get orderDiscountNominal => _orderDiscountNominal;
+  String get orderUpPriceType => _orderUpPriceType;
+  double get orderUpPriceNominal => _orderUpPriceNominal;
+
   int get totalRaw => _items.fold(0, (sum, item) => sum + (item.hargaSatuan * item.qty));
-  int get totalPrice => _items.fold(0, (sum, item) => sum + item.subtotal);
+  int get totalItemPrice => _items.fold(0, (sum, item) => sum + item.subtotal);
+  int get totalOrderUpPrice {
+    final base = totalItemPrice;
+    if (_orderUpPriceType.toUpperCase() == 'PERCENT') {
+      return (base * _orderUpPriceNominal / 100).round();
+    }
+    return _orderUpPriceNominal.toInt();
+  }
+  int get totalOrderDiscount {
+    final base = totalItemPrice + totalOrderUpPrice;
+    if (_orderDiscountType.toUpperCase() == 'PERCENT') {
+      return (base * _orderDiscountNominal / 100).round().clamp(0, base);
+    }
+    return _orderDiscountNominal.toInt().clamp(0, base);
+  }
+  /// Total harga setelah SEMUA diskon & up price (item-level + order-level).
+  int get totalPrice => totalItemPrice + totalOrderUpPrice - totalOrderDiscount;
   int get totalDiscount => totalRaw - totalPrice - totalUpPrice;
   int get totalUpPrice => _items.fold(0, (sum, item) => sum + item.upPriceTotal);
   int get totalQty => _items.fold(0, (sum, item) => sum + item.qty);
@@ -173,6 +203,29 @@ class DraftOrderProvider with ChangeNotifier {
 
   void setOrderType(String type) {
     _orderType = type;
+    notifyListeners();
+  }
+
+  void setOrderDiscount({required String type, required double value}) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError('discount type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    if (type == 'PERCENT') {
+      _orderDiscountType = type;
+      _orderDiscountNominal = value > 100 ? 100.0 : value;
+    } else {
+      _orderDiscountType = type;
+      _orderDiscountNominal = value;
+    }
+    notifyListeners();
+  }
+
+  void setOrderUpPrice({required String type, required double value}) {
+    if (type != 'PERCENT' && type != 'NOMINAL') {
+      throw ArgumentError('up_price type harus PERCENT atau NOMINAL, dapat: $type');
+    }
+    _orderUpPriceType = type;
+    _orderUpPriceNominal = value;
     notifyListeners();
   }
 
@@ -259,6 +312,11 @@ class DraftOrderProvider with ChangeNotifier {
     _customerAddress = order.storeAddress;
     _orderType = order.orderType;
     _notes = order.notes;
+    // Rehydrate order-level discount/up price
+    _orderDiscountType = order.orderDiscountType;
+    _orderDiscountNominal = order.orderDiscountNominal.toDouble();
+    _orderUpPriceType = order.orderUpPriceType;
+    _orderUpPriceNominal = order.orderUpPriceNominal.toDouble();
     _items = order.items.map((item) {
       final line = OrderLine(
         id: '${item.productId}_${DateTime.now().millisecondsSinceEpoch}',
@@ -326,6 +384,15 @@ class DraftOrderProvider with ChangeNotifier {
     }).toList();
   }
 
+  Map<String, dynamic> buildOrderLevelPayload() {
+    return {
+      'order_discount_type': _orderDiscountType,
+      'order_discount_nominal': _orderDiscountNominal.toInt(),
+      'order_up_price_type': _orderUpPriceType,
+      'order_up_price_nominal': _orderUpPriceNominal.toInt(),
+    };
+  }
+
   void reset() {
     _customerId = null;
     _customerName = null;
@@ -334,6 +401,10 @@ class DraftOrderProvider with ChangeNotifier {
     _notes = null;
     _orderType = 'REGULER';
     _editingOrderId = null;
+    _orderDiscountType = 'PERCENT';
+    _orderDiscountNominal = 0;
+    _orderUpPriceType = 'NOMINAL';
+    _orderUpPriceNominal = 0;
     notifyListeners();
   }
 

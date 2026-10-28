@@ -225,6 +225,12 @@ class Order(Base):
     invoice_number = Column(String(50), nullable=True, index=True)
     # Idempotency key from client for duplicate prevention
     client_request_id = Column(String(128), nullable=True, index=True)
+    # Order-level (global) discount — applied to total after item-level discounts
+    order_discount_type = Column(String(10), default='PERCENT')  # 'PERCENT' atau 'NOMINAL'
+    order_discount_nominal = Column(Integer, default=0)  # dalam IDR
+    # Order-level (global) up price — applied to total before order-level discount
+    order_up_price_type = Column(String(10), default='NOMINAL')  # 'PERCENT' atau 'NOMINAL'
+    order_up_price_nominal = Column(Integer, default=0)  # dalam IDR
 
     __table_args__ = (
         Index("ix_orders_status", "status"),

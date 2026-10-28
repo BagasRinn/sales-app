@@ -246,6 +246,14 @@ class Order {
   final String? rejectReason;
   final String? invoiceNumber;
 
+  // Order-level (global) discount
+  final String orderDiscountType;
+  final int orderDiscountNominal;
+
+  // Order-level (global) up price
+  final String orderUpPriceType;
+  final int orderUpPriceNominal;
+
   Order({
     required this.id,
     required this.salesId,
@@ -262,6 +270,10 @@ class Order {
     required this.cancelledItems,
     this.rejectReason,
     this.invoiceNumber,
+    this.orderDiscountType = 'PERCENT',
+    this.orderDiscountNominal = 0,
+    this.orderUpPriceType = 'NOMINAL',
+    this.orderUpPriceNominal = 0,
   });
 
   String get statusLabel {
@@ -328,6 +340,10 @@ class Order {
           [],
       rejectReason: json['reject_reason'] as String?,
       invoiceNumber: json['invoice_number'] as String?,
+      orderDiscountType: json['order_discount_type'] as String? ?? 'PERCENT',
+      orderDiscountNominal: json['order_discount_nominal'] as int? ?? 0,
+      orderUpPriceType: json['order_up_price_type'] as String? ?? 'NOMINAL',
+      orderUpPriceNominal: json['order_up_price_nominal'] as int? ?? 0,
     );
   }
 }
