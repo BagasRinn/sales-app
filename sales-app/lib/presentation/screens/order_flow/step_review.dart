@@ -710,11 +710,12 @@ class _LineRow extends StatelessWidget {
                       ),
                       if (disc != null && !disc.isEmpty) ...[
                         const SizedBox(height: 2),
-                        _activeLayersSummary(disc, currency),
+                        _activeLayersSummary(disc, currency,
+                            d1: d1, d2: d2, d3: d3),
                       ],
                       if (up != null && !up.isEmpty) ...[
                         const SizedBox(height: 2),
-                        _upPriceChip(up, price, currency),
+                        _upPriceChip(up, price, currency, upTotal: upTotal),
                       ],
                     ],
                   ),
@@ -809,24 +810,24 @@ class _LineRow extends StatelessWidget {
     );
   }
 
-  Widget _activeLayersSummary(ItemDiscount disc, NumberFormat currency) {
+  Widget _activeLayersSummary(ItemDiscount disc, NumberFormat currency,
+      {int d1 = 0, int d2 = 0, int d3 = 0}) {
     final parts = <String>[];
     for (final entry in [
-      (1, disc.layer1),
-      (2, disc.layer2),
-      (3, disc.layer3),
+      (1, disc.layer1, d1),
+      (2, disc.layer2, d2),
+      (3, disc.layer3, d3),
     ]) {
       final l = entry.$2;
       if (l == null) continue;
+      final cut = entry.$3;
+      if (cut <= 0) continue;
       final label = entry.$1 == 1
           ? 'Diskon 1'
           : entry.$1 == 2
-          ? 'Diskon 2'
-          : 'Diskon 3';
-      final cut = l.type == 'NOMINAL'
-          ? currency.format(l.value)
-          : '${l.value}%';
-      parts.add('$label: $cut');
+              ? 'Diskon 2'
+              : 'Diskon 3';
+      parts.add('$label: -${currency.format(cut)}');
     }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
@@ -838,14 +839,11 @@ class _LineRow extends StatelessWidget {
     );
   }
 
-  Widget _upPriceChip(ItemUpPrice up, int hargaSatuan, NumberFormat currency) {
-    final label = up.type.toUpperCase() == 'PERCENT'
-        ? (up.percent == up.percent.roundToDouble()
-              ? '${up.percent.round()}%'
-              : '${up.percent}%')
-        : currency.format(up.nominal);
+  Widget _upPriceChip(ItemUpPrice up, int hargaSatuan, NumberFormat currency,
+      {int upTotal = 0}) {
+    if (upTotal <= 0) return const SizedBox.shrink();
     return Text(
-      'Up Price: $label',
+      'Up Price: +${currency.format(upTotal)}',
       style: AppTextStyles.bodySmall.copyWith(
         color: AppColors.warning,
         fontWeight: FontWeight.w500,
