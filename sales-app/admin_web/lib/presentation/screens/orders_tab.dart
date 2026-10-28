@@ -146,9 +146,18 @@ class _OrdersTabState extends State<OrdersTab>
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
       final provider = context.read<AdminProvider>();
       final search = value.trim().isEmpty ? null : value.trim();
-      provider.loadPendingOrders(search: search);
-      provider.loadDraftOrders();
-      _applyFilters();
+      // Hanya reload tab yang aktif — jangan firing 3 request sekaligus.
+      switch (_tabController.index) {
+        case 0:
+          provider.loadPendingOrders(search: search);
+          break;
+        case 1:
+          provider.loadDraftOrders();
+          break;
+        case 2:
+          _applyFilters();
+          break;
+      }
     });
   }
 

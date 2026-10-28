@@ -152,8 +152,8 @@ class _BerandaTabState extends State<_BerandaTab> {
       // Pakai loadRecentOrders agar Orderan Terbaru tidak terikat
       // dengan filter Pesanan. List Pesanan di-spawn terpisah di
       // OrderListScreen.initState.
+      // Produk di-load di Katalog tab & Order Flow, tidak perlu di Beranda.
       context.read<OrderProvider>().loadRecentOrders();
-      context.read<ProductProvider>().loadProducts();
     });
   }
 
@@ -161,7 +161,6 @@ class _BerandaTabState extends State<_BerandaTab> {
     await Future.wait([
       context.read<HomeStatsProvider>().refresh(),
       context.read<OrderProvider>().loadRecentOrders(),
-      context.read<ProductProvider>().loadProducts(),
     ]);
   }
 

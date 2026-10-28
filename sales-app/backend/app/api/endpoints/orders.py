@@ -1169,7 +1169,7 @@ def cancel_order(
 @router.get("/pending")
 def list_pending_orders(
     skip: int = 0,
-    limit: int = 10000,
+    limit: int = 50,
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),

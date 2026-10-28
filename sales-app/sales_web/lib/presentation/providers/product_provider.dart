@@ -3,8 +3,20 @@ import '../../core/api_exception.dart';
 import '../../data/models/product.dart';
 import '../../data/repositories/product_repository.dart';
 
+enum StockStatus { available, low, outOfStock }
+
+StockStatus getStockStatus(int available) {
+  if (available <= 0) return StockStatus.outOfStock;
+  if (available <= 5) return StockStatus.low;
+  return StockStatus.available;
+}
+
 class ProductProvider with ChangeNotifier {
   final ProductRepository _productRepo;
+  // Muat produk per halaman (50/item), bukan semua sekaligus (3000).
+  static const int _pageSize = 50;
+  // Cache produk selama 5 menit untuk mencegah reload berulang.
+  static const Duration _productCacheDuration = Duration(minutes: 5);
 
   List<Product> _allProducts = [];
   List<String> _suppliers4p = [];
@@ -12,6 +24,7 @@ class ProductProvider with ChangeNotifier {
   String? _error;
   String _searchQuery = '';
   String? _orderTypeFilter;
+  DateTime? _lastLoadTime;
 
   ProductProvider(this._productRepo);
 
@@ -20,6 +33,12 @@ class ProductProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get searchQuery => _searchQuery;
+
+  /// Cek apakah cache produk masih valid (belum lewat durasi cache).
+  bool get _isProductCacheValid {
+    if (_lastLoadTime == null || _allProducts.isEmpty) return false;
+    return DateTime.now().difference(_lastLoadTime!) < _productCacheDuration;
+  }
 
   List<Product> get filteredProducts {
     var products = _allProducts;
@@ -30,6 +49,11 @@ class ProductProvider with ChangeNotifier {
   }
 
   Future<void> loadProducts({String? search, String? orderType}) async {
+    // Jika cache masih valid dan tidak ada search/orderType baru, skip reload.
+    if (_isProductCacheValid && search == null && orderType == null) {
+      return;
+    }
+
     _isLoading = true;
     _error = null;
     _searchQuery = search ?? '';
@@ -37,14 +61,44 @@ class ProductProvider with ChangeNotifier {
 
     try {
       _allProducts = await _productRepo.getProducts(
+        skip: 0,
+        limit: _pageSize,
         search: search,
         orderType: orderType,
-        limit: 3000,
       );
+      _lastLoadTime = DateTime.now();
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
       _error = 'Gagal memuat produk.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreProducts() async {
+    if (_isLoading) return;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final moreProducts = await _productRepo.getProducts(
+        skip: _allProducts.length,
+        limit: _pageSize,
+        search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        orderType: _orderTypeFilter,
+      );
+      if (moreProducts.isEmpty) {
+        // No more products
+      } else {
+        _allProducts.addAll(moreProducts);
+      }
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      // Silent fail for load more
     }
 
     _isLoading = false;
@@ -72,12 +126,4 @@ class ProductProvider with ChangeNotifier {
       return avail <= 0;
     }).length;
   }
-}
-
-enum StockStatus { available, low, outOfStock }
-
-StockStatus getStockStatus(int available) {
-  if (available <= 0) return StockStatus.outOfStock;
-  if (available <= 5) return StockStatus.low;
-  return StockStatus.available;
 }

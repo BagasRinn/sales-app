@@ -88,6 +88,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _customerTotal = 0;
   String _customerSearch = '';
 
+  // Pending/Draft orders pagination
+  final int _pendingOrdersPage = 0;
+  final int _pendingOrdersLimit = 50;
+  final int _draftOrdersPage = 0;
+  final int _draftOrdersLimit = 50;
+
   // Filters
   String? _selectedSupplier;
   String? _selectedStatus;
@@ -472,7 +478,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> loadPendingOrders({String? search}) async {
     try {
-      _pendingOrders = await _repo.getPendingOrders(search: search);
+      _pendingOrders = await _repo.getPendingOrders(
+        search: search,
+        skip: _pendingOrdersPage * _pendingOrdersLimit,
+        limit: _pendingOrdersLimit,
+      );
       _pendingOrdersCacheTime = DateTime.now(); // Update cache timestamp
       notifyListeners();
     } catch (e) {
@@ -517,7 +527,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Load draft orders (status DRAFT)
   Future<void> loadDraftOrders() async {
     try {
-      _draftOrders = await _repo.getDraftOrders();
+      _draftOrders = await _repo.getDraftOrders(
+        skip: _draftOrdersPage * _draftOrdersLimit,
+        limit: _draftOrdersLimit,
+      );
       notifyListeners();
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -1125,6 +1138,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       _pendingOrders = await _repo.getPendingOrders(
         search: _orderSearch,
+        skip: _pendingOrdersPage * _pendingOrdersLimit,
+        limit: _pendingOrdersLimit,
         cancelToken: cancelToken,
       );
       _pendingOrdersCacheTime = DateTime.now(); // Update cache timestamp

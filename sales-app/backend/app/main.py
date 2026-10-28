@@ -107,11 +107,11 @@ app = FastAPI(
 _allowed_origins = os.getenv("CORS_ORIGINS", "").split(",")
 print(f"CORS YANG AKTIF: {_allowed_origins}")
 if not _allowed_origins or _allowed_origins == [""]:
-    _allowed_origins = ["*"]
+    _allowed_origins = []
     logger.warning(
-        "[CORS] CORS_ORIGINS is unset — falling back to '*'. "
-        "Browsers will REJECT credentialed requests, so the web app cannot "
-        "reach the API. Set CORS_ORIGINS env var to your web app origin(s)."
+        "[CORS] CORS_ORIGINS is unset — no origins allowed. "
+        "Web app cannot reach the API until CORS_ORIGINS is set. "
+        "Set CORS_ORIGINS env var to your web app origin(s) (comma-separated)."
     )
 
 app.add_middleware(

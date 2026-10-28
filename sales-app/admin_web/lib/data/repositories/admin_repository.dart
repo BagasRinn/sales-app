@@ -59,11 +59,15 @@ class AdminRepository {
 
   Future<List<Order>> getPendingOrders({
     String? search,
+    int skip = 0,
+    int limit = 50,
     CancelToken? cancelToken,
   }) async {
-    final params = <String, String>{};
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
     if (search != null && search.isNotEmpty) params['search'] = search;
-    params['limit'] = '10000';
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/orders/pending$qs', cancelToken: cancelToken);
     return (data as List).map((e) => Order.fromJson(e)).toList();
@@ -75,11 +79,17 @@ class AdminRepository {
   }
 
   /// Get draft orders (status DRAFT).
-  Future<List<Order>> getDraftOrders({CancelToken? cancelToken}) async {
-    final data = await _api.get(
-      '/orders?status=DRAFT&limit=10000',
-      cancelToken: cancelToken,
-    );
+  Future<List<Order>> getDraftOrders({
+    int skip = 0,
+    int limit = 50,
+    CancelToken? cancelToken,
+  }) async {
+    final params = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/orders?status=DRAFT$qs', cancelToken: cancelToken);
     final orders = data is Map<String, dynamic>
         ? (data['orders'] as List? ?? const [])
         : (data as List? ?? const []);

@@ -9,11 +9,10 @@ enum ProductStatusFilter { all, available, low, outOfStock }
 
 class ProductProvider extends ChangeNotifier {
   final ProductRepository _productRepo;
-  // Dinaikkan dari 1000 ke 3000 supaya mobile load semua product dalam
-  // 1 API call. Sebelumnya 1000 cukup untuk kebanyakan kasus, tapi dengan
-  // 2025+ product di DB, 3 batch = 3 request. Backend endpoint `list_products`
-  // accept limit apapun (tidak ada max), jadi aman.
-  static const int _pageSize = 3000;
+  // Muat produk per halaman (50/item), bukan semua sekaligus (3000).
+  static const int _pageSize = 50;
+  // Cache produk selama 5 menit untuk mencegah reload berulang.
+  static const Duration _productCacheDuration = Duration(minutes: 5);
 
   List<Product> _allProducts = [];
   bool _isLoading = false;
@@ -23,6 +22,7 @@ class ProductProvider extends ChangeNotifier {
   String _searchQuery = '';
   ProductStatusFilter _statusFilter = ProductStatusFilter.all;
   String? _categoryFilter;
+  DateTime? _lastLoadTime;
 
   /// Daftar supplier yang dikategorikan sebagai 4P (dari backend).
   /// Loaded once saat app init, dipakai untuk label/badge produk.
@@ -38,6 +38,12 @@ class ProductProvider extends ChangeNotifier {
   void dispose() {
     _searchDebouncer.dispose();
     super.dispose();
+  }
+
+  /// Cek apakah cache produk masih valid (belum lewat durasi cache).
+  bool get _isProductCacheValid {
+    if (_lastLoadTime == null || _allProducts.isEmpty) return false;
+    return DateTime.now().difference(_lastLoadTime!) < _productCacheDuration;
   }
 
   List<Product> get products {
@@ -153,6 +159,11 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<void> loadProducts({String? search, String? orderType}) async {
+    // Jika cache masih valid dan tidak ada search/orderType baru, skip reload.
+    if (_isProductCacheValid && search == null && orderType == null) {
+      return;
+    }
+
     _isLoading = true;
     _errorMessage = null;
     _hasMore = true;
@@ -166,6 +177,7 @@ class ProductProvider extends ChangeNotifier {
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
         orderType: orderType,
       );
+      _lastLoadTime = DateTime.now();
       _hasMore = _allProducts.length >= _pageSize;
     } on ApiException catch (e) {
       _errorMessage = e.message;

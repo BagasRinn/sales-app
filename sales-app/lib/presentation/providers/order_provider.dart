@@ -7,6 +7,8 @@ import 'draft_order_provider.dart';
 class OrderProvider extends ChangeNotifier {
   final OrderRepository _orderRepo;
   static const int _pageSize = 20;
+  // Cache order selama 2 menit untuk mencegah reload berulang.
+  static const Duration _orderCacheDuration = Duration(minutes: 2);
 
   List<Order> _orders = [];
   bool _isLoading = false;
@@ -14,6 +16,7 @@ class OrderProvider extends ChangeNotifier {
   bool _hasMore = true;
   String? _errorMessage;
   String? _activeStatusFilter;
+  DateTime? _lastLoadTime;
 
   // Dipakai khusus untuk section "Orderan Terbaru" di Beranda.
   // Dipisah dari `_orders` supaya filter yang dipasang di halaman Pesanan
@@ -37,7 +40,18 @@ class OrderProvider extends ChangeNotifier {
     return _orders.where((o) => o.status == status).length;
   }
 
+  /// Cek apakah cache order masih valid (belum lewat durasi cache).
+  bool get _isOrderCacheValid {
+    if (_lastLoadTime == null || _orders.isEmpty) return false;
+    return DateTime.now().difference(_lastLoadTime!) < _orderCacheDuration;
+  }
+
   Future<void> loadOrders({String? status, bool reset = true}) async {
+    // Jika cache masih valid dan tidak ada filter baru, skip reload.
+    if (reset && _isOrderCacheValid && status == _activeStatusFilter) {
+      return;
+    }
+
     if (reset) {
       _isLoading = true;
       _hasMore = true;
@@ -58,6 +72,7 @@ class OrderProvider extends ChangeNotifier {
         _orders.addAll(newOrders);
       }
       _hasMore = newOrders.length >= _pageSize;
+      _lastLoadTime = DateTime.now();
     } on ApiException catch (e) {
       _errorMessage = e.message;
     } catch (e, st) {

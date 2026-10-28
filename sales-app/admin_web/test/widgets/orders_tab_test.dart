@@ -38,6 +38,8 @@ class _FakeRepo extends AdminRepository {
   @override
   Future<List<Order>> getPendingOrders({
     String? search,
+    int skip = 0,
+    int limit = 50,
     CancelToken? cancelToken,
   }) async => [_order('PENDING')];
 
@@ -52,7 +54,11 @@ class _FakeRepo extends AdminRepository {
   }) async => (orders: [_order('PENDING'), _order('APPROVED')], total: 2);
 
   @override
-  Future<List<Order>> getDraftOrders({CancelToken? cancelToken}) async => [
+  Future<List<Order>> getDraftOrders({
+    int skip = 0,
+    int limit = 50,
+    CancelToken? cancelToken,
+  }) async => [
     _order('DRAFT'),
   ];
 }

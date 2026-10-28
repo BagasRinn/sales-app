@@ -48,6 +48,7 @@ def _exclude_deleted(query):
 
 @router.get("/sales", response_model=List[SalesUserResponse])
 def list_sales_users(
+    limit: int = Query(100, ge=1, le=1000, description="Maksimal jumlah sales user; default 100"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -56,7 +57,7 @@ def list_sales_users(
         User.role == "SALES", User.is_active.is_(True)
     )
     query = apply_branch_filter(query, User, current_user)
-    return query.order_by(User.username).all()
+    return query.order_by(User.username).limit(limit).all()
 
 
 @router.get("", response_model=List[UserResponse])

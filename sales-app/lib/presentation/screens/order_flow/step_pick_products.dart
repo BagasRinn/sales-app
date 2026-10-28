@@ -25,6 +25,7 @@ class _StepPickProductsState extends State<StepPickProducts> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   String? _lastLoadedType;
+  final Map<String, TextEditingController> _qtyControllers = {};
 
   @override
   void initState() {
@@ -51,6 +52,9 @@ class _StepPickProductsState extends State<StepPickProducts> {
   @override
   void dispose() {
     _searchController.dispose();
+    for (final c in _qtyControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -62,6 +66,43 @@ class _StepPickProductsState extends State<StepPickProducts> {
           p.id.toLowerCase().contains(q) ||
           (p.namaSupplier?.toLowerCase().contains(q) ?? false);
     }).toList();
+  }
+
+  TextEditingController _getQtyController(String productId, int currentQty) {
+    if (!_qtyControllers.containsKey(productId)) {
+      _qtyControllers[productId] = TextEditingController(
+        text: currentQty > 0 ? '$currentQty' : '',
+      );
+    } else {
+      final c = _qtyControllers[productId]!;
+      if (c.text.isEmpty && currentQty > 0) {
+        c.text = '$currentQty';
+      } else if (currentQty == 0 && c.text.isNotEmpty) {
+        c.text = '';
+      }
+    }
+    return _qtyControllers[productId]!;
+  }
+
+  void _onQtyChanged(String productId, String value, Product product) {
+    final qty = int.tryParse(value) ?? 0;
+    final draft = context.read<DraftOrderProvider>();
+    final existing = draft.linesForProduct(productId);
+
+    if (qty <= 0) {
+      if (existing.isNotEmpty) {
+        for (final line in existing) {
+          draft.removeLine(line.id);
+        }
+      }
+    } else {
+      if (existing.isNotEmpty) {
+        draft.setLineQty(existing.first.id, qty);
+      } else {
+        draft.addLine(productId, qty: qty);
+      }
+    }
+    setState(() {});
   }
 
   @override
@@ -185,7 +226,14 @@ class _StepPickProductsState extends State<StepPickProducts> {
                       itemCount: products.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
-                        return _ProductRow(product: products[i]);
+                        final product = products[i];
+                        final qty = draft.totalQtyForProduct(product.id);
+                        return _ProductRow(
+                          product: product,
+                          qty: qty,
+                          qtyController: _getQtyController(product.id, qty),
+                          onQtyChanged: (v) => _onQtyChanged(product.id, v, product),
+                        );
                       },
                     ),
         ),
@@ -250,13 +298,19 @@ class _StepPickProductsState extends State<StepPickProducts> {
 
 class _ProductRow extends StatelessWidget {
   final Product product;
-  const _ProductRow({required this.product});
+  final int qty;
+  final TextEditingController qtyController;
+  final ValueChanged<String> onQtyChanged;
+  const _ProductRow({
+    required this.product,
+    required this.qty,
+    required this.qtyController,
+    required this.onQtyChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final draft = context.watch<DraftOrderProvider>();
     final productProvider = context.watch<ProductProvider>();
-    final qty = draft.totalQtyForProduct(product.id);
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -346,7 +400,12 @@ class _ProductRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _QtyStepper(productId: product.id, qty: qty, available: product.stokTersedia),
+              _QtyStepper(
+                controller: qtyController,
+                currentQty: qty,
+                available: product.stokTersedia,
+                onChanged: onQtyChanged,
+              ),
             ],
           ),
         ),
@@ -481,145 +540,70 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-class _QtyStepper extends StatefulWidget {
-  final String productId;
-  final int qty;
+// ─── Quantity Stepper (Stateless - controller managed by parent) ────────────────
+
+class _QtyStepper extends StatelessWidget {
+  final TextEditingController controller;
+  final int currentQty;
   final int available;
+  final ValueChanged<String> onChanged;
+
   const _QtyStepper({
-    required this.productId,
-    required this.qty,
+    required this.controller,
+    required this.currentQty,
     required this.available,
+    required this.onChanged,
   });
 
   @override
-  State<_QtyStepper> createState() => _QtyStepperState();
-}
-
-class _QtyStepperState extends State<_QtyStepper> {
-  late TextEditingController _controller;
-  bool _isEditing = false;
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: '${widget.qty}');
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus && _isEditing) {
-        _applyInput();
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _QtyStepper oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_isEditing && widget.qty != oldWidget.qty) {
-      _controller.text = '${widget.qty}';
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _applyInput() {
-    final text = _controller.text.trim();
-    final parsed = int.tryParse(text) ?? 0;
-    final capped = parsed.clamp(0, widget.available);
-    _controller.text = '$capped';
-    _isEditing = false;
-    _focusNode.unfocus();
-    context.read<DraftOrderProvider>().setQty(widget.productId, capped);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final currentQty = int.tryParse(_controller.text) ?? widget.qty;
-    final canIncrement = widget.available > 0 && currentQty < widget.available;
+    final qty = int.tryParse(controller.text) ?? currentQty;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Minus
         _StepperButton(
           icon: Icons.remove,
-          onTap: currentQty > 0
+          onTap: qty > 0
               ? () {
-                  final newQty = (currentQty - 1).clamp(0, widget.available);
-                  setState(() {
-                    _controller.text = '$newQty';
-                  });
-                  context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
+                  final newQty = qty - 1;
+                  controller.text = '$newQty';
+                  onChanged('$newQty');
                 }
               : null,
         ),
+        // Qty input
         SizedBox(
           width: 52,
-          child: GestureDetector(
-            onTap: () {
-              _controller.selection = TextSelection(
-                baseOffset: 0,
-                extentOffset: _controller.text.length,
-              );
-              _isEditing = true;
-              _focusNode.requestFocus();
-            },
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              style: AppTextStyles.bodyLarge.copyWith(
-                fontWeight: FontWeight.w600,
-                color: currentQty > 0 ? AppColors.primaryLight : AppColors.textMuted,
-                fontSize: 15,
-              ),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.primaryLight, width: 1.5),
-                ),
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              onChanged: (val) {
-                _isEditing = true;
-                final parsed = int.tryParse(val) ?? 0;
-                if (parsed > widget.available) {
-                  final capped = widget.available.toString();
-                  _controller.value = TextEditingValue(
-                    text: capped,
-                    selection: TextSelection.collapsed(offset: capped.length),
-                  );
-                  _applyInput();
-                } else if (parsed >= 0) {
-                  _applyInput();
-                }
-              },
-              onSubmitted: (_) => _applyInput(),
+          child: TextField(
+            controller: controller,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            style: AppTextStyles.bodyLarge.copyWith(
+              fontWeight: FontWeight.w600,
+              color: qty > 0 ? AppColors.primaryLight : AppColors.textMuted,
+              fontSize: 15,
             ),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+              border: InputBorder.none,
+            ),
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: onChanged,
           ),
         ),
+        // Plus
         _StepperButton(
           icon: Icons.add,
-          onTap: canIncrement
+          onTap: available > 0 && qty < available
               ? () {
-                  final currentQty = int.tryParse(_controller.text) ?? widget.qty;
-                  final newQty = (currentQty + 1).clamp(0, widget.available);
-                  setState(() {
-                    _controller.text = '$newQty';
-                  });
-                  context.read<DraftOrderProvider>().setQty(widget.productId, newQty);
+                  final newQty = qty + 1;
+                  controller.text = '$newQty';
+                  onChanged('$newQty');
                 }
               : null,
           primary: true,
-          disabled: !canIncrement,
         ),
       ],
     );
@@ -630,18 +614,17 @@ class _StepperButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final bool primary;
-  final bool disabled;
+
   const _StepperButton({
     required this.icon,
     required this.onTap,
     this.primary = false,
-    this.disabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = primary ? AppColors.primaryLight : AppColors.border;
-    final isInactive = onTap == null || disabled;
+    final isInactive = onTap == null;
     return Material(
       color: primary
           ? (isInactive ? color.withValues(alpha: 0.4) : color)

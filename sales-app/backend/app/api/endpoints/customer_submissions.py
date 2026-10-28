@@ -194,7 +194,7 @@ def submit_customer_registration(
 @router.get("/my", response_model=List[CustomerSubmissionResponse])
 def list_my_submissions(
     response: Response,
-    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    limit: int = Query(100, ge=1, le=1000, description="Maksimal jumlah submission yang dikembalikan; default 100"),
     offset: int = Query(0, ge=0),
     include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
@@ -210,8 +210,7 @@ def list_my_submissions(
     submissions = submissions.order_by(CustomerRegistrationSubmission.created_at.desc())
     if include_total:
         response.headers["X-Total-Count"] = str(submissions.order_by(None).count())
-    if limit is not None or offset:
-        submissions = submissions.limit(limit).offset(offset)
+    submissions = submissions.limit(limit).offset(offset)
     return [_serialize(s, db) for s in submissions.all()]
 
 
@@ -252,7 +251,7 @@ def check_duplicate_customer(
 def list_submissions(
     response: Response,
     status: Optional[str] = Query(None, description="Filter status: PENDING/APPROVED/REJECTED"),
-    limit: Optional[int] = Query(None, ge=1, le=1000, description="Opsional; default = semua"),
+    limit: int = Query(100, ge=1, le=1000, description="Maksimal jumlah submission yang dikembalikan; default 100"),
     offset: int = Query(0, ge=0),
     include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
@@ -263,12 +262,11 @@ def list_submissions(
     query = apply_branch_filter(query, CustomerRegistrationSubmission, current_user)
     if status:
         query = query.filter(CustomerRegistrationSubmission.status == status.upper())
-    submissions = query.order_by(CustomerRegistrationSubmission.created_at.desc())
+    query = query.order_by(CustomerRegistrationSubmission.created_at.desc())
     if include_total:
-        response.headers["X-Total-Count"] = str(submissions.order_by(None).count())
-    if limit is not None or offset:
-        submissions = submissions.limit(limit).offset(offset)
-    return [_serialize(s, db) for s in submissions.all()]
+        response.headers["X-Total-Count"] = str(query.order_by(None).count())
+    query = query.limit(limit).offset(offset)
+    return [_serialize(s, db) for s in query.all()]
 
 
 @router.get("/{submission_id}", response_model=CustomerSubmissionResponse)
