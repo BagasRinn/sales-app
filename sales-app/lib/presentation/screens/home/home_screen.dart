@@ -461,6 +461,7 @@ class _RecentOrdersSection extends StatelessWidget {
     // Pakai recentOrders (bukan orders) supaya filter Pesanan tidak
     // mencemari tampilan Orderan Terbaru.
     final orders = orderProvider.recentOrders;
+    final recentError = orderProvider.recentOrdersError;
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -482,7 +483,47 @@ class _RecentOrdersSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        if (orders.isEmpty && !orderProvider.isLoadingRecent)
+        if (recentError != null && orders.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: AppColors.errorBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.error),
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 40,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Gagal memuat orderan',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  recentError,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.error,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () =>
+                      context.read<OrderProvider>().loadRecentOrders(),
+                  child: const Text('Coba lagi'),
+                ),
+              ],
+            ),
+          )
+        else if (orders.isEmpty && !orderProvider.isLoadingRecent)
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(

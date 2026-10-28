@@ -9,6 +9,9 @@ class OrderProvider extends ChangeNotifier {
   static const int _pageSize = 20;
   // Cache order selama 2 menit untuk mencegah reload berulang.
   static const Duration _orderCacheDuration = Duration(minutes: 2);
+  // Cache order terbaru selama 1 menit — hindari refetch berulang pada
+  // setiap resume app yang justru menimbulkan silent error.
+  static const Duration _recentOrdersCacheDuration = Duration(minutes: 1);
 
   List<Order> _orders = [];
   bool _isLoading = false;
@@ -20,9 +23,11 @@ class OrderProvider extends ChangeNotifier {
 
   // Dipakai khusus untuk section "Orderan Terbaru" di Beranda.
   // Dipisah dari `_orders` supaya filter yang dipasang di halaman Pesanan
-  // tidak mengotori tampilan Orderan Terbaru.
+  // tidak mencemari tampilan Orderan Terbaru.
   List<Order> _recentOrders = [];
   bool _isLoadingRecent = false;
+  String? _recentOrdersError;
+  DateTime? _recentOrdersLastLoadTime;
 
   OrderProvider(this._orderRepo);
 
@@ -35,6 +40,7 @@ class OrderProvider extends ChangeNotifier {
 
   List<Order> get recentOrders => _recentOrders;
   bool get isLoadingRecent => _isLoadingRecent;
+  String? get recentOrdersError => _recentOrdersError;
 
   int countByStatus(String status) {
     return _orders.where((o) => o.status == status).length;
@@ -103,7 +109,18 @@ class OrderProvider extends ChangeNotifier {
   /// Orderan Terbaru konsisten dengan backend dan tidak terkontaminasi filter
   /// yang dipasang di halaman Pesanan.
   Future<void> loadRecentOrders() async {
+    // Gunakan cache 1 menit supaya tidak refetch berulang pada setiap
+    // resume app (didChangeAppLifecycleState) yang justru bisa menimbulkan
+    // silent error dan tampilan "Belum ada orderan" meski order ada.
+    if (_recentOrdersLastLoadTime != null &&
+        _recentOrders.isNotEmpty &&
+        DateTime.now().difference(_recentOrdersLastLoadTime!) <
+            _recentOrdersCacheDuration) {
+      return;
+    }
+
     _isLoadingRecent = true;
+    _recentOrdersError = null;
     notifyListeners();
 
     try {
@@ -112,8 +129,13 @@ class OrderProvider extends ChangeNotifier {
         limit: 5,
         status: null,
       );
-    } catch (e) {
-      // Diam saja — fallback ke list sebelumnya supaya UI tidak blank.
+      _recentOrdersLastLoadTime = DateTime.now();
+    } on ApiException catch (e) {
+      _recentOrdersError = e.message;
+      debugPrint('loadRecentOrders ApiException: ${e.message}');
+    } catch (e, st) {
+      _recentOrdersError = 'Gagal memuat orderan terbaru (${e.runtimeType})';
+      debugPrint('loadRecentOrders unexpected error: $e\n$st');
     }
 
     _isLoadingRecent = false;
