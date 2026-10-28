@@ -1215,10 +1215,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
     if (otherCount == 0) return;
 
-    // Apply ke item lain
-    draft.applyDiscountToAll(widget.line.id);
-
-    // Apply juga ke item ini sendiri (sama seperti Save)
+    // 1. Simpan dulu ke item ini sendiri (ambil nilai terbaru dari input)
     for (var idx = 1; idx <= 3; idx++) {
       final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
       draft.setDiscountLayer(
@@ -1228,6 +1225,9 @@ class _DiscountSheetState extends State<_DiscountSheet> {
         value: v,
       );
     }
+
+    // 2. Baru apply ke semua item LAIN (sudah pakai nilai baru)
+    draft.applyDiscountToAll(widget.line.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
