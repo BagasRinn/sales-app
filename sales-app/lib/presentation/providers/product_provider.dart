@@ -221,13 +221,17 @@ class ProductProvider extends ChangeNotifier {
   void search(String query) {
     if (query == _searchQuery) return;
     _searchQuery = query;
-    _searchDebouncer(loadProducts);
+    _searchDebouncer(() {
+      _lastLoadTime = null;
+      loadProducts(search: query);
+    });
   }
 
   void clearSearch() {
     _searchDebouncer.cancel();
     if (_searchQuery.isEmpty) return;
     _searchQuery = '';
+    _lastLoadTime = null;
     loadProducts();
   }
 

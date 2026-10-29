@@ -118,6 +118,20 @@ class ProductProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void search(String query) {
+    if (query == _searchQuery) return;
+    _searchQuery = query;
+    _lastLoadTime = null;
+    loadProducts(search: query);
+  }
+
+  void clearSearch() {
+    if (_searchQuery.isEmpty) return;
+    _searchQuery = '';
+    _lastLoadTime = null;
+    loadProducts();
+  }
+
   int countByStockStatus(StockStatus status) {
     return _allProducts.where((p) {
       final avail = p.stokTersedia;

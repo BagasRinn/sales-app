@@ -829,17 +829,6 @@ class _StepPickProductsState extends State<_StepPickProducts> {
       products = products.where((p) => p.orderType == draft.orderType).toList();
     }
 
-    // Search filter by code, name, supplier
-    final q = _searchController.text.toLowerCase().trim();
-    if (q.isNotEmpty) {
-      products = products.where((p) {
-        final name = p.namaBarang.toLowerCase();
-        final id = p.id.toLowerCase();
-        final supplier = (p.namaSupplier ?? '').toLowerCase();
-        return name.contains(q) || id.contains(q) || supplier.contains(q);
-      }).toList();
-    }
-
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => FocusScope.of(context).unfocus(),
@@ -930,12 +919,12 @@ class _StepPickProductsState extends State<_StepPickProducts> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {});
+                          context.read<ProductProvider>().clearSearch();
                         },
                       )
                     : null,
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (v) => context.read<ProductProvider>().search(v),
             ),
           ),
 
@@ -946,7 +935,9 @@ class _StepPickProductsState extends State<_StepPickProducts> {
                 : products.isEmpty
                 ? Center(
                     child: Text(
-                      q.isEmpty ? 'Tidak ada produk' : 'Produk tidak ditemukan',
+                      _searchController.text.isNotEmpty
+                          ? 'Produk tidak ditemukan'
+                          : 'Tidak ada produk',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.textMuted,
                       ),

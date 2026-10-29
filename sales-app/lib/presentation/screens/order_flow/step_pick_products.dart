@@ -201,7 +201,10 @@ class _StepPickProductsState extends State<StepPickProducts> {
               fillColor: AppColors.cardSurface,
               contentPadding: const EdgeInsets.symmetric(vertical: 0),
             ),
-            onChanged: (v) => setState(() => _search = v),
+            onChanged: (v) {
+              setState(() => _search = v);
+              context.read<ProductProvider>().search(v);
+            },
           ),
         ),
 
