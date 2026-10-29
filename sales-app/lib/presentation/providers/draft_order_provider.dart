@@ -578,13 +578,18 @@ class DraftOrderProvider extends ChangeNotifier {
     };
   }
 
+  /// Counter monotonik per proses. `DateTime.now()` di sebagian platform
+  /// (termasuk Android/Windows) bisa punya resolusi milidetik, sehingga dua
+  /// line yang ditambah beruntun dapat memperoleh timestamp yang sama.
+  /// Tanpa counter, ID duplikat membuat setLineQty/removeLine/setDiscountLayer
+  /// mengenai line yang salah (bahkan semua line sekaligus).
+  static int _lineIdCounter = 0;
+
   String _generateId() {
-    // Gunakan timestamp + random sebagai simple ID
-    return '${DateTime.now().microsecondsSinceEpoch}_${(1000 + (mathRandom() * 9000).toInt())}';
+    _lineIdCounter++;
+    return '${DateTime.now().microsecondsSinceEpoch}_$_lineIdCounter';
   }
 }
-
-double mathRandom() => (DateTime.now().microsecondsSinceEpoch % 1000) / 1000;
 
 /// Satu baris item di cart. Boleh ada banyak baris untuk produk yang sama.
 class OrderLine {
