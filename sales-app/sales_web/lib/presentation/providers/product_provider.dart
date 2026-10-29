@@ -140,4 +140,18 @@ class ProductProvider with ChangeNotifier {
       return avail <= 0;
     }).length;
   }
+
+  /// Ambil satu produk by ID — cek _allProducts dulu, kalau tidak ada fetch dari backend.
+  /// Tidak memasukkan hasil ke _allProducts.
+  Future<Product?> fetchProductById(String productId) async {
+    try {
+      return _allProducts.firstWhere((p) => p.id == productId);
+    } on StateError {
+      try {
+        return await _productRepo.getProduct(productId);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
 }

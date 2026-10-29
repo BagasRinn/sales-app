@@ -40,4 +40,10 @@ class ProductRepository {
     final list = data as List<dynamic>;
     return list.map((e) => e.toString()).toList();
   }
+
+  Future<Product?> getProduct(String productId) async {
+    final data = await _api.get('/products/$productId');
+    if (data == null) return null;
+    return Product.fromJson(data as Map<String, dynamic>);
+  }
 }

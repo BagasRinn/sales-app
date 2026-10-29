@@ -1340,19 +1340,50 @@ class _StepReview extends StatefulWidget {
 }
 
 class _StepReviewState extends State<_StepReview> {
+  final Map<String, Product> _fetchedProducts = {};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DraftOrderProvider>().setNotes(widget.notesController.text);
     });
+    _ensureProductData();
+  }
+
+  Future<void> _ensureProductData() async {
+    final draft = context.read<DraftOrderProvider>();
+    final productProvider = context.read<ProductProvider>();
+    final prices = <String, int>{};
+
+    for (final line in draft.items) {
+      if (line.qty <= 0) continue;
+
+      final matches = productProvider.allProducts.where(
+        (p) => p.id == line.productId,
+      );
+      if (matches.isNotEmpty) {
+        prices[line.productId] = matches.first.harga;
+        continue;
+      }
+
+      final p = await productProvider.fetchProductById(line.productId);
+      if (p != null && mounted) {
+        setState(() => _fetchedProducts[p.id] = p);
+        prices[p.id] = p.harga;
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final draft = context.watch<DraftOrderProvider>();
-    final products = context.watch<ProductProvider>().allProducts;
-    final productMap = {for (final p in products) p.id: p};
+    final productProvider = context.watch<ProductProvider>();
+    final allProducts = [
+      ...productProvider.allProducts,
+      ..._fetchedProducts.values,
+    ];
+    final productMap = {for (final p in allProducts) p.id: p};
     final idr = NumberFormat('#,###', 'id');
 
     return GestureDetector(
