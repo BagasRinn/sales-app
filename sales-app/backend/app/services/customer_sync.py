@@ -1,16 +1,14 @@
 """
 Customer sync service — Excel import logic untuk tabel customers.
 
-Identity toko = (nama_toko, alamat) keduanya. Boleh ada dua toko dengan
-nama sama selama alamatnya beda, dan sebaliknya.
-
-Pola bulk upsert: 1 bulk SELECT + 1 bulk INSERT ON CONFLICT DO UPDATE + 1 commit.
-Pattern mirror dari app/services/sheets_sync.py.
+Identity toko = (branch, kode, kode_area). nama_toko & alamat adalah field
+deskriptif: dua toko boleh share nama/alamat selama (kode, kode_area)-nya
+beda, dan untuk (kode, kode_area) yang sama datanya selalu di-refresh dari
+Excel pada tiap import (update bila ada perubahan).
 """
 import logging
 from io import BytesIO
 from typing import List, Dict, Any
-from uuid import UUID
 import sqlalchemy
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
@@ -127,14 +125,21 @@ def _bulk_upsert_customers(
     """
     Bulk upsert customers using PostgreSQL ON CONFLICT DO UPDATE.
 
-    Identity = (branch, kode), sama seperti Product identity (id, branch).
-    `kode` yang sama BOLEH di branch berbeda (mis. 'OUT001' di BATULICIN
-    dan 'OUT001' di BARABAI = 2 customer beda), tapi HARUS unik dalam 1
-    branch. `kode_area` jadi field deskriptif saja.
+    Identity = (branch, kode, kode_area), match dengan unique constraint
+    customers (lihat models.Customer.__table_args__). `kode` yang sama
+    BOLEH di branch berbeda (mis. 'OUT001' di BATULICIN dan 'OUT001' di
+    BARABAI = 2 customer beda), tapi HARUS unik dalam 1 branch. `kode_area`
+    jadi bagian dari identity.
 
     Branch diambil dari caller (JWT user). Wajib non-None untuk insert baru
-    (customers.branch NOT NULL). Re-activation path (existing soft-deleted
-    rows) tidak kena constraint ini karena load row dulu.
+    (customers.branch NOT NULL).
+
+    SEMUA row (existing aktif, soft-deleted, maupun baru) dikirim lewat satu
+    bulk INSERT ON CONFLICT DO UPDATE:
+      - row baru → ter-insert.
+      - row existing aktif → field deskriptif (nama_toko, alamat) di-update
+        bila berubah.
+      - row existing soft-deleted → re-aktivasi otomatis via set_ deleted_at=None.
 
     Returns (inserted_count, updated_count).
     """
@@ -150,7 +155,7 @@ def _bulk_upsert_customers(
     # Rows dengan kode NULL di-skip dari lookup (multiple NULLs allowed
     # per branch oleh UNIQUE index). Kalau kode_area kosong, kode_area
     # jadi string kosong (juga distinct di UNIQUE index).
-    from sqlalchemy import and_, or_, tuple_
+    from sqlalchemy import and_, or_
     triples_in_file = sorted({
         (r["branch"], r.get("kode") or "", r.get("kode_area") or "")
         for r in rows
@@ -183,36 +188,30 @@ def _bulk_upsert_customers(
                 .filter(or_(*conditions))
                 .all()
             )
-    # Build lookup: (branch, kode, kode_area) -> (customer_id, is_deleted)
-    existing_map: Dict[tuple, tuple] = {}
+    # Build lookup: (branch, kode, kode_area) -> ada customer existing
+    # (aktif maupun soft-deleted).
+    existing_keys: set = set()
     for row in existing_rows:
         if row.kode and row.branch:
-            existing_map[(row.branch, row.kode, row.kode_area or "")] = (
-                str(row.id), row.deleted_at is not None
-            )
+            existing_keys.add((row.branch, row.kode, row.kode_area or ""))
 
-    to_insert = []   # new customers (no existing triple, or NULL kode)
-    to_update = []  # re-activate deleted customers
+    # Semua row masuk ke bulk INSERT — ON CONFLICT DO UPDATE yang menentukan
+    # nasib tiap row (insert baru / update field deskriptif / re-aktivasi).
+    to_insert = rows
 
+    # Count: inserted = row baru (tidak match existing / kode NULL),
+    # updated = row yang match customer existing (aktif maupun soft-deleted).
+    inserted = 0
+    updated = 0
     for r in rows:
-        kode = r.get("kode")
-        # NULL/empty kode → always insert (no conflict possible by UNIQUE
-        # semantics, multiple NULLs allowed per branch).
-        if not kode:
-            to_insert.append(r)
+        if not r.get("kode"):
+            # Multiple NULLs allowed per branch oleh UNIQUE index → selalu insert.
+            inserted += 1
             continue
-        key = (r["branch"], kode, r.get("kode_area") or "")
-        if key in existing_map:
-            cid, is_deleted = existing_map[key]
-            if is_deleted:
-                to_update.append((cid, r))
-            # else: active customer exists — ON CONFLICT DO UPDATE will refresh
-            # other fields (nama_toko/alamat) below.
+        if (r["branch"], r["kode"], r.get("kode_area") or "") in existing_keys:
+            updated += 1
         else:
-            to_insert.append(r)
-
-    inserted = len(to_insert)
-    updated = len(to_update)
+            inserted += 1
 
     if to_insert:
         stmt = insert(Customer).values([
@@ -227,15 +226,14 @@ def _bulk_upsert_customers(
         ])
         # ON CONFLICT must match the actual unique constraint
         # (branch, kode, kode_area) per models.Customer.__table_args__.
-        # NOT updating `branch` on conflict — kalau ada existing customer
-        # di branch yang sama dengan kode + kode_area sama, pertahankan
-        # branch-nya.
+        # NOT updating `branch` on conflict — pertahankan branch existing.
         #
         # Untuk field opsional (alamat, kode_area): kalau field di Excel
         # kosong/NULL, JANGAN overwrite data existing. Pakai COALESCE supaya
         # nilai existing (EXCLUDED.<col>) hanya dipakai kalau input non-empty,
         # jika tidak maka nilai lama (customers.<col>) dipertahankan.
         # nama_toko wajib (sudah divalidasi), jadi boleh langsung di-overwrite.
+        # kode/kode_area tidak berubah (bagian dari conflict key, nilainya sama).
         stmt = stmt.on_conflict_do_update(
             index_elements=[Customer.branch, Customer.kode, Customer.kode_area],
             set_={
@@ -247,24 +245,14 @@ def _bulk_upsert_customers(
                     Customer.alamat,
                 ),
                 "deleted_at": None,
+                "updated_at": sqlalchemy.func.now(),
             },
         )
         db.execute(stmt)
-        logger.info(f"[SYNC] Bulk inserted {len(to_insert)} customers")
-
-    if to_update:
-        # Re-activate deleted customers by id
-        for customer_id_str, r in to_update:
-            kode_val = r.get("kode")
-            kode_area_val = r.get("kode_area")
-            result = db.query(Customer).filter(Customer.id == UUID(customer_id_str)).with_for_update().first()
-            if result:
-                if kode_val is not None:
-                    result.kode = kode_val
-                if kode_area_val is not None:
-                    result.kode_area = kode_area_val
-                result.deleted_at = None
-        logger.info(f"[SYNC] Re-activated {len(to_update)} deleted customers")
+        logger.info(
+            f"[SYNC] Bulk upserted {len(to_insert)} customers "
+            f"(new: {inserted}, updated/reactivated: {updated})"
+        )
 
     return inserted, updated
 
@@ -322,8 +310,9 @@ def sync_customers_from_excel(
         }
 
     total_rows = len(raw_rows)
-    # Identity customer = (branch, kode). Same kode boleh di branch berbeda;
-    # dalam 1 branch harus unik. NULL kode di-skip dari unique check.
+    # Identity customer = (branch, kode, kode_area). Same kode boleh di
+    # branch berbeda; dalam 1 branch, kombinasi (kode, kode_area) harus
+    # unik. NULL kode di-skip dari unique check.
     branch_norm = _normalize(current_user.get("branch"))
     seen_keys: set = set()
 
