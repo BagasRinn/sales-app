@@ -38,7 +38,10 @@ build/
 *.ipr
 *.iws
 .metadata
-pubspec.lock
+# pubspec.lock sengaja di-commit supaya versi dependency sama di semua mesin
+# dan build CI identik dengan build lokal.
+# Pengecualian: package internal (library) tidak perlu lockfile.
+/sales-app/packages/*/pubspec.lock
 
 # ---------- Android ----------
 *.jks
@@ -66,6 +69,8 @@ pubspec.lock
 # ---------- Node ----------
 node_modules/
 package-lock.json
+# lockfile e2e sengaja di-commit supaya versi Playwright reproducible
+!sales-app/admin_web/tests/e2e/package-lock.json
 
 # ---------- IDE ----------
 .idea/
@@ -84,9 +89,12 @@ $RECYCLE.BIN/
 
 # ---------- Claude / agent artifacts ----------
 .claude/
+.agents/
 Untitled-1.json
 *.review.json
 code_review_output.json
+# graphify index (generated, bisa di-rebuild kapan saja dengan `graphify .`)
+graphify-out/
 
 # ---------- Data / binary dumps (not source) ----------
 *.xlsx
@@ -96,6 +104,8 @@ code_review_output.json
 *.db
 *.sqlite3
 *.bak
+*.bak-*
+*.orig
 *.tmp
 *.log
 
@@ -109,6 +119,8 @@ exports/
 
 # ---------- Docs drafts & planning ----------
 docs/superpowers/
+# Plan/SDD files disimpan di luar repo (C:\Users\lenov\.opencode\plan)
+/plans/
 
 # ---------- Internal SDD workspace (Claude execution metadata) ----------
 .superpowers/
