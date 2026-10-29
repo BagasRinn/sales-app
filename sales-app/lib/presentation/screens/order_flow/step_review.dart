@@ -733,7 +733,9 @@ class _LineRow extends StatelessWidget {
 
             // ── Row 2: qty meta + stepper + aksi ──────────────────────────────
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Kiri: qty + diskon summary
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,34 +766,31 @@ class _LineRow extends StatelessWidget {
                       if (newQty == 0) {
                         draft.removeLine(line.id);
                       } else {
-                        draft.setQty(line.productId, newQty);
+                        draft.setLineQty(line.id, newQty);
                       }
                     },
                   ),
-                  const SizedBox(width: 6),
-                ],
-                // Tombol diskon
-                if (!isFree)
+                  const SizedBox(width: 4),
                   _actionIconBtn(
                     icon: Icons.discount_outlined,
-                    color: disc != null
+                    color: disc != null && !disc.isEmpty
                         ? AppColors.success
                         : AppColors.textSecondary,
                     onTap: () =>
-                        _showDiscountSheet(context, line, disc, currency),
+                        _showDiscountSheet(context, line, product, currency),
                   ),
-                const SizedBox(width: 4),
-                // Tombol up price
-                if (!isFree)
+                  const SizedBox(width: 2),
                   _actionIconBtn(
                     icon: Icons.trending_up,
                     color: up != null && !up.isEmpty
                         ? AppColors.warning
                         : AppColors.textSecondary,
                     onTap: () =>
-                        _showUpPriceSheet(context, line, up, price, currency),
+                        _showUpPriceSheet(context, line, product, price, currency),
                   ),
-                const SizedBox(width: 4),
+                  const SizedBox(width: 2),
+                ],
+                // Menu "Hapus" selalu visible, juga untuk barang gratis
                 _PopupMenuBtn(
                   items: [
                     if (!isFree)
@@ -894,7 +893,7 @@ class _LineRow extends StatelessWidget {
   void _showDiscountSheet(
     BuildContext context,
     OrderLine line,
-    ItemDiscount? disc,
+    Product? product,
     NumberFormat currency,
   ) {
     showModalBottomSheet(
@@ -902,14 +901,14 @@ class _LineRow extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) =>
-          _DiscountSheet(line: line, disc: disc, currency: currency),
+          _DiscountSheet(line: line, product: product, currency: currency),
     );
   }
 
   void _showUpPriceSheet(
     BuildContext context,
     OrderLine line,
-    ItemUpPrice? up,
+    Product? product,
     int hargaSatuan,
     NumberFormat currency,
   ) {
@@ -919,7 +918,7 @@ class _LineRow extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _UpPriceSheet(
         line: line,
-        up: up,
+        product: product,
         hargaSatuan: hargaSatuan,
         currency: currency,
       ),
@@ -990,12 +989,12 @@ class _LineRow extends StatelessWidget {
 /// ── Bottom sheet diskon 3 layer ────────────────────────────────────────────
 class _DiscountSheet extends StatefulWidget {
   final OrderLine line;
-  final ItemDiscount? disc;
+  final Product? product;
   final NumberFormat currency;
 
   const _DiscountSheet({
     required this.line,
-    required this.disc,
+    required this.product,
     required this.currency,
   });
 
@@ -1011,41 +1010,34 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   @override
   void initState() {
     super.initState();
-    _initLayer(1, widget.disc?.layer1);
-    _initLayer(2, widget.disc?.layer2);
-    _initLayer(3, widget.disc?.layer3);
+    _type1 = widget.line.discount?.layer1?.type ?? 'PERCENT';
+    _type2 = widget.line.discount?.layer2?.type ?? 'PERCENT';
+    _type3 = widget.line.discount?.layer3?.type ?? 'PERCENT';
+    _ctrl1 = TextEditingController(
+      text: widget.line.discount?.layer1 != null ? '${widget.line.discount!.layer1!.value}' : '',
+    );
+    _ctrl2 = TextEditingController(
+      text: widget.line.discount?.layer2 != null ? '${widget.line.discount!.layer2!.value}' : '',
+    );
+    _ctrl3 = TextEditingController(
+      text: widget.line.discount?.layer3 != null ? '${widget.line.discount!.layer3!.value}' : '',
+    );
+    _product = widget.product;
     _fetchProduct();
   }
 
   Future<void> _fetchProduct() async {
+    if (_product != null) return;
     final p = await context.read<ProductProvider>().fetchProductById(widget.line.productId);
     if (p != null && mounted) {
       setState(() => _product = p);
     }
   }
 
-  void _initLayer(int idx, DiscountLayer? layer) {
-    switch (idx) {
-      case 1:
-        _type1 = layer?.type ?? 'PERCENT';
-        _ctrl1 = TextEditingController(
-          text: layer != null ? '${layer.value}' : '',
-        );
-        break;
-      case 2:
-        _type2 = layer?.type ?? 'PERCENT';
-        _ctrl2 = TextEditingController(
-          text: layer != null ? '${layer.value}' : '',
-        );
-        break;
-      case 3:
-        _type3 = layer?.type ?? 'PERCENT';
-        _ctrl3 = TextEditingController(
-          text: layer != null ? '${layer.value}' : '',
-        );
-        break;
-    }
-  }
+  int get _hargaSatuan =>
+      _product?.harga ??
+      widget.product?.harga ??
+      context.read<DraftOrderProvider>().getPrice(widget.line.productId);
 
   @override
   void dispose() {
@@ -1142,7 +1134,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   int _calcPreview(int idx) {
     final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
     if (v <= 0) return 0;
-    final raw = ((_product?.harga ?? 0) * widget.line.qty).toInt();
+    final raw = _hargaSatuan * widget.line.qty;
     if (idx == 1) {
       return _typeFor(idx) == 'PERCENT' ? (raw * v / 100).round() : v.round();
     }
@@ -1161,7 +1153,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   }
 
   int get _subtotal {
-    final raw = ((_product?.harga ?? 0) * widget.line.qty).toInt();
+    final raw = _hargaSatuan * widget.line.qty;
     int running = raw;
     for (var i = 1; i <= 3; i++) {
       running -= _calcPreview(i);
@@ -1171,15 +1163,12 @@ class _DiscountSheetState extends State<_DiscountSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final products = context.read<ProductProvider>().products;
-    final productMap = {for (final p in products) p.id: p};
-    final product = productMap[widget.line.productId];
-    final name = product?.namaBarang ?? widget.line.productId;
-
-    // Simpan product untuk dipakai di _calcPreview / _subtotal
-    if (product != _product) {
-      _product = product;
-    }
+    // Jangan menimpa _product hasil _fetchProduct(): produk dari server-side
+    // search belum tentu ada di daftar aktif ProductProvider. Kalau ditimpa
+    // dengan null, preview diskon & subtotal akan tampil 0.
+    final name = _product?.namaBarang ??
+        widget.product?.namaBarang ??
+        widget.line.productId;
 
     return Container(
       decoration: BoxDecoration(
@@ -1747,13 +1736,13 @@ class _AddLineSheetState extends State<_AddLineSheet> {
 /// Bottom sheet untuk set Up Price (1 layer, per-piece, type PERCENT atau NOMINAL).
 class _UpPriceSheet extends StatefulWidget {
   final OrderLine line;
-  final ItemUpPrice? up;
+  final Product? product;
   final int hargaSatuan;
   final NumberFormat currency;
 
   const _UpPriceSheet({
     required this.line,
-    required this.up,
+    required this.product,
     required this.hargaSatuan,
     required this.currency,
   });
@@ -1769,10 +1758,10 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
   @override
   void initState() {
     super.initState();
-    _type = widget.up?.type.toUpperCase() ?? 'NOMINAL';
+    _type = widget.line.upPrice?.type.toUpperCase() ?? 'NOMINAL';
     final initial = _type == 'PERCENT'
-        ? (widget.up?.percent ?? 0)
-        : (widget.up?.nominal ?? 0).toDouble();
+        ? (widget.line.upPrice?.percent ?? 0)
+        : (widget.line.upPrice?.nominal ?? 0).toDouble();
     _ctrl = TextEditingController(
       text: initial > 0
           ? (initial == initial.roundToDouble()
