@@ -24,6 +24,14 @@ class ProductProvider extends ChangeNotifier {
   String? _categoryFilter;
   DateTime? _lastLoadTime;
 
+  /// Tipe order yang dipakai pada fetch produk terakhir yang sukses.
+  /// Dipakai untuk: (1) mendeteksi pergantian tipe order agar list lama
+  /// dikosongkan dulu (mencegah "flash" produk 4P saat masuk step pilih
+  /// produk dengan tipe REGULER, dan sebaliknya), (2) dipakai ulang saat
+  /// search/clear supaya hasil pencarian tetap ter-filter sesuai tipe
+  /// order yang sedang berjalan di Order Flow.
+  String? _activeOrderType;
+
   /// Daftar supplier yang dikategorikan sebagai 4P (dari backend).
   /// Loaded once saat app init, dipakai untuk label/badge produk.
   final List<String> _suppliers4p = [];
@@ -159,8 +167,19 @@ class ProductProvider extends ChangeNotifier {
   }
 
   Future<void> loadProducts({String? search, String? orderType}) async {
-    // Jika cache masih valid dan tidak ada search/orderType baru, skip reload.
-    if (_isProductCacheValid && search == null && orderType == null) {
+    // Kalau tipe order berubah dari fetch terakhir, list lama tidak valid
+    // lagi (filter backend order_type beda). Kosongkan supaya UI menampilkan
+    // skeleton, bukan "flash" produk dari tipe order sebelumnya selama
+    // menunggu response server.
+    if (orderType != _activeOrderType) {
+      _allProducts = [];
+    }
+
+    // Jika cache masih valid, tidak ada search baru, dan tipe ordernya
+    // sama dengan fetch terakhir, skip reload.
+    if (_isProductCacheValid &&
+        search == null &&
+        orderType == _activeOrderType) {
       return;
     }
 
@@ -177,6 +196,7 @@ class ProductProvider extends ChangeNotifier {
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
         orderType: orderType,
       );
+      _activeOrderType = orderType;
       _lastLoadTime = DateTime.now();
       _hasMore = _allProducts.length >= _pageSize;
     } on ApiException catch (e) {
@@ -200,6 +220,7 @@ class ProductProvider extends ChangeNotifier {
         skip: _allProducts.length,
         limit: _pageSize,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        orderType: _activeOrderType,
       );
 
       if (moreProducts.isEmpty) {
@@ -223,7 +244,10 @@ class ProductProvider extends ChangeNotifier {
     _searchQuery = query;
     _searchDebouncer(() {
       _lastLoadTime = null;
-      loadProducts(search: query);
+      // Bawa orderType aktif supaya hasil search di Order Flow tetap
+      // ter-filter — tanpa ini backend mengembalikan semua produk dan
+      // produk 4P bisa nyusup di flow REGULER.
+      loadProducts(search: query, orderType: _activeOrderType);
     });
   }
 
@@ -232,7 +256,7 @@ class ProductProvider extends ChangeNotifier {
     if (_searchQuery.isEmpty) return;
     _searchQuery = '';
     _lastLoadTime = null;
-    loadProducts();
+    loadProducts(orderType: _activeOrderType);
   }
 
   void setStatusFilter(ProductStatusFilter filter) {
@@ -254,7 +278,7 @@ class ProductProvider extends ChangeNotifier {
     if (_searchQuery.isNotEmpty) {
       _searchQuery = '';
       _searchDebouncer.cancel();
-      loadProducts();
+      loadProducts(orderType: _activeOrderType);
     } else {
       notifyListeners();
     }

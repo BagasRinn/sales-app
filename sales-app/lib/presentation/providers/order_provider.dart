@@ -118,6 +118,15 @@ class OrderProvider extends ChangeNotifier {
     );
   }
 
+  /// Hapus cache list order supaya loadOrders/loadRecentOrders berikutnya
+  /// benar-benar refetch dari server. Dipanggil setelah mutasi berhasil
+  /// (create/submit/update/delete/cancel) supaya order baru langsung muncul
+  /// di Beranda dan tab Pesanan tanpa menunggu cache 1–2 menit kedaluwarsa.
+  void invalidateOrderCaches() {
+    _lastLoadTime = null;
+    _recentOrdersLastLoadTime = null;
+  }
+
   /// Ambil 5 order terbaru (semua status) khusus untuk section "Orderan Terbaru"
   /// di Beranda. Tidak pernah append — selalu replace list supaya tampilan
   /// Orderan Terbaru konsisten dengan backend dan tidak terkontaminasi filter
@@ -193,6 +202,7 @@ class OrderProvider extends ChangeNotifier {
         orderUpPriceType: orderUpPriceType,
         orderUpPriceNominal: orderUpPriceNominal,
       );
+      invalidateOrderCaches();
       notifyListeners();
       return order;
     } on ApiException catch (e) {
@@ -234,6 +244,7 @@ class OrderProvider extends ChangeNotifier {
         orderUpPriceType: orderUpPriceType,
         orderUpPriceNominal: orderUpPriceNominal,
       );
+      invalidateOrderCaches();
       notifyListeners();
       return order;
     } on ApiException catch (e) {
@@ -259,6 +270,7 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       await _orderRepo.submitOrder(orderId);
+      invalidateOrderCaches();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -279,6 +291,7 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       await _orderRepo.deleteOrder(orderId);
+      invalidateOrderCaches();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -299,6 +312,7 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       await _orderRepo.cancelOrder(orderId);
+      invalidateOrderCaches();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
