@@ -109,12 +109,7 @@ graphify-out/
 *.tmp
 *.log
 
-# ---------- Migration & one-off scripts (local dev only) ----------
-migrate_to_railway.py
-create_tables_railway.py
-migrate_storage_to_s3.py
-
-# Exports folder (data sensitif, temporary migrasi)
+# Exports folder (data sensitif, one-off script output)
 exports/
 
 # ---------- Docs drafts & planning ----------
