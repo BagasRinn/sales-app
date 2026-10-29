@@ -34,23 +34,36 @@ class _StepReviewState extends State<StepReview> {
     _notesController = TextEditingController(
       text: context.read<DraftOrderProvider>().notes,
     );
-    _fetchMissingProducts();
+    _ensureProductData();
   }
 
-  Future<void> _fetchMissingProducts() async {
+  Future<void> _ensureProductData() async {
     final draft = context.read<DraftOrderProvider>();
     final productProvider = context.read<ProductProvider>();
-    final existingIds =
-        {for (final p in productProvider.products) p.id};
-    final missingIds = draft.items
-        .where((l) => l.qty > 0 && !existingIds.contains(l.productId))
-        .map((l) => l.productId)
-        .toSet();
-    for (final id in missingIds) {
-      final p = await productProvider.fetchProductById(id);
-      if (p != null && mounted) {
-        setState(() => _fetchedProducts[id] = p);
+    final prices = <String, int>{};
+
+    for (final line in draft.items) {
+      if (line.qty <= 0) continue;
+
+      // Coba ambil dari productProvider (daftar aktif)
+      final matches = productProvider.products.where(
+        (p) => p.id == line.productId,
+      );
+      if (matches.isNotEmpty) {
+        prices[line.productId] = matches.first.harga;
+        continue;
       }
+
+      // Tidak ada di daftar aktif, fetch dari backend
+      final p = await productProvider.fetchProductById(line.productId);
+      if (p != null && mounted) {
+        setState(() => _fetchedProducts[p.id] = p);
+        prices[p.id] = p.harga;
+      }
+    }
+
+    if (prices.isNotEmpty && mounted) {
+      context.read<DraftOrderProvider>().setPricingCache(prices);
     }
   }
 
