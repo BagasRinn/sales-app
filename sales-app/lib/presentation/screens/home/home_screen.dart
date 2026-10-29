@@ -423,7 +423,7 @@ class _SkeletonCardState extends State<_SkeletonCard>
                   ),
                 ],
               ),
-              const Spacer(),
+              const SizedBox(height: 14),
               Container(
                 width: 100,
                 height: 20,

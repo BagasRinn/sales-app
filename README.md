@@ -17,8 +17,6 @@ mode offline.
 | Admin web | `sales-app/admin_web` | Flutter Web | `sales-admin-web.web.app` |
 | Package bersama | `sales-app/packages/datetime_utils` | Dart | dipakai ketiga klien |
 
-Backend production: `https://sales-app-production-1872.up.railway.app` (docs Swagger di `/docs`).
-
 ## Fitur
 
 ### Sales — mobile (`sales-app`) & web (`sales-app/sales_web`)
