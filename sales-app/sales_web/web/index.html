@@ -30,32 +30,153 @@
       padding: 0;
       background-color: #F4F7FB;
     }
+
+    /* Banner "versi baru tersedia" (dibuat oleh script di bawah body). */
+    #update-bar {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      max-width: 520px;
+      margin: 0 auto;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 8px 14px;
+      border-radius: 10px;
+      background: #0F2540;
+      color: #FFFFFF;
+      font: 600 13px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+      box-shadow: 0 6px 24px rgba(15, 37, 64, 0.28);
+    }
+
+    #update-bar .update-label {
+      flex: 1 1 auto;
+    }
+
+    #update-bar .update-reload {
+      flex: 0 0 auto;
+      padding: 7px 14px;
+      border: 0;
+      border-radius: 7px;
+      background: #FFFFFF;
+      color: #0F2540;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    #update-bar .update-dismiss {
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.75);
+      font: 400 18px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <script>
-    // Cache bust: ubah angka ini setiap kali deploy, atau otomatis dengan build timestamp
-    var _cb = Date.now();
-  </script>
-  <script>
-    // Inject cache-bust query param ke flutter_bootstrap.js DAN main.dart.js
-    window.addEventListener('load', function() {
-      [].forEach.call(document.querySelectorAll('script[src]'), function(s) {
-        var src = s.getAttribute('src');
-        if (src && !src.includes('?v=')) {
-          s.setAttribute('src', src + (src.includes('?') ? '&' : '?') + 'v=' + window._cb);
-        }
-      });
-      // Also bust for flutter assets link
-      var links = document.querySelectorAll('link[rel="preload"][as="script"]');
-      links.forEach(function(l) {
-        var href = l.getAttribute('href');
-        if (href && !href.includes('?v=')) {
-          l.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'v=' + window._cb);
-        }
-      });
-    });
-  </script>
+  <!--
+    URL file ini ditambahi ?v=<buildId> saat deploy oleh
+    scripts/stamp_flutter_web.mjs, sehingga build baru = URL baru.
+  -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <!--
+    Deteksi versi baru tanpa memaksa user menghapus cache.
+
+    build-id.json di-generate oleh scripts/stamp_flutter_web.mjs dan selalu
+    di-serve dengan Cache-Control: no-cache.
+
+    Sengaja TIDAK auto-reload: di order flow ada draft order di memori, reload
+    paksa bisa menghilangkan data yang sedang diisi. User yang menentukan kapan
+    reload lewat tombol, dan boleh menutup banner kalau sedang sibuk.
+  -->
+  <script>
+    (function () {
+      var current = null; // build id yang sedang dijalankan halaman ini
+      var dismissed = null; // build id yang sudah ditolak user
+      var timer = null;
+
+      function stopPolling() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+
+      function startPolling() {
+        stopPolling();
+        timer = setInterval(checkVersion, 15 * 60 * 1000);
+      }
+
+      function showBanner(nextBuild) {
+        if (document.getElementById('update-bar')) return;
+
+        var bar = document.createElement('div');
+        bar.id = 'update-bar';
+
+        var label = document.createElement('span');
+        label.className = 'update-label';
+        label.textContent = 'Versi baru tersedia.';
+
+        var reload = document.createElement('button');
+        reload.type = 'button';
+        reload.className = 'update-reload';
+        reload.textContent = 'Muat ulang';
+        reload.addEventListener('click', function () {
+          location.reload();
+        });
+
+        var dismiss = document.createElement('button');
+        dismiss.type = 'button';
+        dismiss.className = 'update-dismiss';
+        dismiss.setAttribute('aria-label', 'Tutup');
+        dismiss.textContent = '\u00D7';
+        dismiss.addEventListener('click', function () {
+          dismissed = nextBuild;
+          if (bar.parentNode) bar.parentNode.removeChild(bar);
+          startPolling();
+        });
+
+        bar.appendChild(label);
+        bar.appendChild(reload);
+        bar.appendChild(dismiss);
+        document.body.appendChild(bar);
+
+        stopPolling();
+      }
+
+      function checkVersion() {
+        fetch('build-id.json?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (res) {
+            return res.ok ? res.text() : null;
+          })
+          .then(function (body) {
+            if (!body) return;
+            if (current === null) {
+              current = body;
+              return;
+            }
+            if (body === current || body === dismissed) return;
+            showBanner(body);
+          })
+          .catch(function () {
+            /* offline atau build-id.json belum ada: abaikan */
+          });
+      }
+
+      checkVersion();
+      startPolling();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') checkVersion();
+      });
+    })();
+  </script>
 </body>
 </html>

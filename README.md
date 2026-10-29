@@ -126,7 +126,29 @@ Lihat `/docs` untuk daftar lengkap.
 - `pubspec.lock` di-commit — Flutter build jadi deterministic antar mesin.
 - Folder `build/`, `venv/`, `__pycache__/` di-gitignore.
 - Credential files (`credentials.json`, `*.pem`, `*.key`, `.env`) jangan di-commit.
-- Web production build: `cd sales-app/admin_web && flutter build web`
+- Web production build & deploy — **jangan** `flutter build web` lalu `firebase deploy` manual:
+  - `.\scripts\deploy_web.ps1 -App sales_web`
+  - `.\scripts\deploy_web.ps1 -App admin_web`
+
+  Script itu menjalankan build, lalu `scripts/stamp_flutter_web.mjs` menambahkan
+  `?v=<buildId>` ke `flutter_bootstrap.js` dan `main.dart.js` sebelum deploy.
+  Tanpa langkah itu browser bisa memakai bundle lama sampai 1 tahun.
+  Di CI (push ke `main`) langkah ini sudah otomatis.
+
+- Strategi cache web (lihat `firebase.json` di tiap app):
+  - `index.html`, `/`, `build-id.json` → `no-cache` (selalu revalidasi, ±300 byte).
+  - `flutter_bootstrap.js`, `main.dart.js` → cache 1 tahun, **aman** karena URL-nya
+    ber-versi (`?v=<buildId>`), jadi build baru = URL baru = unduh baru.
+  - Hasilnya: user selalu dapat versi terbaru tanpa hapus cache, dan tidak ada
+    tambahan kuota saat tidak ada deploy.
+
+- Verifikasi setelah deploy:
+  ```powershell
+  curl.exe -sI https://sales-order-web.web.app/main.dart.js | Select-String cache-control
+  curl.exe -sI https://sales-order-web.web.app/               | Select-String cache-control
+  ```
+  Harus muncul `max-age=31536000, immutable` untuk `main.dart.js` dan `no-cache` untuk `/`.
+
 
 ## Troubleshooting
 

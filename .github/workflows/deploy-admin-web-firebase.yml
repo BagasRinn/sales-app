@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'sales-app/admin_web/**'
+      - 'scripts/**'
+      - '.github/workflows/deploy-admin-web-firebase.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -28,12 +31,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: sales-app/admin_web/package.json
 
       - name: Build Flutter Web
         run: flutter build web --release
         working-directory: sales-app/admin_web
+
+      # Menambahkan ?v=<buildId> ke flutter_bootstrap.js & main.dart.js supaya
+      # browser tidak pernah memakai bundle lama walau cache-nya 1 tahun.
+      - name: Stamp build id (cache busting)
+        env:
+          BUILD_ID: run${{ github.run_number }}-${{ github.sha }}
+        run: node scripts/stamp_flutter_web.mjs sales-app/admin_web/build/web
 
       - name: Deploy to Firebase
         run: |
