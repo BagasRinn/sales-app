@@ -19,6 +19,7 @@ class OrderProvider extends ChangeNotifier {
   bool _hasMore = true;
   String? _errorMessage;
   String? _activeStatusFilter;
+  String? _activeSearchQuery;
   DateTime? _lastLoadTime;
 
   // Dipakai khusus untuk section "Orderan Terbaru" di Beranda.
@@ -52,9 +53,12 @@ class OrderProvider extends ChangeNotifier {
     return DateTime.now().difference(_lastLoadTime!) < _orderCacheDuration;
   }
 
-  Future<void> loadOrders({String? status, bool reset = true}) async {
+  Future<void> loadOrders({String? status, String? search, bool reset = true}) async {
     // Jika cache masih valid dan tidak ada filter baru, skip reload.
-    if (reset && _isOrderCacheValid && status == _activeStatusFilter) {
+    if (reset &&
+        _isOrderCacheValid &&
+        status == _activeStatusFilter &&
+        search == _activeSearchQuery) {
       return;
     }
 
@@ -64,6 +68,7 @@ class OrderProvider extends ChangeNotifier {
     }
     _errorMessage = null;
     _activeStatusFilter = status;
+    _activeSearchQuery = search;
     notifyListeners();
 
     try {
@@ -71,6 +76,7 @@ class OrderProvider extends ChangeNotifier {
         skip: reset ? 0 : _orders.length,
         limit: _pageSize,
         status: status,
+        search: search,
       );
       if (reset) {
         _orders = newOrders;
@@ -95,13 +101,21 @@ class OrderProvider extends ChangeNotifier {
     if (_isLoadingMore || !_hasMore) return;
     _isLoadingMore = true;
     notifyListeners();
-    await loadOrders(status: _activeStatusFilter, reset: false);
+    await loadOrders(
+      status: _activeStatusFilter,
+      search: _activeSearchQuery,
+      reset: false,
+    );
   }
 
   /// Re-fetch dengan filter aktif saat ini — dipakai setelah mutasi (delete/submit)
   /// supaya list otomatis update tanpa harus trigger refresh manual.
   Future<void> refreshOrders() async {
-    await loadOrders(status: _activeStatusFilter, reset: true);
+    await loadOrders(
+      status: _activeStatusFilter,
+      search: _activeSearchQuery,
+      reset: true,
+    );
   }
 
   /// Ambil 5 order terbaru (semua status) khusus untuk section "Orderan Terbaru"

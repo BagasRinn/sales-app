@@ -74,6 +74,7 @@ class OrderRepository {
     int skip = 0,
     int limit = 50,
     String? status,
+    String? search,
   }) async {
     final queryParams = <String, String>{
       'skip': skip.toString(),
@@ -81,6 +82,9 @@ class OrderRepository {
     };
     if (status != null) {
       queryParams['status'] = status;
+    }
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
     }
 
     final data = await _api.get('/orders/my', queryParams: queryParams);

@@ -18,7 +18,7 @@ class StepPickCustomer extends StatefulWidget {
 class _StepPickCustomerState extends State<StepPickCustomer> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
-  List<Customer>? _customers;
+  List<Customer> _customers = [];
   bool _loading = false;
   String? _error;
 
@@ -34,14 +34,14 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({String? search}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final repo = context.read<CustomerRepository>();
-      final result = await repo.getMyCustomers();
+      final result = await repo.getMyCustomers(search: search);
       if (!mounted) return;
       setState(() {
         _customers = result;
@@ -85,7 +85,7 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
                     )
                   : null,
             ),
-            onChanged: (v) => setState(() => _search = v),
+            onChanged: (v) => _load(search: v),
           ),
         ),
         Padding(
@@ -105,7 +105,7 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
   }
 
   Widget _buildList() {
-    if (_loading && _customers == null) {
+    if (_loading && _customers.isEmpty) {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: 8,
@@ -120,11 +120,10 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
         ),
       );
     }
-    final list = _customers ?? [];
-    final filtered = _search.isEmpty
-        ? list
-        : list.where((c) {
-            final q = _search.toLowerCase();
+    final q = _searchController.text.toLowerCase().trim();
+    final filtered = q.isEmpty
+        ? _customers
+        : _customers.where((c) {
             return c.namaToko.toLowerCase().contains(q) ||
                 (c.kode?.toLowerCase().contains(q) ?? false) ||
                 (c.alamat?.toLowerCase().contains(q) ?? false);

@@ -110,12 +110,22 @@ class _OrderListScreenState extends State<OrderListScreen>
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() => _searchQuery = '');
+                          _searchQuery = '';
+                          context.read<OrderProvider>().loadOrders(
+                            status: _statusFilters[_selectedFilterIndex].status,
+                            search: '',
+                          );
                         },
                       )
                     : null,
               ),
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: (v) {
+                _searchQuery = v;
+                context.read<OrderProvider>().loadOrders(
+                  status: _statusFilters[_selectedFilterIndex].status,
+                  search: v,
+                );
+              },
             ),
           ),
           SizedBox(
@@ -145,7 +155,7 @@ class _OrderListScreenState extends State<OrderListScreen>
 
   Widget _buildList() {
     final orderProvider = context.watch<OrderProvider>();
-    final orders = _filterOrders(orderProvider.orders);
+    final orders = orderProvider.orders;
     final errorMessage = orderProvider.errorMessage;
 
     if (errorMessage != null && orders.isEmpty) {
@@ -249,15 +259,6 @@ class _OrderListScreenState extends State<OrderListScreen>
     );
   }
 
-  List<Order> _filterOrders(List<Order> orders) {
-    if (_searchQuery.isEmpty) return orders;
-    final q = _searchQuery.toLowerCase();
-    return orders.where((o) {
-      return o.id.toLowerCase().contains(q) ||
-          (o.customerName?.toLowerCase().contains(q) ?? false) ||
-          (o.storeName?.toLowerCase().contains(q) ?? false);
-    }).toList();
-  }
 }
 
 class _StatusFilter {

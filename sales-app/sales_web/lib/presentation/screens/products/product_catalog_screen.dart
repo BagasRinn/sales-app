@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,7 @@ class ProductCatalogScreen extends StatefulWidget {
 class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
   final _searchController = TextEditingController();
   String _stockFilter = 'Semua';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -29,6 +31,7 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -61,8 +64,14 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
                         },
                       )
                     : null,
-              ),
-              onSubmitted: (value) => provider.loadProducts(search: value),
+                ),
+                onChanged: (value) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(
+                    const Duration(milliseconds: 400),
+                    () => provider.loadProducts(search: value),
+                  );
+                },
             ),
           ),
 
@@ -116,18 +125,6 @@ class _ProductCatalogScreenState extends State<ProductCatalogScreen> {
 
   Widget _buildProductList(ProductProvider provider, NumberFormat idr) {
     var products = provider.allProducts;
-
-    // Apply search filter
-    if (_searchController.text.isNotEmpty) {
-      final q = _searchController.text.toLowerCase();
-      products = products
-          .where(
-            (p) =>
-                p.namaBarang.toLowerCase().contains(q) ||
-                (p.kategori?.toLowerCase().contains(q) ?? false),
-          )
-          .toList();
-    }
 
     // Apply stock filter
     if (_stockFilter == 'Tersedia') {
