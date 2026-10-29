@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/design_system.dart';
 import '../../../core/design_system/widgets/app_components.dart';
+import '../../../core/number_input.dart';
 import '../../../data/models/product.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/draft_order_provider.dart';
@@ -25,16 +26,23 @@ class StepReview extends StatefulWidget {
 }
 
 class _StepReviewState extends State<StepReview> {
+  late final DraftOrderProvider _draft;
   late TextEditingController _notesController;
   final Map<String, Product> _fetchedProducts = {};
 
   @override
   void initState() {
     super.initState();
-    _notesController = TextEditingController(
-      text: context.read<DraftOrderProvider>().notes,
-    );
+    _draft = context.read<DraftOrderProvider>();
+    _notesController = TextEditingController(text: _draft.notes);
+    // Listener eksplisit: di build release `context.watch` tidak selalu
+    // memicu rebuild, jadi perubahan draft dipaksa rebuild lewat setState.
+    _draft.addListener(_onDraftChanged);
     _ensureProductData();
+  }
+
+  void _onDraftChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _ensureProductData() async {
@@ -69,13 +77,14 @@ class _StepReviewState extends State<StepReview> {
 
   @override
   void dispose() {
+    _draft.removeListener(_onDraftChanged);
     _notesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final draft = context.watch<DraftOrderProvider>();
+    final draft = _draft;
     final productProvider = context.watch<ProductProvider>();
     final allProducts = [
       ...productProvider.products,
@@ -604,7 +613,9 @@ class _LineRow extends StatelessWidget {
       symbol: 'Rp ',
       decimalDigits: 0,
     );
-    final draft = context.watch<DraftOrderProvider>();
+    // Rebuild baris ini datang dari StepReview (listener draft), jadi cukup
+    // baca provider tanpa membuat dependency baru.
+    final draft = context.read<DraftOrderProvider>();
     final name = product?.namaBarang ?? line.productId;
     final price = product?.harga ?? draft.getPrice(line.productId);
     final rawSubtotal = price * line.qty;
@@ -856,16 +867,20 @@ class _LineRow extends StatelessWidget {
       final l = entry.$2;
       if (l == null) continue;
       final cut = entry.$3;
-      if (cut <= 0) continue;
       final label = entry.$1 == 1
           ? 'Diskon 1'
           : entry.$1 == 2
               ? 'Diskon 2'
               : 'Diskon 3';
       if (l.type.toUpperCase() == 'PERCENT') {
-        parts.add('$label: ${l.value}%');
+        parts.add('$label: ${formatEditableNumber(l.value)}%');
       } else {
-        parts.add('$label: -${currency.format(cut)}');
+        // Pakai potongan sebenarnya (sudah di-clamp ke sisa subtotal). Kalau
+        // hasilnya 0 — mis. harga produk belum diketahui — tetap tampilkan
+        // nilai nominal tersimpan supaya diskon tidak terlihat "hilang".
+        parts.add(
+          '$label: -${currency.format(cut > 0 ? cut : l.value.round())}',
+        );
       }
     }
     if (parts.isEmpty) return const SizedBox.shrink();
@@ -1014,13 +1029,19 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     _type2 = widget.line.discount?.layer2?.type ?? 'PERCENT';
     _type3 = widget.line.discount?.layer3?.type ?? 'PERCENT';
     _ctrl1 = TextEditingController(
-      text: widget.line.discount?.layer1 != null ? '${widget.line.discount!.layer1!.value}' : '',
+      text: widget.line.discount?.layer1 != null
+          ? formatEditableNumber(widget.line.discount!.layer1!.value)
+          : '',
     );
     _ctrl2 = TextEditingController(
-      text: widget.line.discount?.layer2 != null ? '${widget.line.discount!.layer2!.value}' : '',
+      text: widget.line.discount?.layer2 != null
+          ? formatEditableNumber(widget.line.discount!.layer2!.value)
+          : '',
     );
     _ctrl3 = TextEditingController(
-      text: widget.line.discount?.layer3 != null ? '${widget.line.discount!.layer3!.value}' : '',
+      text: widget.line.discount?.layer3 != null
+          ? formatEditableNumber(widget.line.discount!.layer3!.value)
+          : '',
     );
     _product = widget.product;
     _fetchProduct();
@@ -1088,10 +1109,20 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     _ctrlFor(idx).clear();
   }
 
+  /// Nilai input layer [idx]. Nominal rupiah menerima pemisah ribuan
+  /// ("10.000" → 10000), persen tidak (supaya "10.000" bukan 10000%).
+  double _inputValue(int idx) => parseNumberInput(
+        _ctrlFor(idx).text,
+        allowThousands: _typeFor(idx) != 'PERCENT',
+      );
+
   void _onSave() {
+    // Tutup keyboard dulu: layout sheet bergeser saat keyboard turun, dan tap
+    // pada tombol bisa hilang kalau posisinya berubah di tengah gesture.
+    FocusScope.of(context).unfocus();
     final draft = context.read<DraftOrderProvider>();
     for (var idx = 1; idx <= 3; idx++) {
-      final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+      final v = _inputValue(idx);
       draft.setDiscountLayer(
         lineId: widget.line.id,
         layer: idx,
@@ -1103,13 +1134,14 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   }
 
   void _onApplyToAll() {
+    FocusScope.of(context).unfocus();
     final draft = context.read<DraftOrderProvider>();
     final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
     if (otherCount == 0) return;
 
     // 1. Simpan dulu ke item ini sendiri (ambil nilai terbaru dari input)
     for (var idx = 1; idx <= 3; idx++) {
-      final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+      final v = _inputValue(idx);
       draft.setDiscountLayer(
         lineId: widget.line.id,
         layer: idx,
@@ -1132,7 +1164,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   }
 
   int _calcPreview(int idx) {
-    final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
+    final v = _inputValue(idx);
     if (v <= 0) return 0;
     final raw = _hargaSatuan * widget.line.qty;
     if (idx == 1) {
@@ -1141,8 +1173,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     // Layers 2 & 3 dihitung dari sisa setelah layer sebelumnya
     int running = raw;
     for (var i = 1; i < idx; i++) {
-      final prevV =
-          double.tryParse(_ctrlFor(i).text.replaceAll(',', '.')) ?? 0.0;
+      final prevV = _inputValue(i);
       if (prevV <= 0) continue;
       final cut = _typeFor(i) == 'PERCENT'
           ? (running * prevV / 100).round()
@@ -1170,140 +1201,160 @@ class _DiscountSheetState extends State<_DiscountSheet> {
         widget.product?.namaBarang ??
         widget.line.productId;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          // Handle
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.borderLight,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Edit Diskon',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+    // Keyboard ditangani di luar Container: isi sheet jadi area scroll yang
+    // fleksibel dan tombol Simpan di-pin di footer. Tanpa ini, saat keyboard
+    // terbuka Column lebih tinggi dari ruang tersedia sehingga tombol Simpan
+    // terdorong ke belakang keyboard dan tap pertama tidak mengenai apa pun.
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 20),
-                  style: IconButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: AppColors.border),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-            child: Text(
-              name,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textMuted,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // Layer cards
-          for (var idx = 1; idx <= 3; idx++)
-            _LayerCard(
-              idx: idx,
-              type: _typeFor(idx),
-              controller: _ctrlFor(idx),
-              preview: _calcPreview(idx),
-              onTypeChanged: (t) => _setType(idx, t),
-              onChanged: (_) => setState(() {}),
-            ),
-          const Divider(height: 1, indent: 20, endIndent: 20),
-          // Subtotal
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Subtotal',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+              const SizedBox(height: 14),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Edit Diskon',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, size: 20),
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+                child: Text(
+                  name,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Layer cards
+                      for (var idx = 1; idx <= 3; idx++)
+                        _LayerCard(
+                          idx: idx,
+                          type: _typeFor(idx),
+                          controller: _ctrlFor(idx),
+                          preview: _calcPreview(idx),
+                          onTypeChanged: (t) => _setType(idx, t),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      const Divider(height: 1, indent: 20, endIndent: 20),
+                      // Subtotal
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Subtotal',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              widget.currency.format(_subtotal),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Terapkan ke Semua Item
+                      Consumer<DraftOrderProvider>(
+                        builder: (context, draft, _) {
+                          final otherCount = draft.items
+                              .where((l) => l.id != widget.line.id)
+                              .length;
+                          if (otherCount == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _onApplyToAll,
+                                icon: const Icon(Icons.done_all, size: 18),
+                                label: Text(
+                                  'Terapkan ke Semua Item ($otherCount)',
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(44),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  widget.currency.format(_subtotal),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.success,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Terapkan ke Semua Item
-          Consumer<DraftOrderProvider>(
-            builder: (context, draft, _) {
-              final otherCount = draft.items
-                  .where((l) => l.id != widget.line.id)
-                  .length;
-              if (otherCount == 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              ),
+              // Tombol simpan — selalu terlihat di atas keyboard.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                 child: SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _onApplyToAll,
-                    icon: const Icon(Icons.done_all, size: 18),
-                    label: Text('Terapkan ke Semua Item ($otherCount)'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(44),
+                  child: FilledButton(
+                    onPressed: _onSave,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
                     ),
+                    child: const Text('Simpan'),
                   ),
                 ),
-              );
-            },
-          ),
-          // Tombol simpan
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _onSave,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                child: const Text('Simpan'),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1570,8 +1621,10 @@ class _AddLineSheetState extends State<_AddLineSheet> {
   String _layer1Type = 'PERCENT';
   final _layer1Controller = TextEditingController();
   ItemDiscount? _buildDiscount() {
-    final v =
-        double.tryParse(_layer1Controller.text.replaceAll(',', '.')) ?? 0.0;
+    final v = parseNumberInput(
+      _layer1Controller.text,
+      allowThousands: _layer1Type != 'PERCENT',
+    );
     if (v <= 0) return null;
     double capped = v;
     if (_layer1Type == 'PERCENT' && v > 100) capped = 100.0;
@@ -1763,11 +1816,7 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
         ? (widget.line.upPrice?.percent ?? 0)
         : (widget.line.upPrice?.nominal ?? 0).toDouble();
     _ctrl = TextEditingController(
-      text: initial > 0
-          ? (initial == initial.roundToDouble()
-                ? '${initial.round()}'
-                : '$initial')
-          : '',
+      text: initial > 0 ? formatEditableNumber(initial) : '',
     );
   }
 
@@ -1777,15 +1826,13 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
     super.dispose();
   }
 
-  int get _valueInt {
-    final raw = _ctrl.text.replaceAll(',', '.');
-    return double.tryParse(raw)?.toInt() ?? 0;
-  }
+  /// Nominal rupiah menerima pemisah ribuan ("10.000" → 10000); persen tidak.
+  double get _inputValue =>
+      parseNumberInput(_ctrl.text, allowThousands: _type != 'PERCENT');
 
-  double get _valueDouble {
-    final raw = _ctrl.text.replaceAll(',', '.');
-    return double.tryParse(raw) ?? 0.0;
-  }
+  int get _valueInt => _inputValue.toInt();
+
+  double get _valueDouble => _inputValue;
 
   int get _perPiece {
     if (_type == 'PERCENT') {
@@ -1797,6 +1844,7 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
   int get _total => _perPiece * widget.line.qty;
 
   void _onSave() {
+    FocusScope.of(context).unfocus();
     final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
     context.read<DraftOrderProvider>().setUpPrice(
       lineId: widget.line.id,
@@ -1811,14 +1859,17 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
     final otherCount = draft.items.where((l) => l.id != widget.line.id).length;
     if (otherCount == 0) return;
 
-    draft.applyUpPriceToAll(widget.line.id);
+    FocusScope.of(context).unfocus();
 
+    // Simpan dulu ke line ini, baru salin ke line lain — kalau urutannya
+    // dibalik, line lain menyalin nilai up price yang lama/kosong.
     final value = _type == 'PERCENT' ? _valueDouble : _valueInt.toDouble();
-    context.read<DraftOrderProvider>().setUpPrice(
+    draft.setUpPrice(
       lineId: widget.line.id,
       type: _type,
       value: value,
     );
+    draft.applyUpPriceToAll(widget.line.id);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1832,148 +1883,177 @@ class _UpPriceSheetState extends State<_UpPriceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
+    // Sama seperti sheet diskon: isi sheet jadi scroll fleksibel dan footer
+    // di-pin supaya tombol Simpan tidak tertutup keyboard saat muncul.
     return Padding(
-      padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.borderLight,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                Icon(Icons.trending_up, color: AppColors.warning, size: 20),
-                const SizedBox(width: 8),
-                const Text('Edit Up Price', style: AppTextStyles.headlineSmall),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Penambah per-piece (×${widget.line.qty}). Ditambahkan ke base sebelum diskon.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Type chip selector (% / Rp)
-            Row(
-              children: [
-                _typeChip('Rp', _type == 'NOMINAL'),
-                const SizedBox(width: 8),
-                _typeChip('%', _type == 'PERCENT'),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Input
-            TextField(
-              controller: _ctrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
-              ],
-              decoration: InputDecoration(
-                labelText: _type == 'PERCENT'
-                    ? 'Persen (%)'
-                    : 'Nominal per-piece (Rp)',
-                hintText: _type == 'PERCENT' ? 'Contoh: 10' : 'Contoh: 1000',
-                prefixText: _type == 'PERCENT' ? null : 'Rp ',
-                border: const OutlineInputBorder(),
-                suffixIcon: _ctrl.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () => setState(() => _ctrl.clear()),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.borderLight,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            // Live preview
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Per-piece: ${widget.currency.format(_perPiece)}',
-                    style: AppTextStyles.bodySmall,
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.trending_up,
+                            color: AppColors.warning,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Edit Up Price',
+                            style: AppTextStyles.headlineSmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Penambah per-piece (×${widget.line.qty}). Ditambahkan ke base sebelum diskon.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Type chip selector (% / Rp)
+                      Row(
+                        children: [
+                          _typeChip('Rp', _type == 'NOMINAL'),
+                          const SizedBox(width: 8),
+                          _typeChip('%', _type == 'PERCENT'),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Input
+                      TextField(
+                        controller: _ctrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: _type == 'PERCENT'
+                              ? 'Persen (%)'
+                              : 'Nominal per-piece (Rp)',
+                          hintText: _type == 'PERCENT'
+                              ? 'Contoh: 10'
+                              : 'Contoh: 1000',
+                          prefixText: _type == 'PERCENT' ? null : 'Rp ',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: _ctrl.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setState(() => _ctrl.clear()),
+                                ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      // Live preview
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Per-piece: ${widget.currency.format(_perPiece)}',
+                              style: AppTextStyles.bodySmall,
+                            ),
+                            Text(
+                              'Total: + ${widget.currency.format(_total)}',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Consumer<DraftOrderProvider>(
+                        builder: (context, draft, _) {
+                          final otherCount = draft.items
+                              .where((l) => l.id != widget.line.id)
+                              .length;
+                          if (otherCount == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _onApplyToAll,
+                                icon: const Icon(Icons.done_all, size: 18),
+                                label: Text(
+                                  'Terapkan ke Semua Item ($otherCount)',
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(44),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Total: + ${widget.currency.format(_total)}',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Consumer<DraftOrderProvider>(
-              builder: (context, draft, _) {
-                final otherCount = draft.items
-                    .where((l) => l.id != widget.line.id)
-                    .length;
-                if (otherCount == 0) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _onApplyToAll,
-                      icon: const Icon(Icons.done_all, size: 18),
-                      label: Text('Terapkan ke Semua Item ($otherCount)'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(44),
+              // Footer — selalu terlihat di atas keyboard.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Batal'),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Batal'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _onSave,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.warning,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _onSave,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.warning,
+                        ),
+                        child: const Text('Simpan'),
+                      ),
                     ),
-                    child: const Text('Simpan'),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

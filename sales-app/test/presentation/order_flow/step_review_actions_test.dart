@@ -173,4 +173,106 @@ void main() {
     expect(find.text('× 1 · Rp 5.000'), findsOneWidget);
     expect(find.textContaining('Diskon 1:'), findsNothing);
   });
+
+  testWidgets('klik Simpan sekali tetap kena walau keyboard terbuka', (
+    tester,
+  ) async {
+    // Layar kecil (360×640 dp) + keyboard 300 dp: dulu sheet diskon lebih
+    // tinggi dari ruang tersedia, tombol Simpan terdorong ke belakang
+    // keyboard, dan tap pertama tidak melakukan apa-apa.
+    tester.view.physicalSize = const Size(1620, 1920);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    tester.view.viewInsets = FakeViewPadding.zero;
+
+    final draft = DraftOrderProvider();
+    draft.setCustomerDirect(id: 'C1', namaToko: 'Toko Uji');
+    draft.setPricingCache({'P1': 10000});
+    draft.addLine('P1', qty: 2);
+    await _pump(tester, draft);
+
+    await tester.tap(find.byIcon(Icons.discount_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(1), '10');
+    await tester.pump();
+
+    // Keyboard muncul.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    await tester.pumpAndSettle();
+
+    final simpan = find.widgetWithText(FilledButton, 'Simpan');
+    final rect = tester.getRect(simpan);
+    expect(
+      rect.bottom,
+      lessThanOrEqualTo(640 - 300),
+      reason: 'Tombol Simpan harus berada di atas keyboard',
+    );
+
+    // Satu tap saja.
+    await tester.tap(simpan);
+    await tester.pumpAndSettle();
+
+    expect(draft.items.single.discount?.layer1?.value, 10);
+    expect(find.text('Edit Diskon'), findsNothing);
+    expect(find.textContaining('Diskon 1:'), findsOneWidget);
+  });
+
+  testWidgets('nominal "10.000" tidak lagi terbaca Rp 10', (tester) async {
+    tester.view.physicalSize = const Size(2400, 3600);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final draft = DraftOrderProvider();
+    draft.setCustomerDirect(id: 'C1', namaToko: 'Toko Uji');
+    draft.setPricingCache({'P1': 10000});
+    draft.addLine('P1', qty: 2);
+    await _pump(tester, draft);
+
+    await tester.tap(find.byIcon(Icons.discount_outlined));
+    await tester.pumpAndSettle();
+    // Ganti layer 1 ke nominal, lalu isi dengan pemisah ribuan.
+    await tester.tap(find.text('Rp').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(1), '10.000');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Simpan'));
+    await tester.pumpAndSettle();
+
+    final layer = draft.items.single.discount!.layer1!;
+    expect(layer.type, 'NOMINAL');
+    expect(layer.value, 10000);
+    // Ditampilkan di line item, bukan tersimpan diam-diam.
+    expect(find.textContaining('Diskon 1: -Rp 10.000'), findsOneWidget);
+  });
+
+  testWidgets('up price "1.000" tersimpan dan terapkan-ke-semua benar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(2400, 3600);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final draft = DraftOrderProvider();
+    draft.setCustomerDirect(id: 'C1', namaToko: 'Toko Uji');
+    draft.setPricingCache({'P1': 10000, 'P2': 5000});
+    draft.addLine('P1', qty: 2);
+    draft.addLine('P2', qty: 1);
+    await _pump(tester, draft);
+
+    await tester.tap(find.byIcon(Icons.trending_up).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(1), '1.000');
+    await tester.pump();
+
+    // Baris lain harus ikut mendapat nilai baru, bukan nilai lama (kosong).
+    await tester.tap(find.textContaining('Terapkan ke Semua Item'));
+    await tester.pumpAndSettle();
+
+    expect(draft.items[0].upPrice?.nominal, 1000);
+    expect(draft.items[1].upPrice?.nominal, 1000);
+  });
 }
