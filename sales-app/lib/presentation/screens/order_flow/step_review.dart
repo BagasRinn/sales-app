@@ -1014,6 +1014,14 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     _initLayer(1, widget.disc?.layer1);
     _initLayer(2, widget.disc?.layer2);
     _initLayer(3, widget.disc?.layer3);
+    _fetchProduct();
+  }
+
+  Future<void> _fetchProduct() async {
+    final p = await context.read<ProductProvider>().fetchProductById(widget.line.productId);
+    if (p != null && mounted) {
+      setState(() => _product = p);
+    }
   }
 
   void _initLayer(int idx, DiscountLayer? layer) {

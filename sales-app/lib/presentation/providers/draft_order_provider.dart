@@ -119,11 +119,10 @@ class DraftOrderProvider extends ChangeNotifier {
         double pct = value > 100 ? 100.0 : value;
         newLayer = DiscountLayer(type: type, value: pct);
       } else {
-        // NOMINAL — stored as int IDR
-        final price = _priceCache[line.productId] ?? 0;
-        final max = price * line.qty;
-        int capped = value > max ? max : value.toInt();
-        newLayer = DiscountLayer(type: type, value: capped.toDouble());
+        // NOMINAL — stored as int IDR. Tidak ada cap client-side; backend
+        // _layer_cut sudah clamp nominal ke running subtotal. Hindari
+        // _priceCache yang mungkin belum terisi (produk dari search baru).
+        newLayer = DiscountLayer(type: type, value: value.toDouble());
       }
     }
 

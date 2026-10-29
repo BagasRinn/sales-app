@@ -2277,6 +2277,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   late String _type1, _type2, _type3;
   late TextEditingController _ctrl1, _ctrl2, _ctrl3;
   late NumberFormat _idr;
+  Product? _product;
 
   @override
   void initState() {
@@ -2285,6 +2286,16 @@ class _DiscountSheetState extends State<_DiscountSheet> {
     _initLayer(1, widget.line.discount.layer1);
     _initLayer(2, widget.line.discount.layer2);
     _initLayer(3, widget.line.discount.layer3);
+    _product = widget.product;
+    _fetchProduct();
+  }
+
+  Future<void> _fetchProduct() async {
+    if (_product != null) return;
+    final p = await context.read<ProductProvider>().fetchProductById(widget.line.productId);
+    if (p != null && mounted) {
+      setState(() => _product = p);
+    }
   }
 
   void _initLayer(int idx, DiscountLayer? layer) {
@@ -2362,7 +2373,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   int _calcPreview(int idx) {
     final v = double.tryParse(_ctrlFor(idx).text.replaceAll(',', '.')) ?? 0.0;
     if (v <= 0) return 0;
-    final price = widget.product?.harga ?? widget.line.hargaSatuan;
+    final price = _product?.harga ?? widget.line.hargaSatuan;
     final raw = price * widget.line.qty;
     if (idx == 1) {
       return _typeFor(idx) == 'PERCENT' ? (raw * v / 100).round() : v.round();
@@ -2381,7 +2392,7 @@ class _DiscountSheetState extends State<_DiscountSheet> {
   }
 
   int get _subtotal {
-    final price = widget.product?.harga ?? widget.line.hargaSatuan;
+    final price = _product?.harga ?? widget.line.hargaSatuan;
     final raw = price * widget.line.qty;
     int running = raw;
     for (var i = 1; i <= 3; i++) {
