@@ -26,6 +26,7 @@ class StepReview extends StatefulWidget {
 
 class _StepReviewState extends State<StepReview> {
   late TextEditingController _notesController;
+  final Map<String, Product> _fetchedProducts = {};
 
   @override
   void initState() {
@@ -33,6 +34,24 @@ class _StepReviewState extends State<StepReview> {
     _notesController = TextEditingController(
       text: context.read<DraftOrderProvider>().notes,
     );
+    _fetchMissingProducts();
+  }
+
+  Future<void> _fetchMissingProducts() async {
+    final draft = context.read<DraftOrderProvider>();
+    final productProvider = context.read<ProductProvider>();
+    final existingIds =
+        {for (final p in productProvider.products) p.id};
+    final missingIds = draft.items
+        .where((l) => l.qty > 0 && !existingIds.contains(l.productId))
+        .map((l) => l.productId)
+        .toSet();
+    for (final id in missingIds) {
+      final p = await productProvider.fetchProductById(id);
+      if (p != null && mounted) {
+        setState(() => _fetchedProducts[id] = p);
+      }
+    }
   }
 
   @override
@@ -44,8 +63,12 @@ class _StepReviewState extends State<StepReview> {
   @override
   Widget build(BuildContext context) {
     final draft = context.watch<DraftOrderProvider>();
-    final products = context.watch<ProductProvider>().products;
-    final productMap = {for (final p in products) p.id: p};
+    final productProvider = context.watch<ProductProvider>();
+    final allProducts = [
+      ...productProvider.products,
+      ..._fetchedProducts.values,
+    ];
+    final productMap = {for (final p in allProducts) p.id: p};
     final currency = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -570,7 +593,7 @@ class _LineRow extends StatelessWidget {
     );
     final draft = context.watch<DraftOrderProvider>();
     final name = product?.namaBarang ?? line.productId;
-    final price = product?.harga ?? 0;
+    final price = product?.harga ?? draft.getPrice(line.productId);
     final rawSubtotal = price * line.qty;
     final disc = line.discount;
     final up = line.upPrice;

@@ -29,8 +29,10 @@ class DraftOrderProvider extends ChangeNotifier {
   Map<String, int> _priceCache = {};
 
   void setPricingCache(Map<String, int> prices) {
-    _priceCache = prices;
+    _priceCache.addAll(prices);
   }
+
+  int getPrice(String productId) => _priceCache[productId] ?? 0;
 
   void setCustomer(Customer c) {
     customerId = c.id;

@@ -262,4 +262,18 @@ class ProductProvider extends ChangeNotifier {
 
   bool get hasActiveFilters =>
       _statusFilter != ProductStatusFilter.all || _categoryFilter != null;
+
+  /// Ambil satu produk by ID — cek cache dulu, kalau tidak ada fetch dari backend.
+  /// Tidak memasukkan hasil ke _allProducts (supaya tidak mencemari daftar aktif).
+  Future<Product?> fetchProductById(String productId) async {
+    try {
+      return _allProducts.firstWhere((p) => p.id == productId);
+    } on StateError {
+      try {
+        return await _productRepo.getProduct(productId);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
 }
