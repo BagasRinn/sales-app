@@ -139,7 +139,7 @@
 #   Edit file: sales-app/backend/.env
 #
 #   SEBELUM (Supabase):
-#   DATABASE_URL=postgresql://postgres.mdtydisgpqbcgsiuabhv:xxx@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+#   DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
 #
 #   SESUDAH (Railway):
 #   DATABASE_URL=postgresql://postgres:xxx@xxxx.railway.app:5432/railway

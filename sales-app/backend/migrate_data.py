@@ -5,12 +5,25 @@ Hanya copy DATA (bukan schema), urut berdasarkan FK dependency.
 Menggunakan psycopg2 langsung dengan autocommit untuk bypass timeout.
 """
 
+import os
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 # ====== KONFIGURASI ======
-SRC_URL = "postgresql://postgres.mdtydisgpqbcgsiuabhv:njN332OaL9upST0N@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
-DST_URL = "postgresql://postgres.mxaipnqvznwrqgaselbd:zCDqKMMpfzOYTgjL@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
+# Kredensial DIBACA DARI ENVIRONMENT — jangan hardcode credential di sini
+# (repo ini public; credential yang ter-commit harus dianggap bocor).
+# Windows PowerShell:
+#   $env:SRC_DATABASE_URL = "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+#   $env:DST_DATABASE_URL = "postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+SRC_URL = os.environ.get("SRC_DATABASE_URL", "")
+DST_URL = os.environ.get("DST_DATABASE_URL", "")
+
+if not SRC_URL or not DST_URL:
+    raise SystemExit(
+        "Set environment variables SRC_DATABASE_URL dan DST_DATABASE_URL "
+        "sebelum menjalankan script ini (lihat komentar di atas)."
+    )
 
 # Urutan tabel: parent dulu, child belak (FK safe)
 TABLE_ORDER = [
