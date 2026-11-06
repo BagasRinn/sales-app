@@ -52,6 +52,9 @@ services:
     restart: unless-stopped
     init: true
     env_file: .env.production
+    volumes:
+      # PDF bulletin (STORAGE_PROVIDER=local). Backup ikut deploy/backup.sh.
+      - ./bulletins:/data/bulletins
     depends_on:
       db:
         condition: service_healthy

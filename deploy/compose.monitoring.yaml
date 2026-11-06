@@ -1,0 +1,70 @@
+# Stack monitoring terpisah dari compose.prod.yaml.
+#
+# Tujuan:
+#   - uptime-kuma : cek /health, latency, SSL, alert
+#   - dozzle      : lihat log container (api/db/caddy)
+#   - pghero      : performa PostgreSQL (koneksi, ukuran tabel, index, query)
+#
+# Semua port hanya bind ke 127.0.0.1. Akses dari laptop lewat SSH tunnel:
+#   ssh -L 3001:127.0.0.1:3001 -L 8080:127.0.0.1:8080 -L 8081:127.0.0.1:8081 ...
+#
+# Jalankan dari folder deploy/:
+#   docker compose -p deploy --env-file .env.monitoring \
+#     -f compose.monitoring.yaml up -d
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "127.0.0.1:3001:3001"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [monitoring]
+
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    volumes:
+      # Read-only: Dozzle hanya boleh membaca log, bukan mengubah container.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_ENABLE_ACTIONS: "false"
+    ports:
+      - "127.0.0.1:8080:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [monitoring]
+
+  pghero:
+    image: ankane/pghero:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://pghero:${PGHERO_DB_PASSWORD:?Set PGHERO_DB_PASSWORD}@db:5432/sales
+      PGHERO_USERNAME: ${PGHERO_USERNAME:-admin}
+      PGHERO_PASSWORD: ${PGHERO_PASSWORD:?Set PGHERO_PASSWORD}
+    ports:
+      - "127.0.0.1:8081:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [monitoring, internal]
+
+volumes:
+  uptime_kuma_data:
+
+networks:
+  monitoring:
+  internal:
+    external: true
+    name: deploy_internal

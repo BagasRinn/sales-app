@@ -128,7 +128,7 @@ def bulletin_upload_pdf(
     file: UploadFile = File(...),
     _current_user: CurrentUser = Depends(require_write_access),
 ):
-    """Upload file PDF ke Supabase Storage."""
+    """Upload file PDF ke storage yang dikonfigurasi (local disk/S3/Supabase)."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Hanya file PDF yang diizinkan")
 
@@ -147,6 +147,8 @@ def bulletin_upload_pdf(
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=f"Upload gagal: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Upload gagal menyimpan file: {e}")
 
     return {"pdf_url": public_url}
 

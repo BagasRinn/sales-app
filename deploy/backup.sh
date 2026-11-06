@@ -7,6 +7,7 @@
 #
 # Variabel yang dibaca (dari environment atau deploy/backup.env):
 #   BACKUP_DIR      folder tujuan (default /var/backups/sales)
+#   BULLETINS_DIR   folder PDF bulletin (default <deploy>/bulletins)
 #   RETENTION_DAYS  hapus backup lebih tua dari N hari (default 14)
 #   AGE_RECIPIENT   public key age untuk enkripsi (sangat disarankan)
 #   RCLONE_REMOTE   remote rclone untuk upload offsite (opsional)
@@ -28,6 +29,7 @@ if [[ -f "$BACKUP_ENV" ]]; then
 fi
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/sales}"
+BULLETINS_DIR="${BULLETINS_DIR:-$SCRIPT_DIR/bulletins}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 AGE_RECIPIENT="${AGE_RECIPIENT:-}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
@@ -82,6 +84,34 @@ if command -v sha256sum >/dev/null; then
   ( cd "$BACKUP_DIR" && sha256sum "$(basename "$FINAL")" ) > "$FINAL.sha256"
 fi
 
+# ── Backup file PDF bulletin (local storage di VPS) ─────────────────────────
+BULLETIN_ARCHIVE=""
+if [[ -d "$BULLETINS_DIR" ]] && \
+   [[ -n "$(find "$BULLETINS_DIR" -maxdepth 1 -type f -name '*.pdf' -print -quit)" ]]; then
+  BULLETIN_OUT="$BACKUP_DIR/bulletins-$STAMP.tar.gz"
+  log "mulai arsip bulletin ke $BULLETIN_OUT"
+  tar -C "$BULLETINS_DIR" -czf "$BULLETIN_OUT" .
+  BULLETIN_ARCHIVE="$BULLETIN_OUT"
+
+  if [[ -n "$AGE_RECIPIENT" ]]; then
+    age --encrypt --recipient "$AGE_RECIPIENT" --output "$BULLETIN_OUT.age" "$BULLETIN_OUT"
+    rm -f "$BULLETIN_OUT"
+    BULLETIN_ARCHIVE="$BULLETIN_OUT.age"
+  fi
+
+  if command -v sha256sum >/dev/null; then
+    ( cd "$BACKUP_DIR" && sha256sum "$(basename "$BULLETIN_ARCHIVE")" ) > "$BULLETIN_ARCHIVE.sha256"
+  fi
+
+  if [[ -n "$RCLONE_REMOTE" ]]; then
+    rclone copy "$BULLETIN_ARCHIVE" "$RCLONE_REMOTE" --checksum
+    [[ -f "$BULLETIN_ARCHIVE.sha256" ]] && \
+      rclone copy "$BULLETIN_ARCHIVE.sha256" "$RCLONE_REMOTE" --checksum
+  fi
+else
+  log "tidak ada PDF bulletin di $BULLETINS_DIR, lewati arsip file"
+fi
+
 if [[ -n "$RCLONE_REMOTE" ]]; then
   command -v rclone >/dev/null || die "RCLONE_REMOTE diset tapi rclone tidak ada"
   log "upload ke $RCLONE_REMOTE"
@@ -92,7 +122,12 @@ else
 fi
 
 log "hapus backup lebih tua dari $RETENTION_DAYS hari"
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'sales-*' -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -maxdepth 1 -type f \
+  \( -name 'sales-*' -o -name 'bulletins-*' \) \
+  -mtime +"$RETENTION_DAYS" -delete
 
 SIZE="$(du -h "$FINAL" | cut -f1)"
 log "selesai: $FINAL ($SIZE)"
+if [[ -n "$BULLETIN_ARCHIVE" ]]; then
+  log "selesai: $BULLETIN_ARCHIVE ($(du -h "$BULLETIN_ARCHIVE" | cut -f1))"
+fi

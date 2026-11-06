@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 
 class _TZFormatter(logging.Formatter):
     def converter(self, timestamp):
@@ -209,6 +210,15 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# PDF bulletin disimpan di disk VPS (STORAGE_PROVIDER=local) dan disajikan
+# langsung oleh API. Caddy meneruskan seluruh path ke service api, jadi tidak
+# perlu aturan tambahan di Caddyfile.
+if os.getenv("STORAGE_PROVIDER", "").strip().lower() in ("local", "filesystem", "fs"):
+    _bulletin_dir = os.getenv("LOCAL_STORAGE_DIR", "/data/bulletins").strip()
+    os.makedirs(_bulletin_dir, exist_ok=True)
+    app.mount("/bulletins", StaticFiles(directory=_bulletin_dir), name="bulletins")
+    logger.info("[STORAGE] Bulletin PDF served from %s at /bulletins", _bulletin_dir)
 
 
 @app.middleware("http")

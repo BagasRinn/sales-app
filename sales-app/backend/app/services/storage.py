@@ -1,9 +1,15 @@
 """
-Storage service — support S3-compatible (Tigris, AWS S3) dan Supabase Storage.
+Storage service — support local disk (VPS), S3-compatible (Tigris, AWS S3),
+dan Supabase Storage.
 
 Priority:
-  1. S3 (jika AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_BUCKET_NAME diset)
-  2. Supabase Storage (fallback, jika SUPABASE_URL + SUPABASE_SERVICE_KEY diset)
+  1. Local disk (jika STORAGE_PROVIDER=local)
+  2. S3 (jika AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_BUCKET_NAME diset)
+  3. Supabase Storage (fallback, jika SUPABASE_URL + SUPABASE_SERVICE_KEY diset)
+
+Local disk dipakai untuk produksi di VPS: file disimpan di LOCAL_STORAGE_DIR
+dan disajikan lewat StaticFiles pada path /bulletins. URL publik dibentuk dari
+PUBLIC_BASE_URL (mis. https://api.madsalesapp.my.id).
 
 Usage: sama seperti supabase_storage.py — interface tidak berubah.
   from app.services.storage import upload_pdf, delete_file
@@ -12,6 +18,7 @@ Usage: sama seperti supabase_storage.py — interface tidak berubah.
 import os
 import uuid
 import logging
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -31,7 +38,16 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "bulletins")
 
+# ── Local disk Config (VPS) ──────────────────────────────────────────────────
+
+LOCAL_STORAGE_DIR = os.getenv("LOCAL_STORAGE_DIR", "/data/bulletins").strip()
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+
 # ── Provider resolution ──────────────────────────────────────────────────────
+
+
+def _use_local() -> bool:
+    return STORAGE_PROVIDER in ("local", "filesystem", "fs")
 
 
 def _use_s3() -> bool:
@@ -75,17 +91,87 @@ def _s3_public_url(key: str) -> str:
     return f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{key}"
 
 
+# ── Local disk helpers ─────────────────────────────────────────────────────
+
+
+def _local_dir() -> Path:
+    return Path(LOCAL_STORAGE_DIR)
+
+
+def _local_public_prefix() -> str:
+    """Prefix URL publik, tanpa slash di akhir."""
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}/bulletins"
+    # Fallback: URL relatif. Tetap bisa dipakai oleh klien yang memanggil API
+    # lewat host yang sama, tapi sebaiknya PUBLIC_BASE_URL selalu diisi.
+    return "/bulletins"
+
+
+def _upload_local(content: bytes, filename: str) -> str:
+    directory = _local_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+
+    name = f"{uuid.uuid4()}.pdf"
+    target = directory / name
+    tmp = directory / f".{name}.tmp"
+
+    # Tulis ke file sementara lalu rename atomik, supaya request yang membaca
+    # file tidak pernah melihat PDF setengah jadi.
+    with open(tmp, "wb") as fh:
+        fh.write(content)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, target)
+
+    url = f"{_local_public_prefix()}/{name}"
+    logger.info("Uploaded to local storage: %s", target)
+    return url
+
+
+def _local_filename_from_url(public_url: str) -> Optional[str]:
+    """Ambil nama file dari URL lokal, atau None jika bukan URL kita.
+
+    Hanya nama file dasar yang diterima — mencegah path traversal.
+    """
+    prefix = f"{_local_public_prefix()}/"
+    if not public_url.startswith(prefix):
+        return None
+
+    name = public_url[len(prefix):].split("?", 1)[0].split("#", 1)[0]
+    if name != Path(name).name or not name.endswith(".pdf"):
+        logger.warning("delete_file: nama file lokal tidak valid, skip: %s", public_url)
+        return None
+    return name
+
+
+def _delete_local(public_url: str) -> None:
+    name = _local_filename_from_url(public_url)
+    if not name:
+        return
+
+    target = _local_dir() / name
+    try:
+        target.unlink()
+        logger.info("Deleted from local storage: %s", target)
+    except FileNotFoundError:
+        logger.debug("delete_file: file lokal sudah tidak ada: %s", target)
+
+
 # ── Public API (compatible dengan supabase_storage.py) ──────────────────────
 
 
 def upload_pdf(content: bytes, filename: str) -> str:
     """Upload PDF, return public URL.
 
-    Supports S3/Tigris (优先) dan Supabase Storage (fallback).
+    Supports local disk (STORAGE_PROVIDER=local), S3/Tigris, dan Supabase
+    Storage (fallback).
     """
     ext = filename.rsplit(".", 1)[-1].lower()
     if ext not in ("pdf",):
         raise ValueError("Hanya file PDF yang diizinkan")
+
+    if _use_local():
+        return _upload_local(content, filename)
 
     if _use_s3():
         client = _get_s3_client()
@@ -106,6 +192,7 @@ def upload_pdf(content: bytes, filename: str) -> str:
     raise RuntimeError(
         "Tidak ada storage provider yang terkonfigurasi.\n"
         "Pilih salah satu:\n"
+        "  Local disk — set STORAGE_PROVIDER=local, LOCAL_STORAGE_DIR, PUBLIC_BASE_URL\n"
         "  S3/Tigris  — set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME\n"
         "  Supabase   — set SUPABASE_URL, SUPABASE_SERVICE_KEY"
     )
@@ -138,10 +225,16 @@ def _upload_supabase(content: bytes, filename: str) -> str:
 def delete_file(public_url: str) -> None:
     """Hapus file berdasarkan public URL-nya.
 
-    Mendeteksi otomatis apakah URL dari S3 atau Supabase Storage.
+    Mendeteksi otomatis apakah URL dari local disk, S3, atau Supabase Storage.
     """
     if not public_url:
         return
+
+    if _use_local():
+        if _local_filename_from_url(public_url):
+            _delete_local(public_url)
+            return
+        # Bisa jadi file lama dari provider sebelumnya; lanjut ke deteksi lain.
 
     if _use_s3() and _is_s3_url(public_url):
         _delete_s3(public_url)

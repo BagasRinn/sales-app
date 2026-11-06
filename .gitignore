@@ -134,9 +134,12 @@ sales-app/admin_web/.agents/
 .env.production
 .env.*.local
 deploy/backup.env
+deploy/.env.monitoring
+deploy/bulletins/
 # Template deploy tetap dilacak, file isian tidak.
 !deploy/.env.production.example
 !deploy/backup.env.example
+!deploy/.env.monitoring.example
 
 # State lokal Supabase CLI (berisi referensi project, jangan di-commit).
 supabase/.temp/
