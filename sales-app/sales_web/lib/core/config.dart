@@ -4,7 +4,7 @@ class AppConfig {
   ///   flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000/api/v1
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://sales-app-production-1872.up.railway.app/api/v1',
+    defaultValue: 'https://api.madsalesapp.my.id/api/v1',
   );
   static const Duration requestTimeout = Duration(seconds: 30);
 

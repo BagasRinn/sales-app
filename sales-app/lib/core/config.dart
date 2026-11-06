@@ -5,7 +5,7 @@ class AppConfig {
   /// (10.0.2.2 = localhost mesin host dari Android emulator)
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://sales-app-production-1872.up.railway.app/api/v1',
+    defaultValue: 'https://api.madsalesapp.my.id/api/v1',
   );
 
   static const Duration requestTimeout = Duration(seconds: 30);
