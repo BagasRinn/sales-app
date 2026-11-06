@@ -9,10 +9,10 @@ enum ProductStatusFilter { all, available, low, outOfStock }
 
 class ProductProvider extends ChangeNotifier {
   final ProductRepository _productRepo;
-  // Muat produk per halaman (50/item), bukan semua sekaligus (3000).
+  // Muat produk per halaman (50/item)
   static const int _pageSize = 50;
-  // Cache produk selama 5 menit untuk mencegah reload berulang.
-  static const Duration _productCacheDuration = Duration(minutes: 5);
+  // Cache produk selama 10 menit untuk mencegah reload berulang.
+  static const Duration _productCacheDuration = Duration(minutes: 10);
 
   List<Product> _allProducts = [];
   bool _isLoading = false;
@@ -24,12 +24,6 @@ class ProductProvider extends ChangeNotifier {
   String? _categoryFilter;
   DateTime? _lastLoadTime;
 
-  /// Tipe order yang dipakai pada fetch produk terakhir yang sukses.
-  /// Dipakai untuk: (1) mendeteksi pergantian tipe order agar list lama
-  /// dikosongkan dulu (mencegah "flash" produk 4P saat masuk step pilih
-  /// produk dengan tipe REGULER, dan sebaliknya), (2) dipakai ulang saat
-  /// search/clear supaya hasil pencarian tetap ter-filter sesuai tipe
-  /// order yang sedang berjalan di Order Flow.
   String? _activeOrderType;
 
   /// Daftar supplier yang dikategorikan sebagai 4P (dari backend).
@@ -48,7 +42,7 @@ class ProductProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  /// Cek apakah cache produk masih valid (belum lewat durasi cache).
+  /// Cek apakah cache produk masih valid.
   bool get _isProductCacheValid {
     if (_lastLoadTime == null || _allProducts.isEmpty) return false;
     return DateTime.now().difference(_lastLoadTime!) < _productCacheDuration;

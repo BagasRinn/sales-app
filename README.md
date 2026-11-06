@@ -86,8 +86,8 @@ customer, dan user-nya.
 
 | Role | Akses |
 |---|---|
-| `ADMIN` | Terbatas cabangnya. Approve/reject order, ubah diskon, batalkan item, hapus produk, kelola user, import & edit stok/customer, bulletin, laporan |
-| `SUPERVISOR` | Terbatas cabangnya. Kelola produk/stok/customer/user, bulletin, import, target supplier — **tidak** bisa approve/reject order |
+| `ADMIN` | Terbatas cabangnya. Approve/reject order, ubah diskon, batalkan item, hapus produk, import & edit stok/customer, bulletin, laporan. **Tidak** bisa mengelola user |
+| `SUPERVISOR` | Terbatas cabangnya. Kelola produk/stok/customer/user (hanya akun SALES di cabangnya sendiri), bulletin, import, target supplier — **tidak** bisa approve/reject order |
 | `MANAGER` | Global lintas cabang. Laporan & monitoring, kelola master cabang, operasi tulis yang diizinkan guard akses — **tidak** bisa approve/reject order |
 | `SALES` | Order miliknya sendiri, customer di area-nya, katalog, bulletin |
 

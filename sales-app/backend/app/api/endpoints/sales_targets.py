@@ -12,7 +12,14 @@ from app.schemas.schemas import (
     SalesTargetUpdate,
     SalesTargetResponse,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_admin_or_supervisor,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+    branch_guard,
+    CurrentUser,
+)
 
 router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 
@@ -21,7 +28,7 @@ router = APIRouter(prefix="/sales-targets", tags=["Sales Targets"])
 def list_sales_targets(
     period: Optional[str] = Query(None, description="Filter by period (YYYY-MM)"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """List all sales targets. Admin/Supervisor only. Branch-scoped for ADMIN/SUPERVISOR."""
     # First get sales users in the same branch
@@ -33,9 +40,14 @@ def list_sales_targets(
     sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
     sales_user_ids = [row[0] for row in sales_users_q.all()]
 
-    query = db.query(SalesTarget)
-    if sales_user_ids:
-        query = query.filter(SalesTarget.user_id.in_(sales_user_ids))
+    # Fail-closed: no visible sales users means no targets to show. Without
+    # this guard the empty `in_()` branch below would leak every branch.
+    if not sales_user_ids:
+        return []
+
+    query = db.query(SalesTarget).filter(
+        SalesTarget.user_id.in_(sales_user_ids)
+    )
     if period:
         query = query.filter(SalesTarget.period == period)
     return query.order_by(SalesTarget.period.desc(), SalesTarget.user_id).all()
@@ -58,10 +70,9 @@ def upsert_sales_target(
     if user.role != "SALES":
         raise HTTPException(status_code=400, detail="Target hanya bisa diset untuk role SALES")
 
-    # Branch access check for ADMIN/SUPERVISOR
-    if current_user.get("role") in ("ADMIN", "SUPERVISOR") and current_user.get("branch") is not None:
-        if user.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak bisa mengatur target untuk sales di branch lain")
+    # Branch access check (global MANAGER may target any branch; branchless
+    # non-manager accounts are denied).
+    branch_guard(current_user, user.branch)
 
     # Upsert
     target = (

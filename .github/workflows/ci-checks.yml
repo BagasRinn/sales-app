@@ -1,0 +1,26 @@
+name: CI Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Konstanta cabang diduplikasi di backend + 3 aplikasi Flutter.
+      # Step ini gagal kalau salah satu file tertinggal saat menambah cabang.
+      - name: Cek sinkronisasi konstanta cabang
+        run: python scripts/check_branch_sync.py
+
+      # Kompilasi sintaks saja — tidak menyentuh database dan tidak butuh .env.
+      - name: Kompilasi sintaks backend
+        run: python -m compileall -q sales-app/backend/app

@@ -25,6 +25,42 @@ import 'change_password_dialog.dart';
 import 'cross_branch_reports_tab.dart';
 import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
+import '../../core/config.dart';
+
+/// Identitas halaman di dashboard Admin Web. Dipakai agar pemilihan halaman
+/// tidak bergantung pada index numerik yang mudah bergeser saat menu
+/// ditambah/disembunyikan.
+enum _DashboardPage {
+  dashboard,
+  orders,
+  customers,
+  customerSubmissions,
+  products,
+  suppliers,
+  sync,
+  users,
+  performance,
+  penugasan,
+  bulletins,
+  importedSales,
+  crossBranch,
+}
+
+class _NavSpec {
+  final _DashboardPage page;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final String group;
+
+  const _NavSpec({
+    required this.page,
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.group,
+  });
+}
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
@@ -135,95 +171,134 @@ class _DashboardContentState extends State<_DashboardContent>
 
   bool get _isGlobalManager => widget.role == 'MANAGER';
 
-  List<AppShellNavItem> _navItems({bool hasNewPending = false}) {
+  /// Satu-satunya sumber daftar menu. Dipakai bersama oleh sidebar
+  /// (`_navItems`) dan pemilihan halaman (`_buildBody`), supaya index menu
+  /// selalu cocok dengan halaman yang ditampilkan — termasuk saat ada menu
+  /// yang disembunyikan lewat feature flag.
+  List<_NavSpec> _navSpecs() {
     const utama = 'Utama';
     const data = 'Data';
     const operasional = 'Operasional';
     const manajemen = 'Manajemen';
     return [
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.dashboard,
         icon: Icons.dashboard_outlined,
         selectedIcon: Icons.dashboard,
         label: 'Dashboard',
         group: utama,
       ),
-      AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.orders,
         icon: Icons.assignment_outlined,
         selectedIcon: Icons.assignment,
         label: 'Pesanan',
-        showBadge: hasNewPending,
         group: utama,
       ),
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.customers,
         icon: Icons.store_outlined,
         selectedIcon: Icons.store,
         label: 'Toko',
         group: data,
       ),
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.customerSubmissions,
         icon: Icons.person_add_alt_1_outlined,
         selectedIcon: Icons.person_add_alt_1,
         label: 'Pengajuan Customer',
         group: data,
       ),
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.products,
         icon: Icons.inventory_2_outlined,
         selectedIcon: Icons.inventory_2,
         label: 'Produk & Stok',
         group: data,
       ),
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.suppliers,
         icon: Icons.store_mall_directory_outlined,
         selectedIcon: Icons.store_mall_directory,
         label: 'Supplier',
         group: data,
       ),
-      const AppShellNavItem(
+      const _NavSpec(
+        page: _DashboardPage.sync,
         icon: Icons.sync_outlined,
         selectedIcon: Icons.sync,
         label: 'Sinkronisasi',
         group: operasional,
       ),
       if (widget.role != 'ADMIN') ...[
-        const AppShellNavItem(
+        const _NavSpec(
+          page: _DashboardPage.users,
           icon: Icons.people_outline,
           selectedIcon: Icons.people,
           label: 'User',
           group: manajemen,
         ),
-        const AppShellNavItem(
+        const _NavSpec(
+          page: _DashboardPage.performance,
           icon: Icons.trending_up_outlined,
           selectedIcon: Icons.trending_up,
           label: 'Performa Sales',
           group: manajemen,
         ),
-        const AppShellNavItem(
+        const _NavSpec(
+          page: _DashboardPage.penugasan,
           icon: Icons.assignment_ind_outlined,
           selectedIcon: Icons.assignment_ind,
           label: 'Penugasan Sales',
           group: manajemen,
         ),
-        const AppShellNavItem(
+        const _NavSpec(
+          page: _DashboardPage.bulletins,
           icon: Icons.campaign_outlined,
           selectedIcon: Icons.campaign,
           label: 'Bulletin',
           group: manajemen,
         ),
-        const AppShellNavItem(
-          icon: Icons.analytics_outlined,
-          selectedIcon: Icons.analytics,
-          label: 'Data Penjualan',
-          group: manajemen,
-        ),
+        // Disembunyikan sementara lewat AppConfig.enableImportedSales.
+        // Halaman & provider-nya tetap ada, hanya tidak ditampilkan.
+        if (AppConfig.enableImportedSales)
+          const _NavSpec(
+            page: _DashboardPage.importedSales,
+            icon: Icons.analytics_outlined,
+            selectedIcon: Icons.analytics,
+            label: 'Data Penjualan',
+            group: manajemen,
+          ),
       ],
       if (_isGlobalManager)
-        const AppShellNavItem(
+        const _NavSpec(
+          page: _DashboardPage.crossBranch,
           icon: Icons.compare_arrows_outlined,
           selectedIcon: Icons.compare_arrows,
           label: 'Laporan Lintas Cabang',
           group: manajemen,
         ),
     ];
+  }
+
+  List<AppShellNavItem> _navItems({bool hasNewPending = false}) {
+    return [
+      for (final spec in _navSpecs())
+        AppShellNavItem(
+          icon: spec.icon,
+          selectedIcon: spec.selectedIcon,
+          label: spec.label,
+          group: spec.group,
+          showBadge: spec.page == _DashboardPage.orders && hasNewPending,
+        ),
+    ];
+  }
+
+  int _indexOfPage(_DashboardPage page) {
+    final index = _navSpecs().indexWhere((spec) => spec.page == page);
+    // Fallback ke menu pertama (Dashboard) kalau halaman tidak tersedia untuk
+    // role ini — mencegah index -1.
+    return index < 0 ? 0 : index;
   }
 
   @override
@@ -317,12 +392,11 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   void _onNavTap(int i) {
-    final items = _navItems();
+    final specs = _navSpecs();
     final leavingOrders =
-        i != 1 &&
-        _selectedIndex == 1 &&
-        _selectedIndex < items.length &&
-        items[_selectedIndex].label == 'Pesanan';
+        i != _indexOfPage(_DashboardPage.orders) &&
+        _selectedIndex < specs.length &&
+        specs[_selectedIndex].page == _DashboardPage.orders;
     if (leavingOrders) {
       // Clear badge when leaving orders tab
       context.read<AdminProvider>().clearNewPendingBadge();
@@ -336,8 +410,8 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   Widget _buildBody() {
-    final items = _navItems();
-    final i = _selectedIndex.clamp(0, items.length - 1);
+    final specs = _navSpecs();
+    final i = _selectedIndex.clamp(0, specs.length - 1);
     // Permission BEDA per fitur â€” bukan satu flag global. Backend endpoint
     // masing-masing tab punya aturan sendiri, jadi UI harus match.
     //
@@ -356,55 +430,54 @@ class _DashboardContentState extends State<_DashboardContent>
     final masterReadOnly = widget.role != 'ADMIN';
     final syncReadOnly = widget.role == 'SALES';
 
-    // Indexes shared: 0=Dashboard, 1=Pesanan, 2=Toko,
-    // 3=Pengajuan Customer, 4=Produk & Stok, 5=Supplier, 6=Sinkronisasi.
-    // MANAGER & SUPERVISOR: 7=User, 8=Performa Sales, 9=Penugasan Sales, 10=Bulletin, 11=Data Penjualan, (MANAGER: 12=Laporan Lintas).
-    // ADMIN: 0-6 only (tidak masuk blok conditional di atas).
-    // Global MANAGER: 12=CrossBranchReports.
-    // ADMIN/SUPERVISOR: 7=User, 8=Bulletin.
-    switch (i) {
-      case 0:
+    // Halaman dipilih berdasarkan identitas menu (bukan index numerik),
+    // sehingga urutan menu bisa berubah tanpa membuat tab yang salah terbuka.
+    switch (specs[i].page) {
+      case _DashboardPage.dashboard:
         return StatsTab(
           role: widget.role,
           onOpenOrdersTab: (initialTabIndex) {
             setState(() {
-              _selectedIndex = 1;
+              _selectedIndex = _indexOfPage(_DashboardPage.orders);
               _ordersInitialTabIndex = initialTabIndex;
             });
-            context.read<AdminProvider>().setActiveTab(1);
+            context
+                .read<AdminProvider>()
+                .setActiveTab(_indexOfPage(_DashboardPage.orders));
           },
         );
-      case 1:
+      case _DashboardPage.orders:
         return OrdersTab(
           readOnly: orderReadOnly,
           initialTabIndex: _ordersInitialTabIndex,
         );
-      case 2:
+      case _DashboardPage.customers:
         return CustomersTab(readOnly: masterReadOnly);
-      case 3:
+      case _DashboardPage.customerSubmissions:
         return CustomerSubmissionsTab(readOnly: masterReadOnly);
-      case 4:
+      case _DashboardPage.products:
         return ProductsTab(readOnly: masterReadOnly);
-      case 5:
+      case _DashboardPage.suppliers:
         return const SuppliersTab();
-      case 6:
+      case _DashboardPage.sync:
         return SyncTab(readOnly: syncReadOnly);
-      case 7:
+      case _DashboardPage.users:
         return UsersTab(
           readOnly: usersReadOnly,
           currentRole: widget.role,
           currentBranch: widget.branch,
           currentBranchNama: widget.branchNama,
         );
-      case 8:
+      case _DashboardPage.performance:
         return const PerformanceTab(); // MANAGER & SUPERVISOR
-      case 9:
+      case _DashboardPage.penugasan:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
-      case 10:
+      case _DashboardPage.bulletins:
         return BulletinsTab(readOnly: masterReadOnly); // MANAGER & SUPERVISOR
-      case 11:
+      case _DashboardPage.importedSales:
+        // Tidak bisa dibuka selama AppConfig.enableImportedSales = false.
         return const ImportedSalesTab(); // MANAGER & SUPERVISOR
-      case 12:
+      case _DashboardPage.crossBranch:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
     }
@@ -412,10 +485,12 @@ class _DashboardContentState extends State<_DashboardContent>
       role: widget.role,
       onOpenOrdersTab: (initialTabIndex) {
         setState(() {
-          _selectedIndex = 1;
+          _selectedIndex = _indexOfPage(_DashboardPage.orders);
           _ordersInitialTabIndex = initialTabIndex;
         });
-        context.read<AdminProvider>().setActiveTab(1);
+        context
+            .read<AdminProvider>()
+            .setActiveTab(_indexOfPage(_DashboardPage.orders));
       },
     );
   }
@@ -440,7 +515,7 @@ class _DashboardContentState extends State<_DashboardContent>
       onPointerSignal: (_) => _recordActivity(), // wheel/trackpad
       child: AppShell(
         scaffoldKey: _scaffoldKey,
-        title: navItems[_selectedIndex].label,
+        title: navItems[_selectedIndex.clamp(0, navItems.length - 1)].label,
         titleTrailing: null,
         actions: [
           IconButton(
@@ -458,7 +533,7 @@ class _DashboardContentState extends State<_DashboardContent>
             ? 'Supervisor Cabang'
             : 'Admin Panel',
         items: navItems,
-        selectedIndex: _selectedIndex,
+        selectedIndex: _selectedIndex.clamp(0, navItems.length - 1),
         onIndexSelected: _onNavTap,
         userName: widget.nama.isNotEmpty ? widget.nama : widget.username,
         roleLabel: widget.role == 'MANAGER' ? 'Manager' : 'Administrator',

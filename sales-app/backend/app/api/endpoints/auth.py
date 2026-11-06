@@ -13,6 +13,9 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     require_auth,
+    require_manager_global,
+    resolve_new_user_branch,
+    VALID_ROLES,
 )
 from app.core import branch as branch_constants
 
@@ -20,24 +23,29 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(
+    user: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_manager_global),
+):
+    """Create a user.
+
+    Only a global MANAGER may create accounts. ADMIN and SUPERVISOR are
+    rejected; SUPERVISOR can still manage existing SALES accounts through
+    /users.
+    """
     existing = db.query(User).filter(User.username == user.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username sudah terdaftar")
 
-    if user.role.upper() not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
-        raise HTTPException(status_code=400, detail="Role harus ADMIN, SUPERVISOR, MANAGER, atau SALES")
+    if user.role.upper() not in VALID_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail="Role harus ADMIN, SUPERVISOR, MANAGER, atau SALES",
+        )
 
-    # Validate branch
-    branch = user.branch
-    if user.role.upper() == "MANAGER":
-        # Global manager: branch must be null or omitted
-        pass  # branch stays None
-    else:
-        if not branch:
-            raise HTTPException(status_code=400, detail="Branch wajib untuk ADMIN, SUPERVISOR, atau SALES")
-        if not branch_constants.is_valid_branch(branch):
-            raise HTTPException(status_code=400, detail=f"Branch tidak valid: {branch}")
+    # Enforces role ceiling + branch rules for the caller's scope.
+    branch = resolve_new_user_branch(current_user, user.role, user.branch)
 
     new_user = User(
         username=user.username,
@@ -118,6 +126,15 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Only actual refresh tokens may be used here; an access token must not be
+    # replayable as a long-lived session.
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token bukan refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
@@ -125,11 +142,34 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
             detail="Token payload tidak valid",
         )
 
-    db_user = db.query(User).filter(User.id == UUID(user_id)).first()
-    if not db_user:
+    try:
+        user_uuid = UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token payload tidak valid",
+        )
+
+    db_user = db.query(User).filter(User.id == user_uuid).first()
+    if not db_user or db_user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User tidak ditemukan",
+        )
+
+    if not db_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun nonaktif. Hubungi manager.",
+        )
+
+    # A password change bumps token_version; refresh tokens issued before that
+    # must stop working.
+    if (db_user.token_version or 0) != payload.get("tv", 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesi sudah tidak valid (password telah diubah)",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(

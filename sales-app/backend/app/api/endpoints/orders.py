@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.orm import Session, joinedload, load_only
 from sqlalchemy import text, func, case, or_
 from uuid import UUID, NAMESPACE_URL, uuid4, uuid5
 from sqlalchemy.exc import IntegrityError
@@ -27,7 +27,16 @@ from app.schemas.schemas import (
     OrderReject,
     WITA,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_admin,
+    require_admin_or_supervisor,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+    branch_guard,
+    is_global_manager,
+    CurrentUser,
+)
 from app.core import branch as branch_constants
 from app.services.stock_logger import log_stock_change
 
@@ -204,6 +213,26 @@ def _layer_cut_sql(type_col, percent_col, nominal_col, base):
 
 
 
+def _order_response_load_options():
+    """Kolom minimal yang dipakai `_build_order_response`.
+
+    Tanpa `load_only`, SQLAlchemy menarik seluruh kolom products/customers/users
+    (termasuk `users.password_hash`) dari Supabase untuk setiap order. Itu
+    menambah egress DB tanpa dipakai response.
+    """
+    return (
+        joinedload(Order.items).joinedload(OrderItem.product).load_only(
+            Product.nama_barang,
+            Product.harga,
+        ),
+        joinedload(Order.customer).load_only(
+            Customer.kode,
+            Customer.nama_toko,
+        ),
+        joinedload(Order.sales).load_only(User.username, User.nama),
+    )
+
+
 def _build_order_response(order: Order) -> dict:
     items_data = []
     total_amount = 0
@@ -293,10 +322,6 @@ def _build_order_response(order: Order) -> dict:
         "order_up_price_type": order.order_up_price_type or 'NOMINAL',
         "order_up_price_nominal": int(order.order_up_price_nominal or 0),
     }
-
-
-def _sync_order_to_sheets(order_id: str):
-    logger.info(f"[SHEETS SYNC] Order {order_id} submitted (sheets sync disabled)")
 
 
 def _rebalance_booking(db, sales_id, order_id, old_items, new_items, sumber: str = "EDIT", branch: str | None = None):
@@ -485,6 +510,9 @@ def create_order(
             raise HTTPException(status_code=403, detail="Customer tidak ditemukan")
     else:
         customer = _get_customer(order_req.customer_id, db)
+        # Non-SALES callers may only order for customers in a branch they can
+        # access (global MANAGER may use any branch).
+        branch_guard(current_user, customer.branch)
 
     # Validasi ringan dulu: produk ada + tipe cocok dengan order_type. Cek stok
     # aktual dilakukan di _book_items() setelah Order+OrderItems ditambah, supaya
@@ -632,13 +660,12 @@ def get_my_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
     search: Optional[str] = Query(None),
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
     query = db.query(Order).options(
-        joinedload(Order.items).joinedload(OrderItem.product),
-        joinedload(Order.customer),
+        *_order_response_load_options(),
     ).filter(
         Order.sales_id == UUID(current_user["user_id"])
     )
@@ -652,7 +679,7 @@ def get_my_orders(
         query = query.join(Order.customer).filter(
             or_(
                 Customer.nama_toko.ilike(search_term),
-                Customer.nama.ilike(search_term),
+                Customer.kode.ilike(search_term),
             )
         )
 
@@ -853,6 +880,7 @@ def update_draft_order(
         customer = _validate_customer_for_sales(order_update.customer_id, sales_id, db)
     else:
         customer = _get_customer(order_update.customer_id, db)
+        branch_guard(current_user, customer.branch)
 
     # Validasi setiap item.product.order_type cocok dengan new_order_type.
     # Batch-load produk sekali (sebelumnya 1 query per item, 2× per request).
@@ -970,7 +998,6 @@ def update_draft_order(
 @router.post("/{order_id}/submit")
 def submit_draft_order(
     order_id: UUID,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -1003,9 +1030,6 @@ def submit_draft_order(
     order.status = "PENDING"
     db.commit()
     db.refresh(order)
-
-    # Sync ke sheets
-    background_tasks.add_task(_sync_order_to_sheets, str(order.id))
 
     return _build_order_response(order)
 
@@ -1184,18 +1208,14 @@ def cancel_order(
 @router.get("/pending")
 def list_pending_orders(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     search: Optional[str] = Query(None, description="Cari nama toko atau sales"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     query = (
         db.query(Order)
-        .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.sales),
-            joinedload(Order.customer),
-        )
+        .options(*_order_response_load_options())
         .filter(Order.status == "PENDING")
     )
     query = apply_branch_filter(query, Order, current_user)
@@ -1239,19 +1259,15 @@ def list_all_orders(
         ),
     ),
     skip: int = 0,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """List semua pesanan dengan filter status + rentang tanggal (WITA).
     date_from/date_to opsional - kalau dua-duanya kosong, semua pesanan.
     Set header X-Total-Count untuk pagination di client.
     """
-    query = db.query(Order).options(
-        joinedload(Order.items).joinedload(OrderItem.product),
-        joinedload(Order.sales),
-        joinedload(Order.customer),
-    )
+    query = db.query(Order).options(*_order_response_load_options())
     count_query = db.query(Order)
     query = apply_branch_filter(query, Order, current_user)
     count_query = apply_branch_filter(count_query, Order, current_user)
@@ -1276,13 +1292,13 @@ def list_all_orders(
     if branch is not None:
         # Branch-scoped user yang minta branch berbeda = tolak. Global MANAGER
         # boleh minta branch apapun.
-        user_role = current_user.get("role")
         user_branch = current_user.get("branch")
-        if user_role != "MANAGER" and user_branch is not None and user_branch != branch:
-            raise HTTPException(
-                status_code=403,
-                detail="Tidak boleh query branch lain dari branch sendiri",
-            )
+        if not is_global_manager(current_user):
+            if user_branch is None or user_branch != branch:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tidak boleh query branch lain dari branch sendiri",
+                )
         query = query.filter(Order.branch == branch)
         count_query = count_query.filter(Order.branch == branch)
 
@@ -1379,24 +1395,23 @@ def get_order_detail(
 ):
     order = (
         db.query(Order)
-        .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.customer),
-            joinedload(Order.sales),
-        )
+        .options(*_order_response_load_options())
         .filter(Order.id == order_id)
         .first()
     )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user["role"] not in ("ADMIN", "MANAGER", "SUPERVISOR"):
-        if str(order.sales_id) != current_user["user_id"]:
+    if current_user.get("role") == "SALES":
+        # SALES: only their own orders, and only within their own branch.
+        if (
+            str(order.sales_id) != current_user["user_id"]
+            or order.branch != current_user.get("branch")
+        ):
             raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
-    elif current_user.get("role") == "ADMIN" and current_user.get("branch") is not None:
-        # ADMIN: must be same branch
-        if order.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    else:
+        # ADMIN / SUPERVISOR are branch-scoped; global MANAGER sees all.
+        branch_guard(current_user, order.branch)
 
     return _build_order_response(order)
 
@@ -1411,15 +1426,14 @@ def update_discounts(
     """Update diskon per item - admin only, hanya untuk pesanan PENDING."""
     order = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .options(*_order_response_load_options())
         .filter(Order.id == order_id)
         .with_for_update(of=[Order])
         .first()
     )
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
-    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    branch_guard(current_user, order.branch)
     if order.status != "PENDING":
         raise HTTPException(
             status_code=400,
@@ -1504,8 +1518,7 @@ def approve_order(
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    branch_guard(current_user, order.branch)
 
     if order.status != "PENDING":
         raise HTTPException(
@@ -1651,8 +1664,7 @@ def reject_order(
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    branch_guard(current_user, order.branch)
 
     if order.status != "PENDING":
         raise HTTPException(
@@ -1713,8 +1725,7 @@ def cancel_order_items(
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
 
-    if current_user.get("branch") is not None and order.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak memiliki akses ke pesanan ini")
+    branch_guard(current_user, order.branch)
 
     if order.status != "PENDING":
         raise HTTPException(
@@ -1736,6 +1747,17 @@ def cancel_order_items(
                 status_code=404,
                 detail=f"Item '{entry.item_id}' tidak ditemukan di pesanan ini",
             )
+
+        # Never release more than the item still has; otherwise a crafted
+        # request could return stock that was never booked by this order.
+        item_qty = int(item.qty or 0)
+        release_qty = min(int(entry.qty or 0), item_qty)
+        if release_qty <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Qty cancel tidak valid untuk item '{entry.item_id}'",
+            )
+
         # Lookup produk sekali: dipakai untuk nama_barang + release stok_booking.
         product = db.query(Product).filter(
             Product.id == item.product_id,
@@ -1743,13 +1765,13 @@ def cancel_order_items(
         ).with_for_update().first()
         if product:
             old_booking = product.stok_booking or 0
-            product.stok_booking = max(0, old_booking - entry.qty)
+            product.stok_booking = max(0, old_booking - release_qty)
             log_stock_change(
                 db=db,
                 product_id=item.product_id,
                 sumber="ITEM_CANCEL",
                 field_terdampak="stok_booking",
-                delta=-entry.qty,
+                delta=-release_qty,
                 nilai_sebelum=old_booking,
                 nilai_sesudah=product.stok_booking,
                 actor_id=UUID(current_user["user_id"]),
@@ -1759,10 +1781,10 @@ def cancel_order_items(
 
         # Hapus atau kurangi OrderItem supaya total_amount otomatis exclude
         # barang yang dibatalkan. Partial cancel → kurangi qty; full cancel → hapus row.
-        if entry.qty >= item.qty:
+        if release_qty >= item_qty:
             db.delete(item)
         else:
-            item.qty = item.qty - entry.qty
+            item.qty = item_qty - release_qty
 
         cancelled.append({
             "product_id": item.product_id,
@@ -1770,13 +1792,13 @@ def cancel_order_items(
             # produk sudah dihapus dari tabel products, nama_barang jadi null
             # dan UI fallback ke "Produk {product_id}".
             "nama_barang": product.nama_barang if product else None,
-            "qty": entry.qty,
+            "qty": release_qty,
             # Simpan harga_satuan + subtotal saat cancel - admin perlu lihat
             # impact finansial dari item yang dibatalkan (mis. "barang rusak
             # Rp 12.000"). Kalau product sudah dihapus, harga jadi 0 dan
             # subtotal jadi 0.
             "harga_satuan": product.harga if product else 0,
-            "subtotal": (product.harga or 0) * entry.qty,
+            "subtotal": (product.harga or 0) * release_qty,
             "reason": entry.reason.strip(),
         })
 

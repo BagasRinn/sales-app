@@ -1,0 +1,20 @@
+# Domain diambil dari environment API_DOMAIN (lihat compose.prod.yaml).
+# Contoh isi .env.production: API_DOMAIN=api.namakita.my.id
+
+{$API_DOMAIN} {
+	encode gzip zstd
+	reverse_proxy api:8000
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000"
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

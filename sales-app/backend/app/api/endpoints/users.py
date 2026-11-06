@@ -15,12 +15,13 @@ from app.schemas.schemas import (
     SalesUserResponse,
 )
 from app.core.security import (
-    require_admin_or_supervisor,
-    require_admin,
-    require_auth,
-    require_write_access,
+    require_supervisor_or_manager_global,
     get_password_hash,
     apply_branch_filter,
+    assert_can_manage_role,
+    effective_scope_role,
+    is_global_manager,
+    resolve_new_user_branch,
     CurrentUser,
 )
 from app.core import branch as branch_constants
@@ -50,9 +51,9 @@ def _exclude_deleted(query):
 def list_sales_users(
     limit: int = Query(100, ge=1, le=1000, description="Maksimal jumlah sales user; default 100"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
-    """List SALES user. Semua role login boleh. Branch-scoped for non-MANAGER."""
+    """List SALES user - supervisor + manager only. Branch-scoped for supervisor."""
     query = _exclude_deleted(db.query(User)).filter(
         User.role == "SALES", User.is_active.is_(True)
     )
@@ -69,10 +70,11 @@ def list_users(
     offset: int = Query(0, ge=0),
     include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
-    """List semua user (kecuali soft-deleted) - admin + supervisor only.
-    Branch-scoped for ADMIN/SUPERVISOR; global MANAGER sees all."""
+    """List semua user (kecuali soft-deleted) - supervisor + manager only.
+    ADMIN tidak punya akses. Supervisor hanya melihat cabangnya sendiri;
+    global MANAGER melihat semua."""
     query = _exclude_deleted(db.query(User))
     # Branch filter applied first
     query = apply_branch_filter(query, User, current_user)
@@ -95,46 +97,18 @@ def list_users(
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_write_access),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
-    """Buat user baru - admin + supervisor only.
+    """Buat user baru - manager global atau supervisor cabang.
 
-    Strict rule: ADMIN/SUPERVISOR cannot create users in another branch.
-    If they attempt to do so → 400.
-    Only global MANAGER can pick any branch.
+    ADMIN tidak boleh membuat user. Manager global boleh membuat role apa pun;
+    user non-MANAGER wajib punya branch, sedangkan MANAGER selalu global
+    (branch=None). Supervisor hanya boleh membuat SALES di cabangnya sendiri.
     """
-    creator_role = current_user.get("role")
-    creator_branch = current_user.get("branch")
-    target_branch = user.branch
-
-    if creator_role in ("ADMIN", "SUPERVISOR"):
-        # Branch-scoped creator: must create user in their own branch
-        effective_branch = creator_branch
-        if target_branch is not None and target_branch != creator_branch:
-            raise HTTPException(
-                status_code=400,
-                detail="Admin tidak dapat membuat user di branch lain",
-            )
-    elif creator_role == "MANAGER":
-        # Global manager: can create anywhere
-        effective_branch = target_branch
-        # Validate target branch
-        if effective_branch and not branch_constants.is_valid_branch(effective_branch):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Branch tidak valid: {effective_branch}",
-            )
-        # MANAGER creating MANAGER → branch must be None (global)
-        if user.role.upper() == "MANAGER" and effective_branch is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="Manager global harus tanpa branch",
-            )
-    else:
-        raise HTTPException(status_code=403, detail="Akses ditolak")
-
-    if user.role.upper() not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
-        raise HTTPException(status_code=400, detail="Role tidak valid")
+    # Enforces role ceiling + branch rules (fail-closed) for this caller.
+    effective_branch = resolve_new_user_branch(
+        current_user, user.role, user.branch
+    )
 
     existing = (
         _exclude_deleted(db.query(User))
@@ -163,27 +137,55 @@ def update_user(
     user_id: UUID,
     update: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_write_access),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
-    """Edit user - admin + supervisor only. Branch-scoped: ADMIN/SUPERVISOR
-    can only edit users in their own branch. Global MANAGER can edit anyone."""
+    """Edit user - supervisor + manager only.
+
+    Supervisor hanya boleh mengelola akun SALES di cabangnya sendiri.
+    Global MANAGER boleh mengelola siapa pun. ADMIN tidak punya akses.
+    """
     target_user = _exclude_deleted(db.query(User).filter(User.id == user_id)).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
 
-    # Branch-scoped creator: can only edit users in their own branch
-    creator_role = current_user.get("role")
-    creator_branch = current_user.get("branch")
-    if creator_role in ("ADMIN", "SUPERVISOR"):
-        if target_user.branch != creator_branch:
-            raise HTTPException(status_code=403, detail="Tidak bisa mengedit user di branch lain")
-
     data = update.model_dump(exclude_unset=True)
 
+    # --- Caller scope checks (fail-closed) -------------------------------
+    creator_scope = effective_scope_role(current_user)
+    creator_branch = current_user.get("branch")
+
+    # Supervisor may only manage SALES accounts (never ADMIN/MANAGER).
+    if creator_scope == "SUPERVISOR" and target_user.role != "SALES":
+        raise HTTPException(
+            status_code=403,
+            detail="Supervisor hanya dapat mengelola user SALES",
+        )
+
+    if not is_global_manager(current_user):
+        # Branch-scoped: only users in the same branch, never global managers.
+        if target_user.branch != creator_branch:
+            raise HTTPException(
+                status_code=403,
+                detail="Tidak bisa mengedit user di branch lain",
+            )
+        if target_user.role == "MANAGER":
+            raise HTTPException(
+                status_code=403,
+                detail="Hanya manager global yang dapat mengelola manager",
+            )
+
+    # Prevent self role changes (avoids accidental self-lockout/escalation).
+    if str(target_user.id) == str(current_user.get("user_id")) and "role" in data:
+        if (data["role"] or "").upper() != target_user.role:
+            raise HTTPException(
+                status_code=400,
+                detail="Tidak dapat mengubah role akun sendiri",
+            )
+
     if "role" in data:
-        new_role = data["role"].upper()
-        if new_role not in ("ADMIN", "SUPERVISOR", "MANAGER", "SALES"):
-            raise HTTPException(status_code=400, detail="Role tidak valid")
+        # Enforce the caller's role ceiling (SUPERVISOR -> SALES only,
+        # ADMIN -> up to ADMIN, MANAGER -> any).
+        new_role = assert_can_manage_role(current_user, data["role"])
         # Cegah admin terakhir di-nonaktifkan (safety)
         if target_user.role == "ADMIN" and new_role != "ADMIN":
             other_admins = (
@@ -198,17 +200,30 @@ def update_user(
                 )
         data["role"] = new_role
 
-    # Handle branch update: global MANAGER can change branch; others cannot
+    # Handle branch update: only a global MANAGER can change branch. A no-op
+    # value (client re-sends the user's current branch) is ignored so that
+    # supervisor edits are not rejected by an unchanged field.
     if "branch" in data:
-        if creator_role != "MANAGER":
-            raise HTTPException(status_code=403, detail="Hanya manager global yang dapat mengubah branch")
         new_branch = data["branch"]
-        if new_branch and not branch_constants.is_valid_branch(new_branch):
-            raise HTTPException(status_code=400, detail=f"Branch tidak valid: {new_branch}")
-        # MANAGER role must always have branch=None
-        role_to_set = data.get("role", target_user.role)
-        if role_to_set == "MANAGER" and new_branch is not None:
-            raise HTTPException(status_code=400, detail="Manager global harus tanpa branch")
+        if new_branch == target_user.branch:
+            data.pop("branch")
+        else:
+            if not is_global_manager(current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Hanya manager global yang dapat mengubah branch",
+                )
+            if new_branch and not branch_constants.is_valid_branch(new_branch):
+                raise HTTPException(status_code=400, detail=f"Branch tidak valid: {new_branch}")
+            # MANAGER role must always have branch=None
+            role_to_set = data.get("role", target_user.role)
+            if role_to_set == "MANAGER" and new_branch is not None:
+                raise HTTPException(status_code=400, detail="Manager global harus tanpa branch")
+
+    # Promoting to MANAGER always yields the single global manager shape.
+    # Only a global MANAGER can reach here (role ceiling above).
+    if data.get("role") == "MANAGER":
+        data["branch"] = None
 
     # Tangkap sebelum pop - deteksi request yang punya field password.
     had_password_change = "password" in data
@@ -233,7 +248,7 @@ def update_user(
 def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _current_user: CurrentUser = Depends(require_write_access),
+    _current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Soft-delete user - DIHAPUS.
 

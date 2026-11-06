@@ -198,10 +198,6 @@ class AreaAssignment(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    __table_args__ = (
-        Index("ix_orders_branch_status_created_at", "branch", "status", "created_at"),
-        Index("ix_orders_sales_status_created", "sales_id", "status", "created_at"),
-    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Branch scoping: set to sales user's branch at order creation time.
@@ -232,10 +228,17 @@ class Order(Base):
     order_up_price_type = Column(String(10), default='NOMINAL')  # 'PERCENT' atau 'NOMINAL'
     order_up_price_nominal = Column(Integer, default=0)  # dalam IDR
 
+    # Satu-satunya deklarasi __table_args__ untuk tabel ini. Sebelumnya ada dua
+    # blok (yang kedua menimpa yang pertama, sehingga index komposit di blok
+    # pertama tidak pernah terdaftar di metadata). Penggabungan ini hanya
+    # memengaruhi metadata SQLAlchemy — tidak mengubah tabel yang sudah ada,
+    # karena create_all() melewati tabel yang sudah dibuat.
     __table_args__ = (
         Index("ix_orders_status", "status"),
         Index("ix_orders_created_at", "created_at"),
         Index("ix_orders_status_created_at", "status", "created_at"),
+        Index("ix_orders_branch_status_created_at", "branch", "status", "created_at"),
+        Index("ix_orders_sales_status_created", "sales_id", "status", "created_at"),
         Index("ix_orders_sales_id", "sales_id"),
         Index("ix_orders_customer_id", "customer_id"),
     )
@@ -402,11 +405,30 @@ class ImportedSale(Base):
     template, bukan dihitung ulang di sisi import).
     """
     __tablename__ = "imported_sales"
+    __table_args__ = (
+        # Summary filters by (branch, sale_date range). The single-column
+        # indexes below are kept for other queries (e.g. trans_no lookups).
+        Index(
+            "ix_imported_sales_branch_sale_date",
+            "branch",
+            "sale_date",
+        ),
+        # Re-import idempotency: one row per deterministic key. Legacy rows
+        # keep dedupe_key NULL (PostgreSQL unique indexes allow many NULLs)
+        # until the lazy migration or backfill script assigns a key.
+        Index(
+            "uq_imported_sales_dedupe_key",
+            "dedupe_key",
+            unique=True,
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     import_log_id = Column(UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=False, index=True)
     branch = Column(String(20), nullable=True, index=True)
     trans_no = Column(String(50), nullable=True, index=True)
+    # ``<md5 base>#<occurrence>``; see app.services.sales_import_keys.
+    dedupe_key = Column(String(64), nullable=True)
     # Tanggal penjualan (dari kolom `Penjualan` pada template).
     sale_date = Column(Date, nullable=True, index=True)
     customer_kode = Column(String(50), nullable=True)
@@ -433,6 +455,116 @@ class ImportedSale(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     import_log = relationship("ImportLog")
+
+
+class SalesImportVersion(Base):
+    """Monotonic version counter for imported-sales summaries.
+
+    One row per (scope, month). `scope` is either a branch code or the
+    literal ``GLOBAL`` (for global MANAGER). Clients poll the cheap version
+    endpoint and only download the heavier summary when the version changes.
+
+    The counter is bumped in the same transaction as a successful import,
+    so a failed/rolled-back import never changes it.
+    """
+    __tablename__ = "sales_import_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "scope",
+            "month",
+            name="uq_sales_import_versions_scope_month",
+        ),
+        Index("ix_sales_import_versions_month", "month"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scope = Column(String(20), nullable=False)
+    # YYYY-MM (same format as the summary endpoint).
+    month = Column(String(7), nullable=False)
+    version = Column(BigInteger, nullable=False, default=0)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class ImportedSalesMonthlySummary(Base):
+    """Precomputed top-N aggregation for imported-sales summaries.
+
+    One row per ``(scope, month, dimension, group)``. ``dimension`` is one of
+    ``TOTAL``/``PRODUCT``/``SALES``/``CUSTOMER``/``CHANNEL``; ``TOTAL`` stores
+    the whole-month totals in a single row (``row_count`` = imported rows),
+    while the other dimensions store the top ``SUMMARY_TOP_N`` groups by
+    revenue.
+
+    Why precompute: the read endpoint previously ran ``GROUP BY`` over every
+    row of the month on each request. With thousands of rows that is both CPU
+    and DB→app egress. The table is recomputed in the import transaction (and
+    lazily backfilled for legacy data), so reads become a small indexed
+    lookup. ``limit`` is capped at ``SUMMARY_TOP_N`` (100) by the API, so the
+    stored top-100 always satisfies any request.
+    """
+    __tablename__ = "imported_sales_monthly_summary"
+    __table_args__ = (
+        # Read path filters by (scope, month, dimension) then orders by revenue.
+        Index(
+            "ix_imported_sales_summary_lookup",
+            "scope",
+            "month",
+            "dimension",
+            "revenue",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scope = Column(String(20), nullable=False)
+    # YYYY-MM (same format as the summary endpoint).
+    month = Column(String(7), nullable=False)
+    dimension = Column(String(20), nullable=False)
+    # Group key/label are stored as empty strings instead of NULL so ordering
+    # and lookups behave deterministically. Empty is mapped back to None by
+    # the read helper to preserve the original API response shape.
+    dim_key = Column(String(100), nullable=False, default="")
+    dim_label = Column(String(200), nullable=False, default="")
+    qty = Column(BigInteger, nullable=False, default=0)
+    revenue = Column(BigInteger, nullable=False, default=0)
+    row_count = Column(BigInteger, nullable=False, default=0)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class ImportedSalesSummaryState(Base):
+    """Tracks which source version a precomputed summary was built from.
+
+    ``source_version`` mirrors ``sales_import_versions.version`` for the same
+    ``(scope, month)``. The summary endpoint compares both: if the source
+    version moved (new import) or the state row is missing (legacy data), it
+    recomputes once and updates this row. This is the lazy-backfill mechanism.
+    """
+    __tablename__ = "imported_sales_summary_state"
+    __table_args__ = (
+        UniqueConstraint(
+            "scope",
+            "month",
+            name="uq_imported_sales_summary_state_scope_month",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scope = Column(String(20), nullable=False)
+    month = Column(String(7), nullable=False)
+    source_version = Column(BigInteger, nullable=False, default=0)
+    computed_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class SalesTarget(Base):

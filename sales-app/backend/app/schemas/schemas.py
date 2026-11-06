@@ -68,7 +68,7 @@ class OrderStatus(str, Enum):
 
 class UserCreate(BaseSchema):
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6, max_length=72)
+    password: str = Field(..., min_length=8, max_length=72)
     role: str = Field(..., description="ADMIN, SUPERVISOR, MANAGER, atau SALES")
     nama: Optional[str] = Field(None, max_length=100)
     branch: Optional[str] = Field(None, description="Branch code. Required for ADMIN/SUPERVISOR/SALES. Omit or null for global MANAGER.")
@@ -78,7 +78,7 @@ class UserUpdate(BaseSchema):
     """Edit user — semua field opsional, hanya yang dikirim yang berubah."""
     nama: Optional[str] = None
     role: Optional[str] = None
-    password: Optional[str] = Field(None, min_length=6, max_length=72)
+    password: Optional[str] = Field(None, min_length=8, max_length=72)
     is_active: Optional[bool] = None
     branch: Optional[str] = Field(None, description="Branch code. Null = global MANAGER.")
 
@@ -86,7 +86,7 @@ class UserUpdate(BaseSchema):
 class ChangePasswordRequest(BaseSchema):
     """Body untuk POST /auth/change-password — ganti password user sendiri."""
     old_password: str = Field(..., min_length=1, max_length=72)
-    new_password: str = Field(..., min_length=6, max_length=72)
+    new_password: str = Field(..., min_length=8, max_length=72)
 
 
 class UserResponse(BaseSchema):
@@ -193,6 +193,25 @@ class SyncResultResponse(BaseSchema):
     skipped: int
     errors: List[SyncErrorItem]
     needs_review: bool = False
+
+
+# ==================== SALES IMPORTS ====================
+
+class SalesImportVersionResponse(BaseSchema):
+    """Version counter for one (scope, month) pair."""
+    month: str
+    scope: str
+    version: int = 0
+    updated_at: Optional[datetime] = None
+
+
+class SalesImportResultResponse(SyncResultResponse):
+    """Import result plus the new version for every affected (scope, month).
+
+    The client uses these to update its local version cache immediately,
+    avoiding an extra version round-trip right after an import.
+    """
+    versions: List[SalesImportVersionResponse] = Field(default_factory=list)
 
 
 # ==================== ORDERS ====================
@@ -467,7 +486,7 @@ class CustomerResponse(CustomerBase):
     id: UUID
     branch: Optional[str] = None
     branch_nama: Optional[str] = None  # populated via JOIN
-    # Pengelompokan per area/rayon. Optional — legacy customer bisa null.
+    # Pengelompokan per area/rayon. Optional â€” legacy customer bisa null.
     kode_area: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -475,6 +494,20 @@ class CustomerResponse(CustomerBase):
 
     class Config:
         from_attributes = True
+
+
+class CustomerListResponse(BaseSchema):
+    """Customer row ringkas untuk list sales (order flow mobile/web).
+
+    Field yang tidak dipakai UI list sengaja dihilangkan supaya backend
+    tidak perlu mengirim kolom ekstra dari Postgres (egress DB).
+    """
+
+    id: UUID
+    kode: Optional[str] = None
+    nama_toko: str
+    alamat: Optional[str] = None
+    kode_area: Optional[str] = None
 
 
 class KodeAreaListResponse(BaseSchema):

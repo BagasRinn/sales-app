@@ -1,14 +1,21 @@
+import logging
 import os
-import bcrypt
-import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
-from fastapi import Depends, HTTPException, status, Query
+
+import bcrypt
+import jwt
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import false
 from sqlalchemy.orm import Session
 
 from app.models.database import get_db
+
+logger = logging.getLogger(__name__)
+
+VALID_ROLES = ("ADMIN", "SUPERVISOR", "MANAGER", "SALES")
 
 load_dotenv = None
 
@@ -97,6 +104,15 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Only access tokens are accepted as bearer credentials. Without this a
+    # long-lived refresh token could be replayed as an access token.
+    if payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token bukan access token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user_id = payload.get("sub")
     token_version = payload.get("tv", 0)
     if user_id is None:
@@ -112,6 +128,12 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User tidak ditemukan",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Akun nonaktif",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     if (user.token_version or 0) != token_version:
         raise HTTPException(
@@ -169,8 +191,12 @@ def require_supervisor(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 def require_manager_global(current_user: dict = Depends(get_current_user)) -> dict:
-    """Global MANAGER only (branch=NULL)."""
-    if current_user.get("role") != "MANAGER":
+    """Global MANAGER only (branch=NULL).
+
+    A MANAGER row that somehow has a branch set is treated as branch-scoped,
+    so it cannot silently gain cross-branch access.
+    """
+    if not is_global_manager(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Akses ditolak. Hanya manager global yang dapat mengakses endpoint ini.",
@@ -192,11 +218,11 @@ def require_admin_or_supervisor(current_user: dict = Depends(get_current_user)) 
 def require_supervisor_or_manager_global(current_user: dict = Depends(get_current_user)) -> dict:
     """SUPERVISOR (branch-scoped) or MANAGER (global, branch=NULL).
     ADMIN excluded — admin is read-only.
-    MANAGER global sees all branches; SUPERVISOR is branch-scoped."""
-    role = current_user.get("role")
-    if role == "MANAGER":
+    MANAGER global sees all branches; SUPERVISOR is branch-scoped.
+    A MANAGER row with a branch is treated as branch ADMIN and rejected."""
+    if is_global_manager(current_user):
         return current_user
-    if role == "SUPERVISOR":
+    if effective_scope_role(current_user) == "SUPERVISOR":
         return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -207,7 +233,7 @@ def require_supervisor_or_manager_global(current_user: dict = Depends(get_curren
 def require_write_access(current_user: dict = Depends(get_current_user)) -> dict:
     """ADMIN (branch-scoped), SUPERVISOR (branch-scoped), or MANAGER (global).
     Allows all write-capable roles. SALES excluded."""
-    role = current_user.get("role")
+    role = effective_scope_role(current_user)
     if role in ("ADMIN", "SUPERVISOR", "MANAGER"):
         return current_user
     raise HTTPException(
@@ -216,30 +242,153 @@ def require_write_access(current_user: dict = Depends(get_current_user)) -> dict
     )
 
 
+# ---------------------------------------------------------------------------
+# Role / branch helpers (fail-closed)
+# ---------------------------------------------------------------------------
+
+def is_global_manager(current_user: dict) -> bool:
+    """True only for MANAGER with branch=NULL (the documented global role)."""
+    return (
+        current_user.get("role") == "MANAGER"
+        and current_user.get("branch") is None
+    )
+
+
+def effective_scope_role(current_user: dict) -> str:
+    """Role used for authorization decisions.
+
+    A MANAGER row with a branch set is malformed; treat it as a branch ADMIN
+    instead of granting global scope.
+    """
+    role = (current_user.get("role") or "").upper()
+    if role == "MANAGER" and current_user.get("branch") is not None:
+        return "ADMIN"
+    return role
+
+
+def branch_guard(current_user: dict, resource_branch: str | None) -> None:
+    """Raise 403 unless the user may access data belonging to `resource_branch`.
+
+    - Global MANAGER (role=MANAGER, branch=NULL) may access every branch.
+    - Everyone else must have a branch and it must match the resource.
+    - Fail-closed: a non-manager with branch=NULL gets no access.
+    """
+    if is_global_manager(current_user):
+        return
+    user_branch = current_user.get("branch")
+    if user_branch is None or resource_branch != user_branch:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tidak memiliki akses ke data cabang lain",
+        )
+
+
+def assert_can_manage_role(creator: dict, target_role: str) -> str:
+    """Enforce a role ceiling for user management.
+
+    Only a global MANAGER and a branch SUPERVISOR may create/manage users.
+    ADMIN has no user-management access at all. A SUPERVISOR is limited to
+    SALES accounts inside their own branch (see ``resolve_new_user_branch``).
+
+    MANAGER    -> any role (global manager only)
+    SUPERVISOR -> SALES only
+    """
+    role = (target_role or "").upper()
+    if role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="Role tidak valid")
+
+    creator_scope = effective_scope_role(creator)
+    allowed = {
+        "MANAGER": set(VALID_ROLES),
+        "SUPERVISOR": {"SALES"},
+    }.get(creator_scope, set())
+
+    if role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Role {creator_scope or 'UNKNOWN'} tidak boleh membuat/mengubah "
+                f"user dengan role {role}"
+            ),
+        )
+    return role
+
+
+def resolve_new_user_branch(
+    creator: dict, target_role: str, requested_branch: str | None
+) -> str | None:
+    """Validate role ceiling + branch for a new user, return the branch to store.
+
+    - Global MANAGER may create any role. MANAGER targets are always global
+      (``branch=None``); other roles require an explicit valid branch.
+    - SUPERVISOR may only create SALES accounts, and they are always pinned to
+      the supervisor's own branch. Fail-closed if the supervisor has no branch.
+    """
+    from app.core import branch as branch_constants
+
+    role = assert_can_manage_role(creator, target_role)
+    creator_scope = effective_scope_role(creator)
+
+    if role == "MANAGER":
+        if requested_branch:
+            raise HTTPException(
+                status_code=400,
+                detail="Manager global harus tanpa branch",
+            )
+        return None
+
+    if creator_scope == "SUPERVISOR":
+        creator_branch = creator.get("branch")
+        if not creator_branch:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Supervisor tanpa branch tidak dapat membuat user",
+            )
+        if requested_branch and requested_branch != creator_branch:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Supervisor hanya dapat membuat user di cabangnya sendiri",
+            )
+        return creator_branch
+
+    if not requested_branch:
+        raise HTTPException(
+            status_code=400,
+            detail="Branch wajib untuk ADMIN, SUPERVISOR, atau SALES",
+        )
+    if not branch_constants.is_valid_branch(requested_branch):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Branch tidak valid: {requested_branch}",
+        )
+    return requested_branch
+
+
 def apply_branch_filter(query, model, current_user: dict):
     """Apply branch filter to a query based on the current user.
 
     - Global MANAGER (branch=NULL): returns query unchanged (sees all branches).
-    - Branch-scoped users (ADMIN/SUPERVISOR/SALES): filters to their branch.
-    - Fallback during migration (branch=NULL for branch-scoped users before
-      backfill completes): returns query unchanged as a temporary bridge.
-      This fallback is removed after migration stage C completes.
+    - Branch-scoped users: filters to their branch.
+    - Fail-closed: a non-MANAGER account without a branch sees NOTHING instead
+      of every branch. Legacy/misconfigured rows must be fixed, not silently
+      granted global scope.
     """
-    role = current_user.get("role")
+    role = effective_scope_role(current_user)
     branch = current_user.get("branch")
 
-    # Global MANAGER: no filter (sees all branches).
     if role == "MANAGER":
         return query
 
-    # Branch-scoped user with branch set: apply filter.
     if branch is not None:
         return query.filter(model.branch == branch)
 
-    # Fallback: branch is NULL but user is not global MANAGER.
-    # This happens during migration staging between code deploy and backfill.
-    # Return query unchanged to avoid filtering out all rows.
-    return query
+    logger.warning(
+        "[AUTHZ] Non-manager user without branch (%s/%s) denied all rows — "
+        "fix the user's branch assignment.",
+        current_user.get("user_id"),
+        current_user.get("role"),
+    )
+    return query.filter(false())
 
 
 CurrentUser = dict

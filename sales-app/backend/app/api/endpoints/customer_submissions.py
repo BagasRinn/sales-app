@@ -20,7 +20,15 @@ from app.schemas.schemas import (
     CustomerSubmissionCancelRequest,
     CustomerSubmissionCancelResponse,
 )
-from app.core.security import require_auth, require_admin, require_admin_or_supervisor, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_auth,
+    require_admin,
+    require_admin_or_supervisor,
+    require_write_access,
+    apply_branch_filter,
+    branch_guard,
+    CurrentUser,
+)
 from app.core import branch as branch_constants
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
@@ -112,6 +120,14 @@ def submit_customer_registration(
     sales_id otomatis dari token (siapa yang login).
     """
     sales_id = UUID(current_user["user_id"])
+    user_branch = current_user.get("branch")
+    # Submissions (and the placeholder customer/order) are branch-owned rows.
+    # A branchless account must not create global/NULL-branch data.
+    if not user_branch:
+        raise HTTPException(
+            status_code=403,
+            detail="Akun Anda belum memiliki cabang. Hubungi manager.",
+        )
 
     # Buat dict payload, pisahkan field non-database (flag & order-related).
     payload_dict = payload.model_dump()
@@ -126,7 +142,7 @@ def submit_customer_registration(
     submission = CustomerRegistrationSubmission(
         id=uuid4(),
         sales_id=sales_id,
-        branch=current_user.get("branch"),
+        branch=user_branch,
         status='PENDING',
         **payload_dict,
     )
@@ -143,7 +159,7 @@ def submit_customer_registration(
             nama_toko=payload.nama_langganan,
             alamat=payload.alamat_kirim or payload.alamat_ktp or '',
             kode_area=payload.kode_area,
-            branch=current_user.get("branch"),
+            branch=user_branch,
         )
         db.add(customer)
 
@@ -167,7 +183,7 @@ def submit_customer_registration(
             id=uuid4(),
             sales_id=sales_id,
             customer_id=customer_id,
-            branch=current_user.get("branch"),
+            branch=user_branch,
             status='DRAFT',
             created_at=datetime.now(timezone.utc),
             order_type=order_type,
@@ -228,6 +244,8 @@ def check_duplicate_customer(
         Customer.deleted_at.is_(None),
         func.lower(Customer.nama_toko).like(name_pattern),
     )
+    # Duplicate detection is branch-scoped: never reveal another branch's roster.
+    query = apply_branch_filter(query, Customer, current_user)
     if alamat and alamat.strip():
         alamat_pattern = f"%{alamat.lower()}%"
         query = query.filter(func.lower(Customer.alamat).like(alamat_pattern))
@@ -255,7 +273,7 @@ def list_submissions(
     offset: int = Query(0, ge=0),
     include_total: bool = Query(False, description="True = kirim header X-Total-Count"),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Admin/Supervisor lihat semua submissions. Default: semua status (untuk log view)."""
     query = db.query(CustomerRegistrationSubmission)
@@ -284,12 +302,16 @@ def get_submission(
 
     role = current_user.get("role")
     user_id = current_user["user_id"]
-    if role not in ("ADMIN", "MANAGER", "SUPERVISOR") and str(submission.sales_id) != user_id:
-        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
-    # Branch access check for ADMIN
-    if role == "ADMIN" and current_user.get("branch") is not None:
-        if submission.branch != current_user["branch"]:
+    if role == "SALES":
+        # SALES: only their own submission, within their own branch.
+        if (
+            str(submission.sales_id) != user_id
+            or submission.branch != current_user.get("branch")
+        ):
             raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+    else:
+        # ADMIN / SUPERVISOR are branch-scoped; global MANAGER sees all.
+        branch_guard(current_user, submission.branch)
 
     return _serialize(submission, db)
 
@@ -310,8 +332,7 @@ def approve_submission(
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
-    if current_user.get("branch") is not None and submission.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+    branch_guard(current_user, submission.branch)
     if submission.status != "PENDING":
         raise HTTPException(
             status_code=409,
@@ -396,6 +417,7 @@ def approve_submission(
         nama_toko=nama_toko,
         alamat=alamat if alamat else None,
         kode_area=submission.kode_area,
+        branch=submission.branch,
     )
     db.add(customer)
     db.flush()  # dapet customer.id
@@ -433,8 +455,7 @@ def reject_submission(
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
-    if current_user.get("branch") is not None and submission.branch != current_user["branch"]:
-        raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
+    branch_guard(current_user, submission.branch)
     if submission.status != "PENDING":
         raise HTTPException(
             status_code=409,
@@ -463,10 +484,10 @@ def reject_submission(
                     text(
                         "UPDATE products "
                         "SET stok_booking = stok_booking - :qty "
-                        "WHERE id = :pid "
+                        "WHERE id = :pid AND branch = :branch "
                         "RETURNING stok_booking"
                     ),
-                    {"pid": item.product_id, "qty": item.qty},
+                    {"pid": item.product_id, "branch": item.branch, "qty": item.qty},
                 ).first()
                 if result:
                     new_booking = result[0]
@@ -475,6 +496,7 @@ def reject_submission(
                     log_entry = StokLog(
                         id=uuid4(),
                         product_id=item.product_id,
+                        branch=item.branch,
                         sumber="CANCEL",
                         field_terdampak="stok_booking",
                         delta=-item.qty,
@@ -524,7 +546,7 @@ def cancel_submission(
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Pengajuan tidak ditemukan")
-    if submission.sales_id != sales_id:
+    if submission.sales_id != sales_id or submission.branch != current_user.get("branch"):
         raise HTTPException(status_code=403, detail="Tidak punya akses ke pengajuan ini")
     if submission.status != "PENDING":
         raise HTTPException(
@@ -549,10 +571,10 @@ def cancel_submission(
                     text(
                         "UPDATE products "
                         "SET stok_booking = stok_booking - :qty "
-                        "WHERE id = :pid "
+                        "WHERE id = :pid AND branch = :branch "
                         "RETURNING stok_booking"
                     ),
-                    {"pid": item.product_id, "qty": item.qty},
+                    {"pid": item.product_id, "branch": item.branch, "qty": item.qty},
                 ).first()
                 if result:
                     new_booking = result[0]
@@ -560,6 +582,7 @@ def cancel_submission(
                     log_entry = StokLog(
                         id=uuid4(),
                         product_id=item.product_id,
+                        branch=item.branch,
                         sumber="CANCEL",
                         field_terdampak="stok_booking",
                         delta=-item.qty,

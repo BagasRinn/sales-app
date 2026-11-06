@@ -5,20 +5,53 @@ import 'api_service.dart';
 class CustomerRepository {
   final ApiService _api;
 
+  /// Cache list customer tanpa filter. Dipakai order flow agar membuka form
+  /// order berulang kali tidak menarik ~2.000 customer lagi dari Postgres.
+  static const Duration _cacheTtl = Duration(minutes: 10);
+  List<Customer>? _cachedCustomers;
+  DateTime? _cachedAt;
+  String? _cachedToken;
+
   CustomerRepository(this._api);
 
+  bool get _isCacheValid {
+    if (_cachedCustomers == null || _cachedAt == null) return false;
+    // Jangan bagikan cache lintas sesi/login di perangkat yang sama.
+    if (_cachedToken != _api.accessToken) return false;
+    return DateTime.now().difference(_cachedAt!) < _cacheTtl;
+  }
+
+  /// Hapus cache setelah data customer berubah (mis. setelah approval admin).
+  void invalidateCache() {
+    _cachedCustomers = null;
+    _cachedAt = null;
+    _cachedToken = null;
+  }
+
   Future<List<Customer>> getMyCustomers({String? search}) async {
+    final query = (search ?? '').trim();
+    if (query.isEmpty && _isCacheValid) {
+      return List<Customer>.unmodifiable(_cachedCustomers!);
+    }
+
     final queryParams = <String, String>{};
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
+    if (query.isNotEmpty) {
+      queryParams['search'] = query;
     }
     final queryString = queryParams.isEmpty
         ? ''
         : '?${queryParams.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final data = await _api.get('/customers/my$queryString');
-    return (data as List)
+    final result = (data as List)
         .map((e) => Customer.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    if (query.isEmpty) {
+      _cachedCustomers = result;
+      _cachedAt = DateTime.now();
+      _cachedToken = _api.accessToken;
+    }
+    return result;
   }
 
   /// Submit pengajuan customer baru ke backend. Status langsung PENDING.

@@ -1,0 +1,221 @@
+classDiagram
+    class Branch {
+        +String code
+        +String nama
+        +Boolean is_active
+    }
+
+    class User {
+        +UUID id
+        +String username
+        +String password_hash
+        +String role
+        +String nama
+        +String branch
+        +Boolean is_active
+    }
+
+    class Customer {
+        +UUID id
+        +String branch
+        +String kode
+        +String nama_toko
+        +String alamat
+        +String kode_area
+    }
+
+    class Product {
+        +String id
+        +String branch
+        +String nama_barang
+        +Integer harga
+        +Integer stok_sistem
+        +Integer stok_booking
+        +Integer stok_diterima
+        +String kategori
+        +String satuan
+        +String nama_supplier
+        +String order_type
+    }
+
+    class Supplier {
+        +String name
+        +Boolean is_active
+        +String order_type
+    }
+
+    class Order {
+        +UUID id
+        +String branch
+        +UUID sales_id
+        +UUID customer_id
+        +String status
+        +String order_type
+        +String invoice_number
+        +Integer order_discount_nominal
+        +Integer order_up_price_nominal
+    }
+
+    class OrderItem {
+        +UUID id
+        +UUID order_id
+        +String product_id
+        +String branch
+        +Integer qty
+        +Numeric discount_percent
+        +Numeric discount2_percent
+        +Numeric discount3_percent
+        +Integer up_price_nominal
+    }
+
+    class StokLog {
+        +UUID id
+        +String branch
+        +String product_id
+        +String sumber
+        +String field_terdampak
+        +Integer delta
+        +Integer nilai_sebelum
+        +Integer nilai_sesudah
+        +UUID actor_id
+        +UUID order_id
+    }
+
+    class CustomerAssignment {
+        +UUID customer_id
+        +UUID sales_id
+        +UUID assigned_by
+        +DateTime assigned_at
+    }
+
+    class AreaAssignment {
+        +String kode_area
+        +UUID sales_id
+        +String branch
+        +UUID assigned_by
+        +DateTime assigned_at
+    }
+
+    class CustomerRegistrationSubmission {
+        +UUID id
+        +String branch
+        +UUID sales_id
+        +UUID reviewed_by
+        +UUID approved_customer_id
+        +UUID bareng_customer_id
+        +String status
+        +String nama_langganan
+        +String alamat_kirim
+        +String kode_area
+    }
+
+    class SalesTarget {
+        +UUID id
+        +UUID user_id
+        +String period
+        +String target_type
+        +BigInteger target_value
+        +BigInteger incentive_amount
+    }
+
+    class SupplierTarget {
+        +UUID id
+        +String branch
+        +String supplier_name
+        +String period
+        +BigInteger target_value
+    }
+
+    class ImportLog {
+        +UUID id
+        +String user_id
+        +String import_type
+        +String branch
+        +Integer total_rows
+        +Integer inserted
+        +Integer updated
+        +Integer skipped
+        +String file_name
+    }
+
+    class SyncValidationError {
+        +UUID id
+        +UUID import_log_id
+        +Integer row_number
+        +String sku
+        +String reason
+    }
+
+    class ImportedSale {
+        +UUID id
+        +UUID import_log_id
+        +String branch
+        +String trans_no
+        +Date sale_date
+        +String customer_kode
+        +String product_kode
+        +Integer qty
+        +Integer total_amount
+    }
+
+    class Bulletin {
+        +UUID id
+        +String branch
+        +String title
+        +String description
+        +String pdf_url
+        +DateTime expire_at
+    }
+
+    class BulletinDismiss {
+        +UUID id
+        +UUID bulletin_id
+        +UUID sales_id
+        +DateTime dismissed_at
+    }
+
+    Branch "0..1" --> "*" User : memiliki
+    Branch "1" --> "*" Product : memiliki
+    Branch "1" --> "*" Customer : memiliki
+    Branch "1" --> "*" Order : memiliki
+    Branch "1" --> "*" AreaAssignment : menaungi
+    Branch "1" --> "*" CustomerRegistrationSubmission : menaungi
+    Branch "1" --> "*" SupplierTarget : menaungi
+    Branch "1" --> "*" ImportLog : menaungi
+    Branch "0..1" --> "*" Bulletin : global bila null
+
+    User "1" --> "*" Order : membuat
+    Customer "0..1" --> "*" Order : menerima
+    Order "1" --> "*" OrderItem : berisi
+    Product "1" --> "*" OrderItem : dipesan
+
+    User "0..1" --> "*" StokLog : menjadi aktor
+    Order "0..1" --> "*" StokLog : direferensikan
+    Product "1" --> "*" StokLog : mencatat perubahan
+
+    User "1" --> "*" SalesTarget : memiliki target
+    User "1" --> "*" CustomerAssignment : ditugaskan
+    Customer "1" --> "*" CustomerAssignment : ditugaskan
+    User "0..1" --> "*" CustomerAssignment : assigned_by
+    User "1" --> "*" AreaAssignment : ditugaskan
+    User "0..1" --> "*" AreaAssignment : assigned_by
+
+    User "1" --> "*" CustomerRegistrationSubmission : mengajukan
+    User "0..1" --> "*" CustomerRegistrationSubmission : mereview
+    Customer "0..1" --> "*" CustomerRegistrationSubmission : approved_customer
+    Customer "0..1" --> "*" CustomerRegistrationSubmission : bareng_customer
+
+    ImportLog "1" --> "*" ImportedSale : menghasilkan
+    ImportLog "1" --> "*" SyncValidationError : mencatat
+    Bulletin "1" --> "*" BulletinDismiss : dibaca
+    User "1" --> "*" BulletinDismiss : menutup
+
+    Supplier "0..1" --> "*" Product : nama_supplier logis
+
+    note for Product "PK komposit (id, branch); satu SKU dapat ada di beberapa cabang"
+    note for Customer "UNIQUE (branch, kode, kode_area)"
+    note for CustomerAssignment "PK komposit (customer_id, sales_id)"
+    note for AreaAssignment "PK komposit (kode_area, sales_id, branch); kode_area berupa string, bukan FK"
+    note for ImportLog "user_id bertipe String, bukan FK ke users"
+    note for ImportedSale "Tidak berelasi FK ke Customer/Product; hanya menyimpan kode dan nama"
+    note for Supplier "Tidak berelasi FK ke Branch; target per cabang ada di SupplierTarget"

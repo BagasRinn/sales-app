@@ -73,14 +73,86 @@ def seed_initial_data():
         db.close()
 
 
+def _ensure_imported_sales_index() -> None:
+    """Create the (branch, sale_date) index on existing deployments.
+
+    The project has no Alembic; ``Base.metadata.create_all()`` skips tables
+    that already exist, so a newly declared index on ``imported_sales`` would
+    never reach production. This idempotent DDL is cheap and safe to run on
+    every startup.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_imported_sales_branch_sale_date "
+                "ON imported_sales (branch, sale_date)"
+            ))
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning("[STARTUP] Could not ensure imported_sales index: %s", e)
+
+
+def _ensure_imported_sales_dedupe_key() -> None:
+    """Add the dedupe column + unique index on existing deployments.
+
+    Same rationale as ``_ensure_imported_sales_index``: the project has no
+    Alembic, so ``create_all`` will not alter an existing table. Both
+    statements are idempotent and safe on every startup. Existing rows keep
+    ``dedupe_key = NULL`` (allowed by the unique index) until the lazy
+    migration or ``scripts/backfill_sales_dedupe_keys.py`` fills them.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE imported_sales "
+                "ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(64)"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_imported_sales_dedupe_key "
+                "ON imported_sales (dedupe_key)"
+            ))
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning(
+            "[STARTUP] Could not ensure imported_sales dedupe key: %s", e
+        )
+
+
+def _demo_seed_allowed() -> bool:
+    """Demo user seeding hanya boleh jalan di lingkungan non-produksi.
+
+    Dua syarat harus terpenuhi:
+    1. SEED_DEMO_USERS=true (default false)
+    2. ENVIRONMENT bukan 'production'/'prod' (kalau variabelnya diset)
+
+    Tujuannya mencegah akun demo berpassword lemah (admin/admin) ikut
+    terbuat kalau flag ini tidak sengaja diaktifkan di server produksi.
+    """
+    if os.getenv("SEED_DEMO_USERS", "false").lower() != "true":
+        return False
+    environment = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    if environment in ("production", "prod"):
+        logger.error(
+            "[SEED] SEED_DEMO_USERS=true diabaikan karena ENVIRONMENT=production. "
+            "Akun demo tidak dibuat."
+        )
+        return False
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _ensure_imported_sales_index()
+    _ensure_imported_sales_dedupe_key()
     # Load branch labels/names from DB into in-memory cache. Falls back to
     # hardcoded constants if the branches table doesn't exist yet (pre-migration).
     from app.core import branch as branch_constants
     branch_constants.load_branches_cache()
-    if os.getenv("SEED_DEMO_USERS", "false").lower() == "true":
+    if _demo_seed_allowed():
         seed_initial_data()
     else:
         logger.info("[STARTUP] SEED_DEMO_USERS not enabled — skipping demo user seeding.")
@@ -99,21 +171,33 @@ async def lifespan(app: FastAPI):
         logger.info("[SHUTDOWN] Scheduler stopped.")
 
 
+_environment = (os.getenv("ENVIRONMENT") or "").strip().lower()
+_is_production = _environment in ("production", "prod")
+
 app = FastAPI(
     title="API Manajemen Order Sales",
     version="1.1",
     lifespan=lifespan,
+    # Interactive docs and the OpenAPI schema are development aids; keep them
+    # off in production so the full API surface is not advertised.
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 
-_allowed_origins = os.getenv("CORS_ORIGINS", "").split(",")
-print(f"CORS YANG AKTIF: {_allowed_origins}")
-if not _allowed_origins or _allowed_origins == [""]:
-    _allowed_origins = []
+_allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if not _allowed_origins:
     logger.warning(
         "[CORS] CORS_ORIGINS is unset — no origins allowed. "
         "Web app cannot reach the API until CORS_ORIGINS is set. "
         "Set CORS_ORIGINS env var to your web app origin(s) (comma-separated)."
     )
+else:
+    logger.info(f"[CORS] Allowed origins: {_allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -125,6 +209,24 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Baseline security headers for every response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+    )
+    if _is_production:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
@@ -144,7 +246,7 @@ app.include_router(sales_imports.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
-    return {"message": "Sistem Offline-Sync Sales Berjalan Normal", "version": "1.1"}
+    return {"message": "API Manajemen Order Sales berjalan normal", "version": "1.1"}
 
 
 @app.get("/health")

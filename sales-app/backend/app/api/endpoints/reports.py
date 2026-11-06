@@ -11,12 +11,18 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from sqlalchemy import case, cast, func
 from sqlalchemy.types import Integer
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 from sqlalchemy.orm import aliased
 
 from app.models.database import get_db
 from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier
-from app.core.security import require_admin_or_supervisor, require_manager_global, require_auth, apply_branch_filter
+from app.core.security import (
+    require_admin_or_supervisor,
+    require_manager_global,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+)
 from app.core import branch as branch_constants
 from app.schemas.schemas import (
     SalesPerformanceResponse,
@@ -51,7 +57,7 @@ def _three_layer_subtotal_expr():
     def _cut_expr(type_col, percent_col, nominal_col, running):
         return case(
             ((type_col.is_(None) | (type_col == 'PERCENT')),
-             cast(running * func.coalesce(percent_col, 0) / 100, Integer)),
+             cast(func.round(running * func.coalesce(percent_col, 0) / 100), Integer)),
             else_=func.coalesce(func.least(func.coalesce(nominal_col, 0), running), 0),
         )
 
@@ -61,7 +67,14 @@ def _three_layer_subtotal_expr():
     up_per_piece = case(
         (
             (OrderItem.up_price_type.is_(None) | (OrderItem.up_price_type == 'PERCENT')),
-            cast(func.coalesce(Product.harga, 0) * func.coalesce(OrderItem.up_price_percent, 0) / 100, Integer),
+            cast(
+                func.round(
+                    func.coalesce(Product.harga, 0)
+                    * func.coalesce(OrderItem.up_price_percent, 0)
+                    / 100
+                ),
+                Integer,
+            ),
         ),
         else_=func.coalesce(OrderItem.up_price_nominal, 0),
     )
@@ -202,7 +215,7 @@ def daily_report(
         description="Jika true, return Excel XLSX (per-row). Default: return JSON summary (agregat).",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """Generate laporan harian. Timezone mengikuti sales app (WITA/UTC+8).
 
@@ -241,9 +254,17 @@ def _build_daily_xlsx(target_date, statuses, db, current_user):
     orders = (
         db.query(Order)
         .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.customer),
-            joinedload(Order.sales),
+            joinedload(Order.items).joinedload(OrderItem.product).load_only(
+                Product.nama_barang,
+                Product.harga,
+                Product.satuan,
+                Product.nama_supplier,
+            ),
+            joinedload(Order.customer).load_only(
+                Customer.kode,
+                Customer.nama_toko,
+            ),
+            joinedload(Order.sales).load_only(User.username, User.nama),
         )
         .filter(
             Order.status.in_(statuses),
@@ -283,7 +304,7 @@ def period_report(
         description="Jika true, return Excel XLSX (per-row). Default: return JSON summary (agregat).",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """Generate laporan berdasarkan rentang tanggal. Timezone WITA/UTC+8.
 
@@ -331,9 +352,17 @@ def _build_period_xlsx(start, end, statuses, db, current_user):
     orders = (
         db.query(Order)
         .options(
-            joinedload(Order.items).joinedload(OrderItem.product),
-            joinedload(Order.customer),
-            joinedload(Order.sales),
+            joinedload(Order.items).joinedload(OrderItem.product).load_only(
+                Product.nama_barang,
+                Product.harga,
+                Product.satuan,
+                Product.nama_supplier,
+            ),
+            joinedload(Order.customer).load_only(
+                Customer.kode,
+                Customer.nama_toko,
+            ),
+            joinedload(Order.sales).load_only(User.username, User.nama),
         )
         .filter(
             Order.status.in_(statuses),
@@ -365,7 +394,7 @@ def report_summary(
     start_date: str = Query(..., description="Tanggal mulai, YYYY-MM-DD (WITA)"),
     end_date: str = Query(..., description="Tanggal akhir, YYYY-MM-DD (WITA)"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """Agregat laporan per rentang tanggal. Pure SQL aggregation — TIDAK load row order.
     Response: total counts + by_status, by_product (top 20), by_sales (top 20), by_branch.
@@ -518,7 +547,7 @@ def sales_performance_report(
                    "Defaults to APPROVED for backward compatibility.",
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """KPI performa per sales dalam rentang tanggal:
     order count, revenue (total setelah diskon), customer submission count.
@@ -574,13 +603,21 @@ def sales_performance_report(
     order_stats = order_stats.group_by(Order.sales_id).all()
     order_count_map = {s.sales_id: s.order_count for s in order_stats}
 
-    # Revenue per sales: fetch items via Python (uses existing _three_layer_breakdown
-    # which correctly computes sequential 3-layer discounts). This is clean and
-    # avoids complex SQL expressions.
-    from sqlalchemy.orm import joinedload
-    orders_with_items = (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+    # Revenue per sales: agregasi di SQL supaya Postgres hanya mengirim satu
+    # baris per sales, bukan seluruh order + order_items + products.
+    final_subtotal_expr, _ = _three_layer_subtotal_expr()
+    revenue_q = (
+        db.query(
+            Order.sales_id.label("sales_id"),
+            func.coalesce(func.sum(final_subtotal_expr), 0).label("revenue"),
+        )
+        .select_from(Order)
+        .outerjoin(OrderItem, OrderItem.order_id == Order.id)
+        .outerjoin(
+            Product,
+            (Product.id == OrderItem.product_id)
+            & (Product.branch == OrderItem.branch),
+        )
         .filter(
             Order.sales_id.isnot(None),
             Order.status == order_status,
@@ -588,16 +625,11 @@ def sales_performance_report(
             Order.created_at < end_dt,
         )
     )
-    orders_with_items = apply_branch_filter(orders_with_items, Order, current_user)
-    orders_with_items = orders_with_items.all()
-    revenue_map: dict = {}
-    for order in orders_with_items:
-        sid = order.sales_id
-        order_revenue = 0
-        for item in order.items:
-            raw, d1, d2, d3, after, _ = _three_layer_breakdown(item)
-            order_revenue += after
-        revenue_map[sid] = revenue_map.get(sid, 0) + max(0, order_revenue)
+    revenue_q = apply_branch_filter(revenue_q, Order, current_user)
+    revenue_map = {
+        row.sales_id: int(row.revenue or 0)
+        for row in revenue_q.group_by(Order.sales_id).all()
+    }
 
     # Submission counts
     submission_stats = (
@@ -633,7 +665,7 @@ def sales_performance_report(
 @router.get("/sales-performance/dashboard", response_model=SalesPerformanceDashboardResponse)
 def sales_performance_dashboard(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """Per-sales breakdown by status (APPROVED / PENDING / REJECTED) for MTD and Today.
     Admin/Supervisor access. Single call - no date params needed."""
@@ -649,47 +681,50 @@ def sales_performance_dashboard(
     today_end = to_utc(datetime.combine(today + timedelta(days=1), datetime.min.time()))
     month_start_dt = to_utc(datetime.combine(month_start, datetime.min.time()))
 
-    def _revenue_for_order(order: Order) -> int:
-        total = 0
-        for item in order.items:
-            _, _, _, _, after, _ = _three_layer_breakdown(item)
-            total += after
-        return max(0, total)
+    def _aggregate_period(start_dt: datetime, end_dt: datetime):
+        """Aggregate count + revenue per (sales_id, status) in SQL.
 
-    def _aggregate(orders: list[Order]) -> tuple[dict, dict]:
-        """Return (count_map, revenue_map) keyed by sales_id."""
-        count_map: dict = {}
-        revenue_map: dict = {}
-        for o in orders:
-            sid = o.sales_id
-            if sid is None:
-                continue
-            count_map[sid] = count_map.get(sid, 0) + 1
-            revenue_map[sid] = revenue_map.get(sid, 0) + _revenue_for_order(o)
-        return count_map, revenue_map
+        Sebelumnya endpoint ini menarik seluruh order + order_items + products
+        ke Python. Sekarang Postgres hanya mengirim satu baris per kombinasi
+        sales/status, sehingga egress DB turun drastis.
+        """
+        final_subtotal_expr, _ = _three_layer_subtotal_expr()
+        query = (
+            db.query(
+                Order.sales_id.label("sales_id"),
+                Order.status.label("status"),
+                func.count(func.distinct(Order.id)).label("cnt"),
+                func.coalesce(func.sum(final_subtotal_expr), 0).label("revenue"),
+            )
+            .select_from(Order)
+            .outerjoin(OrderItem, OrderItem.order_id == Order.id)
+            .outerjoin(
+                Product,
+                (Product.id == OrderItem.product_id)
+                & (Product.branch == OrderItem.branch),
+            )
+            .filter(
+                Order.sales_id.isnot(None),
+                Order.created_at >= start_dt,
+                Order.created_at < end_dt,
+            )
+        )
+        query = apply_branch_filter(query, Order, current_user)
+        return query.group_by(Order.sales_id, Order.status).all()
 
-    # Load ALL orders (all statuses) for MTD and Today - single query each.
-    # Date filter di SQL, bukan Python. joinedload(items.product) menghindari N+1.
-    mtd_orders_q = (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
-        .filter(
-            Order.sales_id.isnot(None),
-            Order.created_at >= month_start_dt,
-            Order.created_at < today_end,
-        )
-    )
-    mtd_orders = apply_branch_filter(mtd_orders_q, Order, current_user).all()
-    today_orders_q = (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
-        .filter(
-            Order.sales_id.isnot(None),
-            Order.created_at >= today_start,
-            Order.created_at < today_end,
-        )
-    )
-    today_orders = apply_branch_filter(today_orders_q, Order, current_user).all()
+    def _to_maps(rows):
+        counts: dict = {}
+        revenues: dict = {}
+        for row in rows:
+            key = (row.sales_id, row.status)
+            counts[key] = int(row.cnt or 0)
+            revenues[key] = int(row.revenue or 0)
+        return counts, revenues
+
+    mtd_rows = _aggregate_period(month_start_dt, today_end)
+    today_rows = _aggregate_period(today_start, today_end)
+    mtd_count_map, mtd_rev_map = _to_maps(mtd_rows)
+    today_count_map, today_rev_map = _to_maps(today_rows)
 
     # Get all active sales users (for building response list, filtered by branch)
     sales_users_q = (
@@ -699,31 +734,15 @@ def sales_performance_dashboard(
     sales_users_q = apply_branch_filter(sales_users_q, User, current_user)
     sales_users = sales_users_q.all()
 
-    # Split by status in Python - fast since data already loaded.
-    def _split_by_status(orders: list[Order], status: str) -> list[Order]:
-        return [o for o in orders if o.status == status]
-
-    # MTD aggregates
-    approved_mtd_count, approved_mtd_rev = _aggregate(
-        _split_by_status(mtd_orders, "APPROVED"))
-    pending_mtd_count, pending_mtd_rev = _aggregate(
-        _split_by_status(mtd_orders, "PENDING"))
-    rejected_mtd_count, rejected_mtd_rev = _aggregate(
-        _split_by_status(mtd_orders, "REJECTED"))
-    # Today aggregates
-    approved_today_count, approved_today_rev = _aggregate(
-        _split_by_status(today_orders, "APPROVED"))
-    pending_today_count, pending_today_rev = _aggregate(
-        _split_by_status(today_orders, "PENDING"))
-    rejected_today_count, rejected_today_rev = _aggregate(
-        _split_by_status(today_orders, "REJECTED"))
-
     # Order bulan ini bisa berasal dari sales yang sudah dinonaktifkan. Kalau
     # user-nya tidak ada di list, angka cabang/perusahaan jadi lebih kecil dari
-    # total order sebenarnya → ikutkan mereka (hanya yang punya order periode
+    # total order sebenarnya â†’ ikutkan mereka (hanya yang punya order periode
     # ini), supaya card == popup == laporan bulanan.
     active_ids = {u.id for u in sales_users}
-    stale_ids = {o.sales_id for o in mtd_orders if o.sales_id not in active_ids}
+    stale_ids = {
+        row.sales_id for row in mtd_rows
+        if row.sales_id is not None and row.sales_id not in active_ids
+    }
     if stale_ids:
         stale_q = db.query(User).filter(User.id.in_(stale_ids))
         sales_users = sales_users + apply_branch_filter(stale_q, User, current_user).all()
@@ -736,18 +755,18 @@ def sales_performance_dashboard(
             username=u.username or "",
             nama=u.nama,
             branch=u.branch,
-            approved_mtd_count=approved_mtd_count.get(uid, 0),
-            approved_mtd_revenue=approved_mtd_rev.get(uid, 0),
-            approved_today_count=approved_today_count.get(uid, 0),
-            approved_today_revenue=approved_today_rev.get(uid, 0),
-            pending_mtd_count=pending_mtd_count.get(uid, 0),
-            pending_mtd_revenue=pending_mtd_rev.get(uid, 0),
-            pending_today_count=pending_today_count.get(uid, 0),
-            pending_today_revenue=pending_today_rev.get(uid, 0),
-            rejected_mtd_count=rejected_mtd_count.get(uid, 0),
-            rejected_mtd_revenue=rejected_mtd_rev.get(uid, 0),
-            rejected_today_count=rejected_today_count.get(uid, 0),
-            rejected_today_revenue=rejected_today_rev.get(uid, 0),
+            approved_mtd_count=mtd_count_map.get((uid, "APPROVED"), 0),
+            approved_mtd_revenue=mtd_rev_map.get((uid, "APPROVED"), 0),
+            approved_today_count=today_count_map.get((uid, "APPROVED"), 0),
+            approved_today_revenue=today_rev_map.get((uid, "APPROVED"), 0),
+            pending_mtd_count=mtd_count_map.get((uid, "PENDING"), 0),
+            pending_mtd_revenue=mtd_rev_map.get((uid, "PENDING"), 0),
+            pending_today_count=today_count_map.get((uid, "PENDING"), 0),
+            pending_today_revenue=today_rev_map.get((uid, "PENDING"), 0),
+            rejected_mtd_count=mtd_count_map.get((uid, "REJECTED"), 0),
+            rejected_mtd_revenue=mtd_rev_map.get((uid, "REJECTED"), 0),
+            rejected_today_count=today_count_map.get((uid, "REJECTED"), 0),
+            rejected_today_revenue=today_rev_map.get((uid, "REJECTED"), 0),
         ))
 
     return SalesPerformanceDashboardResponse(sales=items)
@@ -917,7 +936,7 @@ def get_supplier_performance(
         ),
     ),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_auth),
+    current_user: dict = Depends(require_write_access),
 ):
     """Per-supplier monthly performance: revenue vs target (with auto-rollover).
 
@@ -1055,30 +1074,35 @@ def get_supplier_performance(
             return 0, False
         return target, True
 
-    # 6. Revenue per supplier using _three_layer_breakdown (Python iteration
-    #    matches the rest of the app and avoids duplicating the SQL expression).
-    orders_with_items = (
-        db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+    # 6. Revenue per supplier: agregasi di SQL supaya Postgres hanya mengirim
+    #    satu baris per supplier, bukan seluruh order + item + product.
+    final_subtotal_expr, _ = _three_layer_subtotal_expr()
+    revenue_q = (
+        db.query(
+            Product.nama_supplier.label("supplier"),
+            func.coalesce(func.sum(final_subtotal_expr), 0).label("revenue"),
+        )
+        .select_from(Order)
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .join(
+            Product,
+            (Product.id == OrderItem.product_id)
+            & (Product.branch == OrderItem.branch),
+        )
         .filter(
             Order.status == "APPROVED",
             Order.created_at >= month_start,
             Order.created_at < month_end,
         )
     )
-    orders_with_items = apply_branch_filter(orders_with_items, Order, current_user)
+    revenue_q = apply_branch_filter(revenue_q, Order, current_user)
     if scope_branch:
-        orders_with_items = orders_with_items.filter(Order.branch == scope_branch)
-    orders_with_items = orders_with_items.all()
-
-    revenue_map: dict = {}
-    for order in orders_with_items:
-        for item in order.items:
-            sup = (item.product.nama_supplier or "").strip() if item.product else ""
-            if not sup:
-                continue
-            raw, d1, d2, d3, after, _ = _three_layer_breakdown(item)
-            revenue_map[sup] = revenue_map.get(sup, 0) + max(0, after)
+        revenue_q = revenue_q.filter(Order.branch == scope_branch)
+    revenue_map = {
+        (row.supplier or "").strip(): int(row.revenue or 0)
+        for row in revenue_q.group_by(Product.nama_supplier).all()
+        if (row.supplier or "").strip()
+    }
 
     rows: list[SupplierPerformanceRow] = []
     for name in all_suppliers:

@@ -7,11 +7,11 @@ import 'draft_order_provider.dart';
 class OrderProvider extends ChangeNotifier {
   final OrderRepository _orderRepo;
   static const int _pageSize = 20;
-  // Cache order selama 2 menit untuk mencegah reload berulang.
-  static const Duration _orderCacheDuration = Duration(minutes: 2);
-  // Cache order terbaru selama 1 menit — hindari refetch berulang pada
+  // Cache order selama 5 menit untuk mencegah reload berulang.
+  static const Duration _orderCacheDuration = Duration(minutes: 5);
+  // Cache order terbaru selama 2 menit — hindari refetch berulang pada
   // setiap resume app yang justru menimbulkan silent error.
-  static const Duration _recentOrdersCacheDuration = Duration(minutes: 1);
+  static const Duration _recentOrdersCacheDuration = Duration(minutes: 2);
 
   List<Order> _orders = [];
   bool _isLoading = false;

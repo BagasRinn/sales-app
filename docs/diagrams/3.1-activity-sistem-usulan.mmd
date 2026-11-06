@@ -1,0 +1,25 @@
+flowchart LR
+    subgraph L1["Sales"]
+        direction TB
+        M(((Mulai))) --> S1([Login])
+        S1 --> S2([Melihat katalog dan stok tersedia])
+        S2 --> S3([Memilih toko])
+        S3 --> S4([Menyusun pesanan])
+        S4 --> S5([Mengirim pesanan])
+        S5 --> S6([Melanjutkan kunjungan berikutnya])
+    end
+
+    subgraph L2["Admin"]
+        direction TB
+        A1([Menerima pesanan])
+        A1 --> A2{Pesanan disetujui?}
+        A2 -- Tidak --> A3([Menolak pesanan])
+        A2 -- Ya --> A4([Menyetujui pesanan])
+        A4 --> A5([Memasukkan pesanan ke sistem utama])
+        A3 --> E(((Selesai)))
+        A5 --> E
+    end
+
+    S5 -->|stok ditahan otomatis| A1
+    A3 -->|stok dikembalikan| S6
+    A4 -->|status pesanan diperbarui| S6

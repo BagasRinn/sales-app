@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, status
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -20,18 +20,29 @@ from app.schemas.schemas import (
     AreaAssignmentsPut,
     CustomerAssignmentsPut,
     CustomerCreate,
+    CustomerListResponse,
     CustomerResponse,
     CustomerUpdate,
     KodeAreaListResponse,
     SalesAssignmentItem,
     SyncResultResponse,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_admin_or_supervisor,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+    branch_guard,
+    CurrentUser,
+)
 from app.core import branch as branch_constants
-from app.core.visibility import visible_customer_query
+from app.core.visibility import visible_customer_query, validate_order_customer_for_sales
 from app.services.customer_sync import sync_customers_from_excel
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
+
+# Hard cap for uploaded Excel files (10 MiB) to avoid memory-exhaustion DoS.
+MAX_EXCEL_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 def _customer_to_response(c: Customer) -> CustomerResponse:
@@ -83,6 +94,9 @@ def list_customers(
     current_user: CurrentUser = Depends(require_auth),
 ):
     query = _exclude_deleted(db.query(Customer))
+    if current_user.get("role") == "SALES":
+        # SALES must use the same 3-tier visibility rule as /customers/my.
+        query = visible_customer_query(db, current_user)
     query = apply_branch_filter(query, Customer, current_user)
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
@@ -97,17 +111,21 @@ def get_customer_count(
 ):
     """Total customers matching current filter - for pagination UI."""
     query = _exclude_deleted(db.query(func.count(Customer.id)))
+    if current_user.get("role") == "SALES":
+        vis = visible_customer_query(db, current_user)
+        query = vis.with_entities(func.count(Customer.id))
     query = apply_branch_filter(query, Customer, current_user)
     if search:
         query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
     return {"total": query.scalar() or 0}
 
 
-@router.get("/my", response_model=List[CustomerResponse])
+@router.get("/my", response_model=List[CustomerListResponse])
 def list_my_customers(
+    response: Response,
     search: Optional[str] = None,
     skip: int = 0,
-    limit: int = 3000,
+    limit: int = Query(3000, ge=1, le=3000),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
@@ -127,6 +145,10 @@ def list_my_customers(
     untuk sales. Mobile belum paginate jadi list harus include semua customer
     yang visible dalam 1 fetch. Kalau di masa depan >> 3000, switch mobile
     ke pagination proper.
+
+    Query sengaja memilih 5 kolom saja (bukan seluruh row Customer) karena
+    endpoint ini dipanggil setiap order flow dibuka. Kolom branch/timestamp
+    tidak dipakai UI list dan hanya menambah egress Supabase.
     """
     if current_user["role"] in ("ADMIN", "SUPERVISOR", "MANAGER"):
         query = _exclude_deleted(db.query(Customer))
@@ -146,7 +168,34 @@ def list_my_customers(
                 Customer.kode_area.ilike(pattern),
             )
         )
-    return [_customer_to_response(c) for c in query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()]
+    # Izinkan browser (sales_web) memakai cache sebentar supaya repeat-open
+    # order flow tidak selalu menembak DB. Mobile native tetap memakai cache
+    # in-memory di CustomerRepository.
+    response.headers["Cache-Control"] = "private, max-age=300"
+
+    rows = (
+        query.with_entities(
+            Customer.id,
+            Customer.kode,
+            Customer.nama_toko,
+            Customer.alamat,
+            Customer.kode_area,
+        )
+        .order_by(Customer.nama_toko)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [
+        CustomerListResponse(
+            id=row.id,
+            kode=row.kode,
+            nama_toko=row.nama_toko,
+            alamat=row.alamat,
+            kode_area=row.kode_area,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/kode-areas", response_model=KodeAreaListResponse)
@@ -204,8 +253,18 @@ def create_customer(
     nama_norm = customer.nama_toko.strip().lower()
     alamat_norm = customer.alamat.strip().lower()
 
+    user_branch = current_user.get("branch")
+    # Customer rows must always belong to a branch; a NULL branch would make
+    # the row invisible to every scope (and historically leaked globally).
+    if not user_branch:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun Anda belum memiliki cabang. Hubungi manager.",
+        )
+
     existing = _exclude_deleted(
         db.query(Customer)
+        .filter(Customer.branch == user_branch)
         .filter(func.lower(Customer.nama_toko) == nama_norm)
         .filter(func.lower(Customer.alamat) == alamat_norm)
     ).first()
@@ -218,7 +277,6 @@ def create_customer(
             ),
         )
 
-    user_branch = current_user.get("branch")
     new_customer = Customer(**customer.model_dump(), branch=user_branch)
     db.add(new_customer)
     db.commit()
@@ -239,9 +297,7 @@ def update_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
     # Branch access check
-    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
-        if customer.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
+    branch_guard(current_user, customer.branch)
 
     data = update.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -262,9 +318,11 @@ def get_customer(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
-        if customer.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
+    if current_user.get("role") == "SALES":
+        # SALES may only read customers they can see/order (3-tier rule).
+        customer = validate_order_customer_for_sales(db, current_user, customer_id)
+    else:
+        branch_guard(current_user, customer.branch)
     return _customer_to_response(customer)
 
 
@@ -272,7 +330,7 @@ def get_customer(
 def list_customer_assignments(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """List sales yang di-assign ke customer ini. Manager + admin only."""
     customer = _exclude_deleted(
@@ -280,9 +338,7 @@ def list_customer_assignments(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
-        if customer.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
+    branch_guard(current_user, customer.branch)
     return _list_assignments(customer_id, db)
 
 
@@ -301,22 +357,19 @@ def put_customer_assignments(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
-        if customer.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
+    branch_guard(current_user, customer.branch)
 
-    # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted.
+    # Validasi setiap sales_id: harus SALES, is_active, tidak soft-deleted,
+    # dan (untuk non-global-manager) berada di branch customer yang sama.
     if body.sales_ids:
-        valid = (
-            db.query(User)
-            .filter(
-                User.id.in_(body.sales_ids),
-                User.role == "SALES",
-                User.is_active.is_(True),
-                User.deleted_at.is_(None),
-            )
-            .all()
+        q = db.query(User).filter(
+            User.id.in_(body.sales_ids),
+            User.role == "SALES",
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+            User.branch == customer.branch,
         )
+        valid = q.all()
         found = {str(u.id) for u in valid}
         invalid = [str(sid) for sid in body.sales_ids if str(sid) not in found]
         if invalid:
@@ -351,9 +404,7 @@ def delete_customer(
     ).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
-    if current_user.get("role") != "MANAGER" and current_user.get("branch") is not None:
-        if customer.branch != current_user["branch"]:
-            raise HTTPException(status_code=403, detail="Tidak memiliki akses ke customer ini")
+    branch_guard(current_user, customer.branch)
 
     customer.deleted_at = datetime.now(timezone.utc)
     db.commit()
@@ -369,7 +420,15 @@ def import_excel(
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Format file harus .xlsx")
 
-    contents = file.file.read()
+    contents = file.file.read(MAX_EXCEL_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_EXCEL_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "File terlalu besar. Maksimal "
+                f"{MAX_EXCEL_UPLOAD_BYTES // (1024 * 1024)} MB."
+            ),
+        )
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="File kosong")
 

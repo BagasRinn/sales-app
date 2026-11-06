@@ -17,6 +17,7 @@ import '../../data/models/branch_report.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../data/models/supplier.dart';
 import '../../core/api_exception.dart';
+import '../../core/config.dart';
 
 enum AdminState { initial, loading, loaded, error }
 
@@ -32,6 +33,24 @@ class CacheConfig {
   static const bulletins = Duration(minutes: 10);
   static const users = Duration(minutes: 10);
   static const orders = Duration(minutes: 2);
+  static const importedSales = Duration(minutes: 5);
+}
+
+/// In-memory summary cache entry. The version is the authoritative freshness
+/// signal; [fetchedAt] is only used for instant display/fallback within the
+/// 5-minute window.
+class _ImportedSalesCacheEntry {
+  final Map<String, dynamic> data;
+  final int version;
+  final String scope;
+  final DateTime fetchedAt;
+
+  const _ImportedSalesCacheEntry({
+    required this.data,
+    required this.version,
+    required this.scope,
+    required this.fetchedAt,
+  });
 }
 
 class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
@@ -54,6 +73,18 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _importedSalesLoading = false;
   String? _importedSalesError;
   Map<String, dynamic>? _salesImportResult;
+
+  /// Imported-sales version/cache state.
+  /// Key = `month|scope|limit|include`. A version match means the cached
+  /// payload is still current, so the summary request is skipped entirely.
+  String? _importedSalesMonth;
+  String? _importedSalesScope;
+  int _importedSalesVersion = 0;
+  int _importedSalesLimit = 10;
+  final Map<String, _ImportedSalesCacheEntry> _importedSalesCache = {};
+  // Guards against out-of-order responses when the user changes month/limit
+  // quickly: only the newest request may write state.
+  int _importedSalesRequestId = 0;
   Map<String, int> _stats = {};
   String? _loadingMessage;
   bool _hasNewPending = false;
@@ -280,6 +311,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, dynamic>? get importedSalesSummary => _importedSalesSummary;
   bool get importedSalesLoading => _importedSalesLoading;
   String? get importedSalesError => _importedSalesError;
+  String? get importedSalesMonth => _importedSalesMonth;
+  String? get importedSalesScope => _importedSalesScope;
+  int get importedSalesVersion => _importedSalesVersion;
+  int get importedSalesLimit => _importedSalesLimit;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
@@ -340,10 +375,19 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   void setUserRole(String role) {
     // Tidak notifyListeners: _userRole cuma dipakai loadAll() untuk skip endpoint
     // admin-only. UI pakai widget.role langsung dari DashboardScreen.
+    if (_userRole != role) {
+      // Role menentukan scope ringkasan penjualan (GLOBAL vs cabang).
+      invalidateImportedSalesCache(clearSummary: true);
+    }
     _userRole = role;
   }
 
   void setUserBranch(String? branch) {
+    if (_userBranch != branch) {
+      // Scope changed (e.g. different session/branch): cached summaries and
+      // versions belong to the old scope and must not be reused.
+      invalidateImportedSalesCache(clearSummary: true);
+    }
     _userBranch = branch;
   }
 
@@ -413,6 +457,13 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           CacheConfig.bulletins,
         );
         break;
+      case 11: // Data Penjualan (imported sales)
+        // A version probe is tiny; always check on resume/focus. The summary
+        // itself is only re-downloaded when the version changed.
+        // Gate by the feature flag: when it is off, index 11 belongs to a
+        // different page (e.g. cross-branch) and must not trigger this probe.
+        needsRefresh = AppConfig.enableImportedSales;
+        break;
     }
 
     if (needsRefresh) {
@@ -461,6 +512,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _bulletinsCacheTime = null;
     _usersCacheTime = null;
     _ordersCacheTime = null;
+    invalidateImportedSalesCache();
+  }
+
+  /// Drop cached imported-sales summaries. Called after an import and when
+  /// the user's branch/scope changes.
+  void invalidateImportedSalesCache({bool clearSummary = false}) {
+    // Discard any in-flight response so it cannot repopulate stale data.
+    _importedSalesRequestId++;
+    _importedSalesCache.clear();
+    if (clearSummary) {
+      _importedSalesSummary = null;
+      _importedSalesVersion = 0;
+      _importedSalesScope = null;
+    }
   }
 
   /// Clear the "new pending" badge after user sees it.
@@ -1066,6 +1131,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
             CacheConfig.bulletins,
           );
           break;
+        case 11: // Data Penjualan (imported sales)
+          // Never skip: the version probe is the freshness mechanism.
+          // When the feature is disabled this index is another page.
+          cacheValid = !AppConfig.enableImportedSales;
+          break;
         default:
           cacheValid = false;
       }
@@ -1107,6 +1177,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else if (tab == 7) {
         // User
         // users loaded separately by users tab itself
+      } else if (tab == 11 && AppConfig.enableImportedSales) {
+        // Data Penjualan: version probe + summary only if the version changed.
+        await loadImportedSalesSummary(month: _importedSalesMonth);
       }
       _state = AdminState.loaded;
     } catch (e) {
@@ -1387,27 +1460,176 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> loadImportedSalesSummary({String? month}) async {
+  String _currentImportedSalesMonth() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}';
+  }
+
+  /// Scope used for cache keys before the server confirms it.
+  String _resolvedSalesScope() {
+    if (_userRole == 'MANAGER' &&
+        (_userBranch == null || _userBranch!.isEmpty)) {
+      return 'GLOBAL';
+    }
+    return _userBranch ?? '';
+  }
+
+  String _importedSalesCacheKey(
+    String month,
+    String scope,
+    int limit,
+    String include,
+  ) {
+    return '$month|$scope|$limit|$include';
+  }
+
+  /// Load the imported-sales summary using the version-first flow:
+  ///
+  /// 1. Paint the cached payload instantly (if it is inside the 5-minute
+  ///    display window).
+  /// 2. Probe the tiny version endpoint.
+  /// 3. Download the summary only when the version differs (or no cache).
+  ///
+  /// A version match is authoritative even when the cache is older than
+  /// 5 minutes — the TTL is a display/fallback aid, not a freshness bypass.
+  Future<bool> loadImportedSalesSummary({
+    String? month,
+    int? limit,
+    bool forceRefresh = false,
+  }) async {
+    final targetMonth = (month == null || month.trim().isEmpty)
+        ? (_importedSalesMonth ?? _currentImportedSalesMonth())
+        : month.trim();
+    final effectiveLimit = limit ?? _importedSalesLimit;
+    const include = 'product,sales,customer,channel';
+
+    _importedSalesMonth = targetMonth;
+    _importedSalesLimit = effectiveLimit;
+    final requestId = ++_importedSalesRequestId;
+
+    final localScope = _resolvedSalesScope();
+    final cacheKey = _importedSalesCacheKey(
+      targetMonth,
+      localScope,
+      effectiveLimit,
+      include,
+    );
+    final cached = _importedSalesCache[cacheKey];
+
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) <
+            CacheConfig.importedSales) {
+      _importedSalesSummary = cached.data;
+      _importedSalesVersion = cached.version;
+      _importedSalesScope = cached.scope;
+    }
+
     _importedSalesLoading = true;
     _importedSalesError = null;
+    notifyListeners();
+
     try {
-      final data = await _repo.getImportedSalesSummary(month: month);
+      final versionInfo = await _repo.getImportedSalesVersion(
+        month: targetMonth,
+      );
+      // A newer request (month/limit change) superseded this one.
+      if (requestId != _importedSalesRequestId) return false;
+      final serverScope = versionInfo['scope']?.toString() ?? localScope;
+      final serverVersion = (versionInfo['version'] as num?)?.toInt() ?? 0;
+      _importedSalesScope = serverScope;
+      _importedSalesVersion = serverVersion;
+
+      final serverKey = _importedSalesCacheKey(
+        targetMonth,
+        serverScope,
+        effectiveLimit,
+        include,
+      );
+      final serverCached = _importedSalesCache[serverKey];
+
+      // Unchanged version -> cached payload is still exact; no summary GET.
+      if (!forceRefresh &&
+          serverCached != null &&
+          serverCached.version == serverVersion) {
+        _importedSalesSummary = serverCached.data;
+        return true;
+      }
+
+      final data = await _repo.getImportedSalesSummary(
+        month: targetMonth,
+        limit: effectiveLimit,
+        include: include,
+      );
+      if (requestId != _importedSalesRequestId) return false;
+      final dataVersion = (data['version'] as num?)?.toInt() ?? serverVersion;
+      final dataScope = data['scope']?.toString() ?? serverScope;
       _importedSalesSummary = data;
+      _importedSalesVersion = dataVersion;
+      _importedSalesScope = dataScope;
+      _importedSalesCache[_importedSalesCacheKey(
+        targetMonth,
+        dataScope,
+        effectiveLimit,
+        include,
+      )] = _ImportedSalesCacheEntry(
+        data: data,
+        version: dataVersion,
+        scope: dataScope,
+        fetchedAt: DateTime.now(),
+      );
       return true;
     } catch (e) {
+      if (requestId != _importedSalesRequestId) return false;
       _importedSalesError = e is ApiException ? e.message : e.toString();
+      if (cached != null) {
+        // Fallback: keep the last good payload visible instead of blanking.
+        _importedSalesSummary = cached.data;
+        _importedSalesVersion = cached.version;
+        _importedSalesScope = cached.scope;
+      }
       return false;
     } finally {
-      _importedSalesLoading = false;
-      notifyListeners();
+      // Only the newest request owns the loading flag.
+      if (requestId == _importedSalesRequestId) {
+        _importedSalesLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<bool> importSalesExcel(List<int> fileBytes, String fileName) async {
+    _salesImportResult = null;
     _setLoading(true, 'Mengimport laporan penjualan...');
     try {
-      _salesImportResult = await _repo.importSalesExcel(fileBytes, fileName);
+      final raw = await _repo.importSalesExcel(fileBytes, fileName);
+      final result = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      _salesImportResult = result;
+      final success = result['success'] == true;
       _setLoading(false);
+
+      if (!success) {
+        String? reason;
+        final errors = result['errors'];
+        if (errors is List && errors.isNotEmpty && errors.first is Map) {
+          reason = (errors.first as Map)['reason']?.toString();
+        }
+        _errorMessage =
+            reason ?? 'Import laporan penjualan gagal. Periksa format file.';
+        notifyListeners();
+        return false;
+      }
+
+      // Only drop the cached summary when the import actually changed data.
+      // A pure re-import (all rows matched unchanged) returns no versions and
+      // leaves the existing snapshot valid, so the next probe can reuse it.
+      final versions = result['versions'];
+      final changed = versions is! List || versions.isNotEmpty;
+      if (changed) {
+        invalidateImportedSalesCache();
+      }
       return true;
     } catch (e) {
       _setLoading(false);

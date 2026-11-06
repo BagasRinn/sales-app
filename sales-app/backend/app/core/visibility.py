@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, select, or_
 
 from app.models.models import Customer, CustomerAssignment, AreaAssignment
-from app.core.security import apply_branch_filter
+from app.core.security import apply_branch_filter, branch_guard
 
 
 def visible_customer_query(db: Session, current_user: dict):
@@ -39,20 +39,22 @@ def visible_customer_query(db: Session, current_user: dict):
         .where(CustomerAssignment.sales_id == me_id)
         .subquery()
     )
-    # Subquery 2: kode_area values I cover
-    my_areas_subq = (
-        select(AreaAssignment.kode_area)
-        .where(AreaAssignment.sales_id == me_id)
-        .subquery()
+    # Subquery 2: kode_area values I cover (scoped to my branch)
+    user_branch = current_user.get("branch")
+    my_areas_stmt = select(AreaAssignment.kode_area).where(
+        AreaAssignment.sales_id == me_id
     )
+    all_areas_stmt = select(AreaAssignment.kode_area)
+    if user_branch is not None:
+        my_areas_stmt = my_areas_stmt.where(AreaAssignment.branch == user_branch)
+        all_areas_stmt = all_areas_stmt.where(AreaAssignment.branch == user_branch)
+    my_areas_subq = my_areas_stmt.subquery()
     # Subquery 3: all customer IDs that have ANY direct assignment
     all_direct = (
         select(CustomerAssignment.customer_id).subquery()
     )
     # Subquery 4: all kode_area values that have ANY assignment
-    all_areas = (
-        select(AreaAssignment.kode_area).subquery()
-    )
+    all_areas = all_areas_stmt.subquery()
 
     query = (
         db.query(CustomerModel)
@@ -95,14 +97,8 @@ def validate_order_customer_for_sales(db: Session, current_user: dict, customer_
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
 
     # Branch filter — sales must only order within their own branch.
-    # Global MANAGER bypasses this check (already filtered at endpoint level).
-    user_branch = current_user.get("branch")
-    if current_user["role"] != "MANAGER" and user_branch is not None:
-        if customer.branch != user_branch:
-            raise HTTPException(
-                status_code=403,
-                detail="Customer tidak ditemukan",
-            )
+    # Fail-closed: a non-manager without a branch gets no customer access.
+    branch_guard(current_user, customer.branch)
 
     me_id = UUID(current_user["user_id"])
 
@@ -132,7 +128,10 @@ def validate_order_customer_for_sales(db: Session, current_user: dict, customer_
     if customer.kode_area:
         area_assigned_to_anyone = (
             db.query(AreaAssignment)
-            .filter(AreaAssignment.kode_area == customer.kode_area)
+            .filter(
+                AreaAssignment.kode_area == customer.kode_area,
+                AreaAssignment.branch == customer.branch,
+            )
             .first()
         ) is not None
         if not area_assigned_to_anyone:
@@ -141,6 +140,7 @@ def validate_order_customer_for_sales(db: Session, current_user: dict, customer_
             db.query(AreaAssignment)
             .filter(
                 AreaAssignment.kode_area == customer.kode_area,
+                AreaAssignment.branch == customer.branch,
                 AreaAssignment.sales_id == me_id,
             )
             .first()

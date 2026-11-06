@@ -9,7 +9,14 @@ from typing import List, Optional
 from app.models.database import get_db
 from app.models.models import Bulletin, BulletinDismiss
 from app.schemas.schemas import BulletinCreate, BulletinUpdate, BulletinResponse
-from app.core.security import require_auth, require_admin_or_supervisor, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_auth,
+    require_admin_or_supervisor,
+    require_write_access,
+    apply_branch_filter,
+    is_global_manager,
+    CurrentUser,
+)
 from app.core import branch as branch_constants
 from app.services.supabase_storage import upload_pdf, delete_file
 
@@ -71,12 +78,17 @@ def list_bulletins(
     if not include_read:
         base_filters.append(~is_dismissed_by_me)
 
-    # Branch filter: NULL = global (visible to all), or matching branch
+    # Branch filter: NULL = global bulletin (visible to all); branch-scoped
+    # users also see their own branch. A non-manager without a branch only
+    # sees global bulletins (fail-closed).
     user_branch = current_user.get("branch")
-    if user_branch is not None:
-        base_filters.append(
-            or_(Bulletin.branch.is_(None), Bulletin.branch == user_branch)
-        )
+    if not is_global_manager(current_user):
+        if user_branch is not None:
+            base_filters.append(
+                or_(Bulletin.branch.is_(None), Bulletin.branch == user_branch)
+            )
+        else:
+            base_filters.append(Bulletin.branch.is_(None))
 
     query = db.query(Bulletin, is_dismissed_by_me.label("is_read")).filter(
         *base_filters,
@@ -120,11 +132,14 @@ def bulletin_upload_pdf(
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Hanya file PDF yang diizinkan")
 
-    content = file.file.read()
+    content = file.file.read(10 * 1024 * 1024 + 1)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="File kosong")
     if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Ukuran file maksimal 10MB")
+        raise HTTPException(status_code=413, detail="Ukuran file maksimal 10MB")
+    # Validate PDF magic bytes; the extension alone is caller-controlled.
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="File bukan PDF yang valid")
 
     try:
         public_url = upload_pdf(content, file.filename)
@@ -137,15 +152,19 @@ def bulletin_upload_pdf(
 
 
 def _assert_bulletin_visible(bulletin: Bulletin, current_user: dict) -> None:
-    """Raise 404 kalau bulletin di luar scope user. Sama dengan pattern
-    branch-scope di seluruh app: ADMIN/SUPERVISOR hanya boleh akses bulletin
-    di branch-nya; MANAGER (branch=NULL) boleh akses semua termasuk global."""
-    user_branch = current_user.get("branch")
-    if user_branch is None:
-        return  # MANAGER global
+    """Raise 404 kalau bulletin di luar scope user.
+
+    - Global MANAGER (branch=NULL) sees everything.
+    - Global bulletins (branch=NULL) are visible to every authenticated user.
+    - Branch-scoped users only see their own branch.
+    - Fail-closed: a non-manager without a branch sees only global bulletins.
+    """
+    if is_global_manager(current_user):
+        return
     if bulletin.branch is None:
         return  # global bulletin
-    if bulletin.branch == user_branch:
+    user_branch = current_user.get("branch")
+    if user_branch is not None and bulletin.branch == user_branch:
         return
     raise HTTPException(
         status_code=404,

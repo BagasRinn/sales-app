@@ -1,0 +1,262 @@
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 50
+hide circle
+
+package "Data Master" {
+  class Branch {
+    +code: string
+    +nama: string
+    +is_active: bool
+    --
+    +update()
+    +enable() / disable()
+  }
+
+  class Supplier {
+    +name: string
+    +is_active: bool
+    +order_type: string
+    --
+    +set_active()
+    +set_order_type()
+  }
+
+  class Product {
+    +id: string
+    +branch: string
+    +nama_barang: string
+    +harga: int
+    +stok_sistem: int
+    +stok_booking: int
+    +stok_diterima: int
+    +nama_supplier: string
+    --
+    +sync_excel()
+    +update_stock()
+  }
+
+  class Customer {
+    +id: uuid
+    +branch: string
+    +kode: string
+    +nama_toko: string
+    +kode_area: string
+    --
+    +import_excel()
+    +assign_sales()
+  }
+}
+
+package "Pengguna dan Penugasan" {
+  class User {
+    +id: uuid
+    +username: string
+    +role: string
+    +nama: string
+    +branch: string
+    +is_active: bool
+    --
+    +login()
+    +refresh_token()
+  }
+
+  class SalesTarget {
+    +id: uuid
+    +user_id: uuid
+    +period: string
+    +target_type: string
+    +target_value: bigint
+    +incentive_amount: bigint
+    --
+    +set_target()
+  }
+
+  class CustomerAssignment {
+    +customer_id: uuid
+    +sales_id: uuid
+    +assigned_by: uuid
+    --
+    +assign()
+    +unassign()
+  }
+
+  class AreaAssignment {
+    +kode_area: string
+    +sales_id: uuid
+    +branch: string
+    +assigned_by: uuid
+    --
+    +assign()
+    +unassign()
+  }
+
+  class SupplierTarget {
+    +id: uuid
+    +branch: string
+    +supplier_name: string
+    +period: string
+    +target_value: bigint
+    --
+    +set_target()
+    +delete()
+  }
+}
+
+package "Transaksi Pesanan" {
+  class Order {
+    +id: uuid
+    +branch: string
+    +sales_id: uuid
+    +customer_id: uuid
+    +status: string
+    +order_type: string
+    +invoice_number: string
+    --
+    +create_draft()
+    +edit_items()
+    +submit()
+    +cancel()
+    +approve()
+    +reject()
+  }
+
+  class OrderItem {
+    +order_id: uuid
+    +product_id: string
+    +branch: string
+    +qty: int
+    +discount_percent: numeric
+    +discount2_percent: numeric
+    +discount3_percent: numeric
+    +up_price_nominal: int
+    --
+    +apply_discount()
+    +compute_subtotal()
+  }
+
+  class StokLog {
+    +branch: string
+    +product_id: string
+    +sumber: string
+    +field_terdampak: string
+    +delta: int
+    +nilai_sebelum: int
+    +nilai_sesudah: int
+    --
+    +log_change()
+  }
+
+  class CustomerRegistrationSubmission {
+    +id: uuid
+    +branch: string
+    +sales_id: uuid
+    +status: string
+    +nama_langganan: string
+    +kode_area: string
+    --
+    +check_duplicate()
+    +approve()
+    +reject()
+    +cancel()
+  }
+}
+
+package "Impor Data" {
+  class ImportLog {
+    +id: uuid
+    +user_id: string
+    +import_type: string
+    +branch: string
+    +file_name: string
+    +inserted: int
+    +updated: int
+    +skipped: int
+    --
+    +record_result()
+  }
+
+  class SyncValidationError {
+    +import_log_id: uuid
+    +row_number: int
+    +sku: string
+    +reason: string
+    --
+    +record()
+  }
+
+  class ImportedSale {
+    +import_log_id: uuid
+    +branch: string
+    +trans_no: string
+    +sale_date: date
+    +customer_kode: string
+    +product_kode: string
+    +qty: int
+    +total_amount: int
+    --
+    +import_excel()
+  }
+}
+
+package "Pengumuman" {
+  class Bulletin {
+    +id: uuid
+    +branch: string
+    +title: string
+    +description: string
+    +pdf_url: string
+    +expire_at: datetime
+    --
+    +upload_pdf()
+    +update()
+    +remove()
+  }
+
+  class BulletinDismiss {
+    +bulletin_id: uuid
+    +sales_id: uuid
+    +dismissed_at: datetime
+    --
+    +dismiss()
+  }
+}
+
+Branch "1" -- "0..*" User
+Branch "1" -- "0..*" Product
+Branch "1" -- "0..*" Customer
+
+User "1" -- "0..*" Order
+Customer "0..1" -- "0..*" Order
+Order "1" -- "0..*" OrderItem
+Product "1" -- "0..*" OrderItem
+
+Order "0..1" -- "0..*" StokLog
+Product "1" -- "0..*" StokLog
+
+User "1" -- "0..*" SalesTarget
+
+User "1" -- "0..*" CustomerAssignment
+Customer "1" -- "0..*" CustomerAssignment
+User "0..1" -- "0..*" CustomerAssignment : assigned_by
+
+User "1" -- "0..*" AreaAssignment
+User "0..1" -- "0..*" AreaAssignment : assigned_by
+
+User "1" -- "0..*" CustomerRegistrationSubmission
+Customer "0..1" -- "0..*" CustomerRegistrationSubmission : approved_customer_id
+Customer "0..1" -- "0..*" CustomerRegistrationSubmission : bareng_customer_id
+User "0..1" -- "0..*" CustomerRegistrationSubmission : reviewed_by
+
+ImportLog "1" -- "0..*" ImportedSale
+ImportLog "1" -- "0..*" SyncValidationError
+
+Bulletin "1" -- "0..*" BulletinDismiss
+User "1" -- "0..*" BulletinDismiss
+
+Supplier "0..1" .. "0..*" Product
+@enduml

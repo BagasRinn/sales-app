@@ -34,14 +34,17 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
     super.dispose();
   }
 
-  Future<void> _load({String? search}) async {
+  Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      // Tanpa parameter search: daftar penuh di-cache repository (10 menit),
+      // lalu pencarian difilter lokal di bawah supaya tidak ada request DB
+      // baru untuk setiap karakter yang diketik.
       final repo = context.read<CustomerRepository>();
-      final result = await repo.getMyCustomers(search: search);
+      final result = await repo.getMyCustomers();
       if (!mounted) return;
       setState(() {
         _customers = result;
@@ -85,7 +88,7 @@ class _StepPickCustomerState extends State<StepPickCustomer> {
                     )
                   : null,
             ),
-            onChanged: (v) => _load(search: v),
+            onChanged: (v) => setState(() => _search = v),
           ),
         ),
         Padding(

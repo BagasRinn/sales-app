@@ -52,9 +52,10 @@ void main() {
 
       // The trend text is rendered as-is (no arrow glyph in source — chip
       // just shows the supplied text). What we CAN verify: the chip's text
-      // widget carries AppColors.success (the foreground of the up chip).
+      // widget carries AppColors.successText (foreground of the up chip;
+      // AppBadge memakai varian teks, bukan warna solid, agar kontras).
       final trendText = tester.widget<Text>(find.text('+12%'));
-      expect(trendText.style?.color, AppColors.success);
+      expect(trendText.style?.color, AppColors.successText);
     });
 
     testWidgets('trend chip renders with error color when trendUp=false',
@@ -69,7 +70,7 @@ void main() {
       ));
 
       final trendText = tester.widget<Text>(find.text('-8%'));
-      expect(trendText.style?.color, AppColors.error);
+      expect(trendText.style?.color, AppColors.dangerText);
     });
 
     testWidgets('onTap fires callback', (tester) async {

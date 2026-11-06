@@ -1,6 +1,11 @@
 class AppConfig {
-  static const String baseUrl = 'https://sales-app-production-1872.up.railway.app/api/v1';
-  // static const String baseUrl = 'http://localhost:8000/api/v1';
+  /// Base URL API. Default ke server produksi, tapi bisa dioverride tanpa
+  /// mengubah kode lewat --dart-define, contoh:
+  ///   flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000/api/v1
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://sales-app-production-1872.up.railway.app/api/v1',
+  );
   static const Duration requestTimeout = Duration(seconds: 30);
 
   static const String tokenKey = 'access_token';

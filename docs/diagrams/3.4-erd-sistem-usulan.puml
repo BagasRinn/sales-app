@@ -1,0 +1,321 @@
+@startuml
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 50
+
+entity "branches" as branches {
+  * code : VARCHAR(20) <<PK>>
+  --
+  nama : VARCHAR(100)
+  is_active : BOOLEAN
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "users" as users {
+  * id : UUID <<PK>>
+  --
+  # branch : VARCHAR(20) <<FK>>
+  username : VARCHAR(50)
+  password_hash : VARCHAR
+  role : VARCHAR(10)
+  nama : VARCHAR(100)
+  is_active : BOOLEAN
+  token_version : INTEGER
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+  deleted_at : TIMESTAMP
+}
+
+entity "products" as products {
+  * id : VARCHAR <<PK>>
+  * branch : VARCHAR(20) <<PK, FK>>
+  --
+  nama_barang : VARCHAR
+  harga : INTEGER
+  stok_sistem : INTEGER
+  stok_booking : INTEGER
+  stok_diterima : INTEGER
+  kategori : VARCHAR
+  satuan : VARCHAR
+  nama_supplier : VARCHAR
+  order_type : VARCHAR(10)
+}
+
+entity "customers" as customers {
+  * id : UUID <<PK>>
+  --
+  # branch : VARCHAR(20) <<FK>>
+  kode : VARCHAR(50)
+  nama_toko : VARCHAR(200)
+  alamat : VARCHAR(500)
+  kode_area : VARCHAR(50)
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+  deleted_at : TIMESTAMP
+}
+
+entity "suppliers" as suppliers {
+  * name : VARCHAR <<PK>>
+  --
+  is_active : BOOLEAN
+  order_type : VARCHAR(10)
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "orders" as orders {
+  * id : UUID <<PK>>
+  --
+  # branch : VARCHAR(20) <<FK>>
+  # sales_id : UUID <<FK>>
+  # customer_id : UUID <<FK>>
+  status : VARCHAR(20)
+  order_type : VARCHAR(10)
+  invoice_number : VARCHAR(50)
+  store_name : VARCHAR(200)
+  store_contact : VARCHAR(50)
+  store_address : VARCHAR(500)
+  notes : VARCHAR(1000)
+  reject_reason : TEXT
+  cancelled_items : JSON
+  client_request_id : VARCHAR(128)
+  order_discount_type : VARCHAR(10)
+  order_discount_nominal : INTEGER
+  order_up_price_type : VARCHAR(10)
+  order_up_price_nominal : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "order_items" as order_items {
+  * id : UUID <<PK>>
+  --
+  # order_id : UUID <<FK>>
+  # product_id : VARCHAR <<FK>>
+  # branch : VARCHAR(20) <<FK>>
+  qty : INTEGER
+  discount_type : VARCHAR(10)
+  discount_percent : NUMERIC(10,4)
+  discount_nominal : INTEGER
+  discount2_type : VARCHAR(10)
+  discount2_percent : NUMERIC(10,4)
+  discount2_nominal : INTEGER
+  discount3_type : VARCHAR(10)
+  discount3_percent : NUMERIC(10,4)
+  discount3_nominal : INTEGER
+  up_price_type : VARCHAR(10)
+  up_price_percent : NUMERIC(10,4)
+  up_price_nominal : INTEGER
+}
+
+entity "stok_log" as stok_log {
+  * id : UUID <<PK>>
+  --
+  # branch : VARCHAR(20) <<FK>>
+  # product_id : VARCHAR <<FK>>
+  # actor_id : UUID <<FK>>
+  # order_id : UUID <<FK>>
+  sumber : VARCHAR(20)
+  field_terdampak : VARCHAR(20)
+  delta : INTEGER
+  nilai_sebelum : INTEGER
+  nilai_sesudah : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "customer_assignments" as customer_assignments {
+  * customer_id : UUID <<PK, FK>>
+  * sales_id : UUID <<PK, FK>>
+  --
+  # assigned_by : UUID <<FK>>
+  assigned_at : TIMESTAMP
+}
+
+entity "area_assignments" as area_assignments {
+  * kode_area : VARCHAR(50) <<PK>>
+  * sales_id : UUID <<PK, FK>>
+  * branch : VARCHAR(20) <<PK, FK>>
+  --
+  # assigned_by : UUID <<FK>>
+  assigned_at : TIMESTAMP
+}
+
+entity "sales_targets" as sales_targets {
+  * id : UUID <<PK>>
+  --
+  # user_id : UUID <<FK>>
+  period : VARCHAR(7)
+  target_type : VARCHAR(20)
+  target_value : BIGINT
+  incentive_amount : BIGINT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "supplier_targets" as supplier_targets {
+  * id : UUID <<PK>>
+  --
+  branch : VARCHAR(20)
+  supplier_name : VARCHAR
+  period : VARCHAR(7)
+  target_value : BIGINT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "customer_registration_submissions" as crs {
+  * id : UUID <<PK>>
+  --
+  # sales_id : UUID <<FK>>
+  # approved_customer_id : UUID <<FK>>
+  # bareng_customer_id : UUID <<FK>>
+  # reviewed_by : UUID <<FK>>
+  branch : VARCHAR(20)
+  status : VARCHAR(20)
+  reject_reason : TEXT
+  reviewed_at : TIMESTAMP
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+  --
+  nama_langganan : VARCHAR(200)
+  nomor_id_ktp : VARCHAR(50)
+  alamat_ktp : TEXT
+  nama_kontak_pemilik : VARCHAR(200)
+  telpon_hp : VARCHAR(50)
+  alamat_kirim : TEXT
+  propinsi : VARCHAR(100)
+  kecamatan : VARCHAR(100)
+  kota : VARCHAR(100)
+  kelurahan : VARCHAR(100)
+  area_route : VARCHAR(100)
+  kode_area : VARCHAR(50)
+  tipe_langganan : VARCHAR(50)
+  --
+  tipe_pembayaran : VARCHAR(20)
+  nama_pasar : VARCHAR(200)
+  jangka_kredit_hari : INTEGER
+  batas_kredit_rupiah : BIGINT
+  channel_kategori : VARCHAR(50)
+  --
+  key_account_ref_id : VARCHAR(50)
+  cluster_langganan : VARCHAR(100)
+  kode_salesman : VARCHAR(50)
+  nama_salesman : VARCHAR(200)
+  siklus_kunjungan : VARCHAR(100)
+  hari_kunjungan : VARCHAR(50)
+}
+
+entity "import_logs" as import_logs {
+  * id : UUID <<PK>>
+  --
+  branch : VARCHAR(20)
+  user_id : VARCHAR
+  nama : VARCHAR
+  import_type : VARCHAR
+  file_name : VARCHAR
+  total_rows : INTEGER
+  inserted : INTEGER
+  updated : INTEGER
+  skipped : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "sync_validation_errors" as sync_errors {
+  * id : UUID <<PK>>
+  --
+  # import_log_id : UUID <<FK>>
+  row_number : INTEGER
+  sku : VARCHAR
+  reason : VARCHAR(255)
+  created_at : TIMESTAMP
+}
+
+entity "imported_sales" as imported_sales {
+  * id : UUID <<PK>>
+  --
+  # import_log_id : UUID <<FK>>
+  branch : VARCHAR(20)
+  trans_no : VARCHAR(50)
+  sale_date : DATE
+  customer_kode : VARCHAR(50)
+  customer_nama : VARCHAR(200)
+  channel : VARCHAR(50)
+  kategori : VARCHAR(50)
+  customer_group : VARCHAR(50)
+  area : VARCHAR(50)
+  alamat : VARCHAR(500)
+  product_kode : VARCHAR(50)
+  product_nama : VARCHAR(200)
+  qty : INTEGER
+  satuan_jual : VARCHAR(50)
+  qtyi : INTEGER
+  satuani : VARCHAR(50)
+  diskon : INTEGER
+  net_per_unit : INTEGER
+  total_amount : INTEGER
+  sales_kode : VARCHAR(50)
+  sales_nama : VARCHAR(200)
+  supplier : VARCHAR(100)
+  created_at : TIMESTAMP
+}
+
+entity "bulletins" as bulletins {
+  * id : UUID <<PK>>
+  --
+  branch : VARCHAR(20)
+  title : VARCHAR(200)
+  description : TEXT
+  pdf_url : VARCHAR(500)
+  expire_at : TIMESTAMP
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "bulletin_dismisses" as bulletin_dismisses {
+  * id : UUID <<PK>>
+  --
+  # bulletin_id : UUID <<FK>>
+  # sales_id : UUID <<FK>>
+  dismissed_at : TIMESTAMP
+}
+
+branches |o--o{ users
+branches ||--o{ products
+branches ||--o{ customers
+branches ||--o{ orders
+branches ||--o{ area_assignments
+branches ||--o{ crs
+branches ||--o{ supplier_targets
+branches |o--o{ import_logs
+branches |o--o{ bulletins
+
+users ||--o{ orders
+customers |o--o{ orders
+orders ||--o{ order_items
+products ||--o{ order_items
+
+products ||--o{ stok_log
+orders |o--o{ stok_log
+users |o--o{ stok_log : actor
+
+users ||--o{ sales_targets
+
+users ||--o{ customer_assignments : sales
+customers ||--o{ customer_assignments
+users |o--o{ customer_assignments : assigned_by
+
+users ||--o{ area_assignments : sales
+users |o--o{ area_assignments : assigned_by
+
+users ||--o{ crs : sales
+users |o--o{ crs : reviewer
+customers |o--o{ crs : approved_customer_id
+customers |o--o{ crs : bareng_customer_id
+
+import_logs ||--o{ imported_sales
+import_logs |o--o{ sync_errors
+
+bulletins ||--o{ bulletin_dismisses
+users ||--o{ bulletin_dismisses : sales
+@enduml

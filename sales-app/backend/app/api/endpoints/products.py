@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer, cast, Date, or_, select
 from typing import List, Optional
@@ -16,12 +16,83 @@ from app.schemas.schemas import (
     SyncResultResponse,
     ImportLogResponse,
 )
-from app.core.security import require_admin, require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_admin,
+    require_admin_or_supervisor,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+    effective_scope_role,
+    is_global_manager,
+    CurrentUser,
+)
 from app.core.timezone import local_day_utc_bounds
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+# Hard cap for uploaded Excel files (10 MiB). Prevents memory-exhaustion DoS.
+MAX_EXCEL_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+def _resolve_product_query(
+    db: Session,
+    product_id: str,
+    requested_branch: Optional[str],
+    current_user: dict,
+):
+    """Resolve the branch of a single-product operation (fail-closed).
+
+    - Global MANAGER may pass `?branch=`. Without it, the product must exist in
+      exactly one branch; otherwise the request is ambiguous (409) instead of
+      silently mutating an arbitrary branch's row.
+    - Branch-scoped users are always pinned to their own branch and may never
+      override it via `?branch=`.
+    """
+    role = effective_scope_role(current_user)
+    user_branch = current_user.get("branch")
+
+    if role == "MANAGER":
+        query = db.query(Product).filter(Product.id == product_id)
+        if requested_branch:
+            if not branch_constants.is_valid_branch(requested_branch):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Branch tidak valid: {requested_branch}",
+                )
+            return query.filter(Product.branch == requested_branch)
+
+        branches = [
+            row[0]
+            for row in query.with_entities(Product.branch).distinct().all()
+        ]
+        if not branches:
+            raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+        if len(branches) > 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Produk ini ada di beberapa cabang. Sertakan parameter "
+                    "branch untuk memilih cabang."
+                ),
+            )
+        return query.filter(Product.branch == branches[0])
+
+    # Branch-scoped caller (ADMIN / SUPERVISOR / SALES).
+    if not user_branch:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun Anda belum memiliki cabang. Hubungi manager.",
+        )
+    if requested_branch and requested_branch != user_branch:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tidak memiliki akses ke data cabang lain",
+        )
+    return db.query(Product).filter(
+        Product.id == product_id, Product.branch == user_branch
+    )
 
 
 def _get_4p_suppliers(db: Optional[Session] = None) -> List[str]:
@@ -324,7 +395,15 @@ def import_excel(
             detail="Format file harus .xlsx"
         )
 
-    contents = file.file.read()
+    contents = file.file.read(MAX_EXCEL_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_EXCEL_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "File terlalu besar. Maksimal "
+                f"{MAX_EXCEL_UPLOAD_BYTES // (1024 * 1024)} MB."
+            ),
+        )
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="File kosong")
 
@@ -564,11 +643,7 @@ def get_product(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_auth),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    # Filter by branch: use explicit branch if provided, otherwise user's branch
-    lookup_branch = branch or current_user.get("branch")
-    if lookup_branch:
-        query = query.filter(Product.branch == lookup_branch)
+    query = _resolve_product_query(db, product_id, branch, current_user)
     product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
@@ -609,10 +684,7 @@ def update_product(
 ):
     """Partial update untuk produk - admin/supervisor. Field yang None di-skip.
     order_type hanya menerima 'REGULER' atau '4P'."""
-    query = db.query(Product).filter(Product.id == product_id)
-    lookup_branch = branch or current_user.get("branch")
-    if lookup_branch:
-        query = query.filter(Product.branch == lookup_branch)
+    query = _resolve_product_query(db, product_id, branch, current_user)
     product = (
         query
         .with_for_update()
@@ -674,10 +746,7 @@ def delete_product(
     _current_user: CurrentUser = Depends(require_admin),
 ):
     from app.models.models import OrderItem
-    query = db.query(Product).filter(Product.id == product_id)
-    lookup_branch = branch or ""
-    if lookup_branch:
-        query = query.filter(Product.branch == lookup_branch)
+    query = _resolve_product_query(db, product_id, branch, _current_user)
     product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
@@ -698,10 +767,7 @@ def update_product_stock(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_write_access),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    lookup_branch = branch or current_user.get("branch")
-    if lookup_branch:
-        query = query.filter(Product.branch == lookup_branch)
+    query = _resolve_product_query(db, product_id, branch, current_user)
     product = (
         query
         .with_for_update()

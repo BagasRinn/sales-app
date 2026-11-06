@@ -70,8 +70,8 @@ void main() {
       expect(find.text('Ringkasan Sistem'), findsOneWidget);
       expect(find.text('Pesanan Hari Ini'), findsOneWidget);
       expect(find.text('Data Master'), findsOneWidget);
-      // 5 kartu order hari ini + 3 kartu data master.
-      expect(find.byType(AppStatCard), findsNWidgets(8));
+      // 5 kartu order hari ini + 4 kartu data master.
+      expect(find.byType(AppStatCard), findsNWidgets(9));
     });
 
     testWidgets('StatsTab MANAGER $label: kartu performa tanpa overflow',

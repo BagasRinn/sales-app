@@ -19,7 +19,14 @@ from app.schemas.schemas import (
     CustomerResponse,
     SalesAssignmentItem,
 )
-from app.core.security import require_admin_or_supervisor, require_auth, require_write_access, apply_branch_filter, CurrentUser
+from app.core.security import (
+    require_admin_or_supervisor,
+    require_auth,
+    require_write_access,
+    apply_branch_filter,
+    branch_guard,
+    CurrentUser,
+)
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -28,7 +35,7 @@ router = APIRouter(prefix="/sales", tags=["Sales"])
 def list_sales_customers(
     sales_id: UUID,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """Semua customer yang visible untuk sales ini (hybrid: area + direct override).
     Admin + supervisor only - untuk tab 'Per Sales' di admin web."""
@@ -38,6 +45,9 @@ def list_sales_customers(
     ).first()
     if not user:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+    # Branch-scoped callers may only inspect sales in their own branch.
+    branch_guard(current_user, user.branch)
 
     # Subquery: area yang di-cover sales ini
     my_areas_subq = (
@@ -102,8 +112,7 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
         )
         .filter(AreaAssignment.kode_area.in_(select(customer_areas_subq.c.kode_area)))
     )
-    if user_branch is not None:
-        aa_q = aa_q.filter(AreaAssignment.branch == user_branch)
+    aa_q = apply_branch_filter(aa_q, AreaAssignment, current_user)
     rows = aa_q.order_by(AreaAssignment.kode_area, User.username).all()
     # Group by kode_area
     grouped: dict[str, List[SalesAssignmentItem]] = {}
@@ -127,7 +136,7 @@ def _list_area_assignments(db: Session, current_user: dict) -> List[AreaAssignme
 @router.get("/area-assignments", response_model=List[AreaAssignmentListItem])
 def list_area_assignments(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """List semua distinct kode_area (dari customer) dengan sales assigned-nya.
     Branch-scoped — hanya dari branch user yang login. MANAGER (branch=NULL)
@@ -139,10 +148,9 @@ def list_area_assignments(
 def list_area_assignment_detail(
     kode_area: str,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_auth),
+    current_user: CurrentUser = Depends(require_write_access),
 ):
     """List sales yang di-assign ke kode_area tertentu. Branch-scoped."""
-    user_branch = current_user.get("branch")
     q = (
         db.query(AreaAssignment, User)
         .outerjoin(
@@ -151,8 +159,7 @@ def list_area_assignment_detail(
         )
         .filter(AreaAssignment.kode_area == kode_area)
     )
-    if user_branch is not None:
-        q = q.filter(AreaAssignment.branch == user_branch)
+    q = apply_branch_filter(q, AreaAssignment, current_user)
     rows = q.order_by(User.username).all()
     return [
         SalesAssignmentItem(

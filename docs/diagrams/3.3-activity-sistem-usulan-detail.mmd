@@ -1,0 +1,82 @@
+flowchart LR
+    subgraph L1["Sales"]
+        direction TB
+        M(((Mulai))) --> S1[Login]
+        S1 --> S2{Autentikasi}
+        S2 -- Gagal --> S1
+        S2 -- Berhasil --> S3[Melihat katalog dan stok]
+        S3 --> S4[Memilih toko]
+        S4 --> S5[Menyusun item pesanan]
+        S5 --> S6[Simpan sebagai DRAFT]
+        S6 --> S7{Edit, hapus, atau kirim?}
+        S7 -- Edit --> S5
+        S7 -- Hapus --> S8[Hapus DRAFT]
+        S8 --> S3
+        S7 -- Kirim --> S9[Submit pesanan]
+        S9 --> S10[Memantau status pesanan]
+        S10 --> S11{Batalkan pesanan?}
+        S11 -- Ya --> S12[Batalkan pesanan PENDING]
+        S11 -- Tidak --> S13([Selesai])
+        S12 --> S13
+        S3 --> S14[Mengajukan toko baru]
+    end
+
+    subgraph L2["Admin"]
+        direction TB
+        A1[Login] --> A2{Autentikasi}
+        A2 -- Gagal --> A1
+        A2 -- Berhasil --> A3[Verifikasi pesanan PENDING]
+        A3 --> A4{Pesanan disetujui?}
+        A4 -- Tidak --> A5[Menolak pesanan]
+        A4 -- Ya --> A6[Menyetujui pesanan]
+        A6 --> A7[Input pesanan ke sistem utama]
+        A2 -- Berhasil --> A8[Kelola data master]
+        A8 --> A9[Impor stok dan pelanggan]
+        A2 -- Berhasil --> A10[Verifikasi pengajuan toko]
+        A2 -- Berhasil --> A11[Melihat laporan]
+        A2 -- Berhasil --> A12[Kelola bulletin]
+    end
+
+    subgraph L3["Sistem"]
+        direction TB
+        B1[Menahan stok saat DRAFT dibuat]
+        B2[Melepas stok saat DRAFT dihapus]
+        B3[Menyesuaikan stok saat item diedit]
+        B4[Mengubah status pesanan]
+        B5[(Database)]
+        B1 --> B5
+        B2 --> B5
+        B3 --> B5
+        B4 --> B5
+    end
+
+    subgraph L4["Supervisor"]
+        direction TB
+        V1[Login] --> V2{Autentikasi}
+        V2 -- Gagal --> V1
+        V2 -- Berhasil --> V3[Memantau pesanan cabang]
+        V3 --> V4[Memantau performa sales]
+    end
+
+    subgraph L5["Manager"]
+        direction TB
+        G1[Login] --> G2{Autentikasi}
+        G2 -- Gagal --> G1
+        G2 -- Berhasil --> G3[Melihat laporan lintas cabang]
+        G3 --> G4[Membandingkan performa cabang]
+        G4 --> E(((Selesai)))
+    end
+
+    S6 -->|stok ditahan| B1
+    S5 -->|item berubah| B3
+    S8 -->|stok dilepas| B2
+    S9 -->|status PENDING| B4
+    S9 -->|pesanan masuk| A3
+    A5 -->|status REJECTED dan stok dilepas| B4
+    A6 -->|status APPROVED dan stok diterima| B4
+    S12 -->|status CANCELLED dan stok dilepas| B4
+    S14 --> A10
+    A9 --> B5
+    B4 -->|status terbaru| S10
+    B5 --> V3
+    B5 --> G3

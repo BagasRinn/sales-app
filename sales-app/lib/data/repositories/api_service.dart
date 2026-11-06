@@ -17,6 +17,8 @@ class ApiService {
   String? _accessToken;
   void Function()? onTokenExpired;
 
+  String? get accessToken => _accessToken;
+
   void setAccessToken(String? token) {
     _accessToken = token;
   }

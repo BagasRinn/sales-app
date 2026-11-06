@@ -89,7 +89,10 @@ class AdminRepository {
       'limit': limit.toString(),
     };
     final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
-    final data = await _api.get('/orders?status=DRAFT$qs', cancelToken: cancelToken);
+    final data = await _api.get(
+      '/orders?status=DRAFT$qs',
+      cancelToken: cancelToken,
+    );
     final orders = data is Map<String, dynamic>
         ? (data['orders'] as List? ?? const [])
         : (data as List? ?? const []);
@@ -398,8 +401,30 @@ class AdminRepository {
     return _api.postFile('/sales-imports/excel', fileBytes, fileName);
   }
 
-  Future<Map<String, dynamic>> getImportedSalesSummary({String? month}) async {
-    final queryString = month != null && month.isNotEmpty ? 'month=$month' : '';
+  /// Cheap freshness probe for the imported-sales summary.
+  /// Returns `{month, scope, version, updated_at}`.
+  Future<Map<String, dynamic>> getImportedSalesVersion({
+    required String month,
+  }) async {
+    final data = await _api.get(
+      '/sales-imports/version?month=${Uri.encodeQueryComponent(month)}',
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Aggregated imported-sales summary. [limit] is the top-N per breakdown
+  /// (server-side LIMIT). [include] optionally narrows the sections sent.
+  Future<Map<String, dynamic>> getImportedSalesSummary({
+    String? month,
+    int limit = 10,
+    String? include,
+  }) async {
+    final params = <String, String>{'limit': limit.toString()};
+    if (month != null && month.isNotEmpty) params['month'] = month;
+    if (include != null && include.isNotEmpty) params['include'] = include;
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
     final data = await _api.get('/sales-imports/summary?$queryString');
     return Map<String, dynamic>.from(data as Map);
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../core/config.dart';
 import '../../core/design_system.dart';
 import '../../core/datetime_utils.dart';
 import '../../core/responsive.dart';
@@ -112,8 +113,10 @@ class _SyncTabState extends State<SyncTab> {
                 readOnly: widget.readOnly,
               ),
 
-              // Sales Report Import Card
-              if (!widget.readOnly)
+              // Sales Report Import Card — only when the Data Penjualan
+              // feature (analysis tab) is enabled; otherwise users could
+              // import data they cannot view.
+              if (!widget.readOnly && AppConfig.enableImportedSales)
                 AppCard(
                   child: Padding(
                     padding: const EdgeInsets.all(28),
@@ -288,6 +291,10 @@ class _SyncTabState extends State<SyncTab> {
     }
     final success = await provider.importSalesExcel(file.bytes!, file.name);
     if (!context.mounted) return;
+    // Both outcomes create an ImportLog row (a failed import records the
+    // validation errors), so refresh history and error sections either way.
+    _historyKey.currentState?._refresh();
+    _errorsKey.currentState?._refresh();
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1122,7 +1129,11 @@ class _FlexImportLogRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  type == 'PRODUCT' ? 'Produk' : 'Toko',
+                  type == 'PRODUCT'
+                      ? 'Produk'
+                      : type == 'SALES'
+                      ? 'Penjualan'
+                      : 'Toko',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: type == 'PRODUCT'
                         ? AppColors.info
@@ -1219,7 +1230,11 @@ class _ImportLogCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  type == 'PRODUCT' ? 'Produk' : 'Toko',
+                  type == 'PRODUCT'
+                      ? 'Produk'
+                      : type == 'SALES'
+                      ? 'Penjualan'
+                      : 'Toko',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: type == 'PRODUCT'
                         ? AppColors.info

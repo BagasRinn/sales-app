@@ -1,0 +1,23 @@
+flowchart LR
+    subgraph Klien["Lapisan Klien"]
+        M[Mobile Sales<br/>Android, iOS, Windows]
+        W[Admin Web<br/>Peramban]
+    end
+
+    subgraph Layanan["Lapisan Layanan"]
+        API[Backend API<br/>FastAPI + SQLAlchemy]
+    end
+
+    subgraph Data["Lapisan Data"]
+        DB[(PostgreSQL)]
+        XLS[Berkas Excel<br/>dari sistem utama]
+    end
+
+    M -->|REST + JWT| API
+    W -->|REST + JWT| API
+    API --> DB
+    XLS -->|impor oleh admin| W
+    W --> API
+
+    SYS[Sistem Utama<br/>invoice dan gudang]
+    W -.->|input manual pesanan disetujui| SYS

@@ -5,9 +5,6 @@ import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../providers/admin_provider.dart';
 
-/// Tab "Data Penjualan": melihat & menganalisis data hasil import laporan
-/// penjualan dari file Excel (admin_web import feature). Admin bisa upload file,
-/// Supervisor/Manager bisa melihat analisis per bulan.
 class ImportedSalesTab extends StatefulWidget {
   const ImportedSalesTab({super.key, this.readOnly = false});
 
@@ -19,7 +16,7 @@ class ImportedSalesTab extends StatefulWidget {
 
 class _ImportedSalesTabState extends State<ImportedSalesTab> {
   final _monthController = TextEditingController();
-  final bool _importing = false;
+  bool _importing = false;
 
   @override
   void initState() {
@@ -33,10 +30,12 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _loadSummary() async {
+  Future<void> _loadSummary({bool forceRefresh = false, int? limit}) async {
     await context.read<AdminProvider>().loadImportedSalesSummary(
-          month: _monthController.text.trim(),
-        );
+      month: _monthController.text.trim(),
+      forceRefresh: forceRefresh,
+      limit: limit,
+    );
   }
 
   Future<void> _pickAndImport(BuildContext context) async {
@@ -60,8 +59,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     }
     if (!context.mounted) return;
     final provider = context.read<AdminProvider>();
+    setState(() => _importing = true);
     final success = await provider.importSalesExcel(file.bytes!, file.name);
     if (!context.mounted) return;
+    setState(() => _importing = false);
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,11 +70,16 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
           backgroundColor: AppColors.success,
         ),
       );
-      await _loadSummary();
+      // Force a re-download only when the import changed data (versions
+      // bumped). A pure re-import keeps the cached snapshot valid, so the
+      // normal version probe can skip the summary GET.
+      final versions = provider.salesImportResult?['versions'];
+      final changed = versions is! List || versions.isNotEmpty;
+      await _loadSummary(forceRefresh: changed);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.read<AdminProvider>().errorMessage ?? 'Import gagal'),
+          content: Text(provider.errorMessage ?? 'Import gagal'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -114,26 +120,33 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                   readOnly: widget.readOnly,
                   onApply: _loadSummary,
                 ),
+                _BreakdownLimitBar(
+                  limit: provider.importedSalesLimit,
+                  onChanged: (value) => _loadSummary(limit: value),
+                ),
                 _StatsGrid(summary: summary),
                 _BreakdownCard(
                   title: 'Rekap per Produk',
                   rows: _asMapList(summary['by_product']),
                   label: (r) =>
-                      '${r['product_nama'] ?? ''} (${r['product_kode'] ?? ''})'.trim(),
+                      '${r['product_nama'] ?? ''} (${r['product_kode'] ?? ''})'
+                          .trim(),
                   value: (r) => '${_toInt(r['qty'])} x ${_toInt(r['revenue'])}',
                 ),
                 _BreakdownCard(
                   title: 'Rekap per Sales',
                   rows: _asMapList(summary['by_sales']),
                   label: (r) =>
-                      '${r['sales_nama'] ?? ''} (${r['sales_kode'] ?? ''})'.trim(),
+                      '${r['sales_nama'] ?? ''} (${r['sales_kode'] ?? ''})'
+                          .trim(),
                   value: (r) => '${_toInt(r['qty'])} x ${_toInt(r['revenue'])}',
                 ),
                 _BreakdownCard(
                   title: 'Rekap per Pelanggan',
                   rows: _asMapList(summary['by_customer']),
                   label: (r) =>
-                      '${r['customer_nama'] ?? ''} (${r['customer_kode'] ?? ''})'.trim(),
+                      '${r['customer_nama'] ?? ''} (${r['customer_kode'] ?? ''})'
+                          .trim(),
                   value: (r) => '${_toInt(r['qty'])} x ${_toInt(r['revenue'])}',
                 ),
                 _BreakdownCard(
@@ -146,7 +159,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
               ],
               if (!widget.readOnly) ...[
                 const SizedBox(height: AppSpacing.lg),
-                _ImportCard(onPick: () => _pickAndImport(context), importing: _importing),
+                _ImportCard(
+                  onPick: () => _pickAndImport(context),
+                  importing: _importing,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 if (provider.salesImportResult != null)
                   _ImportResultCard(result: provider.salesImportResult!),
@@ -232,10 +248,35 @@ class _PeriodCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          AppButton(
-            label: 'Muat',
-            icon: Icons.refresh,
-            onPressed: onApply,
+          AppButton(label: 'Muat', icon: Icons.refresh, onPressed: onApply),
+        ],
+      ),
+    );
+  }
+}
+
+class _BreakdownLimitBar extends StatelessWidget {
+  final int limit;
+  final ValueChanged<int> onChanged;
+
+  const _BreakdownLimitBar({required this.limit, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final expanded = limit >= 50;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Menampilkan $limit teratas per kategori.',
+              style: AppTextStyles.bodyMuted,
+            ),
+          ),
+          TextButton(
+            onPressed: () => onChanged(expanded ? 10 : 50),
+            child: Text(expanded ? 'Tampilkan 10' : 'Tampilkan 50'),
           ),
         ],
       ),
@@ -310,18 +351,24 @@ class _BreakdownCard extends StatelessWidget {
               children: [
                 for (final r in rows) ...[
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs + 2),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs + 2,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: Text(label(r), style: AppTextStyles.body)),
+                        Expanded(
+                          child: Text(label(r), style: AppTextStyles.body),
+                        ),
                         const SizedBox(width: AppSpacing.sm + 4),
                         Flexible(
                           child: Text(
                             value(r),
                             textAlign: TextAlign.end,
-                            style: AppTextStyles.h3.copyWith(color: AppColors.primary),
+                            style: AppTextStyles.h3.copyWith(
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                       ],
@@ -351,7 +398,7 @@ class _ImportCard extends StatelessWidget {
         icon: Icons.folder_open,
         isLoading: importing,
         isFullWidth: true,
-        onPressed: onPick,
+        onPressed: importing ? null : onPick,
       ),
     );
   }
@@ -366,6 +413,7 @@ class _ImportResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final success = result['success'] == true;
     final inserted = _toInt(result['inserted']);
+    final updated = _toInt(result['updated']);
     final skipped = _toInt(result['skipped']);
     final totalRows = _toInt(result['total_rows']);
 
@@ -373,7 +421,8 @@ class _ImportResultCard extends StatelessWidget {
       title: 'Hasil Import',
       child: Text(
         success
-            ? 'Berhasil memproses $totalRows baris — $inserted disisipkan, $skipped dilewati.'
+            ? 'Berhasil memproses $totalRows baris — $inserted baru, '
+                '$updated diperbarui, $skipped dilewati.'
             : 'Proses import tidak selesai. Periksa error pada riwayat import.',
         style: AppTextStyles.body,
       ),

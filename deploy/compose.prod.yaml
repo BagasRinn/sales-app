@@ -1,0 +1,112 @@
+# Stack produksi: PostgreSQL 17 + FastAPI + Caddy.
+#
+# Jalankan dari folder deploy/:
+#   docker compose --env-file .env.production -f compose.prod.yaml up -d --build
+#
+# Semua nilai rahasia ada di .env.production (jangan commit).
+# Variabel ${API_DOMAIN} diambil dari file yang sama lewat --env-file.
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: .env.production
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - timezone=UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    stop_grace_period: 1m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [internal]
+    # Sengaja TIDAK ada "ports:" — database tidak boleh terbuka ke internet.
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [internal, web]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      # Hanya domain yang diteruskan ke Caddy; rahasia tidak ikut.
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN di deploy/.env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [web]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    internal: true
+  web:

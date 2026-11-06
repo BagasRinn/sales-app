@@ -21,6 +21,7 @@ from app.core.security import (
     require_auth,
     require_supervisor_or_manager_global,
     apply_branch_filter,
+    branch_guard,
     CurrentUser,
 )
 
@@ -82,12 +83,9 @@ def upsert_supplier_target(
     pick any branch. Nama harus terdaftar di master suppliers/products."""
     supplier_name = _require_known_supplier(supplier_name, db)
     # Branch access check: branch-scoped supervisor can't write targets for a
-    # different branch. (MANAGER has branch=None → not restricted.)
-    if current_user.get("branch") is not None and current_user["branch"] != branch:
-        raise HTTPException(
-            status_code=403,
-            detail="Tidak bisa mengatur target untuk branch lain",
-        )
+    # different branch. Only a global MANAGER may pick any branch, and a
+    # branchless non-manager is denied (fail-closed).
+    branch_guard(current_user, branch)
     if payload.target_value < 0:
         raise HTTPException(
             status_code=400,
@@ -130,11 +128,7 @@ def delete_supplier_target(
     current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Delete a supplier's target for a (branch, period)."""
-    if current_user.get("branch") is not None and current_user["branch"] != branch:
-        raise HTTPException(
-            status_code=403,
-            detail="Tidak bisa menghapus target untuk branch lain",
-        )
+    branch_guard(current_user, branch)
     row = (
         db.query(SupplierTarget)
         .filter(
