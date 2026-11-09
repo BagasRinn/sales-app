@@ -26,27 +26,50 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.branch import is_valid_branch
 from app.core.security import is_global_manager
 from app.models.models import SalesImportVersion
 
 GLOBAL_SCOPE = "GLOBAL"
 
 
-def resolve_scope(current_user: Dict[str, Any]) -> str:
+def resolve_scope(
+    current_user: Dict[str, Any],
+    branch: Optional[str] = None,
+) -> str:
     """Return the version scope for the current user.
 
-    Global MANAGER -> ``GLOBAL``; everyone else -> their branch.
+    Global MANAGER -> ``GLOBAL`` by default, or the requested branch when the
+    dashboard branch filter is used. Everyone else -> their own branch; a
+    branch override is rejected so a branch-scoped user can never read another
+    branch's data.
+
     Fail closed when a non-manager account has no branch.
     """
+    requested = branch.strip().upper() if branch and branch.strip() else None
+
     if is_global_manager(current_user):
-        return GLOBAL_SCOPE
-    branch = current_user.get("branch")
-    if not branch:
+        if requested is None or requested == GLOBAL_SCOPE:
+            return GLOBAL_SCOPE
+        if not is_valid_branch(requested):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cabang tidak dikenal",
+            )
+        return requested
+
+    user_branch = current_user.get("branch")
+    if not user_branch:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Akun Anda belum memiliki cabang. Hubungi manager.",
         )
-    return branch
+    if requested is not None and requested != str(user_branch).upper():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Anda hanya dapat melihat data cabang sendiri.",
+        )
+    return user_branch
 
 
 def parse_month(month: Optional[str]) -> Tuple[str, datetime, datetime]:

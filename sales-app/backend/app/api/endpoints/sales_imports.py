@@ -2,7 +2,7 @@
 
 Endpoint:
 
-* ``POST /sales-imports/excel`` — upload .xlsx, upsert rows, bump versions
+* ``POST /sales-imports/excel`` - upload .xlsx/.xls, upsert rows, bump versions
   only for data that actually changed.
 * ``GET  /sales-imports/version`` — tiny, no-store version probe.
 * ``GET  /sales-imports/summary`` — reads the precomputed top-N snapshot.
@@ -29,14 +29,19 @@ from app.services.sales_import_versions import (
     parse_month,
     resolve_scope,
 )
-from app.services.sales_summary_service import ensure_summary, read_summary
+from app.services.sales_summary_service import (
+    ensure_summary,
+    read_daily_series,
+    read_sales_daily_series,
+    read_summary,
+)
 
 router = APIRouter(prefix="/sales-imports", tags=["Sales Imports"])
 
 # Hard cap for uploaded Excel files (10 MiB) to avoid memory-exhaustion DoS.
 MAX_EXCEL_UPLOAD_BYTES = 10 * 1024 * 1024
 
-_VALID_SECTIONS = {"product", "sales", "customer", "channel"}
+_VALID_SECTIONS = {"product", "sales", "customer", "channel", "day", "sales_day"}
 
 
 def _parse_include(include: Optional[str]) -> Set[str]:
@@ -60,8 +65,8 @@ def import_sales_excel(
     current_user: CurrentUser = Depends(require_write_access),
 ):
     """
-    Upload file Excel (.xlsx) berisi laporan penjualan → import ke tabel
-    `imported_sales`.
+    Upload file Excel (.xlsx atau .xls) berisi laporan penjualan → import ke
+    tabel `imported_sales`.
 
     Import bersifat idempotent: baris yang sudah ada dicocokkan lewat
     `dedupe_key`, sehingga file yang sama tidak menggandakan data. Baris yang
@@ -71,8 +76,12 @@ def import_sales_excel(
     versi ringkasan). Import gagal tidak menaikkan versi, dan re-import yang
     tidak mengubah data tidak menaikkan versi sama sekali.
     """
-    if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Format file harus .xlsx")
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+        raise HTTPException(
+            status_code=400,
+            detail="Format file harus .xlsx atau .xls",
+        )
 
     contents = file.file.read(MAX_EXCEL_UPLOAD_BYTES + 1)
     if len(contents) > MAX_EXCEL_UPLOAD_BYTES:
@@ -128,15 +137,19 @@ def import_sales_excel(
 def imported_sales_version(
     response: Response,
     month: Optional[str] = None,
+    branch: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_write_access),
 ):
     """Return the current summary version for (scope, month).
 
+    A global MANAGER may pass ``branch`` to probe a single branch instead of
+    GLOBAL. Branch-scoped users can only pass their own branch.
+
     Must never be cached by browsers/proxies — it is the freshness signal.
     """
     normalized, _, _ = parse_month(month)
-    scope = resolve_scope(current_user)
+    scope = resolve_scope(current_user, branch)
     version, updated_at = get_version(db, scope, normalized)
 
     if response is not None:
@@ -154,6 +167,7 @@ def imported_sales_version(
 def imported_sales_summary(
     response: Response,
     month: Optional[str] = None,
+    branch: Optional[str] = None,
     limit: int = Query(10, ge=1, le=100),
     include: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -166,9 +180,17 @@ def imported_sales_summary(
     ada atau versinya tertinggal (data lama / import baru), snapshot dibangun
     sekali secara lazy. `limit` membatasi jumlah baris per breakdown (top-N by
     revenue). `include` memilih breakdown yang dikirim (hemat egress).
+    ``by_day`` (include=day) menambahkan deret omzet harian untuk grafik tren;
+    kuerinya dibatasi ke satu bulan dan mengembalikan maksimal ~31 baris.
+    ``by_sales_day`` (include=sales_day) menambahkan deret harian untuk top 10
+    sales, dipakai grafik multi-garis "Per Sales".
+
+    ``branch`` hanya berlaku untuk global MANAGER: kosong = agregat GLOBAL,
+    kode cabang = data cabang tersebut. Role branch-scoped tidak dapat
+    memakainya untuk membaca cabang lain.
     """
     normalized, start, month_end = parse_month(month)
-    scope = resolve_scope(current_user)
+    scope = resolve_scope(current_user, branch)
     version, updated_at = get_version(db, scope, normalized)
     sections = _parse_include(include)
 
@@ -177,6 +199,14 @@ def imported_sales_summary(
 
     ensure_summary(db, scope, normalized, start, month_end, version)
     summary = read_summary(db, scope, normalized, sections, limit)
+    by_day = (
+        read_daily_series(db, scope, start, month_end) if "day" in sections else []
+    )
+    by_sales_day = (
+        read_sales_daily_series(db, scope, start, month_end)
+        if "sales_day" in sections
+        else []
+    )
 
     return {
         "month": normalized,
@@ -194,4 +224,6 @@ def imported_sales_summary(
         "by_sales": summary["by_sales"],
         "by_customer": summary["by_customer"],
         "by_channel": summary["by_channel"],
+        "by_day": by_day,
+        "by_sales_day": by_sales_day,
     }

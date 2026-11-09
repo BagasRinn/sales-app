@@ -32,6 +32,7 @@ _ensure_imported_sales_dedupe_key()
 
 APP_HEADERS = [
     "Tanggal",
+    "Trans No",
     "Cabang",
     "Kode Pelanggan",
     "Nama Pelanggan",
@@ -75,7 +76,11 @@ def _cleanup() -> None:
             )
         )
         conn.execute(
-            text("DELETE FROM imported_sales WHERE trans_no LIKE :p"),
+            text(
+                "DELETE FROM imported_sales WHERE trans_no LIKE :p "
+                "OR import_log_id IN "
+                "(SELECT id FROM import_logs WHERE file_name LIKE :p)"
+            ),
             {"p": f"{TEST_PREFIX}%"},
         )
         conn.execute(
@@ -143,11 +148,13 @@ def _row(
     qty: int,
     total: int,
     branch: str = "BANJARMASIN",
+    sales_nama: str = "Budi",
+    sale_date: str | None = None,
 ) -> list:
     return [
-        f"{TEST_MONTH}-15", branch, "C001", "Toko A", product,
+        sale_date or f"{TEST_MONTH}-15", trans_no, branch, "C001", "Toko A", product,
         f"Produk {product}", qty, "pcs", 10000, total, 0, 0, 0, 0, 0,
-        total, "REGULER", "Budi", "Supplier A",
+        total, "REGULER", sales_nama, "Supplier A",
     ]
 
 
@@ -165,9 +172,15 @@ def _import(client: TestClient, token: str, rows: list[list]):
     )
 
 
-def _version(client: TestClient, token: str, month: str = TEST_MONTH):
+def _version(
+    client: TestClient,
+    token: str,
+    month: str = TEST_MONTH,
+    query: str = "",
+):
+    suffix = f"&{query}" if query else ""
     return client.get(
-        f"{API}/sales-imports/version?month={month}",
+        f"{API}/sales-imports/version?month={month}{suffix}",
         headers=_headers(token),
     )
 
@@ -257,6 +270,17 @@ def test_import_bumps_branch_and_global_versions():
         assert data["imported_rows"] == 2
         assert data["by_product"][0]["product_kode"] == "P001"
         assert data["by_product"][0]["revenue"] == 20000
+        # Daily series feeds the analytics trend chart. All fixture rows share
+        # one sale date, so the series collapses to a single bucket.
+        assert data["by_day"] == [
+            {"date": f"{TEST_MONTH}-15", "qty": 3, "revenue": 25000}
+        ]
+        # Per-sales daily series (multi-line chart) uses the same payload.
+        assert len(data["by_sales_day"]) == 1
+        assert data["by_sales_day"][0]["sales_nama"] == "Budi"
+        assert data["by_sales_day"][0]["points"] == [
+            {"date": f"{TEST_MONTH}-15", "revenue": 25000}
+        ]
 
         # A second import with a new trans_no adds a new row, so the versions
         # bump again. Re-importing the *same* rows would not (see dedupe tests
@@ -351,6 +375,75 @@ def test_summary_is_strictly_branch_scoped_and_global_sees_all():
         _cleanup()
 
 
+def test_global_manager_can_filter_summary_by_branch():
+    """A global MANAGER may narrow version+summary to one branch."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    sup_banjar = _seed_user("SUPERVISOR", USER_BRANCH)
+    sup_barabai = _seed_user("SUPERVISOR", OTHER_BRANCH)
+    mgr_token = _token(manager, "MANAGER", None)
+    banjar_token = _token(sup_banjar, "SUPERVISOR", USER_BRANCH)
+    barabai_token = _token(sup_barabai, "SUPERVISOR", OTHER_BRANCH)
+    client = TestClient(app)
+
+    try:
+        assert _import(
+            client,
+            banjar_token,
+            [_row(f"{TEST_PREFIX}B1", "P001", 2, 20000)],
+        ).json()["success"] is True
+        assert _import(
+            client,
+            barabai_token,
+            [_row(f"{TEST_PREFIX}R1", "P009", 1, 99999)],
+        ).json()["success"] is True
+
+        # Filtered summary returns only the selected branch's rows.
+        banjar = _summary(
+            client, mgr_token, f"branch={USER_BRANCH}"
+        ).json()
+        assert banjar["scope"] == USER_BRANCH
+        assert banjar["version"] == 1
+        assert banjar["total_revenue"] == 20000
+        assert banjar["imported_rows"] == 1
+
+        barabai = _summary(
+            client, mgr_token, f"branch={OTHER_BRANCH}"
+        ).json()
+        assert barabai["scope"] == OTHER_BRANCH
+        assert barabai["total_revenue"] == 99999
+        assert barabai["imported_rows"] == 1
+
+        # Omitting branch keeps the aggregate GLOBAL scope.
+        assert _summary(client, mgr_token).json()["scope"] == "GLOBAL"
+
+        # Version probe honours the same filter and stays no-store.
+        filtered_version = _version(
+            client, mgr_token, query=f"branch={USER_BRANCH}"
+        )
+        assert filtered_version.status_code == 200, filtered_version.text
+        assert filtered_version.json()["scope"] == USER_BRANCH
+        assert filtered_version.json()["version"] == 1
+        assert filtered_version.headers.get("cache-control") == "no-store"
+
+        # Branch-scoped users cannot read another branch...
+        forbidden = _summary(
+            client, banjar_token, f"branch={OTHER_BRANCH}"
+        )
+        assert forbidden.status_code == 403, forbidden.text
+
+        # ...but may pass their own branch explicitly.
+        own = _summary(client, banjar_token, f"branch={USER_BRANCH}")
+        assert own.status_code == 200, own.text
+        assert own.json()["scope"] == USER_BRANCH
+
+        # Unknown branch is rejected instead of creating an arbitrary scope.
+        unknown = _summary(client, mgr_token, "branch=TIDAK_ADA")
+        assert unknown.status_code == 400, unknown.text
+    finally:
+        _cleanup()
+
+
 def test_summary_limit_and_include_reduce_payload():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
@@ -380,6 +473,85 @@ def test_summary_limit_and_include_reduce_payload():
         assert only_products["by_sales"] == []
         assert only_products["by_customer"] == []
         assert only_products["by_channel"] == []
+        assert only_products["by_day"] == []
+        assert only_products["by_sales_day"] == []
+
+        only_day = _summary(client, token, "include=day").json()
+        assert only_day["by_day"] == [
+            {"date": f"{TEST_MONTH}-15", "qty": 3, "revenue": 60000}
+        ]
+        assert only_day["by_product"] == []
+        assert only_day["by_channel"] == []
+        assert only_day["by_sales_day"] == []
+
+        only_sales_day = _summary(client, token, "include=sales_day").json()
+        assert len(only_sales_day["by_sales_day"]) == 1
+        assert only_sales_day["by_sales_day"][0]["points"] == [
+            {"date": f"{TEST_MONTH}-15", "revenue": 60000}
+        ]
+        assert only_sales_day["by_day"] == []
+        assert only_sales_day["by_product"] == []
+    finally:
+        _cleanup()
+
+
+def test_sales_daily_series_orders_by_revenue_and_keeps_days():
+    _cleanup()
+    supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
+    token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    client = TestClient(app)
+
+    try:
+        assert _import(
+            client,
+            token,
+            [
+                _row(
+                    f"{TEST_PREFIX}S1",
+                    "P001",
+                    1,
+                    10000,
+                    sales_nama="Budi",
+                    sale_date=f"{TEST_MONTH}-15",
+                ),
+                _row(
+                    f"{TEST_PREFIX}S2",
+                    "P002",
+                    1,
+                    5000,
+                    sales_nama="Budi",
+                    sale_date=f"{TEST_MONTH}-16",
+                ),
+                _row(
+                    f"{TEST_PREFIX}S3",
+                    "P003",
+                    1,
+                    20000,
+                    sales_nama="Sari",
+                    sale_date=f"{TEST_MONTH}-15",
+                ),
+                _row(
+                    f"{TEST_PREFIX}S4",
+                    "P004",
+                    1,
+                    30000,
+                    sales_nama="Andi",
+                    sale_date=f"{TEST_MONTH}-16",
+                ),
+            ],
+        ).json()["success"] is True
+
+        series = _summary(client, token, "include=sales_day").json()["by_sales_day"]
+        # Ordered by month revenue: Andi 30k, Sari 20k, Budi 15k.
+        assert [s["sales_nama"] for s in series] == ["Andi", "Sari", "Budi"]
+        assert series[0]["points"] == [
+            {"date": f"{TEST_MONTH}-16", "revenue": 30000}
+        ]
+        # One sales can have several daily buckets.
+        assert series[2]["points"] == [
+            {"date": f"{TEST_MONTH}-15", "revenue": 10000},
+            {"date": f"{TEST_MONTH}-16", "revenue": 5000},
+        ]
     finally:
         _cleanup()
 

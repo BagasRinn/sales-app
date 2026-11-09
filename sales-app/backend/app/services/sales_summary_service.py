@@ -45,6 +45,10 @@ from app.services.sales_import_versions import GLOBAL_SCOPE
 # to satisfy every possible request. Totals are always stored in full.
 SUMMARY_TOP_N = 100
 
+# Number of sales lines drawn on the multi-series daily chart. Ten is enough to
+# compare the top performers without turning the chart into a hairball.
+SALES_TREND_TOP_N = 10
+
 TOTAL_DIMENSION = "TOTAL"
 PRODUCT_DIMENSION = "PRODUCT"
 SALES_DIMENSION = "SALES"
@@ -228,6 +232,127 @@ def ensure_summary(
     recompute_summary(db, scope, month, start, month_end, version)
     db.commit()
     return True
+
+
+def read_daily_series(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+) -> List[Dict[str, Any]]:
+    """Revenue/qty per day for the month (for the analytics trend chart).
+
+    Only the requested month is scanned and at most ~31 rows are returned, so
+    this stays cheap. It is called from the summary endpoint, which the client
+    only requests when the version probe reports a change.
+    """
+    day_col = func.date(ImportedSale.sale_date)
+    rows = (
+        _scope_query(db, scope, start, month_end)
+        .with_entities(
+            day_col.label("day"),
+            func.coalesce(func.sum(ImportedSale.qty), 0).label("qty"),
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
+                "revenue"
+            ),
+        )
+        .group_by(day_col)
+        .order_by(day_col.asc())
+        .all()
+    )
+
+    series: List[Dict[str, Any]] = []
+    for row in rows:
+        day = row.day
+        series.append(
+            {
+                "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
+                "qty": int(row.qty or 0),
+                "revenue": int(row.revenue or 0),
+            }
+        )
+    return series
+
+
+def read_sales_daily_series(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+    limit: int = SALES_TREND_TOP_N,
+) -> List[Dict[str, Any]]:
+    """Daily revenue for the top ``limit`` sales people (multi-line chart).
+
+    The first query picks the top-N sales by month revenue; the second groups
+    the same month's rows per ``(day, sales)``. Only buckets belonging to the
+    selected sales are kept, so the payload is bounded by ``limit * 31`` rows
+    regardless of how many sales exist. Like the total series, this is only
+    fetched when the summary version changes.
+    """
+    sales_revenue = func.coalesce(func.sum(ImportedSale.total_amount), 0)
+
+    top_rows = (
+        _scope_query(db, scope, start, month_end)
+        .with_entities(
+            ImportedSale.sales_kode.label("kode"),
+            ImportedSale.sales_nama.label("nama"),
+            sales_revenue.label("revenue"),
+        )
+        .group_by(ImportedSale.sales_kode, ImportedSale.sales_nama)
+        .order_by(
+            sales_revenue.desc(),
+            func.coalesce(ImportedSale.sales_nama, "").asc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    if not top_rows:
+        return []
+
+    top_keys = [(_as_text(row.kode, 100), _as_text(row.nama, 200)) for row in top_rows]
+    wanted = set(top_keys)
+
+    day_col = func.date(ImportedSale.sale_date)
+    daily_rows = (
+        _scope_query(db, scope, start, month_end)
+        .with_entities(
+            day_col.label("day"),
+            ImportedSale.sales_kode.label("kode"),
+            ImportedSale.sales_nama.label("nama"),
+            sales_revenue.label("revenue"),
+        )
+        .group_by(day_col, ImportedSale.sales_kode, ImportedSale.sales_nama)
+        .order_by(day_col.asc())
+        .all()
+    )
+
+    buckets: Dict[Tuple[str, str], List[Dict[str, Any]]] = {
+        key: [] for key in top_keys
+    }
+    for row in daily_rows:
+        key = (_as_text(row.kode, 100), _as_text(row.nama, 200))
+        bucket = buckets.get(key)
+        if bucket is None:
+            continue
+        day = row.day
+        bucket.append(
+            {
+                "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
+                "revenue": int(row.revenue or 0),
+            }
+        )
+
+    series: List[Dict[str, Any]] = []
+    for key, row in zip(top_keys, top_rows):
+        series.append(
+            {
+                "sales_kode": key[0],
+                "sales_nama": key[1],
+                "revenue": int(row.revenue or 0),
+                "points": buckets.get(key, []),
+            }
+        )
+    return series
 
 
 def _or_none(value: str) -> Optional[str]:

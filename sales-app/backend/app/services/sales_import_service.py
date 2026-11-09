@@ -1,4 +1,4 @@
-"""Import laporan penjualan dari file Excel.
+"""Import laporan penjualan dari file Excel (.xlsx atau .xls).
 
 Mendukung dua bentuk file:
 
@@ -27,7 +27,7 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -50,6 +50,17 @@ try:
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
+
+try:
+    import xlrd
+    XLRD_AVAILABLE = True
+except ImportError:
+    XLRD_AVAILABLE = False
+
+# Excel file signatures. Detecting by content (not just the extension) keeps
+# renamed/corrupt files from being parsed by the wrong reader.
+_XLSX_MAGIC = b"PK\x03\x04"  # ZIP container
+_XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"  # OLE2 compound document
 
 IMPORT_TYPE_SALES = "SALES"
 
@@ -198,55 +209,308 @@ def _resolve_columns(headers: List[str]) -> Dict[str, int]:
     return col_map
 
 
-def _find_header_row(ws) -> int:
-    """Cari baris header laporan penjualan di 15 baris pertama.
+# Exports from accounting/ERP systems often put a company block, filter info,
+# and several blank rows before the real header, so scan deeper than a handful
+# of lines. 200 rows is still cheap because the matrix is already in memory.
+_MAX_HEADER_SCAN_ROWS = 200
+
+# A candidate header row must describe at least two of these three groups:
+# date, item identity, and amount. This prevents a data row (which may contain
+# words like "Sales" or "Total") from being mistaken for the header.
+_HEADER_MIN_STRUCTURAL_GROUPS = 2
+
+
+def _score_header_row(row: List[Any]) -> Tuple[int, Dict[str, int]]:
+    """Score a candidate header row; return ``(score, field -> column)``.
+
+    ``score`` is 0 when the row does not look like a sales header at all.
+    """
+    norms = [_norm_header(c) for c in row]
+    best_per_field: Dict[str, Tuple[int, int]] = {}
+    for idx, header in enumerate(norms):
+        if not header:
+            continue
+        field, match = _best_field_for_header(header)
+        if field is None:
+            continue
+        current = best_per_field.get(field)
+        if current is None or match > current[0]:
+            best_per_field[field] = (match, idx)
+
+    fields = set(best_per_field)
+    has_date = "sale_date" in fields
+    has_item = bool({"product_kode", "product_nama"} & fields)
+    has_amount = bool({"qty", "total_amount"} & fields)
+    structural = int(has_date) + int(has_item) + int(has_amount)
+    if structural < _HEADER_MIN_STRUCTURAL_GROUPS:
+        return 0, {}
+
+    score = (
+        len(fields)
+        + (5 if has_date else 0)
+        + (2 if has_item else 0)
+        + (2 if has_amount else 0)
+    )
+    return score, {field: idx for field, (_, idx) in best_per_field.items()}
+
+
+def _find_header_row_index(rows: List[List[Any]]) -> int:
+    """Cari indeks baris header laporan penjualan (0-based).
 
     Mendeteksi template utama (`Penjualan`, `Trans No`, ...) maupun laporan
     aplikasi (`Tanggal`, `Kode Item`, `Qty`, ...) tanpa bergantung pada satu
-    nama kolom saja.
+    nama kolom saja. Baris pertama yang cocok penuh (tanggal + item/total)
+    langsung dipakai; jika tidak ada, baris dengan skor tertinggi dipilih
+    sebagai fallback (mis. header dua tingkat atau kolom tanggal tanpa judul).
     """
-    for i, row in enumerate(ws.iter_rows(min_row=1, max_row=15, values_only=True), start=1):
-        norms = [_norm_header(c) for c in row]
-        fields = {f for f in (_resolve_field(n) for n in norms if n) if f}
+    best: Optional[Tuple[int, int]] = None
+    for i, row in enumerate(rows[:_MAX_HEADER_SCAN_ROWS]):
+        score, fields = _score_header_row(row)
+        if score <= 0:
+            continue
+
         has_date = "sale_date" in fields
-        has_item = bool({"product_kode", "product_nama"} & fields)
-        has_amount = bool({"qty", "total_amount"} & fields)
+        has_item = bool({"product_kode", "product_nama"} & set(fields))
+        has_amount = bool({"qty", "total_amount"} & set(fields))
         if has_date and (has_item or has_amount):
             return i
-    raise ValueError("Header laporan penjualan tidak ditemukan di 15 baris pertama.")
+
+        if best is None or score > best[0]:
+            best = (score, i)
+
+    if best is not None:
+        return best[1]
+
+    raise ValueError(
+        "Header laporan penjualan tidak ditemukan di "
+        f"{_MAX_HEADER_SCAN_ROWS} baris pertama."
+    )
 
 
-def _read_sales_excel(file_bytes: bytes) -> List[Dict[str, Any]]:
-    """Parse file .xlsx laporan penjualan ke list of row dicts (field -> value)."""
+def _detect_excel_format(file_bytes: bytes, file_name: Optional[str] = None) -> str:
+    """Return ``"xlsx"`` or ``"xls"`` based on content, then filename."""
+    head = file_bytes[:8]
+    if head.startswith(_XLSX_MAGIC):
+        return "xlsx"
+    if head.startswith(_XLS_MAGIC):
+        return "xls"
+
+    # Content signature is authoritative, but a truncated/test buffer may not
+    # have one. Fall back to the uploaded filename so error messages stay clear.
+    lower = (file_name or "").lower()
+    if lower.endswith(".xlsx"):
+        return "xlsx"
+    if lower.endswith(".xls"):
+        return "xls"
+    raise ValueError("Format file harus .xlsx atau .xls")
+
+
+def _read_xlsx_matrices(
+    file_bytes: bytes,
+) -> List[Tuple[str, List[List[Any]]]]:
     if not OPENPYXL_AVAILABLE:
         raise RuntimeError("openpyxl library not installed. Run: pip install openpyxl")
-
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
-    ws = wb.active
-    header_row_idx = _find_header_row(ws)
-
-    headers = [
-        _norm_header(c)
-        for c in next(
-            ws.iter_rows(
-                min_row=header_row_idx,
-                max_row=header_row_idx,
-                values_only=True,
-            )
-        )
+    return [
+        (ws.title, [list(row) for row in ws.iter_rows(values_only=True)])
+        for ws in wb.worksheets
     ]
+
+
+def _read_xls_matrices(
+    file_bytes: bytes,
+) -> List[Tuple[str, List[List[Any]]]]:
+    if not XLRD_AVAILABLE:
+        raise RuntimeError("xlrd library not installed. Run: pip install xlrd")
+    book = xlrd.open_workbook(file_contents=file_bytes)
+    matrices: List[Tuple[str, List[List[Any]]]] = []
+    for sheet in book.sheets():
+        matrix: List[List[Any]] = []
+        for r in range(sheet.nrows):
+            row: List[Any] = []
+            for c in range(sheet.ncols):
+                cell = sheet.cell(r, c)
+                value = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    # xlrd returns raw serial floats for date-formatted cells.
+                    try:
+                        row.append(xlrd.xldate_as_datetime(value, book.datemode))
+                    except Exception:
+                        # Out-of-range/corrupt serial: keep the raw value so the
+                        # row is rejected later with a readable message instead
+                        # of aborting the whole file.
+                        row.append(value)
+                elif cell.ctype == xlrd.XL_CELL_BOOLEAN:
+                    row.append(bool(value))
+                elif cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                    row.append(None)
+                elif isinstance(value, str) and not value.strip():
+                    row.append(None)
+                else:
+                    row.append(value)
+            matrix.append(row)
+        matrices.append((sheet.name, matrix))
+    return matrices
+
+
+def _looks_like_date(value: Any) -> bool:
+    """True when a cell value is very likely a date (used only for inference)."""
+    if isinstance(value, datetime):
+        return True
+    if isinstance(value, date):
+        return True
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # Only modern Excel serials: small numbers are quantities/discounts.
+        return 20000 <= float(value) <= 60000
+    if isinstance(value, str):
+        s = value.strip()
+        if not s or not re.search(r"\d", s):
+            return False
+        if re.search(r"\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}", s):
+            return _to_date(s) is not None
+        if re.search(r"[a-z]", s.lower()):
+            return _to_date(s) is not None
+    return False
+
+
+def _infer_date_column(
+    matrix: List[List[Any]],
+    header_row_idx: int,
+    used_columns: Set[int],
+    sample_limit: int = 100,
+) -> Optional[int]:
+    """Find the date column when its header is blank/unknown.
+
+    Reports sometimes merge the date header across two rows or leave the
+    header cell empty, so the values themselves are inspected instead.
+    """
+    sample = matrix[header_row_idx + 1: header_row_idx + 1 + sample_limit]
+    width = max((len(row) for row in sample), default=0)
+    best_col: Optional[int] = None
+    best_ratio = 0.0
+    best_hits = 0
+    for col in range(width):
+        if col in used_columns:
+            continue
+        hits = 0
+        nonempty = 0
+        for row in sample:
+            if col >= len(row):
+                continue
+            value = row[col]
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            nonempty += 1
+            if _looks_like_date(value):
+                hits += 1
+        if nonempty == 0 or hits == 0:
+            continue
+        ratio = hits / nonempty
+        if ratio < 0.8:
+            continue
+        if (ratio, hits) > (best_ratio, best_hits):
+            best_col, best_ratio, best_hits = col, ratio, hits
+    return best_col
+
+
+def _preview_sheet(matrix: List[List[Any]], limit: int = 5) -> str:
+    lines: List[str] = []
+    for row in matrix[:limit]:
+        cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+        if cells:
+            lines.append(" | ".join(cells)[:120])
+    return " / ".join(lines)
+
+
+def _build_header_error(
+    matrices: List[Tuple[str, List[List[Any]]]],
+    excel_format: str,
+) -> str:
+    parts = [
+        "Header laporan penjualan tidak ditemukan "
+        f"({excel_format.upper()})."
+    ]
+    for sheet_name, matrix in matrices[:3]:
+        preview = _preview_sheet(matrix)
+        if preview:
+            parts.append(f"Sheet '{sheet_name}': {preview}")
+    return " ".join(parts)[:900]
+
+
+def _read_sales_excel(
+    file_bytes: bytes, file_name: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Parse file .xlsx/.xls laporan penjualan ke list of row dicts.
+
+    Semua sheet diperiksa: file ekspor kadang menaruh data di sheet kedua atau
+    ketiga. Sheet dengan header paling meyakinkan dan baris data terbanyak
+    dipakai.
+    """
+    excel_format = _detect_excel_format(file_bytes, file_name)
+    matrices = (
+        _read_xlsx_matrices(file_bytes)
+        if excel_format == "xlsx"
+        else _read_xls_matrices(file_bytes)
+    )
+
+    candidates: List[Tuple[int, int, str, List[List[Any]], int]] = []
+    for sheet_name, matrix in matrices:
+        if not matrix:
+            continue
+        try:
+            header_row_idx = _find_header_row_index(matrix)
+        except ValueError:
+            continue
+
+        data_rows = sum(
+            1
+            for row in matrix[header_row_idx + 1:]
+            if any(c is not None and str(c).strip() for c in row)
+        )
+        if data_rows == 0:
+            continue
+        score, _ = _score_header_row(matrix[header_row_idx])
+        candidates.append((score, data_rows, sheet_name, matrix, header_row_idx))
+
+    if not candidates:
+        raise ValueError(_build_header_error(matrices, excel_format))
+
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    _, _, sheet_name, matrix, header_row_idx = candidates[0]
+
+    headers = [_norm_header(c) for c in matrix[header_row_idx]]
     col_map = _resolve_columns(headers)
 
+    # Fallback: header exists but the date column name is missing/unknown.
+    if col_map.get("sale_date", -1) < 0:
+        used = {idx for idx in col_map.values() if idx >= 0}
+        inferred = _infer_date_column(matrix, header_row_idx, used)
+        if inferred is not None:
+            col_map["sale_date"] = inferred
+            logger.info(
+                "[SALES-IMPORT] inferred sale_date column from values: %s",
+                inferred,
+            )
+
     rows: List[Dict[str, Any]] = []
-    for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
-        if all(cell is None for cell in row):
+    for row in matrix[header_row_idx + 1:]:
+        if all(
+            cell is None or (isinstance(cell, str) and not cell.strip())
+            for cell in row
+        ):
             continue
         row_dict: Dict[str, Any] = {}
         for field, idx in col_map.items():
             row_dict[field] = row[idx] if 0 <= idx < len(row) else None
         rows.append(row_dict)
 
-    logger.info("[SALES-IMPORT] headers resolved: %s", col_map)
+    logger.info(
+        "[SALES-IMPORT] format=%s sheet=%s header_row=%s headers resolved: %s",
+        excel_format,
+        sheet_name,
+        header_row_idx + 1,
+        col_map,
+    )
     return rows
 
 
@@ -335,7 +599,7 @@ def _to_date(value: Any) -> Optional[date]:
             return _EXCEL_EPOCH + timedelta(days=int(value))
         return None
 
-    s = str(value).strip()
+    s = str(value).strip().strip("'\"").strip()
     if not s:
         return None
 
@@ -345,6 +609,12 @@ def _to_date(value: Any) -> Optional[date]:
     except ValueError:
         pass
 
+    # Numeric text that is really an Excel serial (e.g. "46037").
+    if re.fullmatch(r"\d{5}(?:\.0+)?", s):
+        serial = float(s)
+        if 20000 <= serial <= 60000:
+            return _EXCEL_EPOCH + timedelta(days=int(serial))
+
     # Indonesian month names -> English, then retry common text formats.
     normalized = s.lower()
     for indo, english in _INDONESIAN_MONTHS.items():
@@ -353,16 +623,26 @@ def _to_date(value: Any) -> Optional[date]:
     formats = (
         "%Y-%m-%d",
         "%Y/%m/%d",
+        "%Y.%m.%d",
         "%Y%m%d",
         "%d/%m/%Y",
         "%m/%d/%Y",
         "%d-%m-%Y",
+        "%d.%m.%Y",
         "%d-%b-%Y",
         "%d %b %Y",
         "%d-%B-%Y",
         "%d %B %Y",
         "%b %d, %Y",
         "%B %d, %Y",
+        # Two-digit years, only after the unambiguous four-digit formats.
+        "%d-%b-%y",
+        "%d %b %y",
+        "%d-%B-%y",
+        "%d %B %y",
+        "%d/%m/%y",
+        "%m/%d/%y",
+        "%d-%m-%y",
     )
     for candidate in (normalized, normalized.split(" ")[0] if " " in normalized else ""):
         if not candidate:
@@ -460,7 +740,7 @@ def import_sales_from_excel(
     rows: List[SalesRow] = []
 
     try:
-        raw_rows = _read_sales_excel(file_bytes)
+        raw_rows = _read_sales_excel(file_bytes, file_name)
     except Exception as e:
         logger.error("[SALES-IMPORT] Excel read failed: %s", e)
         reason = f"Gagal membaca file Excel: {str(e)}"
@@ -500,13 +780,17 @@ def import_sales_from_excel(
 
         # Tanpa tanggal, baris tidak akan pernah muncul di ringkasan bulanan.
         # Tolak sejak import supaya data tidak "hilang" secara diam-diam.
+        # Sertakan nilai mentahnya agar format yang tidak dikenali mudah
+        # didiagnosis dari pesan error.
         if sale_date is None:
             skipped += 1
+            raw_date = row.get("sale_date")
+            raw_hint = "" if raw_date is None else f" (nilai: {raw_date!r})"
             _add_error(
                 validation_errors,
                 row_num,
                 row,
-                "Tanggal penjualan tidak valid atau kosong",
+                f"Tanggal penjualan tidak valid atau kosong{raw_hint}",
             )
             continue
 
