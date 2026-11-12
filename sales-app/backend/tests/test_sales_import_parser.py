@@ -7,6 +7,7 @@ from openpyxl import Workbook
 
 from app.services.sales_import_service import (
     _detect_excel_format,
+    _iter_sales_excel,
     _read_sales_excel,
     _resolve_columns,
     _resolve_row_branch,
@@ -207,6 +208,78 @@ def test_read_dates_stored_as_text_with_leading_apostrophe():
     )
     row = _read_sales_excel(content)[0]
     assert _to_date(row["sale_date"]) == date(2026, 9, 3)
+
+
+def test_read_template_v2_and_preserve_negative_margin():
+    headers = [
+        "Cabang", "Penjualan", "Kode", "Nama Pelanggan", "Kode Item",
+        "Nama Item", "TOTAL", "MARGIN", "Sales", "Supplier",
+        "Mother SKU", "Divisi",
+    ]
+    content = _workbook_bytes(
+        [[
+            "Cabang Banjarmasin", "2026-11-02", "C001", "Toko A",
+            "P001", "Produk A", 125000, -1500, "Entitas Budi",
+            "Supplier A", "MOTHER-1", "Bahan Bangunan",
+        ]],
+        headers,
+    )
+
+    row = _read_sales_excel(content)[0]
+    assert row["key_mode"] == "v2"
+    assert row["branch"] == "Cabang Banjarmasin"
+    assert row["total_amount"] == 125000
+    assert _to_int(row["margin"]) == -1500
+    assert row["sales_nama"] == "Entitas Budi"
+    assert row["mother_sku"] == "MOTHER-1"
+    assert row["divisi"] == "Bahan Bangunan"
+
+
+def test_return_template_is_detected_and_exact_total_wins_over_total_ppn():
+    headers = [
+        "Cabang", "Tanggal Retur", "Kode Item", "Nama Item", "TOTAL",
+        "TOTAL PPN", "MARGIN", "Supplier", "Divisi", "Mother SKU",
+        "Kode Pelanggan", "Nama Pelanggan", "Sales",
+    ]
+    content = _workbook_bytes(
+        [[
+            "BANJARMASIN", "2026-11-02", "P001", "Produk A", 30000,
+            33000, -500, "Supplier A", "Bangunan", "M001",
+            "C001", "Toko A", "Budi",
+        ]],
+        headers,
+    )
+
+    row = _read_sales_excel(content)[0]
+    assert row["key_mode"] == "return"
+    assert row["total_amount"] == 30000
+    assert _to_int(row["margin"]) == -500
+    assert row["sales_nama"] == "Budi"
+
+
+def test_total_ppn_is_not_used_when_the_total_column_is_missing():
+    columns = _resolve_columns(["tanggal retur", "kode item", "total ppn"])
+    assert columns["total_amount"] == -1
+
+
+def test_xlsx_streaming_parser_reads_path_and_preserves_excel_row_number(tmp_path):
+    content = _workbook_bytes(
+        [["2026-11-02", "P001", "Produk A", 100]],
+        ["Penjualan", "Kode Item", "Nama Item", "TOTAL"],
+    )
+    path = tmp_path / "sales.xlsx"
+    path.write_bytes(content)
+
+    rows = list(_iter_sales_excel(path))
+    assert len(rows) == 1
+    assert rows[0][0] == 2
+    assert rows[0][1]["product_kode"] == "P001"
+
+
+def test_margin_percent_header_is_not_a_nominal_margin_column():
+    columns = _resolve_columns(["penjualan", "kode item", "total", "margin persen"])
+    assert columns["total_amount"] == 2
+    assert columns["margin"] == -1
 
 
 def test_read_header_beyond_first_15_rows():

@@ -113,6 +113,44 @@ def get_version(
     return int(row.version or 0), row.updated_at
 
 
+def months_in_range(end_month: str, range_months: int) -> List[str]:
+    """Return ordered YYYY-MM keys for a range ending at ``end_month``."""
+    if range_months not in (1, 3, 6, 12):
+        raise HTTPException(
+            status_code=400,
+            detail="range_months harus salah satu dari 1, 3, 6, atau 12",
+        )
+    year, month = map(int, end_month.split("-"))
+    end_index = year * 12 + month - 1
+    result = []
+    for offset in range(range_months - 1, -1, -1):
+        index = end_index - offset
+        result.append(f"{index // 12:04d}-{index % 12 + 1:02d}")
+    return result
+
+
+def get_range_version(
+    db: Session,
+    scope: str,
+    end_month: str,
+    range_months: int,
+) -> Tuple[int, Optional[datetime]]:
+    """Return a cache version that changes when any month in the range changes."""
+    months = months_in_range(end_month, range_months)
+    version_sum, updated_at = (
+        db.query(
+            func.coalesce(func.sum(SalesImportVersion.version), 0),
+            func.max(SalesImportVersion.updated_at),
+        )
+        .filter(
+            SalesImportVersion.scope == scope,
+            SalesImportVersion.month.in_(months),
+        )
+        .one()
+    )
+    return int(version_sum or 0), updated_at
+
+
 def bump_versions(
     db: Session,
     scopes: Iterable[str],

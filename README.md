@@ -40,6 +40,8 @@ Laporan Lintas Cabang (khusus MANAGER).
 - Edit/hapus produk, CRUD customer & user, tambah supplier + atur aktif/`order_type`, target
   sales & supplier.
 - Import stok & customer dari Excel, riwayat error per baris.
+- Data Penjualan: import laporan penjualan dan target omzet Sales/Supplier
+  terpisah dari workbook Excel ([format target](./docs/data-penjualan-target.md)).
 - Laporan harian/periode, performa sales, stok, lintas cabang.
 - Layout responsif: sidebar di desktop, `NavigationRail` di tablet, `Drawer` di HP.
 

@@ -73,6 +73,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _importedSalesLoading = false;
   String? _importedSalesError;
   Map<String, dynamic>? _salesImportResult;
+  Map<String, dynamic>? _salesReturnImportResult;
+  Map<String, dynamic>? _salesTargetImportResult;
 
   /// Imported-sales version/cache state.
   /// Key = `month|scope|limit|include`. A version match means the cached
@@ -81,6 +83,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _importedSalesScope;
   int _importedSalesVersion = 0;
   int _importedSalesLimit = 10;
+  int _importedSalesRangeMonths = 1;
+
+  /// Branch the global MANAGER is currently inspecting. null = GLOBAL
+  /// (all branches). Branch-scoped roles ignore this field; the backend
+  /// always resolves them to their own branch.
+  String? _importedSalesBranchFilter;
   final Map<String, _ImportedSalesCacheEntry> _importedSalesCache = {};
   // Guards against out-of-order responses when the user changes month/limit
   // quickly: only the newest request may write state.
@@ -315,7 +323,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get importedSalesScope => _importedSalesScope;
   int get importedSalesVersion => _importedSalesVersion;
   int get importedSalesLimit => _importedSalesLimit;
+  int get importedSalesRangeMonths => _importedSalesRangeMonths;
+  String? get importedSalesBranchFilter => _importedSalesBranchFilter;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
+  Map<String, dynamic>? get salesReturnImportResult => _salesReturnImportResult;
+  Map<String, dynamic>? get salesTargetImportResult => _salesTargetImportResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
   bool get isLoading => _state == AdminState.loading;
@@ -369,6 +381,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _userRole == 'MANAGER';
   bool get isSupervisor => _userRole == 'SUPERVISOR';
 
+  /// MANAGER without a branch — the only role allowed to switch the
+  /// imported-sales scope between GLOBAL and a single branch.
+  bool get isGlobalManager =>
+      _userRole == 'MANAGER' && (_userBranch == null || _userBranch!.isEmpty);
+
   String? _userBranch;
   String? get userBranch => _userBranch;
 
@@ -377,6 +394,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     // admin-only. UI pakai widget.role langsung dari DashboardScreen.
     if (_userRole != role) {
       // Role menentukan scope ringkasan penjualan (GLOBAL vs cabang).
+      _importedSalesBranchFilter = null;
       invalidateImportedSalesCache(clearSummary: true);
     }
     _userRole = role;
@@ -386,6 +404,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_userBranch != branch) {
       // Scope changed (e.g. different session/branch): cached summaries and
       // versions belong to the old scope and must not be reused.
+      _importedSalesBranchFilter = null;
       invalidateImportedSalesCache(clearSummary: true);
     }
     _userBranch = branch;
@@ -1460,6 +1479,24 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Switch the global MANAGER branch filter for the imported-sales page.
+  /// null/empty = all branches (GLOBAL). The previous payload is cleared so
+  /// the UI never shows another scope's data while the new scope loads.
+  void setImportedSalesBranchFilter(String? branch) {
+    final normalized = (branch == null || branch.trim().isEmpty)
+        ? null
+        : branch.trim().toUpperCase();
+    if (_importedSalesBranchFilter == normalized) return;
+
+    _importedSalesBranchFilter = normalized;
+    _importedSalesRequestId++;
+    _importedSalesSummary = null;
+    _importedSalesVersion = 0;
+    _importedSalesScope = null;
+    _importedSalesError = null;
+    notifyListeners();
+  }
+
   String _currentImportedSalesMonth() {
     final now = DateTime.now();
     return '${now.year.toString().padLeft(4, '0')}-'
@@ -1468,9 +1505,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Scope used for cache keys before the server confirms it.
   String _resolvedSalesScope() {
-    if (_userRole == 'MANAGER' &&
-        (_userBranch == null || _userBranch!.isEmpty)) {
-      return 'GLOBAL';
+    if (isGlobalManager) {
+      final filter = _importedSalesBranchFilter;
+      return (filter == null || filter.isEmpty) ? 'GLOBAL' : filter;
     }
     return _userBranch ?? '';
   }
@@ -1479,9 +1516,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     String month,
     String scope,
     int limit,
+    int rangeMonths,
     String include,
   ) {
-    return '$month|$scope|$limit|$include';
+    return '$month|$scope|$limit|$rangeMonths|$include';
   }
 
   /// Load the imported-sales summary using the version-first flow:
@@ -1496,23 +1534,31 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> loadImportedSalesSummary({
     String? month,
     int? limit,
+    int? rangeMonths,
     bool forceRefresh = false,
   }) async {
     final targetMonth = (month == null || month.trim().isEmpty)
         ? (_importedSalesMonth ?? _currentImportedSalesMonth())
         : month.trim();
     final effectiveLimit = limit ?? _importedSalesLimit;
-    const include = 'product,sales,customer,channel';
+    final effectiveRangeMonths = rangeMonths ?? _importedSalesRangeMonths;
+    const include =
+        'product,sales,all_sales,customer,channel,divisi,supplier,supplier_retur,day,sales_day';
 
     _importedSalesMonth = targetMonth;
     _importedSalesLimit = effectiveLimit;
+    _importedSalesRangeMonths = effectiveRangeMonths;
     final requestId = ++_importedSalesRequestId;
+    // Only a global MANAGER may request a non-default scope. For everyone
+    // else the backend ignores/validates the value against their own branch.
+    final branchFilter = isGlobalManager ? _importedSalesBranchFilter : null;
 
     final localScope = _resolvedSalesScope();
     final cacheKey = _importedSalesCacheKey(
       targetMonth,
       localScope,
       effectiveLimit,
+      effectiveRangeMonths,
       include,
     );
     final cached = _importedSalesCache[cacheKey];
@@ -1532,6 +1578,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final versionInfo = await _repo.getImportedSalesVersion(
         month: targetMonth,
+        rangeMonths: effectiveRangeMonths,
+        branch: branchFilter,
       );
       // A newer request (month/limit change) superseded this one.
       if (requestId != _importedSalesRequestId) return false;
@@ -1544,22 +1592,29 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         targetMonth,
         serverScope,
         effectiveLimit,
+        effectiveRangeMonths,
         include,
       );
       final serverCached = _importedSalesCache[serverKey];
+      final targetUpdatedAt = versionInfo['target_updated_at']?.toString();
+      final cachedTargetUpdatedAt = serverCached?.data['target_updated_at']
+          ?.toString();
 
       // Unchanged version -> cached payload is still exact; no summary GET.
       if (!forceRefresh &&
           serverCached != null &&
-          serverCached.version == serverVersion) {
+          serverCached.version == serverVersion &&
+          cachedTargetUpdatedAt == targetUpdatedAt) {
         _importedSalesSummary = serverCached.data;
         return true;
       }
 
       final data = await _repo.getImportedSalesSummary(
         month: targetMonth,
+        rangeMonths: effectiveRangeMonths,
         limit: effectiveLimit,
         include: include,
+        branch: branchFilter,
       );
       if (requestId != _importedSalesRequestId) return false;
       final dataVersion = (data['version'] as num?)?.toInt() ?? serverVersion;
@@ -1571,6 +1626,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         targetMonth,
         dataScope,
         effectiveLimit,
+        effectiveRangeMonths,
         include,
       )] = _ImportedSalesCacheEntry(
         data: data,
@@ -1595,6 +1651,94 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         _importedSalesLoading = false;
         notifyListeners();
       }
+    }
+  }
+
+  void setImportedSalesRangeMonths(int rangeMonths) {
+    if (![1, 3, 6, 12].contains(rangeMonths)) {
+      throw ArgumentError.value(rangeMonths, 'rangeMonths');
+    }
+    if (_importedSalesRangeMonths == rangeMonths) return;
+    _importedSalesRangeMonths = rangeMonths;
+    _importedSalesRequestId++;
+    _importedSalesSummary = null;
+    _importedSalesError = null;
+    notifyListeners();
+  }
+
+  Future<Map<String, int>> getImportedSalesMonthTotals(String month) async {
+    final summary = await _repo.getImportedSalesSummary(
+      month: month,
+      rangeMonths: 1,
+      limit: 1,
+      include: 'day',
+      branch: isGlobalManager ? _importedSalesBranchFilter : null,
+    );
+    return {
+      'rows': (summary['imported_rows'] as num?)?.toInt() ?? 0,
+      'revenue': (summary['total_revenue'] as num?)?.toInt() ?? 0,
+      'retur_rows': (summary['total_retur_rows'] as num?)?.toInt() ?? 0,
+      'retur_revenue': (summary['total_retur_revenue'] as num?)?.toInt() ?? 0,
+    };
+  }
+
+  Future<bool> deleteImportedSalesReturnsMonth({
+    required String month,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    _setLoading(true, 'Menghapus data retur...');
+    try {
+      final result = await _repo.deleteImportedSalesReturnsMonth(
+        month: month,
+        branch: branch,
+        allBranches: allBranches,
+      );
+      _salesReturnImportResult = result;
+      _importedSalesCache.clear();
+      _setLoading(false);
+      await loadImportedSalesSummary(
+        month: month,
+        rangeMonths: _importedSalesRangeMonths,
+        forceRefresh: true,
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteImportedSalesMonth({
+    required String month,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    _setLoading(true, 'Menghapus data penjualan...');
+    try {
+      final result = await _repo.deleteImportedSalesMonth(
+        month: month,
+        branch: branch,
+        allBranches: allBranches,
+      );
+      _salesImportResult = result;
+      _importedSalesCache.clear();
+      _setLoading(false);
+      await loadImportedSalesSummary(
+        month: month,
+        rangeMonths: _importedSalesRangeMonths,
+        forceRefresh: true,
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
@@ -1630,6 +1774,83 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (changed) {
         invalidateImportedSalesCache();
       }
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> importSalesReturnsExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    _salesReturnImportResult = null;
+    _errorMessage = null;
+    _setLoading(true, 'Mengimport laporan retur...');
+    try {
+      final result = await _repo.importSalesReturnsExcel(fileBytes, fileName);
+      _salesReturnImportResult = result;
+      if (result['success'] != true) {
+        final errors = result['errors'];
+        final firstError = errors is List && errors.isNotEmpty
+            ? errors.first
+            : null;
+        _errorMessage = firstError is Map
+            ? firstError['reason']?.toString()
+            : 'Import retur gagal. Periksa format file.';
+        _setLoading(false);
+        notifyListeners();
+        return false;
+      }
+
+      final versions = result['versions'];
+      if (versions is! List || versions.isNotEmpty) {
+        invalidateImportedSalesCache();
+      }
+      _setLoading(false);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> importSalesTargetsExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    _salesTargetImportResult = null;
+    _errorMessage = null;
+    _setLoading(true, 'Mengimport target penjualan...');
+    try {
+      final result = await _repo.importSalesTargetsExcel(fileBytes, fileName);
+      _salesTargetImportResult = result;
+      if (result['success'] != true) {
+        final errors = result['errors'];
+        final firstError = errors is List && errors.isNotEmpty
+            ? errors.first
+            : null;
+        _errorMessage = firstError is Map
+            ? firstError['reason']?.toString()
+            : 'Import target penjualan gagal. Periksa format file.';
+        _setLoading(false);
+        notifyListeners();
+        return false;
+      }
+
+      final changed =
+          ((result['inserted'] as num?)?.toInt() ?? 0) +
+              ((result['updated'] as num?)?.toInt() ?? 0) >
+          0;
+      if (changed) invalidateImportedSalesCache();
+      _setLoading(false);
+      notifyListeners();
       return true;
     } catch (e) {
       _setLoading(false);
@@ -1692,6 +1913,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _supplierPerformanceError;
   List<BranchOption> _branchOptions = [];
   bool _branchOptionsLoading = false;
+  String? _branchOptionsError;
 
   List<SupplierPerformanceRow> get supplierPerformance => _supplierPerformance;
   bool get supplierPerformanceLoading => _supplierPerformanceLoading;
@@ -1702,16 +1924,19 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// dari request lain (leaderboard, target sales, dsb).
   String? get supplierPerformanceError => _supplierPerformanceError;
   List<BranchOption> get branchOptions => _branchOptions;
+  bool get branchOptionsLoading => _branchOptionsLoading;
+  String? get branchOptionsError => _branchOptionsError;
 
   /// Load the active branch list for the MANAGER branch picker (cached per
   /// session; call again only after branch master data changes).
   Future<void> loadBranchOptions() async {
     if (_branchOptionsLoading) return;
     _branchOptionsLoading = true;
+    _branchOptionsError = null;
     try {
       _branchOptions = await _repo.getBranches();
     } catch (e) {
-      // Picker is optional — KPI keeps working with the current scope.
+      _branchOptionsError = e is ApiException ? e.message : e.toString();
       _errorMessage = e is ApiException ? e.message : e.toString();
     } finally {
       _branchOptionsLoading = false;

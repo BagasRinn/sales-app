@@ -11,6 +11,7 @@ venv/
 # Credentials (defense in depth - also covered by root .gitignore)
 .env
 .env.*
+!.env.example
 credentials.json
 
 # Flutter mobile build artifacts

@@ -21,7 +21,7 @@ service and the backfill script can share it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import and_, or_
@@ -33,6 +33,7 @@ from app.services.sales_import_keys import (
     DEDUPE_SEPARATOR,
     build_dedupe_key,
     canonical_sales_key,
+    canonical_sales_key_v2,
     parse_dedupe_key,
 )
 from app.services.sales_import_versions import GLOBAL_SCOPE
@@ -60,6 +61,9 @@ DATA_FIELDS: Tuple[str, ...] = (
     "diskon",
     "net_per_unit",
     "total_amount",
+    "margin",
+    "mother_sku",
+    "divisi",
     "sales_kode",
     "sales_nama",
     "supplier",
@@ -94,9 +98,13 @@ class SalesRow:
     diskon: Optional[int] = None
     net_per_unit: Optional[int] = None
     total_amount: Optional[int] = None
+    margin: Optional[int] = None
+    mother_sku: Optional[str] = None
+    divisi: Optional[str] = None
     sales_kode: Optional[str] = None
     sales_nama: Optional[str] = None
     supplier: Optional[str] = None
+    key_mode: Optional[str] = None
 
     @property
     def month(self) -> str:
@@ -104,6 +112,15 @@ class SalesRow:
 
     @property
     def base_key(self) -> str:
+        if self.key_mode == "v2":
+            return canonical_sales_key_v2(
+                branch=self.branch,
+                sale_date=self.sale_date,
+                customer_kode=self.customer_kode,
+                product_kode=self.product_kode,
+                sales_nama=self.sales_nama,
+                supplier=self.supplier,
+            )
         return canonical_sales_key(
             branch=self.branch,
             sale_date=self.sale_date,
@@ -128,6 +145,7 @@ class SalesRow:
     def apply_to(self, model: ImportedSale) -> None:
         for name in DATA_FIELDS:
             setattr(model, name, getattr(self, name))
+        model.updated_at = datetime.now(timezone.utc)
 
     def differs_from(self, model: ImportedSale) -> bool:
         return any(
@@ -328,8 +346,12 @@ def _import_lock_keys(
     pairs: Iterable[Tuple[Optional[str], str]]
 ) -> List[str]:
     return [
-        f"sales-import:{branch or GLOBAL_SCOPE}:{month}"
+        key
         for branch, month in pairs
+        for key in {
+            f"sales-import:{GLOBAL_SCOPE}:{month}",
+            f"sales-import:{branch or GLOBAL_SCOPE}:{month}",
+        }
     ]
 
 
@@ -337,6 +359,7 @@ def upsert_sales_rows(
     db: Session,
     import_log_id: Any,
     rows: Sequence[SalesRow],
+    occurrence_counters: Optional[Dict[str, int]] = None,
 ) -> UpsertResult:
     """Insert new rows and update changed ones, matching by dedupe key.
 
@@ -357,7 +380,7 @@ def upsert_sales_rows(
     # instead of inserting a second copy.
     result.migrated_legacy_keys = backfill_dedupe_keys(db, pairs=pairs)
 
-    counters: Dict[str, int] = {}
+    counters = occurrence_counters if occurrence_counters is not None else {}
     keyed_rows: List[Tuple[SalesRow, str]] = []
     for row in rows:
         base = row.base_key

@@ -25,9 +25,12 @@ import gagal tidak pernah mengubah versi maupun snapshot.
 """
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Set, Tuple
+from itertools import islice
+from pathlib import Path
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -75,6 +78,7 @@ def _norm_header(value: Any) -> str:
     if value is None:
         return ""
     s = str(value).replace("\ufeff", "").strip().lower()
+    s = s.replace("%", " persen ")
     s = re.sub(r"[^a-z0-9]+", " ", s)
     return " ".join(s.split())
 
@@ -90,7 +94,8 @@ SALES_FIELD_ALIASES: Dict[str, List[str]] = {
         "invoice",
     ],
     "sale_date": [
-        "tanggal penjualan", "tanggal order", "penjualan", "tanggal",
+        "tanggal retur", "tgl retur", "tanggal penjualan", "tanggal order",
+        "retur", "penjualan", "tanggal",
         "tgl", "tarikh", "order date", "created date", "date", "created",
     ],
     "customer_kode": [
@@ -139,6 +144,13 @@ SALES_FIELD_ALIASES: Dict[str, List[str]] = {
         "total jual", "total penjualan", "total revenue", "total amount",
         "grand total", "total bayar", "total harga", "total",
     ],
+    "margin": [
+        "margin rupiah", "nilai margin", "margin rp", "margin",
+    ],
+    "mother_sku": [
+        "mother sku", "mothersku", "sku induk", "kode induk", "parent sku",
+    ],
+    "divisi": ["devisi", "divisi", "division"],
     "sales_kode": ["kode sales", "kodesales", "sales kode", "kode salesman", "salesman kode"],
     "sales_nama": [
         "nama sales", "namasales", "nama salesman", "nama sales man",
@@ -157,11 +169,17 @@ def _match_score(header: str, alias: str) -> int:
     """
     if not header or not alias:
         return 0
+    if alias == "margin" and header.startswith(
+        ("margin persen", "margin percent", "margin percentage")
+    ):
+        return 0
     if header == alias:
         # Guard: app report has separate "Diskon Layer N" columns. The plain
         # "diskon" alias must only win on a real total column.
         return 100 + len(alias)
     if header.startswith(alias + " "):
+        if alias == "total" and header.startswith("total ppn"):
+            return 0
         if alias == "diskon" and header.startswith("diskon layer"):
             return 0
         if alias == "total harga" and header.startswith("total harga sebelum"):
@@ -480,6 +498,7 @@ def _read_sales_excel(
 
     headers = [_norm_header(c) for c in matrix[header_row_idx]]
     col_map = _resolve_columns(headers)
+    key_mode = _template_key_mode(headers, col_map)
 
     # Fallback: header exists but the date column name is missing/unknown.
     if col_map.get("sale_date", -1) < 0:
@@ -502,6 +521,7 @@ def _read_sales_excel(
         row_dict: Dict[str, Any] = {}
         for field, idx in col_map.items():
             row_dict[field] = row[idx] if 0 <= idx < len(row) else None
+        row_dict["key_mode"] = key_mode
         rows.append(row_dict)
 
     logger.info(
@@ -512,6 +532,144 @@ def _read_sales_excel(
         col_map,
     )
     return rows
+
+
+def _is_v2_template(col_map: Dict[str, int]) -> bool:
+    return (
+        col_map.get("margin", -1) >= 0
+        and (
+            col_map.get("mother_sku", -1) >= 0
+            or col_map.get("devisi", -1) >= 0
+        )
+        and col_map.get("qty", -1) < 0
+    )
+
+
+def _is_return_template(headers: List[str], col_map: Dict[str, int]) -> bool:
+    has_return_date = any(
+        header in {"tanggal retur", "tgl retur", "retur"}
+        for header in headers
+    )
+    return (
+        has_return_date
+        and col_map.get("margin", -1) >= 0
+        and col_map.get("product_kode", -1) >= 0
+        and col_map.get("qty", -1) < 0
+    )
+
+
+def _template_key_mode(
+    headers: List[str], col_map: Dict[str, int]
+) -> Optional[str]:
+    if _is_return_template(headers, col_map):
+        return "return"
+    return "v2" if _is_v2_template(col_map) else None
+
+
+def _iter_sales_excel(
+    source: Union[bytes, str, Path],
+    file_name: Optional[str] = None,
+) -> Iterator[Tuple[int, Dict[str, Any]]]:
+    """Yield parsed rows without retaining an entire .xlsx workbook in memory."""
+    is_path = isinstance(source, (str, Path))
+    path = Path(source) if is_path else None
+    if path is not None:
+        with path.open("rb") as stream:
+            signature = stream.read(8)
+        excel_format = (
+            "xlsx" if signature.startswith(_XLSX_MAGIC)
+            else "xls" if signature.startswith(_XLS_MAGIC)
+            else _detect_excel_format(b"", file_name or path.name)
+        )
+    else:
+        if not isinstance(source, bytes):
+            raise TypeError("source must be bytes or a file path")
+        excel_format = _detect_excel_format(source, file_name)
+
+    if excel_format == "xls":
+        content = path.read_bytes() if path is not None else source
+        if len(content) > 20 * 1024 * 1024:
+            raise ValueError("File .xls lebih dari 20 MB; simpan ulang sebagai .xlsx")
+        for row_number, row in enumerate(
+            _read_sales_excel(content, file_name), start=2
+        ):
+            yield row_number, row
+        return
+
+    if not OPENPYXL_AVAILABLE:
+        raise RuntimeError("openpyxl library not installed. Run: pip install openpyxl")
+
+    workbook_source = str(path) if path is not None else BytesIO(source)
+    workbook = openpyxl.load_workbook(
+        workbook_source, read_only=True, data_only=True
+    )
+    try:
+        candidates = []
+        for worksheet in workbook.worksheets:
+            preview = [
+                list(row)
+                for row in islice(
+                    worksheet.iter_rows(values_only=True),
+                    _MAX_HEADER_SCAN_ROWS,
+                )
+            ]
+            try:
+                header_row_index = _find_header_row_index(preview)
+            except ValueError:
+                continue
+            score, col_map = _score_header_row(preview[header_row_index])
+            candidates.append(
+                (score, worksheet, preview, header_row_index, col_map)
+            )
+
+        if not candidates:
+            raise ValueError(
+                "Header laporan penjualan tidak ditemukan di "
+                f"{_MAX_HEADER_SCAN_ROWS} baris pertama."
+            )
+
+        _, worksheet, preview, header_row_index, col_map = max(
+            candidates, key=lambda candidate: candidate[0]
+        )
+        headers = [_norm_header(cell) for cell in preview[header_row_index]]
+        key_mode = _template_key_mode(headers, col_map)
+        if col_map.get("sale_date", -1) < 0:
+            sample = list(
+                islice(
+                    worksheet.iter_rows(
+                        min_row=header_row_index + 2,
+                        max_row=header_row_index + 101,
+                        values_only=True,
+                    ),
+                    100,
+                )
+            )
+            used = {idx for idx in col_map.values() if idx >= 0}
+            inferred = _infer_date_column(
+                [list(row) for row in sample], -1, used
+            )
+            if inferred is not None:
+                col_map["sale_date"] = inferred
+
+        for row_number, values in enumerate(
+            worksheet.iter_rows(values_only=True), start=1
+        ):
+            if row_number <= header_row_index + 1:
+                continue
+            row = list(values)
+            if all(
+                cell is None or (isinstance(cell, str) and not cell.strip())
+                for cell in row
+            ):
+                continue
+            row_dict = {
+                field: row[index] if 0 <= index < len(row) else None
+                for field, index in col_map.items()
+            }
+            row_dict["key_mode"] = key_mode
+            yield row_number, row_dict
+    finally:
+        workbook.close()
 
 
 def _to_int(value: Any) -> Optional[int]:
@@ -711,7 +869,7 @@ def _add_error(
 
 
 def import_sales_from_excel(
-    file_bytes: bytes,
+    file_bytes: Union[bytes, str, Path],
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
@@ -737,43 +895,104 @@ def import_sales_from_excel(
 
     validation_errors: List[Dict[str, Any]] = []
     skipped = 0
-    rows: List[SalesRow] = []
+    total_rows = 0
+    inserted = 0
+    updated = 0
+    missing_mother_sku = 0
+    template_v2 = False
+    changed_pairs: Set[Tuple[Optional[str], str]] = set()
+    occurrence_counters: Dict[str, int] = {}
+    batch: List[SalesRow] = []
 
-    try:
-        raw_rows = _read_sales_excel(file_bytes, file_name)
-    except Exception as e:
-        logger.error("[SALES-IMPORT] Excel read failed: %s", e)
-        reason = f"Gagal membaca file Excel: {str(e)}"
-        db.add(
-            SyncValidationError(
-                import_log_id=import_log.id,
-                row_number=0,
-                sku="",
-                reason=reason[:255],
-            )
+    def flush_batch() -> None:
+        nonlocal inserted, updated
+        if not batch:
+            return
+        upsert = upsert_sales_rows(
+            db,
+            import_log.id,
+            batch,
+            occurrence_counters=occurrence_counters,
         )
-        db.commit()
-        return {
-            "success": False,
-            "total_rows": 0,
-            "inserted": 0,
-            "updated": 0,
-            "skipped": 0,
-            "errors": [{"row": 0, "sku": "", "reason": reason}],
-            "versions": [],
-        }
+        inserted += upsert.inserted
+        updated += upsert.updated
+        changed_pairs.update(upsert.changed_pairs)
+        batch.clear()
 
-    total_rows = len(raw_rows)
-    for row_num, row in enumerate(raw_rows, start=2):
+    source: Union[bytes, str, Path] = file_bytes
+    source_path = Path(file_bytes) if isinstance(file_bytes, (str, Path)) else None
+    if source_path is not None and source_path.suffix.lower() == ".xls":
+        if source_path.stat().st_size > 20 * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail="File .xls lebih dari 20 MB; simpan ulang sebagai .xlsx",
+            )
+
+    rows_iterator = iter(_iter_sales_excel(source, file_name))
+    while True:
+        try:
+            row_num, row = next(rows_iterator)
+        except StopIteration:
+            break
+        except Exception as e:
+            logger.error("[SALES-IMPORT] Excel read failed: %s", e)
+            db.rollback()
+            failed_log = ImportLog(
+                user_id=current_user.get("user_id"),
+                nama=current_user.get("nama"),
+                import_type=IMPORT_TYPE_SALES,
+                file_name=file_name,
+                branch=current_user.get("branch"),
+            )
+            db.add(failed_log)
+            db.flush()
+            reason = f"Gagal membaca file Excel: {str(e)}"
+            db.add(
+                SyncValidationError(
+                    import_log_id=failed_log.id,
+                    row_number=0,
+                    sku="",
+                    reason=reason[:255],
+                )
+            )
+            db.commit()
+            return {
+                "success": False,
+                "total_rows": 0,
+                "inserted": 0,
+                "updated": 0,
+                "skipped": 0,
+                "errors": [{"row": 0, "sku": "", "reason": reason}],
+                "versions": [],
+                "template": None,
+                "missing_mother_sku": 0,
+            }
+
+        if row.get("key_mode") == "return":
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail="File retur harus diunggah melalui Import Retur.",
+            )
+
+        total_rows += 1
+        template_v2 = template_v2 or row.get("key_mode") == "v2"
         sale_date = _to_date(row.get("sale_date"))
         qty = _to_int(row.get("qty"))
         qtyi = _to_int(row.get("qtyi"))
         diskon = _to_int(row.get("diskon"))
         net_per_unit = _to_int(row.get("net_per_unit"))
         total_amount = _to_int(row.get("total_amount"))
+        margin = _to_int(row.get("margin"))
+        key_mode = row.get("key_mode")
 
         # Baris tanpa transaksi/qty utama dianggap tidak valid → skipped.
-        if not row.get("trans_no") and qty is None and total_amount is None:
+        if (
+            key_mode != "v2"
+            and not row.get("trans_no")
+            and qty is None
+            and total_amount is None
+        ):
             skipped += 1
             _add_error(validation_errors, row_num, row, "Baris kosong/tanpa transaksi")
             continue
@@ -801,8 +1020,32 @@ def import_sales_from_excel(
         row_branch = account_branch
         if global_manager:
             row_branch = _resolve_row_branch(row.get("branch"))
+        product_kode = _clean_str(row.get("product_kode"))
+        product_nama = _clean_str(row.get("product_nama"))
+        if key_mode == "v2":
+            if not row_branch or row_branch not in get_valid_branch_codes():
+                skipped += 1
+                _add_error(
+                    validation_errors, row_num, row, "Cabang kosong atau tidak dikenal"
+                )
+                continue
+            if total_amount is None:
+                skipped += 1
+                _add_error(validation_errors, row_num, row, "TOTAL tidak valid atau kosong")
+                continue
+            if not product_kode and not product_nama:
+                skipped += 1
+                _add_error(
+                    validation_errors,
+                    row_num,
+                    row,
+                    "Kode Item atau Nama Item wajib diisi",
+                )
+                continue
+            if not _clean_str(row.get("mother_sku")):
+                missing_mother_sku += 1
 
-        rows.append(
+        batch.append(
             SalesRow(
                 branch=row_branch,
                 trans_no=_clean_str(row.get("trans_no")),
@@ -814,8 +1057,8 @@ def import_sales_from_excel(
                 customer_group=_clean_str(row.get("customer_group")),
                 area=_clean_str(row.get("area")),
                 alamat=_clean_str(row.get("alamat")),
-                product_kode=_clean_str(row.get("product_kode")),
-                product_nama=_clean_str(row.get("product_nama")),
+                product_kode=product_kode,
+                product_nama=product_nama,
                 qty=qty,
                 satuan_jual=_clean_str(row.get("satuan_jual")),
                 qtyi=qtyi,
@@ -823,24 +1066,24 @@ def import_sales_from_excel(
                 diskon=diskon,
                 net_per_unit=net_per_unit,
                 total_amount=total_amount,
+                margin=margin,
+                mother_sku=_clean_str(row.get("mother_sku")),
+                divisi=_clean_str(row.get("divisi")),
                 sales_kode=_clean_str(row.get("sales_kode")),
                 sales_nama=_clean_str(row.get("sales_nama")),
                 supplier=_clean_str(row.get("supplier")),
+                key_mode=key_mode,
             )
         )
+        if len(batch) >= 5000:
+            flush_batch()
 
-    success = bool(rows)
+    flush_batch()
+    success = bool(inserted or updated)
     if not success and total_rows == 0:
         _add_error(validation_errors, 0, {}, "File tidak berisi baris data")
     elif not success and not validation_errors:
         _add_error(validation_errors, 0, {}, "Tidak ada baris valid untuk diimport")
-
-    # Dedupe/upsert: re-imported rows match their deterministic key, so the
-    # same file cannot append duplicates. Only real data changes are flagged
-    # for version bumps / summary rebuilds below.
-    upsert = upsert_sales_rows(db, import_log.id, rows)
-    inserted = upsert.inserted
-    updated = upsert.updated
 
     import_log.total_rows = total_rows
     import_log.inserted = inserted
@@ -858,10 +1101,10 @@ def import_sales_from_excel(
         )
 
     versions: List[Dict[str, Any]] = []
-    if upsert.changed_pairs:
+    if changed_pairs:
         # Bump only the (scope, month) pairs whose data really moved. A pure
         # re-import of an unchanged file has an empty set and bumps nothing.
-        versions = bump_versions_for_changes(db, upsert.changed_pairs)
+        versions = bump_versions_for_changes(db, changed_pairs)
 
         # Rebuild the precomputed snapshot in the same transaction as the rows
         # and the version bump. The summary endpoint then only needs a small
@@ -871,7 +1114,7 @@ def import_sales_from_excel(
             (v["scope"], v["month"]): int(v["version"] or 0) for v in versions
         }
         affected: set[Tuple[str, str]] = set()
-        for branch, month in upsert.changed_pairs:
+        for branch, month in changed_pairs:
             affected.add((GLOBAL_SCOPE, month))
             if branch:
                 affected.add((branch, month))
@@ -896,4 +1139,6 @@ def import_sales_from_excel(
         "skipped": skipped,
         "errors": validation_errors,
         "versions": versions,
+        "template": "v2" if template_v2 else None,
+        "missing_mother_sku": missing_mother_sku,
     }

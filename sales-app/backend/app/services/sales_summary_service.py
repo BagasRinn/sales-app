@@ -5,7 +5,7 @@ The summary endpoint used to aggregate every row of a month on each request
 table instead:
 
 * ``ImportedSalesMonthlySummary`` holds one ``TOTAL`` row plus the top
-  ``SUMMARY_TOP_N`` groups for each breakdown (product/sales/customer/channel).
+  ``SUMMARY_TOP_N`` groups for each breakdown.
 * ``ImportedSalesSummaryState`` records the source version the table was built
   from.
 
@@ -20,8 +20,9 @@ Recompute happens in two places:
 Both paths are serialized per ``(scope, month)`` with a transaction-scoped
 Postgres advisory lock, so two concurrent requests cannot double-insert rows.
 
-The read path only ever scans this small table (at most 5 dimensions × 100
-rows), so DB→app egress is bounded even when ``imported_sales`` grows.
+The read path only ever scans this small table (six sales dimensions × 100
+rows, plus up to 200 return-supplier rows), so DB→app egress is bounded even
+when the source tables grow.
 """
 from __future__ import annotations
 
@@ -29,12 +30,13 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import uuid4
 
-from sqlalchemy import func
+from sqlalchemy import func, literal
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.models import (
     ImportedSale,
+    ImportedReturn,
     ImportedSalesMonthlySummary,
     ImportedSalesSummaryState,
 )
@@ -44,6 +46,7 @@ from app.services.sales_import_versions import GLOBAL_SCOPE
 # The API caps `limit` at 100, so storing the top 100 per dimension is enough
 # to satisfy every possible request. Totals are always stored in full.
 SUMMARY_TOP_N = 100
+RETURN_SUPPLIER_SNAPSHOT_TOP_N = SUMMARY_TOP_N * 2
 
 # Number of sales lines drawn on the multi-series daily chart. Ten is enough to
 # compare the top performers without turning the chart into a hairball.
@@ -54,23 +57,18 @@ PRODUCT_DIMENSION = "PRODUCT"
 SALES_DIMENSION = "SALES"
 CUSTOMER_DIMENSION = "CUSTOMER"
 CHANNEL_DIMENSION = "CHANNEL"
+DIVISI_DIMENSION = "DIVISI"
+SUPPLIER_DIMENSION = "SUPPLIER"
+RETURN_SUPPLIER_DIMENSION = "RETUR_SUP"
 
 DIMENSIONS: Tuple[str, ...] = (
     PRODUCT_DIMENSION,
     SALES_DIMENSION,
     CUSTOMER_DIMENSION,
     CHANNEL_DIMENSION,
+    DIVISI_DIMENSION,
+    SUPPLIER_DIMENSION,
 )
-
-# Grouping columns per dimension. The last column is used as the label
-# (display name); the first as the key (code).
-_GROUP_COLUMNS = {
-    PRODUCT_DIMENSION: (ImportedSale.product_kode, ImportedSale.product_nama),
-    SALES_DIMENSION: (ImportedSale.sales_kode, ImportedSale.sales_nama),
-    CUSTOMER_DIMENSION: (ImportedSale.customer_kode, ImportedSale.customer_nama),
-    CHANNEL_DIMENSION: (ImportedSale.channel,),
-}
-
 
 def _scope_query(db: Session, scope: str, start: datetime, month_end: datetime):
     """Rows visible to ``scope`` for the month.
@@ -88,10 +86,244 @@ def _scope_query(db: Session, scope: str, start: datetime, month_end: datetime):
     return query
 
 
+def _scope_return_query(
+    db: Session, scope: str, start: datetime, month_end: datetime
+):
+    query = db.query(ImportedReturn).filter(
+        ImportedReturn.sale_date >= start,
+        ImportedReturn.sale_date < month_end,
+    )
+    if scope != GLOBAL_SCOPE:
+        query = query.filter(ImportedReturn.branch == scope)
+    return query
+
+
 def _as_text(value: Any, limit: int) -> str:
     if value is None:
         return ""
     return str(value)[:limit]
+
+
+def _normalized_key(value: Any) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().upper().split())[:100]
+
+
+def _dimension_columns(dimension: str, returns: bool = False):
+    if returns:
+        model = ImportedReturn
+        if dimension == PRODUCT_DIMENSION:
+            return (
+                func.coalesce(
+                    func.nullif(model.mother_sku, ""),
+                    model.product_kode,
+                ),
+                func.max(model.product_nama),
+            )
+        if dimension == SALES_DIMENSION:
+            return model.sales_nama, func.max(model.sales_nama)
+        if dimension == CUSTOMER_DIMENSION:
+            return model.customer_kode, func.max(model.customer_nama)
+        if dimension == DIVISI_DIMENSION:
+            return model.divisi, func.max(model.divisi)
+        if dimension == SUPPLIER_DIMENSION:
+            return model.supplier, func.max(model.supplier)
+        return None, None
+
+    model = ImportedSale
+    if dimension == PRODUCT_DIMENSION:
+        return (
+            func.coalesce(
+                func.nullif(model.mother_sku, ""),
+                model.product_kode,
+            ),
+            func.max(model.product_nama),
+        )
+    if dimension == SALES_DIMENSION:
+        return (
+            func.coalesce(
+                func.nullif(model.sales_kode, ""),
+                model.sales_nama,
+            ),
+            func.max(model.sales_nama),
+        )
+    if dimension == CUSTOMER_DIMENSION:
+        return model.customer_kode, func.max(model.customer_nama)
+    if dimension == CHANNEL_DIMENSION:
+        return model.channel, func.max(model.channel)
+    if dimension == DIVISI_DIMENSION:
+        return model.divisi, func.max(model.divisi)
+    return model.supplier, func.max(model.supplier)
+
+
+def _dimension_rows(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+    dimension: str,
+) -> List[Dict[str, Any]]:
+    """Aggregate gross sales and returns, then net before top-N ordering."""
+    sales_key, sales_label = _dimension_columns(dimension)
+    sales_query = _scope_query(db, scope, start, month_end)
+    sales_groups = (
+        sales_query.with_entities(
+            sales_key.label("dim_key"),
+            sales_label.label("dim_label"),
+            func.coalesce(func.sum(ImportedSale.qty), 0).label("qty"),
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
+                "revenue"
+            ),
+            func.coalesce(func.sum(ImportedSale.margin), 0).label("margin"),
+            (
+                func.max(ImportedSale.product_kode).label("product_kode")
+                if dimension == PRODUCT_DIMENSION
+                else literal(None).label("product_kode")
+            ),
+            (
+                func.max(ImportedSale.mother_sku).label("mother_sku")
+                if dimension == PRODUCT_DIMENSION
+                else literal(None).label("mother_sku")
+            ),
+        )
+        .group_by(sales_key)
+        .order_by(sales_key.asc())
+        .all()
+    )
+    merged: Dict[str, Dict[str, Any]] = {}
+    sales_keys_by_name: Dict[str, str] = {}
+
+    def item_for(key_value: Any, label_value: Any) -> Dict[str, Any]:
+        key = _normalized_key(key_value)
+        item = merged.setdefault(
+            key,
+            {
+                "dim_key": key,
+                "dim_label": "",
+                "qty": 0,
+                "revenue": 0,
+                "margin": 0,
+                "retur_revenue": 0,
+                "retur_margin": 0,
+                "retur_rows": 0,
+                "product_kode": None,
+                "mother_sku": None,
+            },
+        )
+        label = _as_text(label_value, 200)
+        if label and label > item["dim_label"]:
+            item["dim_label"] = label
+        return item
+
+    for group in sales_groups:
+        item = item_for(group.dim_key, group.dim_label)
+        if dimension == SALES_DIMENSION and group.dim_label:
+            sales_keys_by_name.setdefault(
+                _normalized_key(group.dim_label), item["dim_key"]
+            )
+        item["qty"] += int(group.qty or 0)
+        item["revenue"] += int(group.revenue or 0)
+        item["margin"] += int(group.margin or 0)
+        if dimension == PRODUCT_DIMENSION:
+            item["product_kode"] = max(
+                filter(None, (item["product_kode"], group.product_kode)),
+                default=None,
+            )
+            item["mother_sku"] = max(
+                filter(None, (item["mother_sku"], group.mother_sku)),
+                default=None,
+            )
+
+    return_key, return_label = _dimension_columns(dimension, returns=True)
+    if return_key is not None:
+        return_groups = (
+            _scope_return_query(db, scope, start, month_end)
+            .with_entities(
+                return_key.label("dim_key"),
+                return_label.label("dim_label"),
+                func.coalesce(func.sum(ImportedReturn.revenue), 0).label(
+                    "revenue"
+                ),
+                func.coalesce(func.sum(ImportedReturn.margin), 0).label(
+                    "margin"
+                ),
+                func.count(ImportedReturn.id).label("row_count"),
+                (
+                    func.max(ImportedReturn.product_kode).label("product_kode")
+                    if dimension == PRODUCT_DIMENSION
+                    else literal(None).label("product_kode")
+                ),
+                (
+                    func.max(ImportedReturn.mother_sku).label("mother_sku")
+                    if dimension == PRODUCT_DIMENSION
+                    else literal(None).label("mother_sku")
+                ),
+            )
+            .group_by(return_key)
+            .all()
+        )
+        for group in return_groups:
+            return_key_value = group.dim_key
+            if dimension == SALES_DIMENSION:
+                return_key_value = sales_keys_by_name.get(
+                    _normalized_key(group.dim_label or group.dim_key),
+                    group.dim_key,
+                )
+            item = item_for(return_key_value, group.dim_label)
+            item["retur_revenue"] += int(group.revenue or 0)
+            item["retur_margin"] += int(group.margin or 0)
+            item["retur_rows"] += int(group.row_count or 0)
+            if dimension == PRODUCT_DIMENSION:
+                item["product_kode"] = max(
+                    filter(None, (item["product_kode"], group.product_kode)),
+                    default=None,
+                )
+                item["mother_sku"] = max(
+                    filter(None, (item["mother_sku"], group.mother_sku)),
+                    default=None,
+                )
+
+    for item in merged.values():
+        item["revenue"] -= item["retur_revenue"]
+        item["margin"] -= item["retur_margin"]
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            -item["revenue"],
+            item["dim_label"].casefold(),
+            item["dim_key"],
+        ),
+    )
+
+
+def _return_supplier_groups(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+) -> List[Dict[str, Any]]:
+    groups = _dimension_rows(
+        db, scope, start, month_end, SUPPLIER_DIMENSION
+    )
+    by_revenue = sorted(
+        groups,
+        key=lambda item: (
+            -item["retur_revenue"],
+            item["dim_label"].casefold(),
+            item["dim_key"],
+        ),
+    )[:SUMMARY_TOP_N]
+    by_margin = sorted(
+        groups,
+        key=lambda item: (
+            -item["retur_margin"],
+            item["dim_label"].casefold(),
+            item["dim_key"],
+        ),
+    )[:SUMMARY_TOP_N]
+    unique = {item["dim_key"]: item for item in by_revenue + by_margin}
+    return list(unique.values())
 
 
 def _lock_summary(db: Session, scope: str, month: str) -> None:
@@ -117,15 +349,23 @@ def recompute_summary(
     """
     _lock_summary(db, scope, month)
 
-    base = _scope_query(db, scope, start, month_end)
-    revenue_sum = func.coalesce(func.sum(ImportedSale.total_amount), 0)
-    qty_sum = func.coalesce(func.sum(ImportedSale.qty), 0)
-
-    total_revenue, total_qty, row_count = base.with_entities(
-        revenue_sum,
-        qty_sum,
+    sales_totals = _scope_query(db, scope, start, month_end).with_entities(
+        func.coalesce(func.sum(ImportedSale.total_amount), 0),
+        func.coalesce(func.sum(ImportedSale.qty), 0),
+        func.coalesce(func.sum(ImportedSale.margin), 0),
         func.count(ImportedSale.id),
     ).one()
+    return_totals = _scope_return_query(
+        db, scope, start, month_end
+    ).with_entities(
+        func.coalesce(func.sum(ImportedReturn.revenue), 0),
+        func.coalesce(func.sum(ImportedReturn.margin), 0),
+        func.count(ImportedReturn.id),
+    ).one()
+    total_revenue = int(sales_totals[0] or 0) - int(return_totals[0] or 0)
+    total_qty = int(sales_totals[1] or 0)
+    total_margin = int(sales_totals[2] or 0) - int(return_totals[1] or 0)
+    row_count = int(sales_totals[3] or 0)
 
     rows: List[ImportedSalesMonthlySummary] = [
         ImportedSalesMonthlySummary(
@@ -134,46 +374,55 @@ def recompute_summary(
             dimension=TOTAL_DIMENSION,
             dim_key="",
             dim_label="",
-            qty=int(total_qty or 0),
-            revenue=int(total_revenue or 0),
-            row_count=int(row_count or 0),
+            qty=total_qty,
+            revenue=total_revenue,
+            margin=total_margin,
+            retur_revenue=int(return_totals[0] or 0),
+            retur_margin=int(return_totals[1] or 0),
+            retur_rows=int(return_totals[2] or 0),
+            row_count=row_count,
         )
     ]
 
     for dimension in DIMENSIONS:
-        group_columns = _GROUP_COLUMNS[dimension]
-        label_column = group_columns[-1]
-        groups = (
-            base.with_entities(
-                *group_columns,
-                qty_sum.label("qty"),
-                revenue_sum.label("revenue"),
-            )
-            .group_by(*group_columns)
-            .order_by(
-                revenue_sum.desc(),
-                func.coalesce(label_column, "").asc(),
-                func.coalesce(group_columns[0], "").asc(),
-            )
-            .limit(SUMMARY_TOP_N)
-            .all()
-        )
-        for group in groups:
-            values = list(group)
-            key = values[0]
-            label = values[1] if len(group_columns) > 1 else None
+        for group in _dimension_rows(
+            db, scope, start, month_end, dimension
+        )[:SUMMARY_TOP_N]:
             rows.append(
                 ImportedSalesMonthlySummary(
                     scope=scope,
                     month=month,
                     dimension=dimension,
-                    dim_key=_as_text(key, 100),
-                    dim_label=_as_text(label, 200),
-                    qty=int(group.qty or 0),
-                    revenue=int(group.revenue or 0),
+                    dim_key=group["dim_key"],
+                    dim_label=group["dim_label"],
+                    product_kode=_as_text(group["product_kode"], 50) or None,
+                    mother_sku=_as_text(group["mother_sku"], 100) or None,
+                    qty=group["qty"],
+                    revenue=group["revenue"],
+                    margin=group["margin"],
                     row_count=0,
                 )
             )
+
+    return_supplier_groups = _return_supplier_groups(
+        db, scope, start, month_end
+    )
+    for group in return_supplier_groups:
+        if not group["retur_rows"]:
+            continue
+        rows.append(
+            ImportedSalesMonthlySummary(
+                scope=scope,
+                month=month,
+                dimension=RETURN_SUPPLIER_DIMENSION,
+                dim_key=group["dim_key"],
+                dim_label=group["dim_label"],
+                revenue=group["retur_revenue"],
+                margin=group["retur_margin"],
+                row_count=group["retur_rows"],
+                supplier_net_revenue=group["revenue"],
+            )
+        )
 
     # Replace the previous snapshot atomically within the transaction.
     (
@@ -227,7 +476,18 @@ def ensure_summary(
         .first()
     )
     if state is not None and int(state.source_version or 0) == int(version or 0):
-        return False
+        has_snapshot = (
+            db.query(ImportedSalesMonthlySummary.id)
+            .filter(
+                ImportedSalesMonthlySummary.scope == scope,
+                ImportedSalesMonthlySummary.month == month,
+                ImportedSalesMonthlySummary.dimension == TOTAL_DIMENSION,
+            )
+            .first()
+            is not None
+        )
+        if has_snapshot:
+            return False
 
     recompute_summary(db, scope, month, start, month_end, version)
     db.commit()
@@ -252,6 +512,7 @@ def read_daily_series(
         .with_entities(
             day_col.label("day"),
             func.coalesce(func.sum(ImportedSale.qty), 0).label("qty"),
+            func.coalesce(func.sum(ImportedSale.margin), 0).label("margin"),
             func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
                 "revenue"
             ),
@@ -260,17 +521,41 @@ def read_daily_series(
         .order_by(day_col.asc())
         .all()
     )
+    returns = (
+        _scope_return_query(db, scope, start, month_end)
+        .with_entities(
+            func.date(ImportedReturn.sale_date).label("day"),
+            func.coalesce(func.sum(ImportedReturn.margin), 0).label("margin"),
+            func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
+        )
+        .group_by(func.date(ImportedReturn.sale_date))
+        .all()
+    )
+    returns_by_day = {
+        row.day: (int(row.revenue or 0), int(row.margin or 0))
+        for row in returns
+    }
 
     series: List[Dict[str, Any]] = []
     for row in rows:
         day = row.day
+        returned_revenue, returned_margin = returns_by_day.pop(day, (0, 0))
         series.append(
             {
                 "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
                 "qty": int(row.qty or 0),
-                "revenue": int(row.revenue or 0),
+                "margin": int(row.margin or 0) - returned_margin,
+                "revenue": int(row.revenue or 0) - returned_revenue,
             }
         )
+    for day, (returned_revenue, returned_margin) in returns_by_day.items():
+        series.append({
+            "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
+            "qty": 0,
+            "margin": -returned_margin,
+            "revenue": -returned_revenue,
+        })
+    series.sort(key=lambda item: item["date"])
     return series
 
 
@@ -281,75 +566,84 @@ def read_sales_daily_series(
     month_end: datetime,
     limit: int = SALES_TREND_TOP_N,
 ) -> List[Dict[str, Any]]:
-    """Daily revenue for the top ``limit`` sales people (multi-line chart).
-
-    The first query picks the top-N sales by month revenue; the second groups
-    the same month's rows per ``(day, sales)``. Only buckets belonging to the
-    selected sales are kept, so the payload is bounded by ``limit * 31`` rows
-    regardless of how many sales exist. Like the total series, this is only
-    fetched when the summary version changes.
-    """
-    sales_revenue = func.coalesce(func.sum(ImportedSale.total_amount), 0)
-
-    top_rows = (
+    """Daily NET revenue for the top sales people in the selected month."""
+    sales_dimension_key, _ = _dimension_columns(SALES_DIMENSION)
+    sales_rows = (
         _scope_query(db, scope, start, month_end)
         .with_entities(
+            func.date(ImportedSale.sale_date).label("day"),
             ImportedSale.sales_kode.label("kode"),
             ImportedSale.sales_nama.label("nama"),
-            sales_revenue.label("revenue"),
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
+                "revenue"
+            ),
         )
-        .group_by(ImportedSale.sales_kode, ImportedSale.sales_nama)
-        .order_by(
-            sales_revenue.desc(),
-            func.coalesce(ImportedSale.sales_nama, "").asc(),
+        .group_by(
+            func.date(ImportedSale.sale_date),
+            ImportedSale.sales_kode,
+            ImportedSale.sales_nama,
         )
-        .limit(limit)
+        .order_by(sales_dimension_key.asc())
         .all()
     )
-    if not top_rows:
-        return []
-
-    top_keys = [(_as_text(row.kode, 100), _as_text(row.nama, 200)) for row in top_rows]
-    wanted = set(top_keys)
-
-    day_col = func.date(ImportedSale.sale_date)
-    daily_rows = (
-        _scope_query(db, scope, start, month_end)
+    return_rows = (
+        _scope_return_query(db, scope, start, month_end)
         .with_entities(
-            day_col.label("day"),
-            ImportedSale.sales_kode.label("kode"),
-            ImportedSale.sales_nama.label("nama"),
-            sales_revenue.label("revenue"),
+            func.date(ImportedReturn.sale_date).label("day"),
+            ImportedReturn.sales_nama.label("nama"),
+            func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
         )
-        .group_by(day_col, ImportedSale.sales_kode, ImportedSale.sales_nama)
-        .order_by(day_col.asc())
+        .group_by(func.date(ImportedReturn.sale_date), ImportedReturn.sales_nama)
         .all()
     )
-
-    buckets: Dict[Tuple[str, str], List[Dict[str, Any]]] = {
-        key: [] for key in top_keys
-    }
-    for row in daily_rows:
-        key = (_as_text(row.kode, 100), _as_text(row.nama, 200))
-        bucket = buckets.get(key)
-        if bucket is None:
+    sales_by_key: Dict[str, Dict[Any, int]] = {}
+    sales_keys_by_name: Dict[str, str] = {}
+    for row in sales_rows:
+        key = _normalized_key(row.kode or row.nama)
+        if not key:
             continue
-        day = row.day
-        bucket.append(
+        sales_by_key.setdefault(key, {})[row.day] = (
+            sales_by_key.setdefault(key, {}).get(row.day, 0)
+            + int(row.revenue or 0)
+        )
+        name_key = _normalized_key(row.nama)
+        if name_key:
+            sales_keys_by_name.setdefault(name_key, key)
+    returns_by_key: Dict[str, Dict[Any, int]] = {}
+    for row in return_rows:
+        name_key = _normalized_key(row.nama)
+        key = sales_keys_by_name.get(name_key, name_key)
+        if not key:
+            continue
+        returns_by_key.setdefault(key, {})[row.day] = (
+            returns_by_key.setdefault(key, {}).get(row.day, 0)
+            + int(row.revenue or 0)
+        )
+
+    top_rows = _dimension_rows(
+        db, scope, start, month_end, SALES_DIMENSION
+    )[:limit]
+    series: List[Dict[str, Any]] = []
+    for row in top_rows:
+        key = _normalized_key(row["dim_key"])
+        if not key:
+            continue
+        daily_sales = sales_by_key.get(key, {})
+        daily_returns = returns_by_key.get(key, {})
+        days = sorted(set(daily_sales) | set(daily_returns))
+        points = [
             {
                 "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
-                "revenue": int(row.revenue or 0),
+                "revenue": daily_sales.get(day, 0) - daily_returns.get(day, 0),
             }
-        )
-
-    series: List[Dict[str, Any]] = []
-    for key, row in zip(top_keys, top_rows):
+            for day in days
+        ]
         series.append(
             {
-                "sales_kode": key[0],
-                "sales_nama": key[1],
-                "revenue": int(row.revenue or 0),
-                "points": buckets.get(key, []),
+                "sales_kode": _as_text(row["dim_key"], 100),
+                "sales_nama": _as_text(row["dim_label"], 200),
+                "revenue": int(row["revenue"]),
+                "points": points,
             }
         )
     return series
@@ -365,13 +659,17 @@ def read_summary(
     month: str,
     dimensions: Iterable[str],
     limit: int,
+    include_all_sales: bool = False,
 ) -> Dict[str, Any]:
     """Read the precomputed snapshot in the original endpoint response shape.
 
     ``dimensions`` are the lowercase sections requested via ``include``.
     """
+    normalized_dimensions = {d.lower() for d in dimensions}
     wanted = {TOTAL_DIMENSION}
-    wanted.update(d.upper() for d in dimensions)
+    wanted.update(d.upper() for d in normalized_dimensions)
+    if "supplier_retur" in normalized_dimensions:
+        wanted.add(RETURN_SUPPLIER_DIMENSION)
 
     rows = (
         db.query(ImportedSalesMonthlySummary)
@@ -392,17 +690,28 @@ def read_summary(
     result: Dict[str, Any] = {
         "total_revenue": 0,
         "total_qty": 0,
+        "total_margin": 0,
+        "total_retur_revenue": 0,
+        "total_retur_margin": 0,
+        "total_retur_rows": 0,
         "imported_rows": 0,
         "by_product": [],
         "by_sales": [],
         "by_customer": [],
         "by_channel": [],
+        "by_divisi": [],
+        "by_supplier": [],
+        "by_supplier_retur": [],
     }
 
     for row in rows:
         if row.dimension == TOTAL_DIMENSION:
             result["total_revenue"] = int(row.revenue or 0)
             result["total_qty"] = int(row.qty or 0)
+            result["total_margin"] = int(row.margin or 0)
+            result["total_retur_revenue"] = int(row.retur_revenue or 0)
+            result["total_retur_margin"] = int(row.retur_margin or 0)
+            result["total_retur_rows"] = int(row.retur_rows or 0)
             result["imported_rows"] = int(row.row_count or 0)
             continue
 
@@ -414,15 +723,17 @@ def read_summary(
                 continue
             bucket.append(
                 {
-                    "product_kode": _or_none(row.dim_key),
                     "product_nama": _or_none(row.dim_label),
+                    "mother_sku": _or_none(row.mother_sku),
+                    "product_kode": _or_none(row.product_kode),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
                 }
             )
         elif row.dimension == SALES_DIMENSION:
             bucket = result["by_sales"]
-            if len(bucket) >= limit:
+            if not include_all_sales and len(bucket) >= limit:
                 continue
             bucket.append(
                 {
@@ -430,6 +741,7 @@ def read_summary(
                     "sales_nama": _or_none(row.dim_label),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
                 }
             )
         elif row.dimension == CUSTOMER_DIMENSION:
@@ -442,6 +754,7 @@ def read_summary(
                     "customer_nama": _or_none(row.dim_label),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
                 }
             )
         elif row.dimension == CHANNEL_DIMENSION:
@@ -453,7 +766,173 @@ def read_summary(
                     "channel": _or_none(row.dim_key),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
+                }
+            )
+        elif row.dimension == DIVISI_DIMENSION:
+            bucket = result["by_divisi"]
+            if len(bucket) >= limit:
+                continue
+            bucket.append(
+                {
+                    "divisi": _or_none(row.dim_label) or _or_none(row.dim_key),
+                    "qty": int(row.qty or 0),
+                    "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
+                }
+            )
+        elif row.dimension == SUPPLIER_DIMENSION:
+            bucket = result["by_supplier"]
+            if len(bucket) >= limit:
+                continue
+            bucket.append(
+                {
+                    "supplier": _or_none(row.dim_label) or _or_none(row.dim_key),
+                    "qty": int(row.qty or 0),
+                    "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
+                }
+            )
+        elif row.dimension == RETURN_SUPPLIER_DIMENSION:
+            bucket = result["by_supplier_retur"]
+            if len(bucket) >= RETURN_SUPPLIER_SNAPSHOT_TOP_N:
+                continue
+            bucket.append(
+                {
+                    "supplier": _or_none(row.dim_label) or _or_none(row.dim_key),
+                    "revenue": int(row.revenue or 0),
+                    "margin": int(row.margin or 0),
+                    "row_count": int(row.row_count or 0),
+                    "supplier_net_revenue": int(
+                        row.supplier_net_revenue or 0
+                    ),
                 }
             )
 
+    return result
+
+
+def read_summary_range(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+    dimensions: Iterable[str],
+    limit: int,
+    include_all_sales: bool = False,
+) -> Dict[str, Any]:
+    """Aggregate a multi-month range from source rows, netting returns first."""
+    sales_totals = _scope_query(db, scope, start, month_end).with_entities(
+        func.coalesce(func.sum(ImportedSale.total_amount), 0),
+        func.coalesce(func.sum(ImportedSale.qty), 0),
+        func.coalesce(func.sum(ImportedSale.margin), 0),
+        func.count(ImportedSale.id),
+    ).one()
+    return_totals = _scope_return_query(
+        db, scope, start, month_end
+    ).with_entities(
+        func.coalesce(func.sum(ImportedReturn.revenue), 0),
+        func.coalesce(func.sum(ImportedReturn.margin), 0),
+        func.count(ImportedReturn.id),
+    ).one()
+    result: Dict[str, Any] = {
+        "total_revenue": int(sales_totals[0] or 0) - int(return_totals[0] or 0),
+        "total_qty": int(sales_totals[1] or 0),
+        "total_margin": int(sales_totals[2] or 0) - int(return_totals[1] or 0),
+        "total_retur_revenue": int(return_totals[0] or 0),
+        "total_retur_margin": int(return_totals[1] or 0),
+        "total_retur_rows": int(return_totals[2] or 0),
+        "imported_rows": int(sales_totals[3] or 0),
+        "by_product": [],
+        "by_sales": [],
+        "by_customer": [],
+        "by_channel": [],
+        "by_divisi": [],
+        "by_supplier": [],
+        "by_supplier_retur": [],
+    }
+
+    dimension_map = {
+        "product": (PRODUCT_DIMENSION, "by_product"),
+        "sales": (SALES_DIMENSION, "by_sales"),
+        "customer": (CUSTOMER_DIMENSION, "by_customer"),
+        "channel": (CHANNEL_DIMENSION, "by_channel"),
+        "divisi": (DIVISI_DIMENSION, "by_divisi"),
+        "supplier": (SUPPLIER_DIMENSION, "by_supplier"),
+    }
+    requested = {dimension.lower() for dimension in dimensions}
+    for normalized, (dimension, bucket_name) in dimension_map.items():
+        if normalized not in requested:
+            continue
+        groups = _dimension_rows(
+            db, scope, start, month_end, dimension
+        )
+        if normalized != "sales" or not include_all_sales:
+            groups = groups[:limit]
+        for group in groups:
+            item = {
+                "qty": group["qty"],
+                "revenue": group["revenue"],
+                "margin": group["margin"],
+            }
+            if normalized == "product":
+                item.update({
+                    "product_kode": _or_none(
+                        _as_text(group["product_kode"], 50)
+                    ),
+                    "product_nama": _or_none(
+                        _as_text(group["dim_label"], 200)
+                    ),
+                    "mother_sku": _or_none(
+                        _as_text(group["mother_sku"], 100)
+                    ),
+                })
+            elif normalized == "sales":
+                item.update({
+                    "sales_kode": _or_none(
+                        _as_text(group["dim_key"], 100)
+                    ),
+                    "sales_nama": _or_none(
+                        _as_text(group["dim_label"], 200)
+                    ),
+                })
+            elif normalized == "customer":
+                item.update({
+                    "customer_kode": _or_none(
+                        _as_text(group["dim_key"], 100)
+                    ),
+                    "customer_nama": _or_none(
+                        _as_text(group["dim_label"], 200)
+                    ),
+                })
+            elif normalized == "channel":
+                item["channel"] = _or_none(
+                    _as_text(group["dim_key"], 100)
+                )
+            elif normalized == "divisi":
+                item["divisi"] = _or_none(
+                    _as_text(group["dim_label"], 200)
+                ) or _or_none(_as_text(group["dim_key"], 100))
+            else:
+                item["supplier"] = _or_none(
+                    _as_text(group["dim_label"], 200)
+                ) or _or_none(_as_text(group["dim_key"], 100))
+            result[bucket_name].append(item)
+
+    if "supplier_retur" in requested:
+        supplier_groups = _return_supplier_groups(
+            db, scope, start, month_end
+        )
+        result["by_supplier_retur"] = [
+            {
+                "supplier": _or_none(group["dim_label"])
+                or _or_none(group["dim_key"]),
+                "revenue": group["retur_revenue"],
+                "margin": group["retur_margin"],
+                "row_count": group["retur_rows"],
+                "supplier_net_revenue": group["revenue"],
+            }
+            for group in supplier_groups
+            if group["retur_rows"]
+        ]
     return result

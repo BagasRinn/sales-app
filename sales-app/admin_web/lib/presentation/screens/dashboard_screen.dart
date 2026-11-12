@@ -441,9 +441,9 @@ class _DashboardContentState extends State<_DashboardContent>
               _selectedIndex = _indexOfPage(_DashboardPage.orders);
               _ordersInitialTabIndex = initialTabIndex;
             });
-            context
-                .read<AdminProvider>()
-                .setActiveTab(_indexOfPage(_DashboardPage.orders));
+            context.read<AdminProvider>().setActiveTab(
+              _indexOfPage(_DashboardPage.orders),
+            );
           },
         );
       case _DashboardPage.orders:
@@ -476,7 +476,9 @@ class _DashboardContentState extends State<_DashboardContent>
         return BulletinsTab(readOnly: masterReadOnly); // MANAGER & SUPERVISOR
       case _DashboardPage.importedSales:
         // Tidak bisa dibuka selama AppConfig.enableImportedSales = false.
-        return const ImportedSalesTab(); // MANAGER & SUPERVISOR
+        return ImportedSalesTab(
+          readOnly: !_isGlobalManager,
+        ); // MANAGER & SUPERVISOR
       case _DashboardPage.crossBranch:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
@@ -488,9 +490,9 @@ class _DashboardContentState extends State<_DashboardContent>
           _selectedIndex = _indexOfPage(_DashboardPage.orders);
           _ordersInitialTabIndex = initialTabIndex;
         });
-        context
-            .read<AdminProvider>()
-            .setActiveTab(_indexOfPage(_DashboardPage.orders));
+        context.read<AdminProvider>().setActiveTab(
+          _indexOfPage(_DashboardPage.orders),
+        );
       },
     );
   }

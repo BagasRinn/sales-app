@@ -203,6 +203,8 @@ class SalesImportVersionResponse(BaseSchema):
     scope: str
     version: int = 0
     updated_at: Optional[datetime] = None
+    target_updated_at: Optional[datetime] = None
+    range_months: int = 1
 
 
 class SalesImportResultResponse(SyncResultResponse):
@@ -212,6 +214,9 @@ class SalesImportResultResponse(SyncResultResponse):
     avoiding an extra version round-trip right after an import.
     """
     versions: List[SalesImportVersionResponse] = Field(default_factory=list)
+    template: Optional[str] = None
+    missing_mother_sku: int = 0
+    unmatched_suppliers: List[str] = Field(default_factory=list)
 
 
 # ==================== ORDERS ====================

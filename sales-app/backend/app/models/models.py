@@ -393,6 +393,50 @@ class ImportLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class DataPenjualanTarget(Base):
+    """Monthly revenue targets used only by the imported-sales dashboard."""
+    __tablename__ = "data_penjualan_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "branch",
+            "period",
+            "target_type",
+            "name_key",
+            name="uq_data_penjualan_targets_scope_name",
+        ),
+        Index(
+            "ix_data_penjualan_targets_lookup",
+            "branch",
+            "period",
+            "target_type",
+        ),
+        Index(
+            "ix_data_penjualan_targets_period_branch",
+            "period",
+            "branch",
+            "target_type",
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch = Column(String(20), nullable=False)
+    period = Column(String(7), nullable=False)
+    target_type = Column(String(10), nullable=False)
+    name = Column(String(200), nullable=False)
+    name_key = Column(String(200), nullable=False)
+    target_value = Column(BigInteger, nullable=False)
+    import_log_id = Column(
+        UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class ImportedSale(Base):
     """Baris transaksi penjualan dari file Excel laporan penjualan (import berkala admin).
 
@@ -449,10 +493,65 @@ class ImportedSale(Base):
     diskon = Column(Integer, nullable=True)
     net_per_unit = Column(Integer, nullable=True)
     total_amount = Column(Integer, nullable=True)
+    # Template v2: margin nominal (Rupiah, boleh negatif), mother SKU sebagai
+    # kunci produk lintas cabang, dan divisi sebagai dimensi analitik.
+    margin = Column(BigInteger, nullable=True)
+    mother_sku = Column(String(100), nullable=True)
+    divisi = Column(String(100), nullable=True)
     sales_kode = Column(String(50), nullable=True)
     sales_nama = Column(String(200), nullable=True)
     supplier = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    import_log = relationship("ImportLog")
+
+
+class ImportedReturn(Base):
+    """Baris retur penjualan yang diimpor dari laporan Excel."""
+    __tablename__ = "imported_returns"
+    __table_args__ = (
+        Index(
+            "ix_imported_returns_branch_sale_date",
+            "branch",
+            "sale_date",
+        ),
+        Index(
+            "uq_imported_returns_dedupe_key",
+            "dedupe_key",
+            unique=True,
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    import_log_id = Column(
+        UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=False, index=True
+    )
+    branch = Column(String(20), nullable=True, index=True)
+    sale_date = Column(Date, nullable=False, index=True)
+    product_kode = Column(String(50), nullable=True)
+    product_nama = Column(String(200), nullable=True)
+    mother_sku = Column(String(100), nullable=True)
+    divisi = Column(String(100), nullable=True)
+    supplier = Column(String(100), nullable=True)
+    customer_kode = Column(String(50), nullable=True)
+    customer_nama = Column(String(200), nullable=True)
+    sales_nama = Column(String(200), nullable=True)
+    revenue = Column(BigInteger, nullable=False)
+    margin = Column(BigInteger, nullable=True)
+    dedupe_key = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
     import_log = relationship("ImportLog")
 
@@ -528,8 +627,18 @@ class ImportedSalesMonthlySummary(Base):
     # the read helper to preserve the original API response shape.
     dim_key = Column(String(100), nullable=False, default="")
     dim_label = Column(String(200), nullable=False, default="")
+    product_kode = Column(String(50), nullable=True)
+    mother_sku = Column(String(100), nullable=True)
     qty = Column(BigInteger, nullable=False, default=0)
     revenue = Column(BigInteger, nullable=False, default=0)
+    # Margin nominal bulan ini (template v2). 0 untuk data lama.
+    margin = Column(BigInteger, nullable=False, default=0)
+    retur_revenue = Column(BigInteger, nullable=False, default=0)
+    retur_margin = Column(BigInteger, nullable=False, default=0)
+    retur_rows = Column(BigInteger, nullable=False, default=0)
+    # On RETUR_SUP rows, keeps the corresponding NET supplier omzet for the
+    # return-rate denominator.
+    supplier_net_revenue = Column(BigInteger, nullable=False, default=0)
     row_count = Column(BigInteger, nullable=False, default=0)
     updated_at = Column(
         DateTime(timezone=True),

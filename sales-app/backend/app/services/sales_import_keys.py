@@ -109,6 +109,60 @@ def canonical_sales_key(
     return hashlib.md5(encoded).hexdigest()
 
 
+def canonical_sales_key_v2(
+    *,
+    branch: Optional[str],
+    sale_date: Any,
+    customer_kode: Optional[str],
+    product_kode: Optional[str],
+    sales_nama: Optional[str],
+    supplier: Optional[str],
+) -> str:
+    """Return a stable v2 key that excludes mutable financial/descriptive data."""
+    payload = [
+        "v2",
+        _text(branch),
+        _text(sale_date),
+        _text(customer_kode),
+        _text(product_kode),
+        _text(sales_nama),
+        _text(supplier),
+    ]
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.md5(encoded).hexdigest()
+
+
+def canonical_return_key(
+    *,
+    branch: Optional[str],
+    sale_date: Any,
+    product_kode: Optional[str],
+    customer_kode: Optional[str],
+    sales_nama: Optional[str],
+    supplier: Optional[str],
+) -> str:
+    """Return a stable identity key for one imported return row."""
+    payload = [
+        "return",
+        _text(branch),
+        _text(sale_date),
+        _text(product_kode),
+        _text(customer_kode),
+        _text(sales_nama),
+        _text(supplier),
+    ]
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.md5(encoded).hexdigest()
+
+
 def build_dedupe_key(base: str, occurrence: int) -> str:
     """Combine a base key with a non-negative occurrence suffix."""
     if not base:

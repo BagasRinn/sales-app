@@ -401,31 +401,110 @@ class AdminRepository {
     return _api.postFile('/sales-imports/excel', fileBytes, fileName);
   }
 
+  Future<Map<String, dynamic>> importSalesReturnsExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    final data = await _api.postFile(
+      '/sales-imports/returns/excel',
+      fileBytes,
+      fileName,
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> importSalesTargetsExcel(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    final data = await _api.postFile(
+      '/sales-imports/targets/excel',
+      fileBytes,
+      fileName,
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   /// Cheap freshness probe for the imported-sales summary.
   /// Returns `{month, scope, version, updated_at}`.
+  /// [branch] (global MANAGER only) scopes the probe to one branch; null
+  /// keeps the server-side default (GLOBAL for managers, own branch
+  /// otherwise).
   Future<Map<String, dynamic>> getImportedSalesVersion({
     required String month,
+    int rangeMonths = 1,
+    String? branch,
   }) async {
-    final data = await _api.get(
-      '/sales-imports/version?month=${Uri.encodeQueryComponent(month)}',
-    );
+    final params = <String, String>{
+      'month': month,
+      'range_months': rangeMonths.toString(),
+    };
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.get('/sales-imports/version?$queryString');
     return Map<String, dynamic>.from(data as Map);
   }
 
   /// Aggregated imported-sales summary. [limit] is the top-N per breakdown
   /// (server-side LIMIT). [include] optionally narrows the sections sent.
+  /// [branch] (global MANAGER only) selects one branch; null = server default
+  /// scope (GLOBAL for managers, own branch otherwise).
   Future<Map<String, dynamic>> getImportedSalesSummary({
     String? month,
+    int rangeMonths = 1,
     int limit = 10,
     String? include,
+    String? branch,
   }) async {
-    final params = <String, String>{'limit': limit.toString()};
+    final params = <String, String>{
+      'limit': limit.toString(),
+      'range_months': rangeMonths.toString(),
+    };
     if (month != null && month.isNotEmpty) params['month'] = month;
     if (include != null && include.isNotEmpty) params['include'] = include;
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     final queryString = params.entries
         .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
         .join('&');
     final data = await _api.get('/sales-imports/summary?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteImportedSalesMonth({
+    required String month,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    final params = <String, String>{'month': month};
+    if (branch != null && branch.isNotEmpty) {
+      params['branch'] = branch;
+    } else if (allBranches) {
+      params['all_branches'] = 'true';
+    }
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.delete('/sales-imports/month?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> deleteImportedSalesReturnsMonth({
+    required String month,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    final params = <String, String>{'month': month};
+    if (branch != null && branch.isNotEmpty) {
+      params['branch'] = branch;
+    } else if (allBranches) {
+      params['all_branches'] = 'true';
+    }
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.delete('/sales-imports/returns/month?$queryString');
     return Map<String, dynamic>.from(data as Map);
   }
 

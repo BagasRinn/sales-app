@@ -142,7 +142,7 @@ deploy/bulletins/
 !deploy/.env.monitoring.example
 
 # State lokal Supabase CLI (berisi referensi project, jangan di-commit).
-supabase/.temp/
+supabase/
 
 l.txt
 CLAUDE.md

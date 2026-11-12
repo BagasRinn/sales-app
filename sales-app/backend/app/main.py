@@ -122,6 +122,134 @@ def _ensure_imported_sales_dedupe_key() -> None:
         )
 
 
+def _ensure_imported_sales_template_v2_columns() -> None:
+    """Add Template v2 columns (margin, mother SKU, divisi) + summary margin.
+
+    ``create_all`` never alters an existing table and this project has no
+    Alembic, so the DDL is applied idempotently at startup. When the summary
+    ``margin`` column is added for the first time, all precomputed snapshots
+    are invalidated so the next read rebuilds them with margin/divisi data.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE imported_sales "
+                "ADD COLUMN IF NOT EXISTS margin BIGINT"
+            ))
+            conn.execute(text(
+                "ALTER TABLE imported_sales "
+                "ADD COLUMN IF NOT EXISTS mother_sku VARCHAR(100)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE imported_sales "
+                "ADD COLUMN IF NOT EXISTS divisi VARCHAR(100)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE imported_sales "
+                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                "NOT NULL DEFAULT now()"
+            ))
+
+            summary_columns = {
+                row[0]
+                for row in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'imported_sales_monthly_summary' "
+                    "AND column_name IN ('margin', 'product_kode', 'mother_sku')"
+                )).all()
+            }
+            missing_summary_columns = {
+                "margin", "product_kode", "mother_sku"
+            } - summary_columns
+            if "margin" in missing_summary_columns:
+                conn.execute(text(
+                    "ALTER TABLE imported_sales_monthly_summary "
+                    "ADD COLUMN IF NOT EXISTS margin BIGINT "
+                    "NOT NULL DEFAULT 0"
+                ))
+            if "product_kode" in missing_summary_columns:
+                conn.execute(text(
+                    "ALTER TABLE imported_sales_monthly_summary "
+                    "ADD COLUMN IF NOT EXISTS product_kode VARCHAR(50)"
+                ))
+            if "mother_sku" in missing_summary_columns:
+                conn.execute(text(
+                    "ALTER TABLE imported_sales_monthly_summary "
+                    "ADD COLUMN IF NOT EXISTS mother_sku VARCHAR(100)"
+                ))
+            if missing_summary_columns:
+                # Force a lazy rebuild with the new column/dimension.
+                conn.execute(text("DELETE FROM imported_sales_summary_state"))
+                logger.info(
+                    "[STARTUP] Summary columns added (%s); snapshots invalidated.",
+                    ", ".join(sorted(missing_summary_columns)),
+                )
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning(
+            "[STARTUP] Could not ensure template v2 columns: %s", e
+        )
+
+
+def _ensure_imported_returns() -> None:
+    """Ensure return-import and return-summary columns exist on old installs."""
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE imported_returns "
+                "ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(64)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE imported_returns "
+                "ADD COLUMN IF NOT EXISTS margin BIGINT"
+            ))
+            conn.execute(text(
+                "ALTER TABLE imported_returns "
+                "ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ "
+                "NOT NULL DEFAULT now()"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_imported_returns_branch_sale_date "
+                "ON imported_returns (branch, sale_date)"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_imported_returns_dedupe_key "
+                "ON imported_returns (dedupe_key)"
+            ))
+
+            expected = {
+                "retur_revenue": "BIGINT NOT NULL DEFAULT 0",
+                "retur_margin": "BIGINT NOT NULL DEFAULT 0",
+                "retur_rows": "BIGINT NOT NULL DEFAULT 0",
+                "supplier_net_revenue": "BIGINT NOT NULL DEFAULT 0",
+            }
+            existing = {
+                row[0]
+                for row in conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'imported_sales_monthly_summary'"
+                )).all()
+            }
+            missing = set(expected) - existing
+            for name in sorted(missing):
+                conn.execute(text(
+                    f"ALTER TABLE imported_sales_monthly_summary "
+                    f"ADD COLUMN IF NOT EXISTS {name} {expected[name]}"
+                ))
+            if missing:
+                conn.execute(text("DELETE FROM imported_sales_summary_state"))
+                logger.info(
+                    "[STARTUP] Return summary columns added (%s); snapshots invalidated.",
+                    ", ".join(sorted(missing)),
+                )
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning("[STARTUP] Could not ensure imported returns: %s", e)
+
+
 def _demo_seed_allowed() -> bool:
     """Demo user seeding hanya boleh jalan di lingkungan non-produksi.
 
@@ -149,6 +277,8 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _ensure_imported_sales_index()
     _ensure_imported_sales_dedupe_key()
+    _ensure_imported_sales_template_v2_columns()
+    _ensure_imported_returns()
     # Load branch labels/names from DB into in-memory cache. Falls back to
     # hardcoded constants if the branches table doesn't exist yet (pre-migration).
     from app.core import branch as branch_constants

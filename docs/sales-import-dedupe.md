@@ -27,6 +27,58 @@ memang identik dan sah (misalnya dua baris produk yang sama pada satu file)
 tetap tersimpan terpisah sebagai `#0` dan `#1`. Saat file yang sama di-import
 ulang, urutan occurrence yang sama membuat baris-baris itu cocok satu-per-satu.
 
+### Template v2
+
+Template baru (Cabang, Penjualan, Kode, Nama Pelanggan, Kode Item, Nama Item,
+TOTAL, MARGIN, Sales, Supplier, Mother SKU, Devisi) memakai kunci stabil:
+
+```
+md5(["v2", branch, sale_date, customer_kode, product_kode, sales_nama, supplier])#occurrence
+```
+
+Nilai `TOTAL`, `MARGIN`, nama/deskripsi, Mother SKU, dan Devisi bukan bagian
+dari key. Koreksi nilai tersebut memperbarui baris yang sama, bukan membuat
+duplikat. `Sales` disimpan sebagai `sales_nama`; margin adalah nominal Rupiah
+dan dapat bernilai negatif. Header margin persen tidak dipetakan sebagai
+margin nominal. Template v2 wajib berisi tanggal, TOTAL, identitas produk, dan
+cabang yang dikenali.
+
+Upload v2 diterima hanya dari MANAGER global. SUPERVISOR dapat membaca
+dashboard, tetapi tidak dapat mengunggah atau menghapus data.
+
+## Import retur dan omzet NET
+
+MANAGER global mengunggah laporan retur melalui `POST
+/sales-imports/returns/excel` (`.xlsx`/`.xls`, maksimal 10 MB). Kolom yang
+digunakan adalah Cabang, Tanggal Retur, Kode Item, Nama Item, TOTAL, MARGIN,
+Supplier, Devisi, Mother SKU, Kode Pelanggan, Nama Pelanggan, dan Sales.
+`TOTAL` harus berupa nilai retur nonnegatif; `TOTAL PPN` tidak dipakai.
+`MARGIN` boleh negatif. Cabang harus dikenal, sedangkan tanggal, kode item,
+supplier, dan kode pelanggan wajib ada. Baris tidak valid dilewati dan
+dilaporkan pada hasil import.
+
+Identitas retur memakai `(branch, sale_date, product_kode, customer_kode,
+sales_nama, supplier)` ditambah suffix occurrence. TOTAL, MARGIN, nama,
+Mother SKU, dan Devisi dapat dikoreksi melalui upload ulang tanpa
+menggandakan retur. Mengganti supplier membentuk identitas baru. Supplier yang
+tidak ditemukan pada penjualan di cabang/bulan yang sama dicantumkan pada
+`unmatched_suppliers`.
+
+Snapshot Data Penjualan mengurangi TOTAL dan MARGIN retur secara agregat
+sebelum menghitung total, dimensi Produk, Sales, Pelanggan, Devisi, Supplier,
+tren harian, dan top-N. Qty serta jumlah baris penjualan tetap berasal dari
+laporan penjualan. Kartu Supplier Diretur menampilkan 10 supplier teratas,
+dapat diurutkan menurut omzet atau margin retur, dan menghitung persentase
+retur dari omzet kotor supplier sebagai `retur / (omzet NET + retur)`.
+Target omzet menggunakan angka NET yang sama.
+
+Retur dapat dihapus permanen melalui
+`DELETE /sales-imports/returns/month?month=YYYY-MM&branch=KODE` atau dengan
+`all_branches=true`. Penghapusan hanya untuk bulan yang dipilih, tercatat di
+`import_logs` sebagai `SALES_RETUR_DELETE`, menaikkan versi ringkasan bila
+ada baris yang dihapus, dan membangun ulang snapshot dalam transaksi yang
+sama. Di dashboard, konfirmasi membutuhkan ketikan `YYYY-MM`.
+
 ## Alur import
 
 1. Parser memvalidasi baris seperti sebelumnya (tanggal wajib, baris kosong
@@ -48,6 +100,13 @@ Konsekuensinya, re-import file yang sama:
 - versi ringkasan **tidak** naik;
 - snapshot ringkasan tidak dihitung ulang;
 - cache summary di admin_web tetap valid (hanya probe versi yang jalan).
+- file diproses upsert-only: baris yang tidak ada pada upload ulang **tidak
+  dihapus**, dan bulan yang tidak ada di file tidak berubah.
+
+Untuk mengganti seluruh data satu bulan, MANAGER global dapat menghapus data
+bulan (opsional per cabang) terlebih dahulu, lalu mengimpor ulang file yang
+benar. Penghapusan permanen dicatat pada `import_logs` sebagai
+`SALES_DELETE`; konfirmasi dilakukan dengan mengetik `YYYY-MM`.
 
 ## Legacy dan backfill
 
@@ -73,6 +132,11 @@ python scripts/backfill_sales_dedupe_keys.py
 Script aman dijalankan berulang: hanya baris `NULL` yang disentuh, dan
 occurrence melanjutkan key yang sudah ada.
 
+Startup juga membuat tabel `imported_returns`, indeks dedupe dan
+`(branch, sale_date)`, serta kolom ringkasan retur dengan default 0. Penambahan
+kolom snapshot menginvalidasi state lama satu kali agar ringkasan dibangun
+ulang dengan angka NET; data penjualan historis tidak perlu di-backfill.
+
 ## Trade-off yang disengaja
 
 - **Baris identik tetap bisa berdiri sendiri.** Dedupe tidak menghapus baris
@@ -89,8 +153,29 @@ occurrence melanjutkan key yang sudah ada.
 - **Atribusi cabang memengaruhi key.** Global MANAGER yang meng-import file
   tanpa kolom `Cabang` menyimpan baris `branch = NULL`; file yang sama yang
   di-import oleh user cabang akan punya key berbeda karena `branch` berbeda.
-- **Tidak ada delete/rollback batch.** Import hanya insert/update; menghapus
-  batch import belum termasuk Fase 3.
+- **Tidak ada delete saat upload.** File yang lebih kecil tidak menghapus
+  baris lama; gunakan penghapusan terkonfirmasi per bulan bila memang ingin
+  mengganti seluruh bulan.
 - **`updated` mencakup baris yang tidak berubah.** Response API tidak punya
   field `unchanged`; baris yang cocok tetapi isinya sama tetap dihitung
   `updated` agar kompatibel dengan UI yang sudah ada.
+
+## Template v2, margin, dan dimensi
+
+Kolom `margin`, `mother_sku`, `devisi`, dan `updated_at` ditambahkan secara
+idempotent saat startup. Snapshot bulanan lama diinvalidasi satu kali saat
+kolom margin/dimensi snapshot tersedia, lalu dibangun ulang secara lazy.
+Mother SKU dipakai untuk mengelompokkan produk lintas cabang; jika kosong,
+agregasi memakai Kode Item. Data historis yang belum memiliki Mother SKU tetap
+dapat dibaca tanpa backfill.
+
+Ringkasan dapat diminta untuk 1, 3, 6, atau 12 bulan yang berakhir pada bulan
+pilihan. Satu bulan tetap memakai snapshot; rentang lebih panjang diagregasi
+langsung dari baris sumber agar top-N gabungan tetap tepat.
+
+## Batas upload
+
+`.xlsx` diproses dengan reader read-only dan batch upsert 5.000 baris; upload
+ditulis ke file sementara dan dibatasi 70 MB. `.xls` dibatasi 20 MB karena
+reader legacy memuat workbook ke memori. Proxy Caddy menerima request hingga
+80 MB dan memberi waktu 10 menit untuk transfer/import.

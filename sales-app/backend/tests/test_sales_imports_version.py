@@ -13,7 +13,12 @@ from openpyxl import Workbook
 from sqlalchemy import text
 
 from app.core.security import create_access_token
-from app.main import app, _ensure_imported_sales_dedupe_key
+from app.main import (
+    app,
+    _ensure_imported_sales_dedupe_key,
+    _ensure_imported_sales_template_v2_columns,
+    _ensure_imported_returns,
+)
 from app.models.database import engine
 from app.models.models import Base
 
@@ -28,6 +33,8 @@ Base.metadata.create_all(bind=engine)
 # ``create_all`` does not alter an existing table, so ensure the Phase 3
 # column/index the same way the app startup does.
 _ensure_imported_sales_dedupe_key()
+_ensure_imported_sales_template_v2_columns()
+_ensure_imported_returns()
 
 
 APP_HEADERS = [
@@ -52,6 +59,16 @@ APP_HEADERS = [
     "Nama Sales",
     "Supplier",
 ]
+V2_HEADERS = [
+    "Cabang", "Penjualan", "Kode", "Nama Pelanggan", "Kode Item",
+    "Nama Item", "TOTAL", "MARGIN", "Sales", "Supplier", "Mother SKU",
+    "Divisi",
+]
+RETURN_HEADERS = [
+    "Cabang", "Tanggal Retur", "Kode Item", "Nama Item", "TOTAL",
+    "TOTAL PPN", "MARGIN", "Supplier", "Divisi", "Mother SKU",
+    "Kode Pelanggan", "Nama Pelanggan", "Sales",
+]
 
 
 def _cleanup() -> None:
@@ -59,6 +76,13 @@ def _cleanup() -> None:
         conn.execute(
             text(
                 "DELETE FROM sync_validation_errors WHERE import_log_id IN "
+                "(SELECT id FROM import_logs WHERE file_name LIKE :p)"
+            ),
+            {"p": f"{TEST_PREFIX}%"},
+        )
+        conn.execute(
+            text(
+                "DELETE FROM imported_returns WHERE import_log_id IN "
                 "(SELECT id FROM import_logs WHERE file_name LIKE :p)"
             ),
             {"p": f"{TEST_PREFIX}%"},
@@ -96,6 +120,58 @@ def _cleanup() -> None:
         )
 
 
+def _upload_excel(
+        client: TestClient,
+        token: str,
+        path: str,
+        filename: str,
+        rows: list[list],
+        headers: list[str],
+):
+        return client.post(
+            f"{API}{path}",
+            headers=_headers(token),
+            files={
+                "file": (
+                    filename,
+                    _xlsx(rows, headers),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+
+
+def _v2_row(total: int = 100, margin: int = 20) -> list:
+        return [
+            USER_BRANCH, f"{TEST_MONTH}-15", "C001", "Toko A", "P001",
+            "Produk P001", total, margin, "Budi", "Supplier A", "M001",
+            "Bangunan",
+        ]
+
+
+def _return_row(
+        total: int = 30,
+        margin: int = 5,
+        supplier: str = "Supplier A",
+) -> list:
+        return [
+            USER_BRANCH, f"{TEST_MONTH}-20", "P001", "Produk P001", total,
+            total + 3000, margin, supplier, "Bangunan", "M001", "C001",
+            "Toko A", "Budi",
+        ]
+
+
+def _import_returns(client: TestClient, token: str, row: list):
+        return _upload_excel(
+            client,
+            token,
+            "/sales-imports/returns/excel",
+            f"{TEST_PREFIX}returns.xlsx",
+            [row],
+            RETURN_HEADERS,
+        )
+
+
 def _seed_user(role: str, branch: str | None) -> str:
     user_id = str(uuid.uuid4())
     with engine.begin() as conn:
@@ -127,14 +203,19 @@ def _token(user_id: str, role: str, branch: str | None) -> str:
     )
 
 
+def _manager_token() -> str:
+    user_id = _seed_user("MANAGER", None)
+    return _token(user_id, "MANAGER", None)
+
+
 def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _xlsx(rows: list[list]) -> bytes:
+def _xlsx(rows: list[list], headers: list[str] = APP_HEADERS) -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.append(APP_HEADERS)
+    ws.append(headers)
     for row in rows:
         ws.append(row)
     buf = BytesIO()
@@ -237,7 +318,7 @@ def test_import_bumps_branch_and_global_versions():
     try:
         resp = _import(
             client,
-            sup_token,
+            mgr_token,
             [
                 _row(f"{TEST_PREFIX}T1", "P001", 2, 20000),
                 _row(f"{TEST_PREFIX}T2", "P002", 1, 5000),
@@ -270,10 +351,23 @@ def test_import_bumps_branch_and_global_versions():
         assert data["imported_rows"] == 2
         assert data["by_product"][0]["product_kode"] == "P001"
         assert data["by_product"][0]["revenue"] == 20000
+        assert data["by_supplier"] == [
+            {
+                "supplier": "Supplier A",
+                "qty": 3,
+                "revenue": 25000,
+                "margin": 0,
+            }
+        ]
         # Daily series feeds the analytics trend chart. All fixture rows share
         # one sale date, so the series collapses to a single bucket.
         assert data["by_day"] == [
-            {"date": f"{TEST_MONTH}-15", "qty": 3, "revenue": 25000}
+            {
+                "date": f"{TEST_MONTH}-15",
+                "qty": 3,
+                "margin": 0,
+                "revenue": 25000,
+            }
         ]
         # Per-sales daily series (multi-line chart) uses the same payload.
         assert len(data["by_sales_day"]) == 1
@@ -285,7 +379,7 @@ def test_import_bumps_branch_and_global_versions():
         # A second import with a new trans_no adds a new row, so the versions
         # bump again. Re-importing the *same* rows would not (see dedupe tests
         # below).
-        again = _import(client, sup_token, [_row(f"{TEST_PREFIX}T3", "P003", 1, 1000)])
+        again = _import(client, mgr_token, [_row(f"{TEST_PREFIX}T3", "P003", 1, 1000)])
         assert again.json()["success"] is True
         assert _version(client, sup_token).json()["version"] == 2
         assert _version(client, mgr_token).json()["version"] == 2
@@ -335,6 +429,69 @@ def test_global_manager_import_attributes_rows_via_cabang_column():
         _cleanup()
 
 
+def test_sales_import_access_and_month_delete_are_scoped():
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    branch_manager = _seed_user("MANAGER", USER_BRANCH)
+    supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
+    admin = _seed_user("ADMIN", None)
+    manager_token = _token(manager, "MANAGER", None)
+    branch_manager_token = _token(branch_manager, "MANAGER", USER_BRANCH)
+    supervisor_token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    admin_token = _token(admin, "ADMIN", None)
+    client = TestClient(app)
+    rows = [
+        _row(f"{TEST_PREFIX}DEL1", "P001", 1, 10000, USER_BRANCH),
+        _row(f"{TEST_PREFIX}DEL2", "P002", 1, 20000, OTHER_BRANCH),
+    ]
+
+    try:
+        assert _import(client, supervisor_token, rows).status_code == 403
+        assert _import(client, branch_manager_token, rows).status_code == 403
+        assert _version(client, supervisor_token).status_code == 200
+        assert _summary(client, supervisor_token).status_code == 200
+        assert _version(client, admin_token).status_code == 403
+        assert _summary(client, admin_token).status_code == 403
+        assert client.delete(
+            f"{API}/sales-imports/month?month={TEST_MONTH}&all_branches=true",
+            headers=_headers(supervisor_token),
+        ).status_code == 403
+
+        assert _import(client, manager_token, rows).json()["success"] is True
+        branch_delete = client.delete(
+            f"{API}/sales-imports/month?month={TEST_MONTH}&branch={USER_BRANCH}",
+            headers=_headers(manager_token),
+        )
+        assert branch_delete.status_code == 200, branch_delete.text
+        assert branch_delete.json()["deleted"] == 1
+        version_after_branch_delete = _version(
+            client, manager_token
+        ).json()["version"]
+
+        repeated_delete = client.delete(
+            f"{API}/sales-imports/month?month={TEST_MONTH}&branch={USER_BRANCH}",
+            headers=_headers(manager_token),
+        )
+        assert repeated_delete.status_code == 200
+        assert repeated_delete.json()["deleted"] == 0
+        assert _version(client, manager_token).json()["version"] == (
+            version_after_branch_delete
+        )
+
+        global_delete = client.delete(
+            f"{API}/sales-imports/month?month={TEST_MONTH}&all_branches=true",
+            headers=_headers(manager_token),
+        )
+        assert global_delete.status_code == 200, global_delete.text
+        assert global_delete.json()["deleted"] == 1
+        assert client.delete(
+            f"{API}/sales-imports/month?month={TEST_MONTH}",
+            headers=_headers(manager_token),
+        ).status_code == 400
+    finally:
+        _cleanup()
+
+
 def test_summary_is_strictly_branch_scoped_and_global_sees_all():
     _cleanup()
     manager = _seed_user("MANAGER", None)
@@ -348,13 +505,13 @@ def test_summary_is_strictly_branch_scoped_and_global_sees_all():
     try:
         assert _import(
             client,
-            banjar_token,
+            mgr_token,
             [_row(f"{TEST_PREFIX}B1", "P001", 2, 20000)],
         ).json()["success"] is True
         assert _import(
             client,
-            barabai_token,
-            [_row(f"{TEST_PREFIX}R1", "P009", 1, 99999)],
+            mgr_token,
+            [_row(f"{TEST_PREFIX}R1", "P009", 1, 99999, OTHER_BRANCH)],
         ).json()["success"] is True
 
         banjar = _summary(client, banjar_token).json()
@@ -389,13 +546,13 @@ def test_global_manager_can_filter_summary_by_branch():
     try:
         assert _import(
             client,
-            banjar_token,
+            mgr_token,
             [_row(f"{TEST_PREFIX}B1", "P001", 2, 20000)],
         ).json()["success"] is True
         assert _import(
             client,
-            barabai_token,
-            [_row(f"{TEST_PREFIX}R1", "P009", 1, 99999)],
+            mgr_token,
+            [_row(f"{TEST_PREFIX}R1", "P009", 1, 99999, OTHER_BRANCH)],
         ).json()["success"] is True
 
         # Filtered summary returns only the selected branch's rows.
@@ -448,16 +605,17 @@ def test_summary_limit_and_include_reduce_payload():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
 
     try:
         assert _import(
             client,
-            token,
+            upload_token,
             [
-                _row(f"{TEST_PREFIX}L1", "P001", 1, 10000),
-                _row(f"{TEST_PREFIX}L2", "P002", 1, 30000),
-                _row(f"{TEST_PREFIX}L3", "P003", 1, 20000),
+                _row(f"{TEST_PREFIX}L1", "P001", 1, 10000, sales_nama="Sales A"),
+                _row(f"{TEST_PREFIX}L2", "P002", 1, 30000, sales_nama="Sales B"),
+                _row(f"{TEST_PREFIX}L3", "P003", 1, 20000, sales_nama="Sales C"),
             ],
         ).json()["success"] is True
 
@@ -468,26 +626,74 @@ def test_summary_limit_and_include_reduce_payload():
         # Totals are still for the whole month, not just the top-N.
         assert limited["total_revenue"] == 60000
 
+        limited_sales = _summary(
+            client, token, "limit=1&include=sales"
+        ).json()
+        assert len(limited_sales["by_sales"]) == 1
+
+        all_sales = _summary(
+            client, token, "limit=1&include=all_sales"
+        ).json()
+        assert [row["sales_nama"] for row in all_sales["by_sales"]] == [
+            "Sales B",
+            "Sales C",
+            "Sales A",
+        ]
+
+        all_sales_range = _summary(
+            client,
+            token,
+            "limit=1&range_months=3&include=all_sales",
+        ).json()
+        assert [row["sales_nama"] for row in all_sales_range["by_sales"]] == [
+            "Sales B",
+            "Sales C",
+            "Sales A",
+        ]
+
         only_products = _summary(client, token, "include=product").json()
         assert only_products["by_product"]
         assert only_products["by_sales"] == []
         assert only_products["by_customer"] == []
         assert only_products["by_channel"] == []
+        assert only_products["by_divisi"] == []
+        assert only_products["by_supplier"] == []
         assert only_products["by_day"] == []
         assert only_products["by_sales_day"] == []
 
         only_day = _summary(client, token, "include=day").json()
         assert only_day["by_day"] == [
-            {"date": f"{TEST_MONTH}-15", "qty": 3, "revenue": 60000}
+            {
+                "date": f"{TEST_MONTH}-15",
+                "qty": 3,
+                "margin": 0,
+                "revenue": 60000,
+            }
         ]
         assert only_day["by_product"] == []
         assert only_day["by_channel"] == []
+        assert only_day["by_supplier"] == []
         assert only_day["by_sales_day"] == []
 
+        only_supplier = _summary(client, token, "include=supplier").json()
+        assert only_supplier["by_supplier"] == [
+            {
+                "supplier": "Supplier A",
+                "qty": 3,
+                "revenue": 60000,
+                "margin": 0,
+            }
+        ]
+        assert only_supplier["by_product"] == []
+
         only_sales_day = _summary(client, token, "include=sales_day").json()
-        assert len(only_sales_day["by_sales_day"]) == 1
-        assert only_sales_day["by_sales_day"][0]["points"] == [
-            {"date": f"{TEST_MONTH}-15", "revenue": 60000}
+        assert [
+            row["sales_nama"] for row in only_sales_day["by_sales_day"]
+        ] == ["Sales B", "Sales C", "Sales A"]
+        assert [row["points"] for row in only_sales_day["by_sales_day"]] == [
+            [{"date": f"{TEST_MONTH}-15", "revenue": 30000}],
+            [{"date": f"{TEST_MONTH}-15", "revenue": 20000}],
+            [{"date": f"{TEST_MONTH}-15", "revenue": 10000}],
         ]
         assert only_sales_day["by_day"] == []
         assert only_sales_day["by_product"] == []
@@ -499,12 +705,13 @@ def test_sales_daily_series_orders_by_revenue_and_keeps_days():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
 
     try:
         assert _import(
             client,
-            token,
+            upload_token,
             [
                 _row(
                     f"{TEST_PREFIX}S1",
@@ -585,8 +792,10 @@ def _live_products(scope: str) -> list[dict]:
         rows = conn.execute(
             text(
                 "SELECT product_kode, product_nama, "
+                "MAX(mother_sku) AS mother_sku, "
                 "COALESCE(SUM(qty), 0) AS qty, "
-                "COALESCE(SUM(total_amount), 0) AS revenue "
+                "COALESCE(SUM(total_amount), 0) AS revenue, "
+                "COALESCE(SUM(margin), 0) AS margin "
                 f"FROM imported_sales WHERE {where} "
                 "GROUP BY product_kode, product_nama "
                 "ORDER BY revenue DESC, COALESCE(product_nama, '') ASC, "
@@ -598,8 +807,10 @@ def _live_products(scope: str) -> list[dict]:
         {
             "product_kode": row.product_kode,
             "product_nama": row.product_nama,
+            "mother_sku": row.mother_sku,
             "qty": int(row.qty),
             "revenue": int(row.revenue),
+            "margin": int(row.margin),
         }
         for row in rows
     ]
@@ -609,12 +820,13 @@ def test_precomputed_summary_matches_live_aggregation_and_backfills():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
 
     try:
         assert _import(
             client,
-            token,
+            upload_token,
             [
                 _row(f"{TEST_PREFIX}PC1", "P001", 2, 20000),
                 _row(f"{TEST_PREFIX}PC2", "P002", 1, 30000),
@@ -724,6 +936,7 @@ def test_reimport_same_file_is_idempotent():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
     prefix = f"{TEST_PREFIX}ID"
     rows = [
@@ -732,12 +945,12 @@ def test_reimport_same_file_is_idempotent():
     ]
 
     try:
-        first = _import(client, token, rows).json()
+        first = _import(client, upload_token, rows).json()
         assert first["success"] is True
         assert (first["inserted"], first["updated"]) == (2, 0)
         assert _version(client, token).json()["version"] == 1
 
-        again = _import(client, token, rows).json()
+        again = _import(client, upload_token, rows).json()
         assert again["success"] is True
         assert (again["inserted"], again["updated"]) == (0, 2)
         # No data changed, so no version bump and no summary rebuild.
@@ -757,20 +970,21 @@ def test_reimport_updates_changed_row_and_bumps_version():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
     prefix = f"{TEST_PREFIX}UP"
 
     try:
         assert _import(
             client,
-            token,
+            upload_token,
             [_row(f"{prefix}A", "P001", 2, 20000)],
         ).json()["inserted"] == 1
         assert _version(client, token).json()["version"] == 1
 
         changed = _import(
             client,
-            token,
+            upload_token,
             [_row(f"{prefix}A", "P001", 2, 25000)],
         ).json()
         assert changed["success"] is True
@@ -793,19 +1007,20 @@ def test_reimport_with_new_row_inserts_only_the_new_one():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
     prefix = f"{TEST_PREFIX}NEW"
 
     try:
         assert _import(
             client,
-            token,
+            upload_token,
             [_row(f"{prefix}A", "P001", 1, 10000)],
         ).json()["inserted"] == 1
 
         body = _import(
             client,
-            token,
+            upload_token,
             [
                 _row(f"{prefix}A", "P001", 1, 10000),
                 _row(f"{prefix}B", "P002", 1, 7000),
@@ -827,6 +1042,7 @@ def test_identical_rows_in_one_file_stay_separate_but_idempotent():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
     prefix = f"{TEST_PREFIX}DUP"
     rows = [
@@ -836,13 +1052,13 @@ def test_identical_rows_in_one_file_stay_separate_but_idempotent():
     ]
 
     try:
-        first = _import(client, token, rows).json()
+        first = _import(client, upload_token, rows).json()
         assert (first["inserted"], first["updated"]) == (2, 0)
         keys = _dedupe_keys(prefix)
         assert len(keys) == 2
         assert len(set(keys)) == 2
 
-        again = _import(client, token, rows).json()
+        again = _import(client, upload_token, rows).json()
         assert (again["inserted"], again["updated"]) == (0, 2)
         assert _version(client, token).json()["version"] == 1
         assert _count_rows(prefix) == 2
@@ -854,12 +1070,13 @@ def test_legacy_null_dedupe_key_is_migrated_and_matched():
     _cleanup()
     supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
     token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    upload_token = _manager_token()
     client = TestClient(app)
     prefix = f"{TEST_PREFIX}LEG"
     row = _row(f"{prefix}A", "P001", 1, 10000)
 
     try:
-        assert _import(client, token, [row]).json()["inserted"] == 1
+        assert _import(client, upload_token, [row]).json()["inserted"] == 1
         # Simulate a row imported before Phase 3 added the column.
         with engine.begin() as conn:
             conn.execute(
@@ -870,7 +1087,7 @@ def test_legacy_null_dedupe_key_is_migrated_and_matched():
                 {"t": f"{prefix}A"},
             )
 
-        body = _import(client, token, [row]).json()
+        body = _import(client, upload_token, [row]).json()
         assert body["success"] is True
         assert (body["inserted"], body["updated"]) == (0, 1)
         # Lazy migration assigned a key, but the data did not change.
@@ -895,13 +1112,112 @@ def test_same_trans_no_in_different_branches_is_not_deduped():
     row = _row(f"{prefix}A", "P001", 1, 10000)
 
     try:
-        assert _import(client, banjar_token, [row]).json()["inserted"] == 1
-        assert _import(client, barabai_token, [row]).json()["inserted"] == 1
+        row_other_branch = _row(
+            f"{prefix}A", "P001", 1, 10000, branch=OTHER_BRANCH
+        )
+        response = _import(
+            client, mgr_token, [row, row_other_branch]
+        )
+        assert response.json()["inserted"] == 2
 
         assert _summary(client, banjar_token).json()["imported_rows"] == 1
         assert _summary(client, barabai_token).json()["imported_rows"] == 1
         global_summary = _summary(client, mgr_token).json()
         assert global_summary["imported_rows"] == 2
         assert global_summary["total_revenue"] == 20000
+    finally:
+        _cleanup()
+
+
+def test_return_import_nets_summaries_upserts_and_deletes_by_month():
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
+    manager_token = _token(manager, "MANAGER", None)
+    supervisor_token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    client = TestClient(app)
+    sales = _upload_excel(
+        client,
+        manager_token,
+        "/sales-imports/excel",
+        f"{TEST_PREFIX}v2.xlsx",
+        [_v2_row()],
+        V2_HEADERS,
+    )
+    assert sales.status_code == 200, sales.text
+    assert sales.json()["success"] is True
+
+    try:
+        forbidden_upload = _import_returns(
+            client, supervisor_token, _return_row()
+        )
+        assert forbidden_upload.status_code == 403
+        forbidden_delete = client.delete(
+            f"{API}/sales-imports/returns/month"
+            f"?month={TEST_MONTH}&branch={USER_BRANCH}",
+            headers=_headers(supervisor_token),
+        )
+        assert forbidden_delete.status_code == 403
+
+        first = _import_returns(client, manager_token, _return_row())
+        assert first.status_code == 200, first.text
+        assert first.json()["inserted"] == 1
+
+        repeated = _import_returns(client, manager_token, _return_row())
+        assert repeated.status_code == 200, repeated.text
+        assert repeated.json()["inserted"] == 0
+        assert repeated.json()["updated"] == 1
+        assert repeated.json()["versions"] == []
+
+        summary = _summary(
+            client, manager_token, "include=product,sales,customer,divisi,supplier,supplier_retur"
+        ).json()
+        assert summary["total_revenue"] == 70
+        assert summary["total_margin"] == 15
+        assert summary["total_retur_revenue"] == 30
+        assert summary["total_retur_margin"] == 5
+        assert summary["total_retur_rows"] == 1
+        assert summary["by_product"][0]["revenue"] == 70
+        assert summary["by_sales"][0]["revenue"] == 70
+        assert summary["by_customer"][0]["revenue"] == 70
+        assert summary["by_divisi"][0]["revenue"] == 70
+        assert summary["by_supplier"][0]["revenue"] == 70
+        assert summary["by_supplier_retur"][0] == {
+            "supplier": "Supplier A",
+            "revenue": 30,
+            "margin": 5,
+            "row_count": 1,
+            "supplier_net_revenue": 70,
+        }
+
+        corrected = _import_returns(
+            client, manager_token, _return_row(total=40, margin=8)
+        )
+        assert corrected.json()["inserted"] == 0
+        assert corrected.json()["updated"] == 1
+        corrected_summary = _summary(client, manager_token).json()
+        assert corrected_summary["total_revenue"] == 60
+        assert corrected_summary["total_margin"] == 12
+
+        moved_supplier = _import_returns(
+            client,
+            manager_token,
+            _return_row(total=40, margin=8, supplier="Supplier B"),
+        )
+        assert moved_supplier.json()["inserted"] == 1
+        assert moved_supplier.json()["unmatched_suppliers"] == ["Supplier B"]
+        assert _summary(client, manager_token).json()["total_revenue"] == 20
+
+        deleted = client.delete(
+            f"{API}/sales-imports/returns/month"
+            f"?month={TEST_MONTH}&branch={USER_BRANCH}",
+            headers=_headers(manager_token),
+        )
+        assert deleted.status_code == 200, deleted.text
+        assert deleted.json()["deleted"] == 2
+        final_summary = _summary(client, manager_token).json()
+        assert final_summary["total_revenue"] == 100
+        assert final_summary["total_margin"] == 20
+        assert final_summary["total_retur_rows"] == 0
     finally:
         _cleanup()

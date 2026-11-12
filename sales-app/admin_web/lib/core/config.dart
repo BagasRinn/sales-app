@@ -7,11 +7,9 @@ class AppConfig {
     defaultValue: 'https://api.madsalesapp.my.id/api/v1',
   );
 
-  /// Menu & halaman "Data Penjualan" (import laporan penjualan) disembunyikan
-  /// sementara. Implementasinya TIDAK dihapus — cukup ubah flag ini menjadi
-  /// `true` untuk memunculkannya kembali.
+  /// Menu & halaman "Data Penjualan" (import laporan penjualan).
   ///
-  /// Alasan: fitur ini masih dalam tahap penyempurnaan dan belum perlu
-  /// ditampilkan ke pengguna Admin Web saat ini.
-  static const bool enableImportedSales = false;
+  /// Flag ini dinyalakan untuk tahap pengujian/revisi fitur. Set kembali ke
+  /// `false` kalau menu perlu disembunyikan lagi dari pengguna Admin Web.
+  static const bool enableImportedSales = true;
 }

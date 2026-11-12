@@ -52,3 +52,59 @@ def test_sales_row_month_and_base_key():
     assert row.month == "2026-01"
     assert row.base_key == _row().base_key
     assert row.base_key != _row(branch="BARABAI").base_key
+
+
+def test_v2_key_ignores_correctable_data_but_tracks_natural_identity():
+    original = _row(
+        trans_no=None,
+        key_mode="v2",
+        sales_nama="Entitas Budi",
+        supplier="Supplier A",
+        total_amount=10000,
+        margin=1000,
+        divisi="Bangunan",
+        mother_sku="MOTHER-1",
+    )
+    corrected = _row(
+        trans_no=None,
+        key_mode="v2",
+        sales_nama="Entitas Budi",
+        supplier="Supplier A",
+        total_amount=12000,
+        margin=-500,
+        devisi="Cat",
+        mother_sku="MOTHER-2",
+        product_nama="Nama diperbarui",
+    )
+    assert original.base_key == corrected.base_key
+
+    identity = {
+        "trans_no": None,
+        "key_mode": "v2",
+        "sales_nama": "Entitas Budi",
+        "supplier": "Supplier A",
+    }
+    for changed in (
+        {"branch": "BARABAI"},
+        {"sale_date": date(2026, 1, 16)},
+        {"customer_kode": "C002"},
+        {"product_kode": "P002"},
+        {"sales_nama": "Entitas Lain"},
+        {"supplier": "Supplier B"},
+    ):
+        different_identity = {**identity, **changed}
+        assert original.base_key != _row(**different_identity).base_key
+
+
+def test_v2_data_fields_include_margin_and_dimensions():
+    row = _row(
+        key_mode="v2",
+        margin=-100,
+        mother_sku="MOTHER-1",
+        divisi="Bangunan",
+    )
+    model = row.to_model("log", "key#0")
+    assert model.margin == -100
+    assert model.mother_sku == "MOTHER-1"
+    assert model.divisi == "Bangunan"
+    assert not row.differs_from(model)
