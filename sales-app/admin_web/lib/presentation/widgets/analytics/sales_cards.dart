@@ -10,9 +10,14 @@ import 'sales_analytics_models.dart';
 // ---------------------------------------------------------------------------
 
 class SalesHeroCard extends StatelessWidget {
-  const SalesHeroCard({super.key, required this.analytics});
+  const SalesHeroCard({
+    super.key,
+    required this.analytics,
+    this.comparison,
+  });
 
   final SalesAnalytics analytics;
+  final SalesComparison? comparison;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +83,13 @@ class SalesHeroCard extends StatelessWidget {
             color: AppColors.onPrimaryMuted,
           ),
         ),
+        if (comparison != null && comparison!.hasBaseline) ...[
+          const SizedBox(height: 10),
+          _ComparisonBlock(
+            analytics: analytics,
+            comparison: comparison!,
+          ),
+        ],
       ],
     );
 
@@ -222,6 +234,121 @@ class _HeroMetric extends StatelessWidget {
           style: AppTextStyles.h3.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Blok pembanding: rata-rata omzet N bulan sebelumnya + persentase bulan
+/// ini menuju rata-rata itu. Angka ditampilkan penuh (tanpa disingkat ke M/jt).
+class _ComparisonBlock extends StatelessWidget {
+  const _ComparisonBlock({
+    required this.analytics,
+    required this.comparison,
+  });
+
+  final SalesAnalytics analytics;
+  final SalesComparison comparison;
+
+  String _chipLabel(int months) {
+    switch (months) {
+      case 1:
+        return 'Bulan lalu';
+      case 3:
+        return '3 bulan';
+      case 6:
+        return '6 bulan';
+      case 12:
+        return '12 bulan';
+      default:
+        return '$months bulan';
+    }
+  }
+
+  String _monthRange() {
+    if (comparison.monthly.isEmpty) return '';
+    final first = comparison.monthly.first.month;
+    final last = comparison.monthly.last.month;
+    if (first == last) return first;
+    return '$first – $last';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = analytics.totalRevenue;
+    final baseline = comparison.averageRevenue;
+    final pct = baseline <= 0 ? 0.0 : now / baseline;
+    final pctText = formatPercent(pct);
+    final above = pct >= 1.0;
+
+    final labelText =
+        'Rata-rata ${_chipLabel(comparison.months)} (${_monthRange()})';
+    final countText =
+        comparison.monthsWithData < comparison.months
+            ? ' (${comparison.monthsWithData}/${comparison.months} bulan berdata)'
+            : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$labelText$countText',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.onPrimaryMuted,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              pctText,
+              style: AppTextStyles.caption.copyWith(
+                color: above ? Colors.greenAccent : AppColors.onPrimaryMuted,
+                fontWeight: FontWeight.w700,
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth.clamp(0, double.infinity);
+            final fill = pct.clamp(0.0, 1.0) * width;
+            return Stack(
+              children: [
+                Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                if (fill > 0)
+                  Container(
+                    height: 6,
+                    width: fill,
+                    decoration: BoxDecoration(
+                      color: above ? Colors.greenAccent : Colors.amberAccent,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          formatRupiah(baseline),
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.onPrimarySubtle,
+            fontSize: 10,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),

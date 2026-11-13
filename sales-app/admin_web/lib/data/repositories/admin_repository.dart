@@ -515,6 +515,26 @@ class AdminRepository {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Net omzet per bulan untuk N bulan *sebelum* bulan terpilih.
+  /// Digunakan chip pembanding (1/3/6/12 bulan). Bulan tanpa data tidak
+  /// dikembalikan, sehingga rata-rata di frontend hanya dibagi bulan berdata.
+  Future<Map<String, dynamic>> getImportedSalesComparison({
+    required String month,
+    int months = 1,
+    String? branch,
+  }) async {
+    final params = <String, String>{
+      'month': month,
+      'months': months.toString(),
+    };
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.get('/sales-imports/comparison?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> deleteImportedSalesMonth({
     required String month,
     String? branch,

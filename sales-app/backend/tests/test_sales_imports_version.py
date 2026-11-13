@@ -274,6 +274,14 @@ def _summary(client: TestClient, token: str, query: str = ""):
     )
 
 
+def _comparison(client: TestClient, token: str, query: str = ""):
+    suffix = f"&{query}" if query else ""
+    return client.get(
+        f"{API}/sales-imports/comparison?month={TEST_MONTH}{suffix}",
+        headers=_headers(token),
+    )
+
+
 def test_failed_import_does_not_bump_version():
     _cleanup()
     manager = _seed_user("MANAGER", None)
@@ -1219,5 +1227,102 @@ def test_return_import_nets_summaries_upserts_and_deletes_by_month():
         assert final_summary["total_revenue"] == 100
         assert final_summary["total_margin"] == 20
         assert final_summary["total_retur_rows"] == 0
+    finally:
+        _cleanup()
+
+
+def test_comparison_returns_months_before_selected_month():
+    """Pembanding N bulan adalah bulan *sebelum* bulan terpilih."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        # 100 di 2098-12, 200 di 2099-01 (bulan terpilih), 300 di 2099-02
+        _import(client, token, [_row("T1", "P001", 1, 100, sale_date="2098-12-15")])
+        _import(client, token, [_row("T2", "P001", 1, 200, sale_date="2099-01-15")])
+        _import(client, token, [_row("T3", "P001", 1, 300, sale_date="2099-02-15")])
+
+        c3 = _comparison(client, token, "months=3").json()
+        assert c3["month"] == "2099-01"
+        assert c3["months_with_data"] == 1
+        # Bulan sebelum 2099-01: 2098-10, 2098-11, 2098-12 → hanya 2098-12 punya data
+        assert [m["month"] for m in c3["monthly"]] == ["2098-12"]
+        assert c3["monthly"][0]["net_revenue"] == 100
+        assert c3["average_revenue"] == 100
+
+        c12 = _comparison(client, token, "months=12").json()
+        assert [m["month"] for m in c12["monthly"]] == ["2098-12"]
+    finally:
+        _cleanup()
+
+
+def test_comparison_nets_retur_and_excludes_selected_month():
+    """Omzet pembanding sudah dikurangi retur; bulan terpilih ikut diabaikan."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        # Bulan terpilih 2099-01: penjualan 1000 + retur 200
+        _import(client, token, [_row("T1", "P001", 1, 1000, sale_date="2099-01-10")])
+        _import_returns(client, token, _return_row(total=200, margin=0))
+        # Bulan sebelumnya 2098-12: penjualan 600, tanpa retur
+        _import(client, token, [_row("T2", "P001", 1, 600, sale_date="2098-12-10")])
+        # Bulan sebelumnya 2098-11: penjualan 400
+        _import(client, token, [_row("T3", "P001", 1, 400, sale_date="2098-11-10")])
+
+        c2 = _comparison(client, token, "months=2").json()
+        assert c2["months_with_data"] == 2
+        by_month = {m["month"]: m for m in c2["monthly"]}
+        assert by_month["2098-12"]["net_revenue"] == 600
+        assert by_month["2098-12"]["retur_revenue"] == 0
+        assert by_month["2098-11"]["net_revenue"] == 400
+        assert c2["total_revenue"] == 1000
+        assert c2["average_revenue"] == 500
+    finally:
+        _cleanup()
+
+
+def test_comparison_is_branch_scoped_for_non_global_manager():
+    """Supervisor hanya melihat data cabangnya sendiri."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    supervisor = _seed_user("SUPERVISOR", USER_BRANCH)
+    manager_token = _token(manager, "MANAGER", None)
+    supervisor_token = _token(supervisor, "SUPERVISOR", USER_BRANCH)
+    client = TestClient(app)
+
+    try:
+        # 500 di BANJARMASIN bulan lalu, 900 di BARABAI bulan lalu
+        _import(client, manager_token, [_row("T1", "P001", 1, 500, sale_date="2098-12-10")])
+        _import(client, manager_token, [_row("T2", "P002", 1, 900, sale_date="2098-12-10", branch="BARABAI")])
+
+        c_sup = _comparison(client, supervisor_token, "months=1").json()
+        assert c_sup["scope"] == USER_BRANCH
+        assert c_sup["months_with_data"] == 1
+        assert c_sup["monthly"][0]["net_revenue"] == 500
+
+        c_mgr = _comparison(client, manager_token, "months=1&branch=BARABAI").json()
+        assert c_mgr["monthly"][0]["net_revenue"] == 900
+    finally:
+        _cleanup()
+
+
+def test_comparison_empty_month_returns_zero_average():
+    """Tanpa data sama sekali, average 0 dan monthly kosong."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        c = _comparison(client, token, "months=6").json()
+        assert c["months_with_data"] == 0
+        assert c["total_revenue"] == 0
+        assert c["average_revenue"] == 0
+        assert c["monthly"] == []
     finally:
         _cleanup()

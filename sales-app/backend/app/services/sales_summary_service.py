@@ -936,3 +936,60 @@ def read_summary_range(
             if group["retur_rows"]
         ]
     return result
+
+
+def read_monthly_comparison(
+    db: Session,
+    scope: str,
+    start: datetime,
+    month_end: datetime,
+) -> List[Dict[str, Any]]:
+    """Net omzet per bulan (omzet − retur) untuk semua bulan dalam rentang.
+
+    Digunakan chip pembanding di dashboard: N bulan *sebelum* bulan terpilih.
+    Setiap entri berisi ``month`` (YYYY-MM), ``net_revenue``,
+    ``gross_revenue``, ``retur_revenue``, dan ``rows``. Bulan tanpa data
+    sama sekali tidak dikembalikan (frontend lewati saat menghitung rata-rata).
+    """
+    month_expr = func.to_char(ImportedSale.sale_date, "YYYY-MM").label("month")
+    sales_rows = (
+        _scope_query(db, scope, start, month_end)
+        .with_entities(
+            month_expr,
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
+                "gross_revenue"
+            ),
+            func.count(ImportedSale.id).label("rows"),
+        )
+        .group_by(month_expr)
+        .all()
+    )
+    retur_expr = func.to_char(ImportedReturn.sale_date, "YYYY-MM").label("month")
+    return_rows = (
+        _scope_return_query(db, scope, start, month_end)
+        .with_entities(
+            retur_expr,
+            func.coalesce(func.sum(ImportedReturn.revenue), 0).label(
+                "retur_revenue"
+            ),
+        )
+        .group_by(retur_expr)
+        .all()
+    )
+    retur_by_month = {str(row[0]): int(row[1] or 0) for row in return_rows}
+    result: List[Dict[str, Any]] = []
+    for row in sales_rows:
+        month_key = str(row[0])
+        gross = int(row[1] or 0)
+        retur = retur_by_month.get(month_key, 0)
+        result.append(
+            {
+                "month": month_key,
+                "gross_revenue": gross,
+                "retur_revenue": retur,
+                "net_revenue": gross - retur,
+                "rows": int(row[2] or 0),
+            }
+        )
+    result.sort(key=lambda item: item["month"])
+    return result

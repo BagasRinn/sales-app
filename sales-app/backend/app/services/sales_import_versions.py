@@ -129,6 +129,22 @@ def months_in_range(end_month: str, range_months: int) -> List[str]:
     return result
 
 
+def months_before(end_month: str, count: int) -> List[str]:
+    """Return ``count`` YYYY-MM keys strictly *before* ``end_month``.
+
+    The comparison chips on the dashboard use the N months preceding the
+    selected month (the selected month itself is never part of the baseline),
+    so this differs from :func:`months_in_range`, which includes ``end_month``.
+    """
+    year, month = map(int, end_month.split("-"))
+    end_index = year * 12 + month - 1
+    result = []
+    for offset in range(count, 0, -1):
+        index = end_index - offset
+        result.append(f"{index // 12:04d}-{index % 12 + 1:02d}")
+    return result
+
+
 def get_range_version(
     db: Session,
     scope: str,

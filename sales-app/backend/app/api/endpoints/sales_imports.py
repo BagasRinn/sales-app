@@ -36,6 +36,7 @@ from app.services.sales_import_versions import (
     bump_versions,
     get_range_version,
     get_version,
+    months_before,
     months_in_range,
     parse_month,
     resolve_scope,
@@ -43,6 +44,7 @@ from app.services.sales_import_versions import (
 from app.services.sales_summary_service import (
     ensure_summary,
     read_daily_series,
+    read_monthly_comparison,
     read_sales_daily_series,
     recompute_summary,
     read_summary,
@@ -446,6 +448,43 @@ def imported_sales_summary(
         "supplier_targets": supplier_targets,
         "by_day": by_day,
         "by_sales_day": by_sales_day,
+    }
+
+
+@router.get("/comparison")
+def imported_sales_comparison(
+    response: Response,
+    month: Optional[str] = None,
+    branch: Optional[str] = None,
+    months: int = Query(3, ge=1, le=12),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
+):
+    """Net omzet per bulan untuk N bulan *sebelum* bulan terpilih.
+
+    Digunakan chip pembanding di dashboard (Bulanan / 3 / 6 / 12). Bulan
+    yang tidak punya data sama sekali tidak dikembalikan, sehingga rata-rata
+    di frontend hanya dibagi dengan jumlah bulan yang berdata.
+    """
+    normalized, _, month_end = parse_month(month)
+    scope = resolve_scope(current_user, branch)
+    month_keys = months_before(normalized, months)
+    _, start, _ = parse_month(month_keys[0])
+    _, selected_start, _ = parse_month(normalized)
+    monthly = read_monthly_comparison(db, scope, start, selected_start)
+    total = sum(int(item["net_revenue"] or 0) for item in monthly)
+    count = len(monthly)
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store"
+    return {
+        "month": normalized,
+        "months": months,
+        "scope": scope,
+        "month_keys": month_keys,
+        "months_with_data": count,
+        "total_revenue": total,
+        "average_revenue": (total // count) if count else 0,
+        "monthly": monthly,
     }
 
 

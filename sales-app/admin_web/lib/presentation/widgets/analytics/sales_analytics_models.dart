@@ -413,6 +413,73 @@ class SalesAnalytics {
       '${date.day.toString().padLeft(2, '0')}';
 }
 
+/// Payload pembanding: net omzet per bulan untuk N bulan *sebelum* bulan
+/// terpilih. Digunakan chip pembanding (1/3/6/12 bulan) di dashboard.
+class SalesComparison {
+  final String month; // bulan terpilih, YYYY-MM
+  final int months; // jumlah bulan pembanding yang diminta (1/3/6/12)
+  final int monthsWithData; // berapa bulan yang actually punya data
+  final int totalRevenue; // jumlah net omzet bulan berdata
+  final int averageRevenue; // mean (integer) = totalRevenue ~/ monthsWithData
+  final List<ComparisonMonth> monthly;
+
+  const SalesComparison({
+    required this.month,
+    required this.months,
+    required this.monthsWithData,
+    required this.totalRevenue,
+    required this.averageRevenue,
+    required this.monthly,
+  });
+
+  factory SalesComparison.fromMap(Map<String, dynamic> m,
+      {int months = 1}) {
+    final monthly = (m['monthly'] as List? ?? const [])
+        .whereType<Map<dynamic, dynamic>>()
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+        .map((e) => ComparisonMonth.fromMap(e))
+        .toList(growable: false);
+    return SalesComparison(
+      month: m['month']?.toString() ?? '',
+      months: months,
+      monthsWithData: (m['months_with_data'] as num?)?.toInt() ?? 0,
+      totalRevenue: (m['total_revenue'] as num?)?.toInt() ?? 0,
+      averageRevenue: (m['average_revenue'] as num?)?.toInt() ?? 0,
+      monthly: monthly,
+    );
+  }
+
+  /// Apakah ada setidaknya satu bulan pembanding yang punya data.
+  bool get hasBaseline => monthsWithData > 0 && averageRevenue > 0;
+}
+
+class ComparisonMonth {
+  final String month;
+  final int grossRevenue;
+  final int returRevenue;
+  final int netRevenue;
+  final int rows;
+
+  const ComparisonMonth({
+    required this.month,
+    required this.grossRevenue,
+    required this.returRevenue,
+    required this.netRevenue,
+    required this.rows,
+  });
+
+  factory ComparisonMonth.fromMap(Map<String, dynamic> m) => ComparisonMonth(
+        month: m['month']?.toString() ?? '',
+        grossRevenue: (m['gross_revenue'] as num?)?.toInt() ?? 0,
+        returRevenue: (m['retur_revenue'] as num?)?.toInt() ?? 0,
+        netRevenue: (m['net_revenue'] as num?)?.toInt() ?? 0,
+        rows: (m['rows'] as num?)?.toInt() ?? 0,
+      );
+
+  /// Bulan ini ikut dihitung ke rata-rata (punya data nyata).
+  bool get countsTowardAverage => netRevenue > 0 || rows > 0;
+}
+
 DateTime? _parseDateTime(dynamic value) {
   if (value == null) return null;
   final parsed = DateTime.tryParse(value.toString());

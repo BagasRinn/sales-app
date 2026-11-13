@@ -65,11 +65,13 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
       '${_month.month.toString().padLeft(2, '0')}';
 
   Future<void> _loadSummary({bool forceRefresh = false, int? limit}) async {
+    // Ringkasan dashboard selalu satu bulan terpilih. Chip di toolbar adalah
+    // pembanding (N bulan sebelumnya), bukan agregasi multi-bulan.
     await context.read<AdminProvider>().loadImportedSalesSummary(
       month: _monthKey,
       forceRefresh: forceRefresh,
       limit: limit,
-      rangeMonths: context.read<AdminProvider>().importedSalesRangeMonths,
+      rangeMonths: 1,
     );
   }
 
@@ -87,11 +89,8 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     await _loadSummary();
   }
 
-  Future<void> _changeRange(int rangeMonths) async {
-    final provider = context.read<AdminProvider>();
-    if (provider.importedSalesRangeMonths == rangeMonths) return;
-    provider.setImportedSalesRangeMonths(rangeMonths);
-    await _loadSummary();
+  Future<void> _changeComparison(int months) async {
+    await context.read<AdminProvider>().setImportedSalesComparisonMonths(months);
   }
 
   Future<void> _pickMonth() async {
@@ -334,7 +333,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     final importResult = provider.salesImportResult;
     final returnImportResult = provider.salesReturnImportResult;
     final targetImportResult = provider.salesTargetImportResult;
-    final rangeMonths = provider.importedSalesRangeMonths;
+    final comparisonMonths = provider.importedSalesComparisonMonths;
 
     // Never label old-month data with the newly selected month: only render
     // the summary when the payload actually belongs to the visible period.
@@ -342,7 +341,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     final analytics =
         (summary != null &&
             summaryMonth == _monthKey &&
-            ((summary['range_months'] as num?)?.toInt() ?? 1) == rangeMonths)
+            ((summary['range_months'] as num?)?.toInt() ?? 1) == 1)
         ? SalesAnalytics.fromSummary(summary, _month)
         : null;
 
@@ -419,7 +418,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                 month: _month,
                 loading: isLoading,
                 limit: limit,
-                rangeMonths: rangeMonths,
+                comparisonMonths: comparisonMonths,
                 updatedAt: analytics?.updatedAt,
                 rowCount: analytics?.totalRows,
                 showBranchFilter: provider.isGlobalManager,
@@ -433,7 +432,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                 onPick: _pickMonth,
                 onRefresh: () => _loadSummary(forceRefresh: true),
                 onLimitChanged: (value) => _loadSummary(limit: value),
-                onRangeChanged: _changeRange,
+                onComparisonChanged: _changeComparison,
               ),
               if (errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -516,6 +515,12 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
               else
                 _AnalyticsBody(
                   analytics: analytics,
+                  comparison: provider.importedSalesComparison != null
+                      ? SalesComparison.fromMap(
+                          provider.importedSalesComparison!,
+                          months: comparisonMonths,
+                        )
+                      : null,
                   limit: limit,
                   allBranches:
                       provider.isGlobalManager &&
@@ -759,6 +764,7 @@ class _DeleteMonthDialogState extends State<_DeleteMonthDialog> {
 class _AnalyticsBody extends StatelessWidget {
   const _AnalyticsBody({
     required this.analytics,
+    required this.comparison,
     required this.limit,
     required this.allBranches,
     required this.branchOptions,
@@ -772,6 +778,7 @@ class _AnalyticsBody extends StatelessWidget {
   });
 
   final SalesAnalytics analytics;
+  final SalesComparison? comparison;
   final int limit;
   final bool allBranches;
   final List<BranchOption> branchOptions;
@@ -789,7 +796,10 @@ class _AnalyticsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SalesHeroCard(analytics: analytics),
+        SalesHeroCard(
+          analytics: analytics,
+          comparison: comparison,
+        ),
         const SizedBox(height: AppSpacing.md),
         if (analytics.divisi.isEmpty)
           AppCard(
@@ -1545,7 +1555,7 @@ class _PeriodToolbar extends StatelessWidget {
     required this.month,
     required this.loading,
     required this.limit,
-    required this.rangeMonths,
+    required this.comparisonMonths,
     required this.updatedAt,
     required this.rowCount,
     required this.showBranchFilter,
@@ -1557,13 +1567,13 @@ class _PeriodToolbar extends StatelessWidget {
     required this.onPick,
     required this.onRefresh,
     required this.onLimitChanged,
-    required this.onRangeChanged,
+    required this.onComparisonChanged,
   });
 
   final DateTime month;
   final bool loading;
   final int limit;
-  final int rangeMonths;
+  final int comparisonMonths;
   final DateTime? updatedAt;
   final int? rowCount;
   final bool showBranchFilter;
@@ -1575,7 +1585,7 @@ class _PeriodToolbar extends StatelessWidget {
   final VoidCallback onPick;
   final VoidCallback onRefresh;
   final ValueChanged<int> onLimitChanged;
-  final ValueChanged<int> onRangeChanged;
+  final ValueChanged<int> onComparisonChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1652,11 +1662,20 @@ class _PeriodToolbar extends StatelessWidget {
       runSpacing: AppSpacing.sm,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        Text(
+          'Pembanding:',
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
         for (final option in const [1, 3, 6, 12])
           AppChoiceChip(
             label: option == 1 ? 'Bulanan' : '$option Bulan',
-            selected: rangeMonths == option,
-            onSelected: loading ? null : () => onRangeChanged(option),
+            selected: comparisonMonths == option,
+            onSelected: loading ? null : () => onComparisonChanged(option),
           ),
         AppChoiceChip(
           label: 'Top 10',

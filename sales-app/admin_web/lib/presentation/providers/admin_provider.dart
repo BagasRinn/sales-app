@@ -84,6 +84,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _importedSalesVersion = 0;
   int _importedSalesLimit = 10;
   int _importedSalesRangeMonths = 1;
+  int _importedSalesComparisonMonths = 1;
+
+  /// Rata-rata omzet N bulan sebelum bulan terpilih (payload pembanding).
+  Map<String, dynamic>? _importedSalesComparison;
+  final Map<String, Map<String, dynamic>> _importedSalesComparisonCache = {};
 
   /// Branch the global MANAGER is currently inspecting. null = GLOBAL
   /// (all branches). Branch-scoped roles ignore this field; the backend
@@ -324,6 +329,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get importedSalesVersion => _importedSalesVersion;
   int get importedSalesLimit => _importedSalesLimit;
   int get importedSalesRangeMonths => _importedSalesRangeMonths;
+  int get importedSalesComparisonMonths => _importedSalesComparisonMonths;
+  Map<String, dynamic>? get importedSalesComparison => _importedSalesComparison;
   String? get importedSalesBranchFilter => _importedSalesBranchFilter;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, dynamic>? get salesReturnImportResult => _salesReturnImportResult;
@@ -1660,6 +1667,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         scope: dataScope,
         fetchedAt: DateTime.now(),
       );
+      // Fetch pembanding di latar belakang; tidak menunggu sebelum menampilkan
+      // ringkasan bulan terpilih.
+      fetchImportedSalesComparison();
       return true;
     } catch (e) {
       if (requestId != _importedSalesRequestId) return false;
@@ -1690,6 +1700,47 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _importedSalesSummary = null;
     _importedSalesError = null;
     notifyListeners();
+  }
+
+  /// Ganti jumlah bulan pembanding (1/3/6/12). Hanya fetch payload
+  /// pembanding; ringkasan bulan terpilih tidak disentuh.
+  Future<void> setImportedSalesComparisonMonths(int months) async {
+    if (![1, 3, 6, 12].contains(months)) {
+      throw ArgumentError.value(months, 'months');
+    }
+    if (_importedSalesComparisonMonths == months) return;
+    _importedSalesComparisonMonths = months;
+    _importedSalesComparison = null;
+    notifyListeners();
+    await fetchImportedSalesComparison();
+  }
+
+  /// Fetch payload pembanding untuk bulan/skope saat ini. Silence errors:
+  /// pembanding adalah hiasan, tidak boleh memblokir tampilan utama.
+  Future<void> fetchImportedSalesComparison() async {
+    final month = _importedSalesMonth ?? _currentImportedSalesMonth();
+    final branch = isGlobalManager ? _importedSalesBranchFilter : null;
+    final cacheKey =
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths';
+    final cached = _importedSalesComparisonCache[cacheKey];
+    if (cached != null) {
+      _importedSalesComparison = cached;
+      notifyListeners();
+      return;
+    }
+    try {
+      final data = await _repo.getImportedSalesComparison(
+        month: month,
+        months: _importedSalesComparisonMonths,
+        branch: branch,
+      );
+      _importedSalesComparisonCache[cacheKey] = data;
+      _importedSalesComparison = data;
+    } catch (_) {
+      _importedSalesComparison = null;
+    } finally {
+      notifyListeners();
+    }
   }
 
   Future<Map<String, int>> getImportedSalesMonthTotals(String month) async {
