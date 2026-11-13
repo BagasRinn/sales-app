@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/datetime_utils.dart';
+import '../../core/api_exception.dart';
 import '../repositories/api_service.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -376,53 +377,95 @@ class AdminRepository {
     return SyncResult.fromJson(data);
   }
 
-  Future<SyncResult> importExcel(List<int> fileBytes, String fileName) async {
+  Future<SyncResult> importExcel(
+    List<int> fileBytes,
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     final data = await _api.postFile(
       '/products/import-excel',
       fileBytes,
       fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
     );
     return SyncResult.fromJson(data);
   }
 
   Future<SyncResult> importCustomersExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     final data = await _api.postFile(
       '/customers/import-excel',
       fileBytes,
       fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
     );
     return SyncResult.fromJson(data);
   }
 
-  Future<dynamic> importSalesExcel(List<int> fileBytes, String fileName) async {
-    return _api.postFile('/sales-imports/excel', fileBytes, fileName);
+  Future<dynamic> importSalesExcel(
+    List<int> fileBytes,
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    return _api.postFile(
+      '/sales-imports/excel',
+      fileBytes,
+      fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
+    );
   }
 
   Future<Map<String, dynamic>> importSalesReturnsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     final data = await _api.postFile(
       '/sales-imports/returns/excel',
       fileBytes,
       fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
     );
     return Map<String, dynamic>.from(data as Map);
   }
 
   Future<Map<String, dynamic>> importSalesTargetsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     final data = await _api.postFile(
       '/sales-imports/targets/excel',
       fileBytes,
       fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
     );
     return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Snapshot progres import dari backend. Null saat job belum terdaftar
+  /// (biasanya karena upload masih berjalan).
+  Future<Map<String, dynamic>?> getImportProgress(String jobId) async {
+    try {
+      final data = await _api.get('/import-progress/$jobId');
+      return data is Map ? Map<String, dynamic>.from(data) : null;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   /// Cheap freshness probe for the imported-sales summary.

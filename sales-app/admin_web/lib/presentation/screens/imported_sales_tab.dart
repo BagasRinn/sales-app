@@ -10,6 +10,7 @@ import '../providers/admin_provider.dart';
 import '../widgets/analytics/sales_analytics_models.dart';
 import '../widgets/analytics/sales_cards.dart';
 import '../widgets/analytics/sales_charts.dart';
+import '../widgets/import_progress.dart';
 
 /// Data Penjualan: an analytics view over the imported Excel report.
 ///
@@ -144,7 +145,19 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     if (!context.mounted) return;
     final provider = context.read<AdminProvider>();
     setState(() => _importing = true);
-    final success = await provider.importSalesExcel(file.bytes!, file.name);
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Laporan Penjualan',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importSalesExcel(
+        file.bytes!,
+        file.name,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
+    );
     if (!context.mounted) return;
     setState(() => _importing = false);
     if (success) {
@@ -203,9 +216,18 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     if (!context.mounted) return;
     final provider = context.read<AdminProvider>();
     setState(() => _importingReturn = true);
-    final success = await provider.importSalesReturnsExcel(
-      file.bytes!,
-      file.name,
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Laporan Retur',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importSalesReturnsExcel(
+        file.bytes!,
+        file.name,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
     );
     if (!context.mounted) return;
     setState(() => _importingReturn = false);
@@ -262,9 +284,18 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     if (!context.mounted) return;
     final provider = context.read<AdminProvider>();
     setState(() => _importingTarget = true);
-    final success = await provider.importSalesTargetsExcel(
-      file.bytes!,
-      file.name,
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Target Penjualan',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importSalesTargetsExcel(
+        file.bytes!,
+        file.name,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
     );
     if (!context.mounted) return;
     setState(() => _importingTarget = false);

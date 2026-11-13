@@ -134,6 +134,8 @@ class ApiService {
     List<int> fileBytes,
     String fileName, {
     CancelToken? cancelToken,
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
   }) async {
     try {
       final formData = FormData.fromMap({
@@ -144,8 +146,12 @@ class ApiService {
         endpoint,
         data: formData,
         cancelToken: cancelToken,
+        onSendProgress: onSendProgress,
         options: Options(
-          headers: {'Content-Type': 'multipart/form-data'},
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'X-Import-Job-Id': ?jobId,
+          },
           receiveTimeout:
               (endpoint.contains('/import-excel') ||
                   endpoint.contains('/sales-imports'))
@@ -169,13 +175,18 @@ class ApiService {
     return Map<String, dynamic>.from(data);
   }
 
-  Future<void> delete(
+  Future<dynamic> delete(
     String endpoint, {
     Map<String, dynamic>? data,
     CancelToken? cancelToken,
   }) async {
     try {
-      await _dio.delete(endpoint, data: data, cancelToken: cancelToken);
+      final resp = await _dio.delete(
+        endpoint,
+        data: data,
+        cancelToken: cancelToken,
+      );
+      return resp.data;
     } on DioException catch (e) {
       throw _handleError(e);
     }

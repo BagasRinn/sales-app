@@ -71,7 +71,12 @@ class _FakeImportedSalesRepository extends AdminRepository {
   }
 
   @override
-  Future<dynamic> importSalesExcel(List<int> fileBytes, String fileName) async {
+  Future<dynamic> importSalesExcel(
+    List<int> fileBytes,
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     if (failImport != null) throw failImport!;
     return importResult ??
         {
@@ -88,8 +93,10 @@ class _FakeImportedSalesRepository extends AdminRepository {
   @override
   Future<Map<String, dynamic>> importSalesReturnsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     return returnImportResult ??
         {
           'success': true,
@@ -106,8 +113,10 @@ class _FakeImportedSalesRepository extends AdminRepository {
   @override
   Future<Map<String, dynamic>> importSalesTargetsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     return targetImportResult ??
         {
           'success': true,

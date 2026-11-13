@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../core/config.dart';
 import '../../core/design_system.dart';
 import '../../core/datetime_utils.dart';
 import '../../core/responsive.dart';
 import '../../core/responsive_dialog.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/import_progress.dart';
 import '../../data/models/sync_result.dart';
 
 class SyncTab extends StatefulWidget {
@@ -113,79 +113,6 @@ class _SyncTabState extends State<SyncTab> {
                 readOnly: widget.readOnly,
               ),
 
-              // Sales Report Import Card — only when the Data Penjualan
-              // feature (analysis tab) is enabled; otherwise users could
-              // import data they cannot view.
-              if (!widget.readOnly && AppConfig.enableImportedSales)
-                AppCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.primarySoft,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.upload_file,
-                                size: 32,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 20),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Import Laporan Penjualan',
-                                    style: AppTextStyles.headlineMedium,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  const Text(
-                                    'Upload file .xlsx berisi laporan penjualan dari sistem utama',
-                                    style: AppTextStyles.bodyMedium,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: FilledButton.icon(
-                            onPressed: (isLoading || widget.readOnly)
-                                ? null
-                                : () => _pickAndImportSales(context, provider),
-                            icon: isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.folder_open),
-                            label: Text(
-                              isLoading
-                                  ? 'Mengimport...'
-                                  : 'Pilih File Laporan Penjualan (.xlsx)',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
               // Result cards
               if (syncResult != null) ...[
                 const SizedBox(height: 32),
@@ -239,8 +166,21 @@ class _SyncTabState extends State<SyncTab> {
       }
       return;
     }
+    if (!context.mounted) return;
 
-    final success = await provider.importExcel(file.bytes!, file.name);
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Data Produk',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importExcel(
+        file.bytes!,
+        file.name,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
+    );
     if (success && context.mounted) {
       final result_ = provider.lastSyncResult;
       _historyKey.currentState?._refresh();
@@ -258,51 +198,6 @@ class _SyncTabState extends State<SyncTab> {
         ),
       );
     } else if (!success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.errorMessage ?? 'Import gagal'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _pickAndImportSales(
-    BuildContext context,
-    AdminProvider provider,
-  ) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null || file.bytes!.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal membaca file'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-      return;
-    }
-    final success = await provider.importSalesExcel(file.bytes!, file.name);
-    if (!context.mounted) return;
-    // Both outcomes create an ImportLog row (a failed import records the
-    // validation errors), so refresh history and error sections either way.
-    _historyKey.currentState?._refresh();
-    _errorsKey.currentState?._refresh();
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Import laporan penjualan berhasil'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage ?? 'Import gagal'),
@@ -1426,9 +1321,22 @@ class _CustomerImportCardState extends State<_CustomerImportCard> {
       );
       return;
     }
+    if (!context.mounted) return;
 
     setState(() => _importing = true);
-    final success = await provider.importCustomersExcel(file.bytes!, file.name);
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Data Toko',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importCustomersExcel(
+        file.bytes!,
+        file.name,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
+    );
     if (!mounted) return;
     setState(() => _importing = false);
 

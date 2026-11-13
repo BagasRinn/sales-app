@@ -1446,10 +1446,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> importExcel(List<int> fileBytes, String fileName) async {
+  Future<bool> importExcel(
+    List<int> fileBytes,
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     _setLoading(true, 'Mengimport file Excel...');
     try {
-      _lastSyncResult = await _repo.importExcel(fileBytes, fileName);
+      _lastSyncResult = await _repo.importExcel(
+        fileBytes,
+        fileName,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
+      );
       await _loadProducts();
       await _loadStats();
       _setLoading(false);
@@ -1464,11 +1474,18 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> importCustomersExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     _setLoading(true, 'Mengimport data toko...');
     try {
-      _lastSyncResult = await _repo.importCustomersExcel(fileBytes, fileName);
+      _lastSyncResult = await _repo.importCustomersExcel(
+        fileBytes,
+        fileName,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
+      );
       _setLoading(false);
       return true;
     } catch (e) {
@@ -1476,6 +1493,15 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _errorMessage = e is ApiException ? e.message : e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Poll snapshot progres import dari backend; null jika job belum terdaftar.
+  Future<Map<String, dynamic>?> fetchImportProgress(String jobId) async {
+    try {
+      return await _repo.getImportProgress(jobId);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1742,11 +1768,21 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> importSalesExcel(List<int> fileBytes, String fileName) async {
+  Future<bool> importSalesExcel(
+    List<int> fileBytes,
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     _salesImportResult = null;
     _setLoading(true, 'Mengimport laporan penjualan...');
     try {
-      final raw = await _repo.importSalesExcel(fileBytes, fileName);
+      final raw = await _repo.importSalesExcel(
+        fileBytes,
+        fileName,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
+      );
       final result = raw is Map
           ? Map<String, dynamic>.from(raw)
           : <String, dynamic>{};
@@ -1785,13 +1821,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> importSalesReturnsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     _salesReturnImportResult = null;
     _errorMessage = null;
     _setLoading(true, 'Mengimport laporan retur...');
     try {
-      final result = await _repo.importSalesReturnsExcel(fileBytes, fileName);
+      final result = await _repo.importSalesReturnsExcel(
+        fileBytes,
+        fileName,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
+      );
       _salesReturnImportResult = result;
       if (result['success'] != true) {
         final errors = result['errors'];
@@ -1823,13 +1866,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> importSalesTargetsExcel(
     List<int> fileBytes,
-    String fileName,
-  ) async {
+    String fileName, {
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     _salesTargetImportResult = null;
     _errorMessage = null;
     _setLoading(true, 'Mengimport target penjualan...');
     try {
-      final result = await _repo.importSalesTargetsExcel(fileBytes, fileName);
+      final result = await _repo.importSalesTargetsExcel(
+        fileBytes,
+        fileName,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
+      );
       _salesTargetImportResult = result;
       if (result['success'] != true) {
         final errors = result['errors'];
