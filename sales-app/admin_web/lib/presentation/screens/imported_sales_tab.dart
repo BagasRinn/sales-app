@@ -918,9 +918,10 @@ class _AnalyticsBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
+        // Sales Teratas (tidak ada pembanding, sesuai keputusan)
         AppResponsiveGrid(
-          desktopCols: 3,
-          tabletCols: 2,
+          desktopCols: 1,
+          tabletCols: 1,
           mobileCols: 1,
           children: [
             _MetricRankingCard(
@@ -931,6 +932,14 @@ class _AnalyticsBody extends StatelessWidget {
               limit: limit,
               targets: analytics.salesTargets,
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppResponsiveGrid(
+          desktopCols: 1,
+          tabletCols: 1,
+          mobileCols: 1,
+          children: [
             _MetricRankingCard(
               title: 'Pelanggan Teratas',
               items: analytics.customers,
@@ -940,6 +949,14 @@ class _AnalyticsBody extends StatelessWidget {
               comparisonItems: comparisonDetail?['customer'],
               comparisonLabel: comparisonLabel,
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppResponsiveGrid(
+          desktopCols: 1,
+          tabletCols: 1,
+          mobileCols: 1,
+          children: [
             _MetricRankingCard(
               title: 'Divisi Teratas',
               items: analytics.divisi,
@@ -1451,7 +1468,8 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   }
 
   /// Build entri pembanding diurutkan mengikuti urutan [leftItems] (bulan
-  /// dipilih), sehingga baris kanan selaras dengan baris kiri.
+  /// dipilih), sehingga baris kanan selaras dengan baris kiri dan panjangnya
+  /// sama (10 item). Item yang tidak ada di data pembanding ditampilkan 0.
   List<SalesRankingEntry> _buildComparisonEntriesOrderedByLeft(
     List<SalesRankItem> comparisonItems,
     List<SalesRankItem> leftItems,
@@ -1462,25 +1480,27 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       final key = item.code.isNotEmpty ? item.code : item.label;
       if (key.isNotEmpty) byKey[key] = item;
     }
-    return leftItems
-        .map((leftItem) {
-          final key = leftItem.code.isNotEmpty ? leftItem.code : leftItem.label;
-          final rightItem = byKey[key];
-          if (rightItem == null) return null;
-          final value = _showMargin ? rightItem.margin : rightItem.revenue;
-          return SalesRankingEntry(
-            label: rightItem.displayLabel,
-            value: value,
-            sortValue: rightItem.revenue,
-            trailingDetail:
-                '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',
-            showTarget: false,
-            target: null,
-            targetActual: rightItem.revenue,
-          );
-        })
-        .whereType<SalesRankingEntry>()
-        .toList(growable: false);
+    return List<SalesRankingEntry>.generate(leftItems.length, (index) {
+      final leftItem = leftItems[index];
+      final key = leftItem.code.isNotEmpty ? leftItem.code : leftItem.label;
+      final rightItem = byKey[key];
+      final value = rightItem == null
+          ? 0
+          : (_showMargin ? rightItem.margin : rightItem.revenue);
+      final rightLabel = rightItem?.displayLabel ?? leftItem.displayLabel;
+      return SalesRankingEntry(
+        label: rightLabel,
+        value: value,
+        // sortValue menurun menurut indeks kiri agar SalesRankingList
+        // tidak mengurutkan ulang kanan (tetap mengikuti kiri).
+        sortValue: leftItems.length - index,
+        trailingDetail:
+            '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',
+        showTarget: false,
+        target: null,
+        targetActual: rightItem?.revenue ?? 0,
+      );
+    }, growable: false);
   }
 
   @override
