@@ -33,6 +33,7 @@ from app.services.sales_import_versions import (
     parse_month,
 )
 from app.services.sales_summary_service import recompute_summary
+from app.services.import_progress import ImportProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,7 @@ def import_returns_from_excel(
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
+    progress: Optional[ImportProgressReporter] = None,
 ) -> Dict[str, Any]:
     """Validate, upsert, and summarize the return rows in an Excel file."""
     import_log = ImportLog(
@@ -194,6 +196,11 @@ def import_returns_from_excel(
     total_rows = inserted = updated = skipped = 0
     changed_pairs: Set[Tuple[Optional[str], str]] = set()
     suppliers_by_pair: Dict[Tuple[Optional[str], str], Dict[str, str]] = {}
+    expected_rows = 0
+
+    def _set_expected_rows(total: int) -> None:
+        nonlocal expected_rows
+        expected_rows = max(0, int(total or 0))
 
     def flush_batch() -> None:
         nonlocal inserted, updated
@@ -206,8 +213,16 @@ def import_returns_from_excel(
         batch.clear()
 
     try:
-        for row_number, row in _iter_sales_excel(source, file_name):
+        if progress:
+            progress.update(8, "Membaca file Excel...")
+        for row_number, row in _iter_sales_excel(
+            source, file_name, on_total=_set_expected_rows
+        ):
             total_rows += 1
+            if progress and total_rows % 500 == 0:
+                progress.row_progress(
+                    total_rows, expected_rows, "Memproses baris retur", 8, 45
+                )
             sale_date = _to_date(row.get("sale_date"))
             branch = _resolve_row_branch(row.get("branch"))
             product_kode = _clean_str(row.get("product_kode"))
@@ -261,6 +276,8 @@ def import_returns_from_excel(
             if len(batch) >= 1000:
                 flush_batch()
         flush_batch()
+        if progress:
+            progress.update(50, "Menyimpan data retur ke database...")
     except Exception as exc:
         logger.exception("[SALES-RETURN-IMPORT] Excel read failed")
         db.rollback()
@@ -283,6 +300,8 @@ def import_returns_from_excel(
             )
         )
         db.commit()
+        if progress:
+            progress.fail(error)
         return {
             "success": False,
             "total_rows": 0,
@@ -344,7 +363,10 @@ def import_returns_from_excel(
         for scope in (GLOBAL_SCOPE, branch)
         if scope
     }
-    for scope, month in sorted(affected):
+    ordered_affected = sorted(affected)
+    if progress:
+        progress.update(60, "Menghitung ulang ringkasan retur...")
+    for index, (scope, month) in enumerate(ordered_affected, start=1):
         _, start, month_end = parse_month(month)
         recompute_summary(
             db,
@@ -354,8 +376,17 @@ def import_returns_from_excel(
             month_end,
             version_by_key.get((scope, month), 0),
         )
+        if progress:
+            progress.update(
+                60 + int(35 * index / len(ordered_affected)),
+                f"Menghitung ringkasan {scope} {month}...",
+            )
 
+    if progress:
+        progress.update(97, "Menyelesaikan import retur...")
     db.commit()
+    if progress:
+        progress.finish()
     return {
         "success": bool(inserted or updated),
         "total_rows": total_rows,

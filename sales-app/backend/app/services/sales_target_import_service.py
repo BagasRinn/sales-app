@@ -23,6 +23,7 @@ from app.services.sales_import_service import (
     _to_date,
 )
 from app.services.db_locks import acquire_advisory_xact_locks
+from app.services.import_progress import ImportProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -270,15 +271,23 @@ def import_sales_targets_from_excel(
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
+    progress: Optional[ImportProgressReporter] = None,
 ) -> Dict[str, Any]:
+    if progress:
+        progress.update(8, "Membaca file target Excel...")
     try:
         sheets = _read_workbook(file_bytes, file_name)
     except Exception as error:
         logger.warning("[SALES-TARGET-IMPORT] Could not read workbook: %s", error)
+        if progress:
+            progress.fail(f"Gagal membaca file target Excel: {error}")
         raise HTTPException(
             status_code=400,
             detail=f"Gagal membaca file target Excel: {error}",
         ) from error
+
+    if progress:
+        progress.update(15, "Mengenali sheet target...")
 
     recognized: List[Tuple[str, str, int, Dict[str, int], int, List[List[Any]]]] = []
     for sheet_name, matrix in sheets:
@@ -312,6 +321,10 @@ def import_sales_targets_from_excel(
     }
     sheet_logs: List[Dict[str, Any]] = []
     upserts: Dict[Tuple[str, str, str, str], _TargetRow] = {}
+    total_recognized = sum(item[4] for item in recognized)
+    processed_rows = 0
+    if progress:
+        progress.update(20, "Memvalidasi target...")
 
     for sheet_name, target_type, header_index, columns, row_count, matrix in recognized:
         sheet_log = {
@@ -328,6 +341,15 @@ def import_sales_targets_from_excel(
             row = matrix[row_index]
             if not _nonempty(row):
                 continue
+            processed_rows += 1
+            if progress and processed_rows % 100 == 0:
+                progress.row_progress(
+                    processed_rows,
+                    total_recognized,
+                    "Memvalidasi target",
+                    20,
+                    55,
+                )
 
             def value_for(field: str) -> Any:
                 index = columns.get(field)
@@ -383,6 +405,9 @@ def import_sales_targets_from_excel(
 
         sheet_logs.append(sheet_log)
 
+    if progress:
+        progress.update(58, "Menyimpan target ke database...")
+
     import_log = ImportLog(
         user_id=current_user.get("user_id"),
         nama=current_user.get("nama"),
@@ -412,6 +437,11 @@ def import_sales_targets_from_excel(
             grouped.setdefault(
                 (target.branch, target.period, target.target_type), []
             ).append(target)
+        total_chunks = sum(
+            (len(targets) + _UPSERT_CHUNK_SIZE - 1) // _UPSERT_CHUNK_SIZE
+            for targets in grouped.values()
+        )
+        done_chunks = 0
 
         for (branch, period, target_type), targets in grouped.items():
             for offset in range(0, len(targets), _UPSERT_CHUNK_SIZE):
@@ -463,13 +493,25 @@ def import_sales_targets_from_excel(
                                 logs[target_type.lower()][next_action] += 1
                                 break
 
+                done_chunks += 1
+                if progress and total_chunks:
+                    progress.update(
+                        60 + int(30 * done_chunks / total_chunks),
+                        f"Menyimpan target ({done_chunks}/{total_chunks})...",
+                    )
+
         import_log.inserted = inserted
         import_log.updated = updated
+        if progress:
+            progress.update(95, "Menyelesaikan import target...")
         db.commit()
     except Exception:
         db.rollback()
         logger.exception("[SALES-TARGET-IMPORT] Database upsert failed")
         raise
+
+    if progress:
+        progress.finish()
 
     return {
         "success": True,

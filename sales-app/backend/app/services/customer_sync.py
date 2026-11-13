@@ -22,6 +22,7 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 
 from app.models.models import Customer, SyncValidationError, ImportLog
+from app.services.import_progress import ImportProgressReporter
 
 EXCEL_COLUMNS = ["kode", "nama_toko", "alamat", "kode_area"]
 
@@ -262,6 +263,7 @@ def sync_customers_from_excel(
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
+    progress: ImportProgressReporter | None = None,
 ) -> Dict[str, Any]:
     """
     Read customer data from uploaded Excel, bulk upsert into customers table.
@@ -285,6 +287,9 @@ def sync_customers_from_excel(
     # FK ke import_log.id yang valid.
     db.commit()
 
+    if progress:
+        progress.update(5, "Membaca file Excel...")
+
     try:
         raw_rows = _read_excel(file_bytes)
     except Exception as e:
@@ -299,6 +304,8 @@ def sync_customers_from_excel(
         import_log.total_rows = 0
         import_log.skipped = 0
         db.commit()
+        if progress:
+            progress.fail(reason_text)
         return {
             "success": False,
             "total_rows": 0,
@@ -310,6 +317,8 @@ def sync_customers_from_excel(
         }
 
     total_rows = len(raw_rows)
+    if progress:
+        progress.update(20, "Memvalidasi baris toko...")
     # Identity customer = (branch, kode, kode_area). Same kode boleh di
     # branch berbeda; dalam 1 branch, kombinasi (kode, kode_area) harus
     # unik. NULL kode di-skip dari unique check.
@@ -317,6 +326,8 @@ def sync_customers_from_excel(
     seen_keys: set = set()
 
     for idx, row in enumerate(raw_rows, start=1):
+        if progress and idx % 250 == 0:
+            progress.row_progress(idx, total_rows, "Memvalidasi baris", 20, 50)
         nama_toko_raw = row.get("nama_toko")
         alamat_raw = row.get("alamat")
         kode_raw = row.get("kode")
@@ -360,10 +371,14 @@ def sync_customers_from_excel(
 
     inserted = updated = 0
     if validated_rows:
+        if progress:
+            progress.update(55, "Menyimpan toko ke database...")
         try:
             inserted, updated = _bulk_upsert_customers(
                 db, validated_rows, branch=current_user.get("branch"),
             )
+            if progress:
+                progress.update(85, "Toko tersimpan, merapikan data...")
         except Exception as e:
             # PENTING: rollback dulu supaya session tidak tinggal di state aborted.
             # Kalau tidak, command berikutnya (db.add SyncValidationError, db.commit)
@@ -394,11 +409,16 @@ def sync_customers_from_excel(
     import_log.updated = updated
     import_log.skipped = skipped
 
+    if progress:
+        progress.update(92, "Menyelesaikan import toko...")
+
     try:
         db.commit()
     except Exception as e:
         db.rollback()
         logger.error(f"Commit failed: {e}")
+        if progress:
+            progress.fail(f"Database error: {str(e)}")
         return {
             "success": False,
             "total_rows": total_rows,
@@ -408,6 +428,9 @@ def sync_customers_from_excel(
             "errors": [{"row": 0, "sku": "", "reason": f"Database error: {str(e)}"}],
             "needs_review": False,
         }
+
+    if progress:
+        progress.finish()
 
     return {
         "success": True,

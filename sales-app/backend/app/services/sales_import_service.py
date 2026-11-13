@@ -13,7 +13,11 @@ Mendukung dua bentuk file:
    Nama Sales, Supplier.
 
 Semua field keuangan disimpan apa adanya dari file: `net_per_unit` (harga
-per satuan setelah diskon) dan `total_amount` (total akhir baris).
+per satuan setelah diskon) dan `total_amount` (total akhir baris). Kolom
+`TOTAL` selalu diprioritaskan sebagai `total_amount` karena itu total baris
+final pada ekspor sistem utama (termasuk `PPN Head`); bila kolom itu tidak ada,
+dipakai kolom total lain seperti `Total Harga Jual` / `Total Harga Setelah
+Diskon`.
 
 Import bersifat **idempotent**: setiap baris punya `dedupe_key` deterministik
 (lihat ``sales_import_keys``), jadi file yang sama boleh di-import ulang tanpa
@@ -30,7 +34,7 @@ from datetime import date, datetime, timedelta
 from io import BytesIO
 from itertools import islice
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -45,6 +49,7 @@ from app.services.sales_import_versions import (
     parse_month,
 )
 from app.services.sales_summary_service import recompute_summary
+from app.services.import_progress import ImportProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +179,12 @@ def _match_score(header: str, alias: str) -> int:
     ):
         return 0
     if header == alias:
+        # A bare "TOTAL" column is the final invoice line total in the main
+        # system export (TOTAL = Total Harga Jual + PPN Head). Prefer it over
+        # other exact aliases such as "total harga jual" so the imported omzet
+        # matches the TOTAL column users see and sum in the source file.
+        if alias == "total":
+            return 200
         # Guard: app report has separate "Diskon Layer N" columns. The plain
         # "diskon" alias must only win on a real total column.
         return 100 + len(alias)
@@ -569,6 +580,7 @@ def _template_key_mode(
 def _iter_sales_excel(
     source: Union[bytes, str, Path],
     file_name: Optional[str] = None,
+    on_total: Optional[Callable[[int], None]] = None,
 ) -> Iterator[Tuple[int, Dict[str, Any]]]:
     """Yield parsed rows without retaining an entire .xlsx workbook in memory."""
     is_path = isinstance(source, (str, Path))
@@ -590,8 +602,11 @@ def _iter_sales_excel(
         content = path.read_bytes() if path is not None else source
         if len(content) > 20 * 1024 * 1024:
             raise ValueError("File .xls lebih dari 20 MB; simpan ulang sebagai .xlsx")
+        parsed_rows = _read_sales_excel(content, file_name)
+        if on_total is not None:
+            on_total(len(parsed_rows))
         for row_number, row in enumerate(
-            _read_sales_excel(content, file_name), start=2
+            parsed_rows, start=2
         ):
             yield row_number, row
         return
@@ -650,6 +665,9 @@ def _iter_sales_excel(
             )
             if inferred is not None:
                 col_map["sale_date"] = inferred
+
+        if on_total is not None:
+            on_total(max(0, (worksheet.max_row or 0) - header_row_index - 1))
 
         for row_number, values in enumerate(
             worksheet.iter_rows(values_only=True), start=1
@@ -873,6 +891,7 @@ def import_sales_from_excel(
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
+    progress: Optional[ImportProgressReporter] = None,
 ) -> Dict[str, Any]:
     """Import baris laporan penjualan dari file Excel → tabel imported_sales."""
     global_manager = is_global_manager(current_user)
@@ -903,6 +922,11 @@ def import_sales_from_excel(
     changed_pairs: Set[Tuple[Optional[str], str]] = set()
     occurrence_counters: Dict[str, int] = {}
     batch: List[SalesRow] = []
+    expected_rows = 0
+
+    def _set_expected_rows(total: int) -> None:
+        nonlocal expected_rows
+        expected_rows = max(0, int(total or 0))
 
     def flush_batch() -> None:
         nonlocal inserted, updated
@@ -928,7 +952,11 @@ def import_sales_from_excel(
                 detail="File .xls lebih dari 20 MB; simpan ulang sebagai .xlsx",
             )
 
-    rows_iterator = iter(_iter_sales_excel(source, file_name))
+    rows_iterator = iter(
+        _iter_sales_excel(source, file_name, on_total=_set_expected_rows)
+    )
+    if progress:
+        progress.update(8, "Membaca file Excel...")
     while True:
         try:
             row_num, row = next(rows_iterator)
@@ -956,6 +984,8 @@ def import_sales_from_excel(
                 )
             )
             db.commit()
+            if progress:
+                progress.fail(reason)
             return {
                 "success": False,
                 "total_rows": 0,
@@ -976,6 +1006,10 @@ def import_sales_from_excel(
             )
 
         total_rows += 1
+        if progress and total_rows % 500 == 0:
+            progress.row_progress(
+                total_rows, expected_rows, "Memproses baris penjualan", 8, 45
+            )
         template_v2 = template_v2 or row.get("key_mode") == "v2"
         sale_date = _to_date(row.get("sale_date"))
         qty = _to_int(row.get("qty"))
@@ -1079,6 +1113,8 @@ def import_sales_from_excel(
             flush_batch()
 
     flush_batch()
+    if progress:
+        progress.update(50, "Menyimpan data ke database...")
     success = bool(inserted or updated)
     if not success and total_rows == 0:
         _add_error(validation_errors, 0, {}, "File tidak berisi baris data")
@@ -1118,7 +1154,10 @@ def import_sales_from_excel(
             affected.add((GLOBAL_SCOPE, month))
             if branch:
                 affected.add((branch, month))
-        for scope, month in sorted(affected):
+        ordered_affected = sorted(affected)
+        if progress:
+            progress.update(60, "Menghitung ulang ringkasan penjualan...")
+        for index, (scope, month) in enumerate(ordered_affected, start=1):
             _, start, month_end = parse_month(month)
             recompute_summary(
                 db,
@@ -1128,8 +1167,17 @@ def import_sales_from_excel(
                 month_end,
                 version=version_by_key.get((scope, month), 0),
             )
+            if progress:
+                progress.update(
+                    60 + int(35 * index / len(ordered_affected)),
+                    f"Menghitung ringkasan {scope} {month}...",
+                )
 
+    if progress:
+        progress.update(97, "Menyelesaikan import...")
     db.commit()
+    if progress:
+        progress.finish()
 
     return {
         "success": success,

@@ -210,6 +210,34 @@ def test_read_dates_stored_as_text_with_leading_apostrophe():
     assert _to_date(row["sale_date"]) == date(2026, 9, 3)
 
 
+def test_total_column_wins_over_total_harga_jual():
+    headers = [
+        "cabang", "penjualan", "kode item", "nama item", "qty",
+        "total harga jual", "ppn head", "total", "margin", "mother sku",
+    ]
+    col = _resolve_columns(headers)
+    assert col["total_amount"] == 7
+    assert col["qty"] == 4
+    assert col["margin"] == 8
+
+
+def test_read_prefers_total_column_including_ppn():
+    headers = [
+        "Cabang", "Penjualan", "Kode Item", "Nama Item", "Qty",
+        "Total Harga Jual", "PPN Head", "TOTAL", "MARGIN", "Mother SKU",
+    ]
+    content = _workbook_bytes(
+        [[
+            "BANJARMASIN", "2026-01-05", "P001", "Produk A", 1,
+            174000, 19140, 193140, 8590, "MOTHER-1",
+        ]],
+        headers,
+    )
+
+    row = _read_sales_excel(content)[0]
+    assert row["total_amount"] == 193140
+
+
 def test_read_template_v2_and_preserve_negative_margin():
     headers = [
         "Cabang", "Penjualan", "Kode", "Nama Pelanggan", "Kode Item",

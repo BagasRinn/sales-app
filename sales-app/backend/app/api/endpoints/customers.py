@@ -38,6 +38,8 @@ from app.core.security import (
 from app.core import branch as branch_constants
 from app.core.visibility import visible_customer_query, validate_order_customer_for_sales
 from app.services.customer_sync import sync_customers_from_excel
+from app.services.import_progress import ImportProgressReporter
+from app.api.endpoints.import_progress import import_progress_reporter
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
 
@@ -416,6 +418,7 @@ def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_write_access),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Format file harus .xlsx")
@@ -440,6 +443,7 @@ def import_excel(
             "branch": current_user.get("branch"),
         },
         file_name=file.filename,
+        progress=progress,
     )
 
     return SyncResultResponse(

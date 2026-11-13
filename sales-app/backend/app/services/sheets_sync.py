@@ -17,6 +17,7 @@ except ImportError:
 
 from app.models.models import Product, SyncValidationError, ImportLog, Supplier
 from app.services.stock_logger import log_stock_change
+from app.services.import_progress import ImportProgressReporter
 
 
 EXCEL_COLUMNS = ["CCODE", "KATEGORI", "NAME ITEM", "GOOD", "OUM", "FIX", "LAST SUPPLIER"]
@@ -138,6 +139,7 @@ def sync_products_from_excel(
     db: Session,
     current_user: Dict[str, Any],
     file_name: str,
+    progress: ImportProgressReporter | None = None,
 ) -> Dict[str, Any]:
     """
     Read product data from an uploaded Excel file and upsert into the database.
@@ -160,6 +162,9 @@ def sync_products_from_excel(
     db.add(import_log)
     db.flush()
 
+    if progress:
+        progress.update(5, "Membaca file Excel...")
+
     try:
         raw_rows = _read_excel(file_bytes)
     except Exception as e:
@@ -171,6 +176,8 @@ def sync_products_from_excel(
             reason=f"Gagal membaca file Excel: {str(e)}",
         ))
         db.commit()
+        if progress:
+            progress.fail(f"Gagal membaca file Excel: {str(e)}")
         return {
             "success": False,
             "total_rows": 0,
@@ -182,6 +189,8 @@ def sync_products_from_excel(
         }
 
     total_rows = len(raw_rows)
+    if progress:
+        progress.update(20, "Memvalidasi baris produk...")
 
     # Collect non-empty raw supplier names to bulk-query order_type mapping from DB
     raw_supplier_set = {
@@ -192,6 +201,10 @@ def sync_products_from_excel(
     supplier_ot_map = _get_supplier_order_type_map(db, raw_supplier_set)
 
     for row_num, row in enumerate(raw_rows, start=2):
+        if progress and row_num % 250 == 0:
+            progress.row_progress(
+                row_num - 1, total_rows, "Memvalidasi baris", 20, 50
+            )
         sku = str(row.get("CCODE") or "").strip()
         nama_produk = str(row.get("NAME ITEM") or "").strip()
         harga_raw = row.get("FIX")
@@ -233,7 +246,11 @@ def sync_products_from_excel(
 
     inserted = updated = 0
     if validated_rows:
+        if progress:
+            progress.update(55, "Menyimpan produk ke database...")
         inserted, updated = _bulk_upsert(db, validated_rows, current_user.get("branch"))
+        if progress:
+            progress.update(85, "Produk tersimpan, merapikan data...")
 
     for err in validation_errors:
         db.add(SyncValidationError(
@@ -249,10 +266,16 @@ def sync_products_from_excel(
     import_log.skipped = skipped
     db.commit()
 
+    if progress:
+        progress.update(95, "Memeriksa stok produk...")
+
     # Compute needs_review (products where stok_sistem < stok_booking + stok_diterima)
     needs_review_count = db.query(Product).filter(
         Product.stok_sistem < (Product.stok_booking + Product.stok_diterima)
     ).count()
+
+    if progress:
+        progress.finish()
 
     return {
         "success": True,

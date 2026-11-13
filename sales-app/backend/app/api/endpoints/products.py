@@ -29,6 +29,8 @@ from app.core.security import (
 from app.core.timezone import local_day_utc_bounds
 from app.services.sheets_sync import sync_products_from_excel
 from app.services.stock_logger import log_stock_change
+from app.services.import_progress import ImportProgressReporter
+from app.api.endpoints.import_progress import import_progress_reporter
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -384,6 +386,7 @@ def import_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_write_access),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     """
     Upload file Excel (.xlsx) untuk import / update data produk.
@@ -415,6 +418,7 @@ def import_excel(
             "branch": current_user.get("branch"),
         },
         file_name=file.filename,
+        progress=progress,
     )
 
     needs_review = db.query(Product).filter(

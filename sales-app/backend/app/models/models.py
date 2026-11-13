@@ -445,8 +445,9 @@ class ImportedSale(Base):
     (rekap detail) yang di-import admin via admin_web.
 
     Kolom keuangan: `net_per_unit` = N. Jual - Discount (per satuan),
-    `total_amount` = Total Harga Jual (per-satuan x qty — diambil dari kolom
-    template, bukan dihitung ulang di sisi import).
+    `total_amount` = total akhir baris; kolom `TOTAL` diprioritaskan (termasuk
+    PPN Head), dengan fallback `Total Harga Jual` / `Total Harga Setelah
+    Diskon` — bukan dihitung ulang di sisi import.
     """
     __tablename__ = "imported_sales"
     __table_args__ = (

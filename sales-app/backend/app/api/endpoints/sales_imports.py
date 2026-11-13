@@ -55,6 +55,8 @@ from app.services.sales_target_import_service import (
     read_sales_target_updated_at,
 )
 from app.services.sales_return_import_service import import_returns_from_excel
+from app.services.import_progress import ImportProgressReporter
+from app.api.endpoints.import_progress import import_progress_reporter
 
 router = APIRouter(prefix="/sales-imports", tags=["Sales Imports"])
 
@@ -97,6 +99,7 @@ def import_sales_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager_global),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     """
     Upload file Excel (.xlsx atau .xls) berisi laporan penjualan → import ke
@@ -154,6 +157,7 @@ def import_sales_excel(
                 "branch": current_user.get("branch"),
             },
             file_name=file.filename,
+            progress=progress,
         )
 
     return SalesImportResultResponse(
@@ -189,6 +193,7 @@ def import_sales_targets_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager_global),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     """Import per-branch monthly targets for the Data Penjualan dashboard."""
     filename = file.filename or ""
@@ -217,6 +222,7 @@ def import_sales_targets_excel(
             "branch": current_user.get("branch"),
         },
         file_name=filename,
+        progress=progress,
     )
 
 
@@ -225,6 +231,7 @@ def import_sales_returns_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager_global),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     """Import an Excel return report; only a global MANAGER may write it."""
     filename = file.filename or ""
@@ -252,6 +259,7 @@ def import_sales_returns_excel(
             "branch": current_user.get("branch"),
         },
         file_name=filename,
+        progress=progress,
     )
     return SalesImportResultResponse(
         success=result["success"],

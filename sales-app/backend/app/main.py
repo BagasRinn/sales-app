@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports, import_progress
 from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -382,6 +382,7 @@ app.include_router(branches.router, prefix="/api/v1")
 app.include_router(supplier_targets.router, prefix="/api/v1")
 app.include_router(suppliers.router, prefix="/api/v1")
 app.include_router(sales_imports.router, prefix="/api/v1")
+app.include_router(import_progress.router, prefix="/api/v1")
 
 
 @app.get("/")
