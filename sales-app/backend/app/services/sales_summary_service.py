@@ -122,7 +122,10 @@ def _dimension_columns(dimension: str, returns: bool = False):
                 func.max(model.product_nama),
             )
         if dimension == SALES_DIMENSION:
-            return model.sales_nama, func.max(model.sales_nama)
+            return (
+                func.concat(func.coalesce(model.branch, ""), "|", func.coalesce(model.sales_nama, "")),
+                func.max(model.sales_nama),
+            )
         if dimension == CUSTOMER_DIMENSION:
             return model.customer_kode, func.max(model.customer_nama)
         if dimension == DIVISI_DIMENSION:
@@ -142,9 +145,13 @@ def _dimension_columns(dimension: str, returns: bool = False):
         )
     if dimension == SALES_DIMENSION:
         return (
-            func.coalesce(
-                func.nullif(model.sales_kode, ""),
-                model.sales_nama,
+            func.concat(
+                func.coalesce(model.branch, ""),
+                "|",
+                func.coalesce(
+                    func.nullif(model.sales_kode, ""),
+                    model.sales_nama,
+                ),
             ),
             func.max(model.sales_nama),
         )
@@ -219,8 +226,10 @@ def _dimension_rows(
     for group in sales_groups:
         item = item_for(group.dim_key, group.dim_label)
         if dimension == SALES_DIMENSION and group.dim_label:
+            branch_key = _normalized_key(group.dim_key).split("|", 1)[0]
             sales_keys_by_name.setdefault(
-                _normalized_key(group.dim_label), item["dim_key"]
+                f"{branch_key}|{_normalized_key(group.dim_label)}",
+                item["dim_key"],
             )
         item["qty"] += int(group.qty or 0)
         item["revenue"] += int(group.revenue or 0)
@@ -266,8 +275,11 @@ def _dimension_rows(
         for group in return_groups:
             return_key_value = group.dim_key
             if dimension == SALES_DIMENSION:
+                return_parts = _normalized_key(group.dim_key).split("|", 1)
+                return_branch = return_parts[0]
+                return_name = _normalized_key(group.dim_label or (return_parts[1] if len(return_parts) > 1 else ""))
                 return_key_value = sales_keys_by_name.get(
-                    _normalized_key(group.dim_label or group.dim_key),
+                    f"{return_branch}|{return_name}",
                     group.dim_key,
                 )
             item = item_for(return_key_value, group.dim_label)
@@ -572,6 +584,7 @@ def read_sales_daily_series(
         _scope_query(db, scope, start, month_end)
         .with_entities(
             func.date(ImportedSale.sale_date).label("day"),
+            ImportedSale.branch.label("branch"),
             ImportedSale.sales_kode.label("kode"),
             ImportedSale.sales_nama.label("nama"),
             func.coalesce(func.sum(ImportedSale.total_amount), 0).label(
@@ -580,6 +593,7 @@ def read_sales_daily_series(
         )
         .group_by(
             func.date(ImportedSale.sale_date),
+            ImportedSale.branch,
             ImportedSale.sales_kode,
             ImportedSale.sales_nama,
         )
@@ -590,28 +604,33 @@ def read_sales_daily_series(
         _scope_return_query(db, scope, start, month_end)
         .with_entities(
             func.date(ImportedReturn.sale_date).label("day"),
+            ImportedReturn.branch.label("branch"),
             ImportedReturn.sales_nama.label("nama"),
             func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
         )
-        .group_by(func.date(ImportedReturn.sale_date), ImportedReturn.sales_nama)
+        .group_by(
+            func.date(ImportedReturn.sale_date),
+            ImportedReturn.branch,
+            ImportedReturn.sales_nama,
+        )
         .all()
     )
     sales_by_key: Dict[str, Dict[Any, int]] = {}
     sales_keys_by_name: Dict[str, str] = {}
     for row in sales_rows:
-        key = _normalized_key(row.kode or row.nama)
+        key = _normalized_key(f"{row.branch or ''}|{row.kode or row.nama}")
         if not key:
             continue
         sales_by_key.setdefault(key, {})[row.day] = (
             sales_by_key.setdefault(key, {}).get(row.day, 0)
             + int(row.revenue or 0)
         )
-        name_key = _normalized_key(row.nama)
+        name_key = _normalized_key(f"{row.branch or ''}|{row.nama}")
         if name_key:
             sales_keys_by_name.setdefault(name_key, key)
     returns_by_key: Dict[str, Dict[Any, int]] = {}
     for row in return_rows:
-        name_key = _normalized_key(row.nama)
+        name_key = _normalized_key(f"{row.branch or ''}|{row.nama}")
         key = sales_keys_by_name.get(name_key, name_key)
         if not key:
             continue
@@ -737,7 +756,7 @@ def read_summary(
                 continue
             bucket.append(
                 {
-                    "sales_kode": _or_none(row.dim_key),
+                    "sales_kode": _or_none(row.dim_key.split("|", 1)[1] if "|" in row.dim_key else row.dim_key),
                     "sales_nama": _or_none(row.dim_label),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
@@ -890,7 +909,9 @@ def read_summary_range(
             elif normalized == "sales":
                 item.update({
                     "sales_kode": _or_none(
-                        _as_text(group["dim_key"], 100)
+                        _as_text(group["dim_key"], 100).split("|", 1)[1]
+                        if "|" in _as_text(group["dim_key"], 100)
+                        else _as_text(group["dim_key"], 100)
                     ),
                     "sales_nama": _or_none(
                         _as_text(group["dim_label"], 200)
