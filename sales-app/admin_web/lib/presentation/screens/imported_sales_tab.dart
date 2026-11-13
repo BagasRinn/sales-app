@@ -901,7 +901,7 @@ class _AnalyticsBody extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         AppResponsiveGrid(
-          desktopCols: 4,
+          desktopCols: 2,
           tabletCols: 2,
           mobileCols: 1,
           children: [
@@ -1483,38 +1483,50 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bulan ini',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.onPrimaryMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bulan ini',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.onPrimaryMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    SalesRankingList(entries: leftEntries, maxItems: widget.limit),
-                  ],
+                      const SizedBox(height: AppSpacing.xs),
+                      SalesRankingList(entries: leftEntries, maxItems: widget.limit),
+                    ],
+                  ),
                 ),
               ),
               const VerticalDivider(width: 1),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.comparisonLabel ?? 'Pembanding',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.onPrimaryMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.comparisonLabel ?? 'Pembanding',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.onPrimaryMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    SalesRankingList(entries: rightEntries, maxItems: widget.limit),
-                  ],
+                      const SizedBox(height: AppSpacing.xs),
+                      SalesRankingList(entries: rightEntries, maxItems: widget.limit),
+                    ],
+                  ),
                 ),
               ),
             ],
