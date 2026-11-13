@@ -13,6 +13,7 @@ import '../../data/models/user_item.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
+import '../widgets/analytics/sales_analytics_models.dart';
 import '../../data/models/branch_report.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../data/models/supplier.dart';
@@ -89,6 +90,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Rata-rata omzet N bulan sebelum bulan terpilih (payload pembanding).
   Map<String, dynamic>? _importedSalesComparison;
   final Map<String, Map<String, dynamic>> _importedSalesComparisonCache = {};
+
+  /// Detail dimensi pembanding: kode dimensi -> daftar SalesRankItem.
+  Map<String, List<SalesRankItem>>? _importedSalesComparisonDetail;
 
   /// Branch the global MANAGER is currently inspecting. null = GLOBAL
   /// (all branches). Branch-scoped roles ignore this field; the backend
@@ -331,6 +335,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get importedSalesRangeMonths => _importedSalesRangeMonths;
   int get importedSalesComparisonMonths => _importedSalesComparisonMonths;
   Map<String, dynamic>? get importedSalesComparison => _importedSalesComparison;
+  Map<String, List<SalesRankItem>>? get importedSalesComparisonDetail =>
+      _importedSalesComparisonDetail;
   String? get importedSalesBranchFilter => _importedSalesBranchFilter;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, dynamic>? get salesReturnImportResult => _salesReturnImportResult;
@@ -1736,11 +1742,85 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       _importedSalesComparisonCache[cacheKey] = data;
       _importedSalesComparison = data;
+      // Fetch detail dimensi (produk/pelanggan/divisi) untuk ranking
+      // pembanding di latar belakang; error di-silent.
+      await fetchImportedSalesComparisonDetail();
     } catch (_) {
       _importedSalesComparison = null;
     } finally {
       notifyListeners();
     }
+  }
+
+  /// Fetch detail dimensi pembanding (produk, pelanggan, divisi) sebagai
+  /// daftar SalesRankItem dengan nilai rata-rata per bulan.
+  Future<void> fetchImportedSalesComparisonDetail() async {
+    final month = _importedSalesMonth ?? _currentImportedSalesMonth();
+    final branch = isGlobalManager ? _importedSalesBranchFilter : null;
+    final cacheKey =
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|detail';
+    final cached = _importedSalesComparisonCache[cacheKey];
+    if (cached != null) {
+      _importedSalesComparisonDetail = _parseComparisonDetail(cached);
+      return;
+    }
+    try {
+      final data = await _repo.getImportedSalesComparison(
+        month: month,
+        months: _importedSalesComparisonMonths,
+        include: 'product,customer,divisi',
+        branch: branch,
+      );
+      _importedSalesComparisonCache[cacheKey] = data;
+      _importedSalesComparisonDetail = _parseComparisonDetail(data);
+    } catch (_) {
+      _importedSalesComparisonDetail = null;
+    }
+  }
+
+  Map<String, List<SalesRankItem>> _parseComparisonDetail(
+      Map<String, dynamic> data) {
+    int toInt(dynamic value) {
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+    return {
+      'product': (data['by_product'] as List? ?? const [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .map((e) => SalesRankItem(
+                code: e['product_kode']?.toString().trim() ?? '',
+                label: e['product_nama']?.toString().trim() ?? '',
+                qty: toInt(e['qty']),
+                revenue: toInt(e['average_revenue'] ?? e['revenue']),
+                margin: toInt(e['margin']),
+                motherSku: e['mother_sku']?.toString(),
+                productKode: e['product_kode']?.toString(),
+              ))
+          .toList(growable: false),
+      'customer': (data['by_customer'] as List? ?? const [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .map((e) => SalesRankItem(
+                code: e['customer_kode']?.toString().trim() ?? '',
+                label: e['customer_nama']?.toString().trim() ?? '',
+                qty: toInt(e['qty']),
+                revenue: toInt(e['average_revenue'] ?? e['revenue']),
+                margin: toInt(e['margin']),
+              ))
+          .toList(growable: false),
+      'divisi': (data['by_divisi'] as List? ?? const [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .map((e) => SalesRankItem(
+                code: e['divisi']?.toString().trim() ?? '',
+                label: e['divisi']?.toString().trim() ?? '',
+                qty: toInt(e['qty']),
+                revenue: toInt(e['average_revenue'] ?? e['revenue']),
+                margin: toInt(e['margin']),
+              ))
+          .toList(growable: false),
+    };
   }
 
   Future<Map<String, int>> getImportedSalesMonthTotals(String month) async {

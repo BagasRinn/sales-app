@@ -522,12 +522,14 @@ class AdminRepository {
     required String month,
     int months = 1,
     String? branch,
+    String? include,
   }) async {
     final params = <String, String>{
       'month': month,
       'months': months.toString(),
     };
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    if (include != null && include.isNotEmpty) params['include'] = include;
     final queryString = params.entries
         .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
         .join('&');

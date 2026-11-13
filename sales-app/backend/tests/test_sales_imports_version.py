@@ -153,10 +153,12 @@ def _return_row(
         total: int = 30,
         margin: int = 5,
         supplier: str = "Supplier A",
+        sale_date: str | None = None,
+        mother_sku: str = "M001",
 ) -> list:
         return [
-            USER_BRANCH, f"{TEST_MONTH}-20", "P001", "Produk P001", total,
-            total + 3000, margin, supplier, "Bangunan", "M001", "C001",
+            USER_BRANCH, sale_date or f"{TEST_MONTH}-20", "P001", "Produk P001", total,
+            total + 3000, margin, supplier, "Bangunan", mother_sku, "C001",
             "Toko A", "Budi",
         ]
 
@@ -231,11 +233,29 @@ def _row(
     branch: str = "BANJARMASIN",
     sales_nama: str = "Budi",
     sale_date: str | None = None,
+    customer_kode: str | None = None,
 ) -> list:
     return [
-        sale_date or f"{TEST_MONTH}-15", trans_no, branch, "C001", "Toko A", product,
-        f"Produk {product}", qty, "pcs", 10000, total, 0, 0, 0, 0, 0,
-        total, "REGULER", sales_nama, "Supplier A",
+        sale_date or f"{TEST_MONTH}-15",
+        trans_no,
+        branch,
+        customer_kode or "C001",
+        "Toko A",
+        product,
+        f"Produk {product}",
+        qty,
+        "pcs",
+        10000,
+        total,
+        0,
+        0,
+        0,
+        0,
+        0,
+        total,
+        "REGULER",
+        sales_nama,
+        "Supplier A",
     ]
 
 
@@ -1324,5 +1344,82 @@ def test_comparison_empty_month_returns_zero_average():
         assert c["total_revenue"] == 0
         assert c["average_revenue"] == 0
         assert c["monthly"] == []
+    finally:
+        _cleanup()
+
+
+def test_comparison_include_product_gives_average_per_item():
+    """Detail produk di pembanding: total dibagi jumlah bulan berdata."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        # Produk A: 100 di 2098-11, 200 di 2098-12 → total 300 / 2 bulan = 150
+        # Produk B: 300 di 2098-12 saja → total 300 / 2 bulan = 150
+        # Bulan terpilih 2099-01 (diekspirkan dari pembanding): 500 di Produk C
+        _import(client, token, [_row("T1", "P001", 1, 100, sale_date="2098-11-10")])
+        _import(client, token, [_row("T2", "P001", 1, 200, sale_date="2098-12-10")])
+        _import(client, token, [_row("T3", "P002", 1, 300, sale_date="2098-12-10")])
+        _import(client, token, [_row("T4", "P003", 1, 500, sale_date="2099-01-15")])
+
+        c = _comparison(client, token, "months=3&include=product").json()
+        assert c["months_with_data"] == 2
+        by_product = {p["product_kode"]: p for p in c["by_product"]}
+        assert set(by_product.keys()) == {"P001", "P002"}
+        assert by_product["P001"]["revenue"] == 300
+        assert by_product["P001"]["average_revenue"] == 150
+        assert by_product["P002"]["revenue"] == 300
+        assert by_product["P002"]["average_revenue"] == 150
+        # Produk C (bulan terpilih) tidak boleh muncul
+        assert "P003" not in by_product
+    finally:
+        _cleanup()
+
+
+def test_comparison_include_customer_and_divisi():
+    """Detail pelanggan dan divisi juga dikembalikan dengan average_revenue."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        _import(client, token, [_row("T1", "P001", 1, 200, sale_date="2098-11-10", customer_kode="C001")])
+        _import(client, token, [_row("T2", "P001", 1, 300, sale_date="2098-12-10", customer_kode="C002")])
+        _import(client, token, [_row("T3", "P001", 1, 100, sale_date="2098-12-10", customer_kode="C001")])
+
+        c = _comparison(client, token, "months=3&include=customer").json()
+        assert c["months_with_data"] == 2
+
+        by_customer = {cu["customer_kode"]: cu for cu in c["by_customer"]}
+        assert by_customer["C001"]["revenue"] == 300
+        assert by_customer["C001"]["average_revenue"] == 150
+        assert by_customer["C002"]["revenue"] == 300
+        assert by_customer["C002"]["average_revenue"] == 150
+    finally:
+        _cleanup()
+
+
+def test_comparison_include_nets_returns():
+    """Detail dimensi sudah dikurangi retur."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        # Produk A: jual 500 di 2098-12, retur 100 di 2098-12 → net 400 / 1 bulan = 400
+        _import(client, token, [_row("T1", "P001", 1, 500, sale_date="2098-12-10")])
+        _import_returns(client, token, _return_row(total=100, margin=0, sale_date="2098-12-15", mother_sku=""))
+
+        c = _comparison(client, token, "months=2&include=product").json()
+        assert c["months_with_data"] == 1
+        by_product = {p["product_kode"]: p for p in c["by_product"]}
+        assert by_product["P001"]["net_revenue"] == 400 if "net_revenue" in by_product["P001"] else True
+        # read_summary_range returns "revenue" as net already
+        assert by_product["P001"]["revenue"] == 400
+        assert by_product["P001"]["average_revenue"] == 400
     finally:
         _cleanup()

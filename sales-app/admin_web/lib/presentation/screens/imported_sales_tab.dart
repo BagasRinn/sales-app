@@ -93,6 +93,14 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     await context.read<AdminProvider>().setImportedSalesComparisonMonths(months);
   }
 
+  String _comparisonLabel(int months) {
+    final now = _month;
+    final end = DateTime(now.year, now.month - 1);
+    final start = DateTime(now.year, now.month - months);
+    if (months == 1) return 'Bulan lalu (${formatMonthShort(end)})';
+    return '$months Bulan Sebelumnya (${formatMonthShort(start)}–${formatMonthShort(end)})';
+  }
+
   Future<void> _pickMonth() async {
     final picked = await showDialog<DateTime>(
       context: context,
@@ -521,6 +529,9 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                           months: comparisonMonths,
                         )
                       : null,
+                  comparisonMonths: comparisonMonths,
+                  comparisonDetail: provider.importedSalesComparisonDetail,
+                  comparisonLabel: _comparisonLabel(comparisonMonths),
                   limit: limit,
                   allBranches:
                       provider.isGlobalManager &&
@@ -765,6 +776,9 @@ class _AnalyticsBody extends StatelessWidget {
   const _AnalyticsBody({
     required this.analytics,
     required this.comparison,
+    required this.comparisonMonths,
+    required this.comparisonDetail,
+    required this.comparisonLabel,
     required this.limit,
     required this.allBranches,
     required this.branchOptions,
@@ -779,6 +793,9 @@ class _AnalyticsBody extends StatelessWidget {
 
   final SalesAnalytics analytics;
   final SalesComparison? comparison;
+  final int comparisonMonths;
+  final Map<String, List<SalesRankItem>>? comparisonDetail;
+  final String comparisonLabel;
   final int limit;
   final bool allBranches;
   final List<BranchOption> branchOptions;
@@ -894,6 +911,8 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              comparisonItems: comparisonDetail?['product'],
+              comparisonLabel: comparisonLabel,
             ),
             _MetricRankingCard(
               title: 'Sales Teratas',
@@ -909,6 +928,8 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              comparisonItems: comparisonDetail?['customer'],
+              comparisonLabel: comparisonLabel,
             ),
             _MetricRankingCard(
               title: 'Divisi Teratas',
@@ -916,6 +937,8 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              comparisonItems: comparisonDetail?['divisi'],
+              comparisonLabel: comparisonLabel,
             ),
           ],
         ),
@@ -1365,6 +1388,8 @@ class _MetricRankingCard extends StatefulWidget {
     required this.totalMargin,
     required this.limit,
     this.targets,
+    this.comparisonItems,
+    this.comparisonLabel,
   });
 
   final String title;
@@ -1374,6 +1399,10 @@ class _MetricRankingCard extends StatefulWidget {
   final int limit;
   final Map<String, int>? targets;
 
+  /// Items untuk periode pembanding (nilai sudah rata-rata per bulan).
+  final List<SalesRankItem>? comparisonItems;
+  final String? comparisonLabel; // mis. "3 Bulan Sebelumnya (Agu–Okt 2026)"
+
   @override
   State<_MetricRankingCard> createState() => _MetricRankingCardState();
 }
@@ -1381,10 +1410,9 @@ class _MetricRankingCard extends StatefulWidget {
 class _MetricRankingCardState extends State<_MetricRankingCard> {
   bool _showMargin = false;
 
-  @override
-  Widget build(BuildContext context) {
-    final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
-    final entries = widget.items
+  List<SalesRankingEntry> _buildEntries(List<SalesRankItem> items,
+      int totalValue, bool showTarget) {
+    return items
         .map((item) {
           final value = _showMargin ? item.margin : item.revenue;
           final productDetails = [
@@ -1393,6 +1421,10 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             if (item.motherSku?.isNotEmpty == true)
               'Mother SKU ${item.motherSku}',
           ];
+          final entryTarget =
+              showTarget && widget.targets != null
+                  ? widget.targets![item.targetKey]
+                  : null;
           return SalesRankingEntry(
             label: item.displayLabel,
             value: value,
@@ -1401,13 +1433,99 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             trailingDetail:
                 '${formatPercentPrecise(totalValue == 0 ? 0 : value / totalValue)} '
                 '${_showMargin ? 'margin' : 'omzet'}',
-            showTarget: widget.targets != null,
-            target: widget.targets?[item.targetKey],
+            showTarget: showTarget,
+            target: entryTarget,
             targetActual: item.revenue,
           );
         })
         .toList(growable: false);
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
+    final hasComparison = widget.comparisonItems != null &&
+        widget.comparisonItems!.isNotEmpty;
+
+    if (!hasComparison) {
+      return _buildSingleCard(totalValue);
+    }
+
+    final comparisonTotal = widget.comparisonItems!
+        .fold<int>(0, (sum, item) => sum + (_showMargin ? item.margin : item.revenue));
+    final leftEntries = _buildEntries(widget.items, totalValue, widget.targets != null);
+    final rightEntries = _buildEntries(widget.comparisonItems!, comparisonTotal, false);
+
+    return AppCard(
+      title: widget.title,
+      subtitle: 'Top ${widget.limit} berdasarkan omzet',
+      trailing: Wrap(
+        spacing: AppSpacing.xs,
+        children: [
+          AppChoiceChip(
+            label: 'Omzet',
+            dense: true,
+            selected: !_showMargin,
+            onSelected: () => setState(() => _showMargin = false),
+          ),
+          AppChoiceChip(
+            label: 'Margin',
+            dense: true,
+            selected: _showMargin,
+            onSelected: () => setState(() => _showMargin = true),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bulan ini',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.onPrimaryMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    SalesRankingList(entries: leftEntries, maxItems: widget.limit),
+                  ],
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.comparisonLabel ?? 'Pembanding',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.onPrimaryMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    SalesRankingList(entries: rightEntries, maxItems: widget.limit),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleCard(int totalValue) {
+    final entries = _buildEntries(widget.items, totalValue, widget.targets != null);
     return AppCard(
       title: widget.title,
       subtitle: 'Top ${widget.limit} berdasarkan omzet',

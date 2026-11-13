@@ -423,6 +423,12 @@ class SalesComparison {
   final int averageRevenue; // mean (integer) = totalRevenue ~/ monthsWithData
   final List<ComparisonMonth> monthly;
 
+  /// Detail dimensi untuk pembanding (produk / pelanggan / divisi). Setiap
+  /// item sudah dalam bentuk rata-rata per bulan (net omzet ÷ bulan berdata).
+  final List<SalesRankItem> byProduct;
+  final List<SalesRankItem> byCustomer;
+  final List<SalesRankItem> byDivisi;
+
   const SalesComparison({
     required this.month,
     required this.months,
@@ -430,6 +436,9 @@ class SalesComparison {
     required this.totalRevenue,
     required this.averageRevenue,
     required this.monthly,
+    this.byProduct = const [],
+    this.byCustomer = const [],
+    this.byDivisi = const [],
   });
 
   factory SalesComparison.fromMap(Map<String, dynamic> m,
@@ -446,11 +455,40 @@ class SalesComparison {
       totalRevenue: (m['total_revenue'] as num?)?.toInt() ?? 0,
       averageRevenue: (m['average_revenue'] as num?)?.toInt() ?? 0,
       monthly: monthly,
+      byProduct: _rankListFromComparison(m['by_product'], 'product_kode', 'product_nama', product: true),
+      byCustomer: _rankListFromComparison(m['by_customer'], 'customer_kode', 'customer_nama'),
+      byDivisi: _rankListFromComparison(m['by_divisi'], 'divisi', null),
     );
   }
 
   /// Apakah ada setidaknya satu bulan pembanding yang punya data.
   bool get hasBaseline => monthsWithData > 0 && averageRevenue > 0;
+
+  static List<SalesRankItem> _rankListFromComparison(
+    dynamic raw,
+    String codeKey,
+    String? labelKey, {
+    bool product = false,
+  }) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map<dynamic, dynamic>>()
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+        .map(
+          (row) => SalesRankItem(
+            code: row[codeKey]?.toString().trim() ?? '',
+            label: labelKey == null
+                ? ''
+                : row[labelKey]?.toString().trim() ?? '',
+            qty: _toInt(row['qty']),
+            revenue: _toInt(row['average_revenue'] ?? row['revenue']),
+            margin: _toInt(row['margin']),
+            motherSku: product ? row['mother_sku']?.toString() : null,
+            productKode: product ? row['product_kode']?.toString() : null,
+          ),
+        )
+        .toList(growable: false);
+  }
 }
 
 class ComparisonMonth {

@@ -14,7 +14,7 @@ grows to thousands of rows.
 """
 import tempfile
 from pathlib import Path
-from typing import Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
@@ -457,6 +457,8 @@ def imported_sales_comparison(
     month: Optional[str] = None,
     branch: Optional[str] = None,
     months: int = Query(3, ge=1, le=12),
+    include: Optional[str] = None,
+    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
@@ -465,6 +467,11 @@ def imported_sales_comparison(
     Digunakan chip pembanding di dashboard (Bulanan / 3 / 6 / 12). Bulan
     yang tidak punya data sama sekali tidak dikembalikan, sehingga rata-rata
     di frontend hanya dibagi dengan jumlah bulan yang berdata.
+
+    Saat ``include`` diisi (mis. ``product,customer,divisi``), response juga
+    menyertakan agregasi dimensi untuk periode pembanding. Setiap item
+    diberikan field tambahan ``average_revenue`` = total ÷ jumlah bulan
+    berdata, bukan total kasar.
     """
     normalized, _, month_end = parse_month(month)
     scope = resolve_scope(current_user, branch)
@@ -474,6 +481,46 @@ def imported_sales_comparison(
     monthly = read_monthly_comparison(db, scope, start, selected_start)
     total = sum(int(item["net_revenue"] or 0) for item in monthly)
     count = len(monthly)
+
+    sections = {d.strip().lower() for d in (include or "").split(",") if d.strip()}
+    detail: Dict[str, Any] = {}
+    if sections:
+        # read_summary_range mengembalikan total kasar (net) untuk seluruh
+        # rentang pembanding. Kita turunkan jadi rata-rata per item di sini.
+        range_summary = read_summary_range(
+            db,
+            scope,
+            start,
+            selected_start,
+            sections,
+            limit,
+            include_all_sales=False,
+        )
+        # section name ("product") → result key ("by_product")
+        section_to_key = {
+            "product": "by_product",
+            "customer": "by_customer",
+            "divisi": "by_divisi",
+            "sales": "by_sales",
+            "channel": "by_channel",
+            "supplier": "by_supplier",
+        }
+        for section, result_key in section_to_key.items():
+            if section not in sections:
+                continue
+            items = range_summary.get(result_key, [])
+            detail[result_key] = [
+                {
+                    **item,
+                    "average_revenue": (
+                        int(item.get("revenue") or 0) // count
+                    )
+                    if count
+                    else 0,
+                }
+                for item in items
+            ]
+
     if response is not None:
         response.headers["Cache-Control"] = "no-store"
     return {
@@ -485,6 +532,7 @@ def imported_sales_comparison(
         "total_revenue": total,
         "average_revenue": (total // count) if count else 0,
         "monthly": monthly,
+        **detail,
     }
 
 
