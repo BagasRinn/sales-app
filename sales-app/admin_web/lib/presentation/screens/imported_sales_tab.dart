@@ -900,9 +900,10 @@ class _AnalyticsBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
+        // Produk Teratas sendiri dalam satu baris penuh agar nama produk panjang terbaca.
         AppResponsiveGrid(
-          desktopCols: 2,
-          tabletCols: 2,
+          desktopCols: 1,
+          tabletCols: 1,
           mobileCols: 1,
           children: [
             _MetricRankingCard(
@@ -914,6 +915,14 @@ class _AnalyticsBody extends StatelessWidget {
               comparisonItems: comparisonDetail?['product'],
               comparisonLabel: comparisonLabel,
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppResponsiveGrid(
+          desktopCols: 3,
+          tabletCols: 2,
+          mobileCols: 1,
+          children: [
             _MetricRankingCard(
               title: 'Sales Teratas',
               items: analytics.sales,
@@ -1441,6 +1450,39 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         .toList(growable: false);
   }
 
+  /// Build entri pembanding diurutkan mengikuti urutan [leftItems] (bulan
+  /// dipilih), sehingga baris kanan selaras dengan baris kiri.
+  List<SalesRankingEntry> _buildComparisonEntriesOrderedByLeft(
+    List<SalesRankItem> comparisonItems,
+    List<SalesRankItem> leftItems,
+    int comparisonTotal,
+  ) {
+    final byKey = <String, SalesRankItem>{};
+    for (final item in comparisonItems) {
+      final key = item.code.isNotEmpty ? item.code : item.label;
+      if (key.isNotEmpty) byKey[key] = item;
+    }
+    return leftItems
+        .map((leftItem) {
+          final key = leftItem.code.isNotEmpty ? leftItem.code : leftItem.label;
+          final rightItem = byKey[key];
+          if (rightItem == null) return null;
+          final value = _showMargin ? rightItem.margin : rightItem.revenue;
+          return SalesRankingEntry(
+            label: rightItem.displayLabel,
+            value: value,
+            sortValue: rightItem.revenue,
+            trailingDetail:
+                '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',
+            showTarget: false,
+            target: null,
+            targetActual: rightItem.revenue,
+          );
+        })
+        .whereType<SalesRankingEntry>()
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
@@ -1454,7 +1496,12 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     final comparisonTotal = widget.comparisonItems!
         .fold<int>(0, (sum, item) => sum + (_showMargin ? item.margin : item.revenue));
     final leftEntries = _buildEntries(widget.items, totalValue, widget.targets != null);
-    final rightEntries = _buildEntries(widget.comparisonItems!, comparisonTotal, false);
+    // Kanan mengikuti urutan kiri (bulan dipilih), bukan diurutkan ulang sendiri.
+    final rightEntries = _buildComparisonEntriesOrderedByLeft(
+      widget.comparisonItems!,
+      widget.items,
+      comparisonTotal,
+    );
 
     return AppCard(
       title: widget.title,
