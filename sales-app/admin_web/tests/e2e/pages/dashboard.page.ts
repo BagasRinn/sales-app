@@ -3,6 +3,7 @@ import { BasePage } from './base.page';
 
 export type TabName =
   | 'Dashboard'
+  | 'Sales Order'
   | 'Pesanan'
   | 'Toko'
   | 'Pengajuan Customer'
@@ -53,7 +54,8 @@ export class DashboardPage extends BasePage {
 
   async clickTab(tabName: TabName): Promise<void> {
     const tabMap: Record<TabName, RegExp> = {
-      'Dashboard': /dashboard|ringkasan/i,
+      'Dashboard': /dashboard/i,
+      'Sales Order': /sales order/i,
       'Pesanan': /pesanan|orders/i,
       'Toko': /toko|toko/i,
       'Pengajuan Customer': /pengajuan/i,
@@ -73,7 +75,8 @@ export class DashboardPage extends BasePage {
 
   async expectTabVisible(tabName: TabName): Promise<void> {
     const tabMap: Record<TabName, RegExp> = {
-      'Dashboard': /dashboard|ringkasan/i,
+      'Dashboard': /dashboard/i,
+      'Sales Order': /sales order/i,
       'Pesanan': /pesanan|orders/i,
       'Toko': /toko|toko/i,
       'Pengajuan Customer': /pengajuan/i,
@@ -92,7 +95,8 @@ export class DashboardPage extends BasePage {
 
   async expectTabHidden(tabName: TabName): Promise<void> {
     const tabMap: Record<TabName, RegExp> = {
-      'Dashboard': /dashboard|ringkasan/i,
+      'Dashboard': /dashboard/i,
+      'Sales Order': /sales order/i,
       'Pesanan': /pesanan|orders/i,
       'Toko': /toko|toko/i,
       'Pengajuan Customer': /pengajuan/i,

@@ -19,7 +19,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('loads and displays stat cards @smoke', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await stats.expectStatsCardsVisible();
@@ -28,7 +28,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('total orders stat card shows count', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await expect(stats.totalPesananCard).toBeVisible();
@@ -39,7 +39,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('pending orders badge shows correct count', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     // If there are pending orders, badge should be visible
@@ -55,7 +55,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('download daily report - selecting date and downloading', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await stats.expectLaporanSectionVisible();
@@ -77,7 +77,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('download period report with date range', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
 
@@ -98,7 +98,7 @@ test.describe('Dashboard - Stats Tab', () => {
   test('ADMIN sees "Pesanan Perlu Tindakan" section', async ({ page }) => {
     await loginAsAdmin(page);
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await expect(stats.pesananPerluTindakanSection).toBeVisible({ timeout: 5_000 }).catch(() => {});
@@ -111,7 +111,7 @@ test.describe('Dashboard - Stats Tab', () => {
     await page.waitForLoadState('networkidle');
 
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await expect(stats.pesananPerluTindakanSection).toBeHidden({ timeout: 3_000 }).catch(() => {});
@@ -124,7 +124,7 @@ test.describe('Dashboard - Stats Tab', () => {
     await page.waitForLoadState('networkidle');
 
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
 
     const stats = new StatsTabPage(page);
     await expect(stats.performaSalesSection).toBeVisible({ timeout: 5_000 });
@@ -137,7 +137,7 @@ test.describe('Dashboard - Stats Tab', () => {
     await page.waitForLoadState('networkidle');
 
     const dashboard = new DashboardPage(page);
-    await dashboard.clickTab('Dashboard');
+    await dashboard.clickTab('Sales Order');
     await page.waitForLoadState('networkidle');
 
     // Look for branch cards in the perform sales section

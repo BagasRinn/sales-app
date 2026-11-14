@@ -32,9 +32,9 @@ ke API; tidak ada mode offline.
 
 ### Admin
 
-Dashboard dengan 13 menu: Dashboard, Pesanan, Toko, Pengajuan Customer, Produk & Stok,
-Supplier, Sinkronisasi, User, Performa Sales, Penugasan Sales, Bulletin, Data Penjualan,
-Laporan Lintas Cabang (khusus MANAGER).
+Dashboard dengan 13 menu: Dashboard (Data Penjualan), Sales Order, Pesanan, Toko,
+Pengajuan Customer, Produk & Stok, Supplier, Sinkronisasi, User, Performa Sales,
+Penugasan Sales, Bulletin, Laporan Lintas Cabang (khusus MANAGER).
 
 - Approve/reject order, ubah diskon, batalkan item sebagian.
 - Edit/hapus produk, CRUD customer & user, tambah supplier + atur aktif/`order_type`, target

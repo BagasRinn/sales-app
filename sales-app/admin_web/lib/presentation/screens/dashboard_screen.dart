@@ -181,11 +181,24 @@ class _DashboardContentState extends State<_DashboardContent>
     const operasional = 'Operasional';
     const manajemen = 'Manajemen';
     return [
+      // Data Penjualan tampil sebagai menu utama pertama dan memakai label
+      // "Dashboard". Syarat tampilnya tetap sama: hanya non-ADMIN dan selama
+      // feature flag aktif.
+      if (widget.role != 'ADMIN' && AppConfig.enableImportedSales)
+        const _NavSpec(
+          page: _DashboardPage.importedSales,
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          label: 'Dashboard',
+          group: utama,
+        ),
+      // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
+      // bentrok dengan menu Dashboard di atas.
       const _NavSpec(
         page: _DashboardPage.dashboard,
-        icon: Icons.dashboard_outlined,
-        selectedIcon: Icons.dashboard,
-        label: 'Dashboard',
+        icon: Icons.receipt_long_outlined,
+        selectedIcon: Icons.receipt_long,
+        label: 'Sales Order',
         group: utama,
       ),
       const _NavSpec(
@@ -259,16 +272,6 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Bulletin',
           group: manajemen,
         ),
-        // Disembunyikan sementara lewat AppConfig.enableImportedSales.
-        // Halaman & provider-nya tetap ada, hanya tidak ditampilkan.
-        if (AppConfig.enableImportedSales)
-          const _NavSpec(
-            page: _DashboardPage.importedSales,
-            icon: Icons.analytics_outlined,
-            selectedIcon: Icons.analytics,
-            label: 'Data Penjualan',
-            group: manajemen,
-          ),
       ],
       if (_isGlobalManager)
         const _NavSpec(
@@ -301,6 +304,41 @@ class _DashboardContentState extends State<_DashboardContent>
     return index < 0 ? 0 : index;
   }
 
+  /// Nomor tab yang dipakai `AdminProvider` untuk lazy load & cache.
+  /// Sengaja dipisah dari urutan menu: nomor ini mengikuti urutan lama supaya
+  /// urutan sidebar bisa diubah (mis. Data Penjualan dipindah ke atas) tanpa
+  /// mengubah logika pemuatan data di provider.
+  int _providerTabIndex(_DashboardPage page) {
+    switch (page) {
+      case _DashboardPage.dashboard:
+        return 0;
+      case _DashboardPage.orders:
+        return 1;
+      case _DashboardPage.customers:
+        return 2;
+      case _DashboardPage.customerSubmissions:
+        return 3;
+      case _DashboardPage.products:
+        return 4;
+      case _DashboardPage.suppliers:
+        return 5;
+      case _DashboardPage.sync:
+        return 6;
+      case _DashboardPage.users:
+        return 7;
+      case _DashboardPage.performance:
+        return 8;
+      case _DashboardPage.penugasan:
+        return 9;
+      case _DashboardPage.bulletins:
+        return 10;
+      case _DashboardPage.importedSales:
+        return 11;
+      case _DashboardPage.crossBranch:
+        return 12;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -329,6 +367,13 @@ class _DashboardContentState extends State<_DashboardContent>
     _adminProvider.setUserBranch(widget.branch);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Sinkronkan tab aktif provider dengan halaman pertama yang tampil,
+      // karena urutan menu (dan halaman default) tidak lagi sama dengan
+      // nomor tab internal provider.
+      final specs = _navSpecs();
+      _adminProvider.setActiveTab(
+        _providerTabIndex(specs[_selectedIndex.clamp(0, specs.length - 1)].page),
+      );
       _adminProvider.loadAll();
 
       if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') {
@@ -406,7 +451,10 @@ class _DashboardContentState extends State<_DashboardContent>
     // response dari tab lama tidak relevan.
     context.read<AdminProvider>().cancelInFlightLoads();
     // Tell provider tab aktif supaya auto-refresh hanya load data tab ini.
-    context.read<AdminProvider>().setActiveTab(i);
+    // Pakai nomor tab internal provider, bukan index sidebar.
+    context
+        .read<AdminProvider>()
+        .setActiveTab(_providerTabIndex(specs[i].page));
   }
 
   Widget _buildBody() {
@@ -442,7 +490,7 @@ class _DashboardContentState extends State<_DashboardContent>
               _ordersInitialTabIndex = initialTabIndex;
             });
             context.read<AdminProvider>().setActiveTab(
-              _indexOfPage(_DashboardPage.orders),
+              _providerTabIndex(_DashboardPage.orders),
             );
           },
         );
@@ -491,7 +539,7 @@ class _DashboardContentState extends State<_DashboardContent>
           _ordersInitialTabIndex = initialTabIndex;
         });
         context.read<AdminProvider>().setActiveTab(
-          _indexOfPage(_DashboardPage.orders),
+          _providerTabIndex(_DashboardPage.orders),
         );
       },
     );
