@@ -646,6 +646,107 @@ def delete_imported_sales_month(
     }
 
 
+@router.delete("/all")
+def delete_all_imported_sales(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_manager_global),
+):
+    """Permanently delete ALL imported sales and returns, all branches.
+
+    Summary untuk setiap (scope, month) yang terdampak di-recompute agar
+    cache tidak menyimpan data yang sudah dihapus. Endpoint ini hanya
+    menyentuh data penjualan/retur hasil import — target tidak dihapus.
+    """
+    month_expr = func.to_char(ImportedSale.sale_date, "YYYY-MM")
+    months = {
+        str(row[0])
+        for row in db.query(month_expr).distinct().all()
+        if row[0]
+    }
+    retur_expr = func.to_char(ImportedReturn.sale_date, "YYYY-MM")
+    months |= {
+        str(row[0])
+        for row in db.query(retur_expr).distinct().all()
+        if row[0]
+    }
+    branches = {
+        value
+        for (value,) in db.query(ImportedSale.branch).distinct().all()
+        if value
+    } | {
+        value
+        for (value,) in db.query(ImportedReturn.branch).distinct().all()
+        if value
+    }
+    lock_scopes = set(get_valid_branch_codes()) | branches | {"GLOBAL"}
+    acquire_advisory_xact_locks(
+        db,
+        (
+            f"sales-import:{scope}:{month}"
+            for scope in sorted(lock_scopes)
+            for month in sorted(months)
+        ),
+    )
+
+    deleted_sales = db.query(ImportedSale).delete(synchronize_session=False)
+    deleted_returns = db.query(ImportedReturn).delete(synchronize_session=False)
+    db.add(
+        ImportLog(
+            user_id=current_user.get("user_id"),
+            nama=current_user.get("nama"),
+            import_type="SALES_DELETE",
+            total_rows=deleted_sales,
+            inserted=0,
+            updated=0,
+            skipped=0,
+            file_name="delete:all",
+            branch=None,
+        )
+    )
+    db.add(
+        ImportLog(
+            user_id=current_user.get("user_id"),
+            nama=current_user.get("nama"),
+            import_type="SALES_RETUR_DELETE",
+            total_rows=deleted_returns,
+            inserted=0,
+            updated=0,
+            skipped=0,
+            file_name="delete-returns:all",
+            branch=None,
+        )
+    )
+
+    versions = []
+    if deleted_sales or deleted_returns:
+        sorted_scopes = sorted(lock_scopes)
+        sorted_months = sorted(months)
+        versions = bump_versions(db, sorted_scopes, sorted_months)
+        version_by_scope = {
+            row["scope"]: int(row["version"] or 0) for row in versions
+        }
+        for month in sorted_months:
+            _, start, month_end = parse_month(month)
+            for scope in sorted_scopes:
+                recompute_summary(
+                    db,
+                    scope,
+                    month,
+                    start,
+                    month_end,
+                    version_by_scope.get(scope, 0),
+                )
+
+    db.commit()
+    return {
+        "success": True,
+        "deleted_sales": int(deleted_sales),
+        "deleted_returns": int(deleted_returns),
+        "months": sorted(months),
+        "versions": versions,
+    }
+
+
 @router.delete("/returns/month")
 def delete_imported_sales_returns_month(
     month: str = Query(...),

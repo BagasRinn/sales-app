@@ -555,6 +555,11 @@ class AdminRepository {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  Future<Map<String, dynamic>> deleteAllImportedSales() async {
+    final data = await _api.delete('/sales-imports/all');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> deleteImportedSalesReturnsMonth({
     required String month,
     String? branch,

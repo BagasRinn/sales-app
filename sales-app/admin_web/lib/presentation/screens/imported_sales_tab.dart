@@ -381,6 +381,14 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                           : () => _confirmDeleteMonth(context, provider),
                     ),
                     AppButton(
+                      label: 'Hapus semua',
+                      icon: Icons.delete_forever_outlined,
+                      variant: AppButtonVariant.danger,
+                      onPressed: _isImporting
+                          ? null
+                          : () => _confirmDeleteAll(context, provider),
+                    ),
+                    AppButton(
                       label: _importing ? 'Mengimport...' : 'Import Excel',
                       icon: Icons.upload_file,
                       variant: AppButtonVariant.secondary,
@@ -630,6 +638,29 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     }
   }
 
+  Future<void> _confirmDeleteAll(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeleteAllDialog(),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final success = await provider.deleteAllImportedSales();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Semua data penjualan & retur berhasil dihapus'
+              : provider.errorMessage ?? 'Gagal menghapus semua data',
+        ),
+        backgroundColor: success ? AppColors.success : AppColors.error,
+      ),
+    );
+  }
+
   Future<void> _confirmDeleteReturnsMonth(
     BuildContext context,
     AdminProvider provider,
@@ -758,6 +789,77 @@ class _DeleteMonthDialogState extends State<_DeleteMonthDialog> {
           icon: Icons.delete_outline,
           variant: AppButtonVariant.danger,
           onPressed: _controller.text.trim() == widget.month
+              ? () => Navigator.of(context).pop(true)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _DeleteAllDialog extends StatefulWidget {
+  const _DeleteAllDialog();
+
+  @override
+  State<_DeleteAllDialog> createState() => _DeleteAllDialogState();
+}
+
+class _DeleteAllDialogState extends State<_DeleteAllDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Hapus SEMUA data penjualan'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Semua baris penjualan dan retur hasil import, di semua cabang '
+            'dan semua bulan, akan dihapus permanen.',
+            style: AppTextStyles.bodyMuted,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Target penjualan tidak ikut dihapus. Tindakan ini tidak dapat '
+            'dibatalkan. Ketik HAPUS untuk melanjutkan.',
+            style: AppTextStyles.bodyMuted,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Ketik HAPUS',
+              hintText: 'HAPUS',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Batal'),
+        ),
+        AppButton(
+          label: 'Hapus permanen',
+          icon: Icons.delete_forever_outlined,
+          variant: AppButtonVariant.danger,
+          onPressed: _controller.text.trim().toUpperCase() == 'HAPUS'
               ? () => Navigator.of(context).pop(true)
               : null,
         ),

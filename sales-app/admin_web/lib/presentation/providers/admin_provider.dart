@@ -1919,6 +1919,29 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Hapus SEMUA data penjualan & retur hasil import, semua cabang.
+  Future<bool> deleteAllImportedSales() async {
+    _setLoading(true, 'Menghapus semua data penjualan...');
+    try {
+      await _repo.deleteAllImportedSales();
+      _importedSalesCache.clear();
+      _importedSalesComparisonCache.clear();
+      _setLoading(false);
+      await loadImportedSalesSummary(
+        month: _importedSalesMonth,
+        rangeMonths: _importedSalesRangeMonths,
+        forceRefresh: true,
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setLoading(false);
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> importSalesExcel(
     List<int> fileBytes,
     String fileName, {
