@@ -521,6 +521,11 @@ def imported_sales_comparison(
                     )
                     if count
                     else 0,
+                    "average_margin": (
+                        int(item.get("margin") or 0) // count
+                    )
+                    if count
+                    else 0,
                 }
                 for item in items
             ]

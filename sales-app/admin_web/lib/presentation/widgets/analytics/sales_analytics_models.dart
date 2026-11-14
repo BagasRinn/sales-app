@@ -493,7 +493,7 @@ class SalesComparison {
                 : row[labelKey]?.toString().trim() ?? '',
             qty: _toInt(row['qty']),
             revenue: _toInt(row['average_revenue'] ?? row['revenue']),
-            margin: _toInt(row['margin']),
+            margin: _toInt(row['average_margin'] ?? row['margin']),
             motherSku: product ? row['mother_sku']?.toString() : null,
             productKode: product ? row['product_kode']?.toString() : null,
           ),

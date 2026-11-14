@@ -1808,7 +1808,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               label: e['product_nama']?.toString().trim() ?? '',
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
-              margin: toInt(e['margin']),
+              margin: toInt(e['average_margin'] ?? e['margin']),
               motherSku: e['mother_sku']?.toString(),
               productKode: e['product_kode']?.toString(),
             ),
@@ -1823,7 +1823,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               label: e['customer_nama']?.toString().trim() ?? '',
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
-              margin: toInt(e['margin']),
+              margin: toInt(e['average_margin'] ?? e['margin']),
             ),
           )
           .toList(growable: false),
@@ -1836,7 +1836,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               label: e['divisi']?.toString().trim() ?? '',
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
-              margin: toInt(e['margin']),
+              margin: toInt(e['average_margin'] ?? e['margin']),
             ),
           )
           .toList(growable: false),
