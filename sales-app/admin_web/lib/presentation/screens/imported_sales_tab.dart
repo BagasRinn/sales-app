@@ -1483,14 +1483,15 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
           ? 0
           : (_showMargin ? rightItem.margin : rightItem.revenue);
       final rightLabel = rightItem?.displayLabel ?? leftItem.displayLabel;
+      final entryTarget = widget.targets?[leftItem.targetKey];
       return SalesRankingEntry(
         label: rightLabel,
         value: value,
         // sortValue menurun menurut indeks kiri agar SalesRankingList
         // tidak mengurutkan ulang kanan (tetap mengikuti kiri).
         sortValue: leftItems.length - index,
-        showTarget: false,
-        target: null,
+        showTarget: widget.targets != null,
+        target: entryTarget,
         targetActual: rightItem?.revenue ?? 0,
       );
     }, growable: false);
