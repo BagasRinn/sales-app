@@ -90,7 +90,9 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   }
 
   Future<void> _changeComparison(int months) async {
-    await context.read<AdminProvider>().setImportedSalesComparisonMonths(months);
+    await context.read<AdminProvider>().setImportedSalesComparisonMonths(
+      months,
+    );
   }
 
   String _comparisonLabel(int months) {
@@ -813,10 +815,7 @@ class _AnalyticsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SalesHeroCard(
-          analytics: analytics,
-          comparison: comparison,
-        ),
+        SalesHeroCard(analytics: analytics, comparison: comparison),
         const SizedBox(height: AppSpacing.md),
         if (analytics.divisi.isEmpty)
           AppCard(
@@ -1436,8 +1435,11 @@ class _MetricRankingCard extends StatefulWidget {
 class _MetricRankingCardState extends State<_MetricRankingCard> {
   bool _showMargin = false;
 
-  List<SalesRankingEntry> _buildEntries(List<SalesRankItem> items,
-      int totalValue, bool showTarget) {
+  List<SalesRankingEntry> _buildEntries(
+    List<SalesRankItem> items,
+    int totalValue,
+    bool showTarget,
+  ) {
     return items
         .map((item) {
           final value = _showMargin ? item.margin : item.revenue;
@@ -1447,10 +1449,9 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             if (item.motherSku?.isNotEmpty == true)
               'Mother SKU ${item.motherSku}',
           ];
-          final entryTarget =
-              showTarget && widget.targets != null
-                  ? widget.targets![item.targetKey]
-                  : null;
+          final entryTarget = showTarget && widget.targets != null
+              ? widget.targets![item.targetKey]
+              : null;
           return SalesRankingEntry(
             label: item.displayLabel,
             value: value,
@@ -1467,9 +1468,9 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         .toList(growable: false);
   }
 
-  /// Build entri pembanding diurutkan mengikuti urutan [leftItems] (bulan
-  /// dipilih), sehingga baris kanan selaras dengan baris kiri dan panjangnya
-  /// sama (10 item). Item yang tidak ada di data pembanding ditampilkan 0.
+  /// Build entri periode lain mengikuti urutan [leftItems] (bulan kebelakang),
+  /// sehingga baris kanan selaras dengan ranking periode kebelakang.
+  /// Item yang tidak ada di data pembanding ditampilkan 0.
   List<SalesRankingEntry> _buildComparisonEntriesOrderedByLeft(
     List<SalesRankItem> comparisonItems,
     List<SalesRankItem> leftItems,
@@ -1506,21 +1507,28 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   @override
   Widget build(BuildContext context) {
     final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
-    final hasComparison = widget.comparisonItems != null &&
-        widget.comparisonItems!.isNotEmpty;
+    final hasComparison =
+        widget.comparisonItems != null && widget.comparisonItems!.isNotEmpty;
 
     if (!hasComparison) {
       return _buildSingleCard(totalValue);
     }
 
-    final comparisonTotal = widget.comparisonItems!
-        .fold<int>(0, (sum, item) => sum + (_showMargin ? item.margin : item.revenue));
-    final leftEntries = _buildEntries(widget.items, totalValue, widget.targets != null);
-    // Kanan mengikuti urutan kiri (bulan dipilih), bukan diurutkan ulang sendiri.
-    final rightEntries = _buildComparisonEntriesOrderedByLeft(
+    final comparisonTotal = widget.comparisonItems!.fold<int>(
+      0,
+      (sum, item) => sum + (_showMargin ? item.margin : item.revenue),
+    );
+    // Ranking utama memakai periode bulan kebelakang. Bulan aktif hanya
+    // mengikuti urutan entitas yang sudah ditentukan oleh periode tersebut.
+    final leftEntries = _buildEntries(
       widget.comparisonItems!,
-      widget.items,
       comparisonTotal,
+      false,
+    );
+    final rightEntries = _buildComparisonEntriesOrderedByLeft(
+      widget.items,
+      widget.comparisonItems!,
+      totalValue,
     );
 
     return AppCard(
@@ -1559,7 +1567,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Bulan ini',
+                        widget.comparisonLabel ?? 'Bulan sebelumnya',
                         style: AppTextStyles.caption.copyWith(
                           color: AppColors.onPrimaryMuted,
                           fontSize: 11,
@@ -1567,7 +1575,10 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      SalesRankingList(entries: leftEntries, maxItems: widget.limit),
+                      SalesRankingList(
+                        entries: leftEntries,
+                        maxItems: widget.limit,
+                      ),
                     ],
                   ),
                 ),
@@ -1583,7 +1594,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.comparisonLabel ?? 'Pembanding',
+                        'Bulan ini',
                         style: AppTextStyles.caption.copyWith(
                           color: AppColors.onPrimaryMuted,
                           fontSize: 11,
@@ -1591,7 +1602,10 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      SalesRankingList(entries: rightEntries, maxItems: widget.limit),
+                      SalesRankingList(
+                        entries: rightEntries,
+                        maxItems: widget.limit,
+                      ),
                     ],
                   ),
                 ),
@@ -1604,7 +1618,11 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   }
 
   Widget _buildSingleCard(int totalValue) {
-    final entries = _buildEntries(widget.items, totalValue, widget.targets != null);
+    final entries = _buildEntries(
+      widget.items,
+      totalValue,
+      widget.targets != null,
+    );
     return AppCard(
       title: widget.title,
       subtitle: 'Top ${widget.limit} berdasarkan omzet',
