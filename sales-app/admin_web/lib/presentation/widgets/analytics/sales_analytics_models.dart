@@ -143,6 +143,7 @@ class SalesAnalytics {
   final List<SupplierReturnRankItem> supplierRetur;
   final Map<String, int> salesTargets;
   final Map<String, int> supplierTargets;
+  final Map<String, int> divisiTargets;
 
   /// One point per calendar day in [month]; days without sales are zero-filled
   /// so the trend line keeps an even time axis.
@@ -172,6 +173,7 @@ class SalesAnalytics {
     required this.supplierRetur,
     required this.salesTargets,
     required this.supplierTargets,
+    required this.divisiTargets,
     required this.days,
     required this.salesSeries,
   });
@@ -213,6 +215,7 @@ class SalesAnalytics {
       supplierRetur: _supplierReturnList(summary['by_supplier_retur']),
       salesTargets: _targetMap(summary['sales_targets']),
       supplierTargets: _targetMap(summary['supplier_targets']),
+      divisiTargets: _targetMap(summary['divisi_targets']),
       days: days,
       salesSeries: _salesSeries(summary['by_sales_day'], days),
     );
@@ -441,8 +444,7 @@ class SalesComparison {
     this.byDivisi = const [],
   });
 
-  factory SalesComparison.fromMap(Map<String, dynamic> m,
-      {int months = 1}) {
+  factory SalesComparison.fromMap(Map<String, dynamic> m, {int months = 1}) {
     final monthly = (m['monthly'] as List? ?? const [])
         .whereType<Map<dynamic, dynamic>>()
         .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
@@ -455,8 +457,17 @@ class SalesComparison {
       totalRevenue: (m['total_revenue'] as num?)?.toInt() ?? 0,
       averageRevenue: (m['average_revenue'] as num?)?.toInt() ?? 0,
       monthly: monthly,
-      byProduct: _rankListFromComparison(m['by_product'], 'product_kode', 'product_nama', product: true),
-      byCustomer: _rankListFromComparison(m['by_customer'], 'customer_kode', 'customer_nama'),
+      byProduct: _rankListFromComparison(
+        m['by_product'],
+        'product_kode',
+        'product_nama',
+        product: true,
+      ),
+      byCustomer: _rankListFromComparison(
+        m['by_customer'],
+        'customer_kode',
+        'customer_nama',
+      ),
       byDivisi: _rankListFromComparison(m['by_divisi'], 'divisi', null),
     );
   }
@@ -507,12 +518,12 @@ class ComparisonMonth {
   });
 
   factory ComparisonMonth.fromMap(Map<String, dynamic> m) => ComparisonMonth(
-        month: m['month']?.toString() ?? '',
-        grossRevenue: (m['gross_revenue'] as num?)?.toInt() ?? 0,
-        returRevenue: (m['retur_revenue'] as num?)?.toInt() ?? 0,
-        netRevenue: (m['net_revenue'] as num?)?.toInt() ?? 0,
-        rows: (m['rows'] as num?)?.toInt() ?? 0,
-      );
+    month: m['month']?.toString() ?? '',
+    grossRevenue: (m['gross_revenue'] as num?)?.toInt() ?? 0,
+    returRevenue: (m['retur_revenue'] as num?)?.toInt() ?? 0,
+    netRevenue: (m['net_revenue'] as num?)?.toInt() ?? 0,
+    rows: (m['rows'] as num?)?.toInt() ?? 0,
+  );
 
   /// Bulan ini ikut dihitung ke rata-rata (punya data nyata).
   bool get countsTowardAverage => netRevenue > 0 || rows > 0;

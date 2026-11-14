@@ -958,6 +958,7 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              targets: analytics.divisiTargets,
               comparisonItems: comparisonDetail?['divisi'],
               comparisonLabel: comparisonLabel,
             ),
@@ -1453,9 +1454,6 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             value: value,
             sortValue: item.revenue,
             detail: productDetails.isEmpty ? null : productDetails.join(' · '),
-            trailingDetail:
-                '${formatPercentPrecise(totalValue == 0 ? 0 : value / totalValue)} '
-                '${_showMargin ? 'margin' : 'omzet'}',
             showTarget: showTarget,
             target: entryTarget,
             targetActual: item.revenue,
@@ -1491,8 +1489,6 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         // sortValue menurun menurut indeks kiri agar SalesRankingList
         // tidak mengurutkan ulang kanan (tetap mengikuti kiri).
         sortValue: leftItems.length - index,
-        trailingDetail:
-            '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',
         showTarget: false,
         target: null,
         targetActual: rightItem?.revenue ?? 0,

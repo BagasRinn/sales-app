@@ -407,9 +407,12 @@ def imported_sales_summary(
             limit,
             include_all_sales=include_all_sales,
         )
-    sales_targets, supplier_targets, target_updated_at = read_sales_target_summary(
-        db, scope, range_month_keys
-    )
+    (
+        sales_targets,
+        supplier_targets,
+        divisi_targets,
+        target_updated_at,
+    ) = read_sales_target_summary(db, scope, range_month_keys)
     by_day = (
         read_daily_series(db, scope, start, month_end) if "day" in sections else []
     )
@@ -446,6 +449,7 @@ def imported_sales_summary(
         "by_supplier_retur": summary["by_supplier_retur"],
         "sales_targets": sales_targets,
         "supplier_targets": supplier_targets,
+        "divisi_targets": divisi_targets,
         "by_day": by_day,
         "by_sales_day": by_sales_day,
     }

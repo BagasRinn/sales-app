@@ -49,6 +49,12 @@ _ALIASES = {
         "supplier name",
     ),
     "entity": ("entitas",),
+    "divisi": (
+        "divisi",
+        "division",
+        "nama divisi",
+        "divisi name",
+    ),
     "target": (
         "target",
         "target omzet",
@@ -319,8 +325,12 @@ def import_sales_targets_from_excel(
         }
         for target_type in _TARGET_TYPES
     }
+    logs["divisi"] = {"rows": 0, "inserted": 0, "updated": 0, "skipped": 0}
     sheet_logs: List[Dict[str, Any]] = []
     upserts: Dict[Tuple[str, str, str, str], _TargetRow] = {}
+    # Kolom Divisi pada sheet supplier: target divisi = jumlah target omzet
+    # semua supplier yang ber-divisi tersebut, per branch+period.
+    divisi_totals: Dict[Tuple[str, str, str], List[Any]] = {}
     total_recognized = sum(item[4] for item in recognized)
     processed_rows = 0
     if progress:
@@ -403,7 +413,41 @@ def import_sales_targets_from_excel(
             )
             upserts[(branch, period, target_type, name_key)] = target
 
+            if target_type == "SUPPLIER":
+                raw_divisi = str(value_for("divisi") or "").strip()
+                divisi_name = raw_divisi[:200]
+                divisi_key = normalize_target_name(divisi_name)
+                if divisi_name and divisi_key:
+                    bucket = divisi_totals.setdefault(
+                        (branch, period, divisi_key), [divisi_name, 0]
+                    )
+                    bucket[0] = divisi_name
+                    bucket[1] += target_value
+
         sheet_logs.append(sheet_log)
+
+    for (branch, period, divisi_key), (divisi_name, total) in divisi_totals.items():
+        upserts[(branch, period, "DIVISI", divisi_key)] = _TargetRow(
+            branch=branch,
+            period=period,
+            target_type="DIVISI",
+            name=divisi_name,
+            name_key=divisi_key,
+            value=total,
+            sheet="divisi (agregat supplier)",
+        )
+    if divisi_totals:
+        sheet_logs.append(
+            {
+                "sheet": "divisi (agregat supplier)",
+                "type": "divisi",
+                "rows": len(divisi_totals),
+                "inserted": 0,
+                "updated": 0,
+                "skipped": 0,
+            }
+        )
+        logs["divisi"]["rows"] += len(divisi_totals)
 
     if progress:
         progress.update(58, "Menyimpan target ke database...")
@@ -529,7 +573,7 @@ def read_sales_target_summary(
     db: Session,
     scope: str,
     periods: List[str],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[datetime]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], Optional[datetime]]:
     query = db.query(DataPenjualanTarget).filter(
         DataPenjualanTarget.period.in_(periods)
     )
@@ -558,14 +602,22 @@ def read_sales_target_summary(
     )
     sales_targets: List[Dict[str, Any]] = []
     supplier_targets: List[Dict[str, Any]] = []
+    divisi_targets: List[Dict[str, Any]] = []
+    buckets = {
+        "SALES": sales_targets,
+        "SUPPLIER": supplier_targets,
+        "DIVISI": divisi_targets,
+    }
     for target_type, name_key, name, value in grouped:
         entry = {
             "name": name,
             "name_key": name_key,
             "value": int(value or 0),
         }
-        (sales_targets if target_type == "SALES" else supplier_targets).append(entry)
-    return sales_targets, supplier_targets, target_updated_at
+        bucket = buckets.get(target_type)
+        if bucket is not None:
+            bucket.append(entry)
+    return sales_targets, supplier_targets, divisi_targets, target_updated_at
 
 
 def read_sales_target_updated_at(
