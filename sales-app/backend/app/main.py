@@ -157,11 +157,13 @@ def _ensure_imported_sales_template_v2_columns() -> None:
                 for row in conn.execute(text(
                     "SELECT column_name FROM information_schema.columns "
                     "WHERE table_name = 'imported_sales_monthly_summary' "
-                    "AND column_name IN ('margin', 'product_kode', 'mother_sku')"
+                    "AND column_name IN ('margin', 'product_kode', 'mother_sku', "
+                    "'effective_call_count', 'active_outlet_count')"
                 )).all()
             }
             missing_summary_columns = {
-                "margin", "product_kode", "mother_sku"
+                "margin", "product_kode", "mother_sku",
+                "effective_call_count", "active_outlet_count"
             } - summary_columns
             if "margin" in missing_summary_columns:
                 conn.execute(text(
@@ -178,6 +180,18 @@ def _ensure_imported_sales_template_v2_columns() -> None:
                 conn.execute(text(
                     "ALTER TABLE imported_sales_monthly_summary "
                     "ADD COLUMN IF NOT EXISTS mother_sku VARCHAR(100)"
+                ))
+            if "effective_call_count" in missing_summary_columns:
+                conn.execute(text(
+                    "ALTER TABLE imported_sales_monthly_summary "
+                    "ADD COLUMN IF NOT EXISTS effective_call_count BIGINT "
+                    "NOT NULL DEFAULT 0"
+                ))
+            if "active_outlet_count" in missing_summary_columns:
+                conn.execute(text(
+                    "ALTER TABLE imported_sales_monthly_summary "
+                    "ADD COLUMN IF NOT EXISTS active_outlet_count BIGINT "
+                    "NOT NULL DEFAULT 0"
                 ))
             if missing_summary_columns:
                 # Force a lazy rebuild with the new column/dimension.

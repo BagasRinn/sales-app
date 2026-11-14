@@ -445,6 +445,8 @@ def imported_sales_summary(
         "total_retur_margin": summary["total_retur_margin"],
         "total_retur_rows": summary["total_retur_rows"],
         "imported_rows": summary["imported_rows"],
+        "effective_calls": summary["effective_calls"],
+        "active_outlets": summary["active_outlets"],
         "by_product": summary["by_product"],
         "by_sales": summary["by_sales"],
         "by_customer": summary["by_customer"],

@@ -4,50 +4,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'hero shows combined supplier target and moves transactions to metrics',
-    (tester) async {
-      tester.view.physicalSize = const Size(1400, 500);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('hero shows outlet and invoice metrics', (tester) async {
+    tester.view.physicalSize = const Size(1400, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final analytics = SalesAnalytics.fromSummary({
-        'month': '2026-11',
-        'total_revenue': 250000,
-        'imported_rows': 12,
-        'supplier_targets': [
-          {'name': 'Supplier A', 'value': 200000},
-          {'name': 'Supplier B', 'value': 300000},
-        ],
-        'by_day': [
-          {'date': '2026-11-01', 'revenue': 100000},
-          {'date': '2026-11-02', 'revenue': 150000},
-        ],
-      }, DateTime(2026, 11));
+    final analytics = SalesAnalytics.fromSummary({
+      'month': '2026-11',
+      'total_revenue': 250000,
+      'imported_rows': 12,
+      'effective_calls': 5,
+      'active_outlets': 1,
+      'supplier_targets': [
+        {'name': 'Supplier A', 'value': 200000},
+        {'name': 'Supplier B', 'value': 300000},
+      ],
+      'by_day': [
+        {'date': '2026-11-01', 'revenue': 100000},
+        {'date': '2026-11-02', 'revenue': 150000},
+      ],
+    }, DateTime(2026, 11));
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SalesHeroCard(analytics: analytics),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SalesHeroCard(analytics: analytics),
           ),
         ),
-      );
+      ),
+    );
 
-      expect(find.text('Target global · Rp 500.000'), findsOneWidget);
-      expect(find.text('Pencapaian target · 50,00%'), findsOneWidget);
-      expect(find.text('12'), findsOneWidget);
-      expect(find.text('transaksi'), findsNothing);
+    expect(find.text('Target global · Rp 500.000'), findsOneWidget);
+    expect(find.text('Pencapaian target · 50,00%'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('transaksi'), findsNothing);
 
-      final transactions = tester.getTopLeft(find.text('Transaksi'));
-      final activeDays = tester.getTopLeft(find.text('Hari aktif'));
-      expect(transactions.dx, lessThan(activeDays.dx));
-      expect(transactions.dy, closeTo(activeDays.dy, 1));
-    },
-  );
+    final activeOutlets = tester.getTopLeft(find.text('Active Outlet'));
+    final effectiveCalls = tester.getTopLeft(find.text('Effective Call'));
+    final activeDays = tester.getTopLeft(find.text('Hari aktif'));
+    expect(activeOutlets.dx, lessThan(effectiveCalls.dx));
+    expect(effectiveCalls.dx, lessThan(activeDays.dx));
+    expect(activeOutlets.dy, closeTo(activeDays.dy, 1));
+  });
 
   testWidgets('hero explains when no supplier target is configured', (
     tester,

@@ -133,6 +133,8 @@ class SalesAnalytics {
   final int totalReturMargin;
   final int returRows;
   final int totalRows;
+  final int effectiveCalls;
+  final int activeOutlets;
   final int rangeMonths;
   final List<SalesRankItem> products;
   final List<SalesRankItem> sales;
@@ -163,6 +165,8 @@ class SalesAnalytics {
     required this.totalReturMargin,
     required this.returRows,
     required this.totalRows,
+    required this.effectiveCalls,
+    required this.activeOutlets,
     required this.rangeMonths,
     required this.products,
     required this.sales,
@@ -196,6 +200,8 @@ class SalesAnalytics {
       totalReturMargin: _toInt(summary['total_retur_margin']),
       returRows: _toInt(summary['total_retur_rows']),
       totalRows: _toInt(summary['imported_rows']),
+      effectiveCalls: _toInt(summary['effective_calls']),
+      activeOutlets: _toInt(summary['active_outlets']),
       rangeMonths: rangeMonths,
       products: _rankList(
         summary['by_product'],

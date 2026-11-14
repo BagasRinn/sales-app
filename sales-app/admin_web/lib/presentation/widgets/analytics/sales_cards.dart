@@ -113,7 +113,14 @@ class SalesHeroCard extends StatelessWidget {
     );
 
     final metrics = <Widget>[
-      _HeroMetric(label: 'Transaksi', value: formatInt(analytics.totalRows)),
+      _HeroMetric(
+        label: 'Active Outlet',
+        value: formatInt(analytics.activeOutlets),
+      ),
+      _HeroMetric(
+        label: 'Effective Call',
+        value: formatInt(analytics.effectiveCalls),
+      ),
       _HeroMetric(
         label: 'Hari aktif',
         value: '${analytics.activeDays}/$daysInMonth',

@@ -30,7 +30,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import uuid4
 
-from sqlalchemy import func, literal
+from sqlalchemy import case, func, literal
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -108,6 +108,23 @@ def _normalized_key(value: Any) -> str:
     if value is None:
         return ""
     return " ".join(str(value).strip().upper().split())[:100]
+
+
+def _distinct_identity_count(column):
+    """Count non-empty branch + source-code identities without null collapsing."""
+    identity = func.concat(
+        func.coalesce(ImportedSale.branch, ""),
+        "|",
+        column,
+    )
+    return func.count(
+        func.distinct(
+            case(
+                (column.isnot(None) & (column != ""), identity),
+                else_=None,
+            )
+        )
+    )
 
 
 def _dimension_columns(dimension: str, returns: bool = False):
@@ -366,6 +383,8 @@ def recompute_summary(
         func.coalesce(func.sum(ImportedSale.qty), 0),
         func.coalesce(func.sum(ImportedSale.margin), 0),
         func.count(ImportedSale.id),
+        _distinct_identity_count(ImportedSale.trans_no),
+        _distinct_identity_count(ImportedSale.customer_kode),
     ).one()
     return_totals = _scope_return_query(
         db, scope, start, month_end
@@ -378,6 +397,8 @@ def recompute_summary(
     total_qty = int(sales_totals[1] or 0)
     total_margin = int(sales_totals[2] or 0) - int(return_totals[1] or 0)
     row_count = int(sales_totals[3] or 0)
+    effective_call_count = int(sales_totals[4] or 0)
+    active_outlet_count = int(sales_totals[5] or 0)
 
     rows: List[ImportedSalesMonthlySummary] = [
         ImportedSalesMonthlySummary(
@@ -393,6 +414,8 @@ def recompute_summary(
             retur_margin=int(return_totals[1] or 0),
             retur_rows=int(return_totals[2] or 0),
             row_count=row_count,
+            effective_call_count=effective_call_count,
+            active_outlet_count=active_outlet_count,
         )
     ]
 
@@ -714,6 +737,8 @@ def read_summary(
         "total_retur_margin": 0,
         "total_retur_rows": 0,
         "imported_rows": 0,
+        "effective_calls": 0,
+        "active_outlets": 0,
         "by_product": [],
         "by_sales": [],
         "by_customer": [],
@@ -732,6 +757,8 @@ def read_summary(
             result["total_retur_margin"] = int(row.retur_margin or 0)
             result["total_retur_rows"] = int(row.retur_rows or 0)
             result["imported_rows"] = int(row.row_count or 0)
+            result["effective_calls"] = int(row.effective_call_count or 0)
+            result["active_outlets"] = int(row.active_outlet_count or 0)
             continue
 
         # Per-dimension rows are already ordered by revenue; enforce the
@@ -846,6 +873,8 @@ def read_summary_range(
         func.coalesce(func.sum(ImportedSale.qty), 0),
         func.coalesce(func.sum(ImportedSale.margin), 0),
         func.count(ImportedSale.id),
+        _distinct_identity_count(ImportedSale.trans_no),
+        _distinct_identity_count(ImportedSale.customer_kode),
     ).one()
     return_totals = _scope_return_query(
         db, scope, start, month_end
@@ -862,6 +891,8 @@ def read_summary_range(
         "total_retur_margin": int(return_totals[1] or 0),
         "total_retur_rows": int(return_totals[2] or 0),
         "imported_rows": int(sales_totals[3] or 0),
+        "effective_calls": int(sales_totals[4] or 0),
+        "active_outlets": int(sales_totals[5] or 0),
         "by_product": [],
         "by_sales": [],
         "by_customer": [],

@@ -377,6 +377,8 @@ def test_import_bumps_branch_and_global_versions():
         assert data["total_revenue"] == 25000
         assert data["total_qty"] == 3
         assert data["imported_rows"] == 2
+        assert data["effective_calls"] == 2
+        assert data["active_outlets"] == 1
         assert data["by_product"][0]["product_kode"] == "P001"
         assert data["by_product"][0]["revenue"] == 20000
         assert data["by_supplier"] == [

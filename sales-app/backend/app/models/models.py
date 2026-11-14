@@ -641,6 +641,9 @@ class ImportedSalesMonthlySummary(Base):
     # return-rate denominator.
     supplier_net_revenue = Column(BigInteger, nullable=False, default=0)
     row_count = Column(BigInteger, nullable=False, default=0)
+    # Distinct monthly invoice/outlet metrics stored on the TOTAL row.
+    effective_call_count = Column(BigInteger, nullable=False, default=0)
+    active_outlet_count = Column(BigInteger, nullable=False, default=0)
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
