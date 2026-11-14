@@ -38,6 +38,7 @@ from app.core.security import (
     CurrentUser,
 )
 from app.core import branch as branch_constants
+from app.core.search import ilike_contains
 from app.services.stock_logger import log_stock_change
 
 logger = logging.getLogger(__name__)
@@ -675,11 +676,10 @@ def get_my_orders(
         query = query.filter(Order.status == status_filter.upper())
 
     if search:
-        search_term = f"%{search}%"
         query = query.join(Order.customer).filter(
             or_(
-                Customer.nama_toko.ilike(search_term),
-                Customer.kode.ilike(search_term),
+                ilike_contains(Customer.nama_toko, search),
+                ilike_contains(Customer.kode, search),
             )
         )
 
@@ -1220,13 +1220,12 @@ def list_pending_orders(
     )
     query = apply_branch_filter(query, Order, current_user)
     if search:
-        term = f"%{search}%"
         query = query.outerjoin(User, Order.sales_id == User.id).filter(
             or_(
-                Order.store_name.ilike(term),
-                User.nama.ilike(term),
-                User.username.ilike(term),
-                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+                ilike_contains(Order.store_name, search),
+                ilike_contains(User.nama, search),
+                ilike_contains(User.username, search),
+                Order.customer.has(ilike_contains(Customer.nama_toko, search)),  # type: ignore
             )
         )
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
@@ -1333,21 +1332,20 @@ def list_all_orders(
             count_query = count_query.filter(Order.created_at < end_utc)
 
     if search:
-        term = f"%{search}%"
         query = query.outerjoin(User, Order.sales_id == User.id).filter(
             or_(
-                Order.store_name.ilike(term),
-                User.nama.ilike(term),
-                User.username.ilike(term),
-                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+                ilike_contains(Order.store_name, search),
+                ilike_contains(User.nama, search),
+                ilike_contains(User.username, search),
+                Order.customer.has(ilike_contains(Customer.nama_toko, search)),  # type: ignore
             )
         )
         count_query = count_query.outerjoin(User, Order.sales_id == User.id).filter(
             or_(
-                Order.store_name.ilike(term),
-                User.nama.ilike(term),
-                User.username.ilike(term),
-                Order.customer.has(Customer.nama_toko.ilike(term)),  # type: ignore
+                ilike_contains(Order.store_name, search),
+                ilike_contains(User.nama, search),
+                ilike_contains(User.username, search),
+                Order.customer.has(ilike_contains(Customer.nama_toko, search)),  # type: ignore
             )
         )
 

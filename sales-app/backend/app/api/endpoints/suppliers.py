@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     SupplierOrderTypeUpdate,
 )
 from app.core.security import require_auth, apply_branch_filter, require_manager_global, CurrentUser
+from app.core.search import ilike_contains
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
@@ -54,8 +55,8 @@ def list_suppliers(
     if order_type is not None:
         norm_ot = order_type.strip().upper()
         query = query.filter(Supplier.order_type == norm_ot)
-    if search:
-        query = query.filter(Supplier.name.ilike(f"%{search.strip()}%"))
+    if search and search.strip():
+        query = query.filter(ilike_contains(Supplier.name, search.strip()))
 
     total = query.order_by(None).count()
     response.headers["X-Total-Count"] = str(total)

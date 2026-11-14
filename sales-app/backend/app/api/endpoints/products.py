@@ -9,6 +9,7 @@ import os
 from app.models.database import get_db
 from app.models.models import Product, Order, ImportLog, SyncValidationError, Supplier
 from app.core import branch as branch_constants
+from app.core.search import ilike_contains
 from app.schemas.schemas import (
     ProductResponse,
     ProductUpdateStock,
@@ -256,9 +257,9 @@ def list_products(
 
     if search:
         query = query.filter(
-            (Product.id.ilike(f"%{search}%"))
-            | (Product.nama_barang.ilike(f"%{search}%"))
-            | (Product.nama_supplier.ilike(f"%{search}%"))
+            ilike_contains(Product.id, search)
+            | ilike_contains(Product.nama_barang, search)
+            | ilike_contains(Product.nama_supplier, search)
         )
 
     if kategori:
@@ -615,9 +616,9 @@ def get_product_count(
     query = apply_branch_filter(query, Product, current_user)
     if search:
         query = query.filter(
-            (Product.id.ilike(f"%{search}%"))
-            | (Product.nama_barang.ilike(f"%{search}%"))
-            | (Product.nama_supplier.ilike(f"%{search}%"))
+            ilike_contains(Product.id, search)
+            | ilike_contains(Product.nama_barang, search)
+            | ilike_contains(Product.nama_supplier, search)
         )
     if kategori:
         query = query.filter(Product.kategori == kategori)

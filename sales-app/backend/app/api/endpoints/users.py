@@ -25,6 +25,7 @@ from app.core.security import (
     CurrentUser,
 )
 from app.core import branch as branch_constants
+from app.core.search import ilike_contains
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -81,9 +82,9 @@ def list_users(
     if role:
         query = query.filter(User.role == role.upper())
     if search:
-        like = f"%{search}%"
         query = query.filter(
-            (User.username.ilike(like)) | (User.nama.ilike(like))
+            ilike_contains(User.username, search)
+            | ilike_contains(User.nama, search)
         )
     query = query.order_by(User.role, User.username)
     if include_total:

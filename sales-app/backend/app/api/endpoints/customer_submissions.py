@@ -30,6 +30,7 @@ from app.core.security import (
     CurrentUser,
 )
 from app.core import branch as branch_constants
+from app.core.search import LIKE_ESCAPE_CHAR, contains_pattern
 
 router = APIRouter(prefix="/customer-submissions", tags=["Customer Submissions"])
 logger = logging.getLogger(__name__)
@@ -239,16 +240,22 @@ def check_duplicate_customer(
 ):
     """Cek apakah ada customer existing dengan nama+alamat mirip (LIKE).
     Return list match - frontend show warning tapi tetap boleh submit."""
-    name_pattern = f"%{name.lower()}%"
+    name_pattern = contains_pattern(name.lower())
     query = db.query(Customer).filter(
         Customer.deleted_at.is_(None),
-        func.lower(Customer.nama_toko).like(name_pattern),
+        func.lower(Customer.nama_toko).like(
+            name_pattern, escape=LIKE_ESCAPE_CHAR
+        ),
     )
     # Duplicate detection is branch-scoped: never reveal another branch's roster.
     query = apply_branch_filter(query, Customer, current_user)
     if alamat and alamat.strip():
-        alamat_pattern = f"%{alamat.lower()}%"
-        query = query.filter(func.lower(Customer.alamat).like(alamat_pattern))
+        alamat_pattern = contains_pattern(alamat.lower())
+        query = query.filter(
+            func.lower(Customer.alamat).like(
+                alamat_pattern, escape=LIKE_ESCAPE_CHAR
+            )
+        )
 
     matches = query.limit(5).all()
     return {

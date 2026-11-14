@@ -36,6 +36,7 @@ from app.core.security import (
     CurrentUser,
 )
 from app.core import branch as branch_constants
+from app.core.search import ilike_contains
 from app.core.visibility import visible_customer_query, validate_order_customer_for_sales
 from app.services.customer_sync import sync_customers_from_excel
 from app.services.import_progress import ImportProgressReporter
@@ -101,7 +102,7 @@ def list_customers(
         query = visible_customer_query(db, current_user)
     query = apply_branch_filter(query, Customer, current_user)
     if search:
-        query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
+        query = query.filter(ilike_contains(Customer.nama_toko, search))
     return [_customer_to_response(c) for c in query.order_by(Customer.nama_toko).offset(skip).limit(limit).all()]
 
 
@@ -118,7 +119,7 @@ def get_customer_count(
         query = vis.with_entities(func.count(Customer.id))
     query = apply_branch_filter(query, Customer, current_user)
     if search:
-        query = query.filter(Customer.nama_toko.ilike(f"%{search}%"))
+        query = query.filter(ilike_contains(Customer.nama_toko, search))
     return {"total": query.scalar() or 0}
 
 
@@ -161,13 +162,12 @@ def list_my_customers(
         query = apply_branch_filter(query, Customer, current_user)
 
     if search:
-        pattern = f"%{search}%"
         query = query.filter(
             or_(
-                Customer.nama_toko.ilike(pattern),
-                Customer.kode.ilike(pattern),
-                Customer.alamat.ilike(pattern),
-                Customer.kode_area.ilike(pattern),
+                ilike_contains(Customer.nama_toko, search),
+                ilike_contains(Customer.kode, search),
+                ilike_contains(Customer.alamat, search),
+                ilike_contains(Customer.kode_area, search),
             )
         )
     # Izinkan browser (sales_web) memakai cache sebentar supaya repeat-open
