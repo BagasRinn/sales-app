@@ -35,6 +35,9 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   bool _importing = false;
   bool _importingReturn = false;
   bool _importingTarget = false;
+  Map<String, dynamic>? _dismissedImportResult;
+  Map<String, dynamic>? _dismissedReturnImportResult;
+  Map<String, dynamic>? _dismissedTargetImportResult;
 
   bool get _isImporting => _importing || _importingReturn || _importingTarget;
 
@@ -419,10 +422,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                   ],
                 ],
               ),
-              if (widget.readOnly) ...[
-                const SizedBox(height: AppSpacing.sm),
-                const _ReadOnlyNotice(),
-              ],
               const SizedBox(height: AppSpacing.lg),
               _PeriodToolbar(
                 month: _month,
@@ -448,17 +447,40 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                 const SizedBox(height: AppSpacing.md),
                 _ErrorCard(message: errorMessage),
               ],
-              if (importResult != null) ...[
+              if (importResult != null &&
+                  !identical(importResult, _dismissedImportResult)) ...[
                 const SizedBox(height: AppSpacing.md),
-                SalesImportBanner(result: importResult),
+                SalesImportBanner(
+                  result: importResult,
+                  onDismiss: () =>
+                      setState(() => _dismissedImportResult = importResult),
+                ),
               ],
-              if (returnImportResult != null) ...[
+              if (returnImportResult != null &&
+                  !identical(
+                    returnImportResult,
+                    _dismissedReturnImportResult,
+                  )) ...[
                 const SizedBox(height: AppSpacing.md),
-                SalesImportBanner(result: returnImportResult),
+                SalesImportBanner(
+                  result: returnImportResult,
+                  onDismiss: () => setState(
+                    () => _dismissedReturnImportResult = returnImportResult,
+                  ),
+                ),
               ],
-              if (targetImportResult != null) ...[
+              if (targetImportResult != null &&
+                  !identical(
+                    targetImportResult,
+                    _dismissedTargetImportResult,
+                  )) ...[
                 const SizedBox(height: AppSpacing.md),
-                _SalesTargetImportBanner(result: targetImportResult),
+                _SalesTargetImportBanner(
+                  result: targetImportResult,
+                  onDismiss: () => setState(
+                    () => _dismissedTargetImportResult = targetImportResult,
+                  ),
+                ),
               ],
               const SizedBox(height: AppSpacing.md),
               if (analytics == null)
@@ -653,32 +675,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
       );
     }
   }
-}
-
-class _ReadOnlyNotice extends StatelessWidget {
-  const _ReadOnlyNotice();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      color: AppColors.infoSoft,
-      borderRadius: AppRadius.md,
-      border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
-    ),
-    child: const Row(
-      children: [
-        Icon(Icons.info_outline, color: AppColors.info),
-        SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            'Hanya manager yang dapat memperbarui data penjualan.',
-            style: AppTextStyles.body,
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _DeleteMonthDialog extends StatefulWidget {
@@ -2197,9 +2193,13 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _SalesTargetImportBanner extends StatelessWidget {
-  const _SalesTargetImportBanner({required this.result});
+  const _SalesTargetImportBanner({
+    required this.result,
+    required this.onDismiss,
+  });
 
   final Map<String, dynamic> result;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -2263,6 +2263,13 @@ class _SalesTargetImportBanner extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            color: foreground,
+            tooltip: 'Tutup notifikasi',
+            onPressed: onDismiss,
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),

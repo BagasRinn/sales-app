@@ -10,11 +10,7 @@ import 'sales_analytics_models.dart';
 // ---------------------------------------------------------------------------
 
 class SalesHeroCard extends StatelessWidget {
-  const SalesHeroCard({
-    super.key,
-    required this.analytics,
-    this.comparison,
-  });
+  const SalesHeroCard({super.key, required this.analytics, this.comparison});
 
   final SalesAnalytics analytics;
   final SalesComparison? comparison;
@@ -85,10 +81,7 @@ class SalesHeroCard extends StatelessWidget {
         ),
         if (comparison != null && comparison!.hasBaseline) ...[
           const SizedBox(height: 10),
-          _ComparisonBlock(
-            analytics: analytics,
-            comparison: comparison!,
-          ),
+          _ComparisonBlock(analytics: analytics, comparison: comparison!),
         ],
       ],
     );
@@ -245,10 +238,7 @@ class _HeroMetric extends StatelessWidget {
 /// Blok pembanding: rata-rata omzet N bulan sebelumnya + persentase bulan
 /// ini menuju rata-rata itu. Angka ditampilkan penuh (tanpa disingkat ke M/jt).
 class _ComparisonBlock extends StatelessWidget {
-  const _ComparisonBlock({
-    required this.analytics,
-    required this.comparison,
-  });
+  const _ComparisonBlock({required this.analytics, required this.comparison});
 
   final SalesAnalytics analytics;
   final SalesComparison comparison;
@@ -286,10 +276,9 @@ class _ComparisonBlock extends StatelessWidget {
 
     final labelText =
         'Rata-rata ${_chipLabel(comparison.months)} (${_monthRange()})';
-    final countText =
-        comparison.monthsWithData < comparison.months
-            ? ' (${comparison.monthsWithData}/${comparison.months} bulan berdata)'
-            : '';
+    final countText = comparison.monthsWithData < comparison.months
+        ? ' (${comparison.monthsWithData}/${comparison.months} bulan berdata)'
+        : '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -689,9 +678,14 @@ class SalesEmptyStateCard extends StatelessWidget {
 }
 
 class SalesImportBanner extends StatelessWidget {
-  const SalesImportBanner({super.key, required this.result});
+  const SalesImportBanner({
+    super.key,
+    required this.result,
+    required this.onDismiss,
+  });
 
   final Map<String, dynamic> result;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -761,6 +755,13 @@ class SalesImportBanner extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            color: fg,
+            tooltip: 'Tutup notifikasi',
+            onPressed: onDismiss,
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),

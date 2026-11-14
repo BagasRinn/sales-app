@@ -1584,6 +1584,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     const include =
         'product,sales,all_sales,customer,channel,divisi,supplier,supplier_retur,day,sales_day';
 
+    final previousMonth = _importedSalesMonth;
+    final previousScope = _importedSalesScope;
     _importedSalesMonth = targetMonth;
     _importedSalesLimit = effectiveLimit;
     _importedSalesRangeMonths = effectiveRangeMonths;
@@ -1601,6 +1603,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       include,
     );
     final cached = _importedSalesCache[cacheKey];
+    final contextChanged =
+        previousMonth != targetMonth || previousScope != localScope;
 
     if (cached != null &&
         DateTime.now().difference(cached.fetchedAt) <
@@ -1612,6 +1616,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _importedSalesLoading = true;
     _importedSalesError = null;
+    if (contextChanged) {
+      _importedSalesComparison = null;
+      _importedSalesComparisonDetail = null;
+    }
     notifyListeners();
 
     try {
@@ -1645,6 +1653,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           serverCached.version == serverVersion &&
           cachedTargetUpdatedAt == targetUpdatedAt) {
         _importedSalesSummary = serverCached.data;
+        // The summary cache and comparison/detail cache are independent.
+        // Always restore the latter when the summary itself is still current.
+        await fetchImportedSalesComparison();
         return true;
       }
 
@@ -1731,6 +1742,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       _importedSalesComparison = cached;
+      await fetchImportedSalesComparisonDetail();
       notifyListeners();
       return;
     }
@@ -1779,46 +1791,54 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Map<String, List<SalesRankItem>> _parseComparisonDetail(
-      Map<String, dynamic> data) {
+    Map<String, dynamic> data,
+  ) {
     int toInt(dynamic value) {
       if (value is num) return value.toInt();
       return int.tryParse(value?.toString() ?? '') ?? 0;
     }
+
     return {
       'product': (data['by_product'] as List? ?? const [])
           .whereType<Map<dynamic, dynamic>>()
           .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
-          .map((e) => SalesRankItem(
-                code: e['product_kode']?.toString().trim() ?? '',
-                label: e['product_nama']?.toString().trim() ?? '',
-                qty: toInt(e['qty']),
-                revenue: toInt(e['average_revenue'] ?? e['revenue']),
-                margin: toInt(e['margin']),
-                motherSku: e['mother_sku']?.toString(),
-                productKode: e['product_kode']?.toString(),
-              ))
+          .map(
+            (e) => SalesRankItem(
+              code: e['product_kode']?.toString().trim() ?? '',
+              label: e['product_nama']?.toString().trim() ?? '',
+              qty: toInt(e['qty']),
+              revenue: toInt(e['average_revenue'] ?? e['revenue']),
+              margin: toInt(e['margin']),
+              motherSku: e['mother_sku']?.toString(),
+              productKode: e['product_kode']?.toString(),
+            ),
+          )
           .toList(growable: false),
       'customer': (data['by_customer'] as List? ?? const [])
           .whereType<Map<dynamic, dynamic>>()
           .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
-          .map((e) => SalesRankItem(
-                code: e['customer_kode']?.toString().trim() ?? '',
-                label: e['customer_nama']?.toString().trim() ?? '',
-                qty: toInt(e['qty']),
-                revenue: toInt(e['average_revenue'] ?? e['revenue']),
-                margin: toInt(e['margin']),
-              ))
+          .map(
+            (e) => SalesRankItem(
+              code: e['customer_kode']?.toString().trim() ?? '',
+              label: e['customer_nama']?.toString().trim() ?? '',
+              qty: toInt(e['qty']),
+              revenue: toInt(e['average_revenue'] ?? e['revenue']),
+              margin: toInt(e['margin']),
+            ),
+          )
           .toList(growable: false),
       'divisi': (data['by_divisi'] as List? ?? const [])
           .whereType<Map<dynamic, dynamic>>()
           .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
-          .map((e) => SalesRankItem(
-                code: e['divisi']?.toString().trim() ?? '',
-                label: e['divisi']?.toString().trim() ?? '',
-                qty: toInt(e['qty']),
-                revenue: toInt(e['average_revenue'] ?? e['revenue']),
-                margin: toInt(e['margin']),
-              ))
+          .map(
+            (e) => SalesRankItem(
+              code: e['divisi']?.toString().trim() ?? '',
+              label: e['divisi']?.toString().trim() ?? '',
+              qty: toInt(e['qty']),
+              revenue: toInt(e['average_revenue'] ?? e['revenue']),
+              margin: toInt(e['margin']),
+            ),
+          )
           .toList(growable: false),
     };
   }
