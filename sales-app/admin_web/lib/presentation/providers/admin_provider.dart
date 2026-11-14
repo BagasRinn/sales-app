@@ -2192,7 +2192,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         fromDate: from,
         toDate: to,
       );
-      _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
+      _salesPerformanceCacheTime = DateTime.now();
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e is ApiException ? e.message : e.toString();
@@ -2207,7 +2207,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       _dashboardPerformance = await _repo.getSalesPerformanceDashboard();
-      _salesPerformanceCacheTime = DateTime.now(); // Update cache timestamp
+      _salesPerformanceCacheTime = DateTime.now();
       _errorMessage = null;
     } catch (e) {
       if (e is! DioException || !CancelToken.isCancel(e)) {
@@ -2233,7 +2233,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   List<Order> get salesDetailOrders => _salesDetailOrders;
 
-  /// Total dari server untuk SELURUH hasil filter (bukan cuma page yang dikirim).
+  /// Total dari server untuk seluruh hasil filter.
   int get salesDetailTotalOrders => _salesDetailTotalOrders;
   int get salesDetailTotalRevenue => _salesDetailTotalRevenue;
   int get salesDetailTotalDiscount => _salesDetailTotalDiscount;
