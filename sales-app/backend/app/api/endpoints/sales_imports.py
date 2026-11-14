@@ -26,7 +26,12 @@ from app.core.security import (
     require_supervisor_or_manager_global,
 )
 from app.models.database import get_db
-from app.models.models import ImportLog, ImportedReturn, ImportedSale
+from app.models.models import (
+    DataPenjualanTarget,
+    ImportLog,
+    ImportedReturn,
+    ImportedSale,
+)
 from app.schemas.schemas import (
     SalesImportResultResponse,
     SalesImportVersionResponse,
@@ -643,6 +648,55 @@ def delete_imported_sales_month(
         "all_branches": all_branches,
         "deleted": int(deleted),
         "versions": versions,
+    }
+
+
+@router.delete("/targets")
+def delete_imported_sales_targets(
+    period: str = Query(..., description="Periode target (YYYY-MM)"),
+    branch: Optional[str] = None,
+    all_branches: bool = False,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_manager_global),
+):
+    """Permanently delete imported targets (SALES/SUPPLIER/DIVISI) for a period."""
+    normalized, _, _ = parse_month(period)
+    if bool(branch) == bool(all_branches):
+        raise HTTPException(
+            status_code=400,
+            detail="Isi branch atau all_branches=true, tetapi jangan keduanya",
+        )
+    normalized_branch = branch.strip().upper() if branch else None
+    if normalized_branch and not is_valid_branch(normalized_branch):
+        raise HTTPException(status_code=400, detail="Cabang tidak dikenal")
+
+    query = db.query(DataPenjualanTarget).filter(
+        DataPenjualanTarget.period == normalized
+    )
+    if normalized_branch:
+        query = query.filter(DataPenjualanTarget.branch == normalized_branch)
+
+    deleted = query.delete(synchronize_session=False)
+    db.add(
+        ImportLog(
+            user_id=current_user.get("user_id"),
+            nama=current_user.get("nama"),
+            import_type="TARGET_DELETE",
+            total_rows=deleted,
+            inserted=0,
+            updated=0,
+            skipped=0,
+            file_name=f"delete-targets:{normalized}",
+            branch=normalized_branch,
+        )
+    )
+    db.commit()
+    return {
+        "success": True,
+        "period": normalized,
+        "branch": normalized_branch,
+        "all_branches": all_branches,
+        "deleted": int(deleted),
     }
 
 

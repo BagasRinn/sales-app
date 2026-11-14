@@ -555,6 +555,24 @@ class AdminRepository {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  Future<Map<String, dynamic>> deleteImportedSalesTargets({
+    required String period,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    final params = <String, String>{'period': period};
+    if (branch != null && branch.isNotEmpty) {
+      params['branch'] = branch;
+    } else if (allBranches) {
+      params['all_branches'] = 'true';
+    }
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.delete('/sales-imports/targets?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> deleteAllImportedSales() async {
     final data = await _api.delete('/sales-imports/all');
     return Map<String, dynamic>.from(data as Map);

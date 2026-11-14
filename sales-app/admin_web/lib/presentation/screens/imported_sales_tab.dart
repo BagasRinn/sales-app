@@ -371,63 +371,86 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                 subtitle:
                     'Analisis omzet, tren harian, kanal, dan performa dari laporan Excel.',
                 actions: [
-                  if (!widget.readOnly && provider.isGlobalManager) ...[
-                    AppButton(
-                      label: 'Hapus bulan',
-                      icon: Icons.delete_outline,
-                      variant: AppButtonVariant.danger,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _confirmDeleteMonth(context, provider),
+                  if (!widget.readOnly && provider.isGlobalManager)
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        // Grup import: aksi penambahan data.
+                        AppButton(
+                          label: _importing
+                              ? 'Mengimport...'
+                              : 'Import Penjualan',
+                          icon: Icons.upload_file,
+                          variant: AppButtonVariant.outline,
+                          isLoading: _importing,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _pickAndImport(context),
+                        ),
+                        AppButton(
+                          label: _importingTarget
+                              ? 'Mengimport...'
+                              : 'Import Target',
+                          icon: Icons.flag_outlined,
+                          variant: AppButtonVariant.outline,
+                          isLoading: _importingTarget,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _pickAndImportTargets(context),
+                        ),
+                        AppButton(
+                          label: _importingReturn
+                              ? 'Mengimport...'
+                              : 'Import Retur',
+                          icon: Icons.assignment_return_outlined,
+                          variant: AppButtonVariant.outline,
+                          isLoading: _importingReturn,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _pickAndImportReturns(context),
+                        ),
+                        _ActionGroupDivider(),
+                        // Grup hapus: aksi destruktif dipisah agar tidak
+                        // salah klik di samping tombol import.
+                        AppButton(
+                          label: 'Hapus bulan',
+                          icon: Icons.delete_outline,
+                          variant: AppButtonVariant.danger,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _confirmDeleteMonth(context, provider),
+                        ),
+                        AppButton(
+                          label: 'Hapus target',
+                          icon: Icons.remove_circle_outline,
+                          variant: AppButtonVariant.danger,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _confirmDeleteTargets(context, provider),
+                        ),
+                        AppButton(
+                          label: 'Hapus retur',
+                          icon: Icons.delete_sweep_outlined,
+                          variant: AppButtonVariant.danger,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _confirmDeleteReturnsMonth(
+                                  context,
+                                  provider,
+                                ),
+                        ),
+                        AppButton(
+                          label: 'Hapus semua',
+                          icon: Icons.delete_forever_outlined,
+                          variant: AppButtonVariant.danger,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _confirmDeleteAll(context, provider),
+                        ),
+                      ],
                     ),
-                    AppButton(
-                      label: 'Hapus semua',
-                      icon: Icons.delete_forever_outlined,
-                      variant: AppButtonVariant.danger,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _confirmDeleteAll(context, provider),
-                    ),
-                    AppButton(
-                      label: _importing ? 'Mengimport...' : 'Import Excel',
-                      icon: Icons.upload_file,
-                      variant: AppButtonVariant.secondary,
-                      isLoading: _importing,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _pickAndImport(context),
-                    ),
-                    AppButton(
-                      label: _importingTarget
-                          ? 'Mengimport...'
-                          : 'Import Target',
-                      icon: Icons.flag_outlined,
-                      variant: AppButtonVariant.outline,
-                      isLoading: _importingTarget,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _pickAndImportTargets(context),
-                    ),
-                    AppButton(
-                      label: 'Hapus retur',
-                      icon: Icons.delete_sweep_outlined,
-                      variant: AppButtonVariant.danger,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _confirmDeleteReturnsMonth(context, provider),
-                    ),
-                    AppButton(
-                      label: _importingReturn
-                          ? 'Mengimport...'
-                          : 'Import Retur',
-                      icon: Icons.assignment_return_outlined,
-                      variant: AppButtonVariant.outline,
-                      isLoading: _importingReturn,
-                      onPressed: _isImporting
-                          ? null
-                          : () => _pickAndImportReturns(context),
-                    ),
-                  ],
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -506,7 +529,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                             action: widget.readOnly || !provider.isGlobalManager
                                 ? null
                                 : AppButton(
-                                    label: 'Import Excel',
+                                    label: 'Import Penjualan',
                                     icon: Icons.upload_file,
                                     onPressed: () => _pickAndImport(context),
                                   ),
@@ -578,13 +601,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                       !widget.readOnly && provider.isGlobalManager,
                   onImportReturns: () => _pickAndImportReturns(context),
                 ),
-              if (!widget.readOnly && provider.isGlobalManager) ...[
-                const SizedBox(height: AppSpacing.lg),
-                _ImportPanel(
-                  importing: _isImporting,
-                  onPick: () => _pickAndImport(context),
-                ),
-              ],
               const SizedBox(height: AppSpacing.lg),
             ],
           ),
@@ -636,6 +652,34 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
         ),
       );
     }
+  }
+
+  Future<void> _confirmDeleteTargets(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteTargetsDialog(
+        period: _monthKey,
+        scope: provider.importedSalesBranchFilter ?? 'Semua cabang',
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final success = await provider.deleteImportedSalesTargets(
+      period: _monthKey,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Target $_monthKey berhasil dihapus'
+              : provider.errorMessage ?? 'Gagal menghapus target',
+        ),
+        backgroundColor: success ? AppColors.success : AppColors.error,
+      ),
+    );
   }
 
   Future<void> _confirmDeleteAll(
@@ -789,6 +833,92 @@ class _DeleteMonthDialogState extends State<_DeleteMonthDialog> {
           icon: Icons.delete_outline,
           variant: AppButtonVariant.danger,
           onPressed: _controller.text.trim() == widget.month
+              ? () => Navigator.of(context).pop(true)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+/// Pemisah vertikal antar grup tombol aksi di header Data Penjualan.
+class _ActionGroupDivider extends StatelessWidget {
+  const _ActionGroupDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      width: 1,
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      color: AppColors.border,
+    );
+  }
+}
+
+class _DeleteTargetsDialog extends StatefulWidget {
+  const _DeleteTargetsDialog({required this.period, required this.scope});
+
+  final String period;
+  final String scope;
+
+  @override
+  State<_DeleteTargetsDialog> createState() => _DeleteTargetsDialogState();
+}
+
+class _DeleteTargetsDialogState extends State<_DeleteTargetsDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Hapus target penjualan'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Periode: ${widget.period}'),
+          Text('Cakupan: ${widget.scope}'),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Semua target import (sales, supplier, dan divisi) pada periode '
+            'ini akan dihapus permanen. Ketik periode untuk melanjutkan.',
+            style: AppTextStyles.bodyMuted,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Ketik YYYY-MM',
+              hintText: '2026-11',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Batal'),
+        ),
+        AppButton(
+          label: 'Hapus permanen',
+          icon: Icons.delete_outline,
+          variant: AppButtonVariant.danger,
+          onPressed: _controller.text.trim() == widget.period
               ? () => Navigator.of(context).pop(true)
               : null,
         ),
@@ -2381,90 +2511,6 @@ class _SalesTargetImportBanner extends StatelessWidget {
             visualDensity: VisualDensity.compact,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ImportPanel extends StatelessWidget {
-  const _ImportPanel({required this.importing, required this.onPick});
-
-  final bool importing;
-  final VoidCallback onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final info = Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppColors.primarySoft,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.upload_file,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm + 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Import laporan penjualan', style: AppTextStyles.h3),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Format .xlsx atau .xls. Data yang sama akan diperbarui, '
-                      'bukan diduplikasi. Maksimal 70 MB; file besar dapat '
-                      'memerlukan beberapa menit.',
-                      style: AppTextStyles.caption,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-
-          if (constraints.maxWidth < 560) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                info,
-                const SizedBox(height: AppSpacing.md),
-                AppButton(
-                  label: importing ? 'Mengimport...' : 'Pilih File Excel',
-                  icon: Icons.folder_open,
-                  isLoading: importing,
-                  isFullWidth: true,
-                  onPressed: importing ? null : onPick,
-                ),
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              Expanded(child: info),
-              const SizedBox(width: AppSpacing.md),
-              AppButton(
-                label: importing ? 'Mengimport...' : 'Pilih File Excel',
-                icon: Icons.folder_open,
-                variant: AppButtonVariant.outline,
-                isLoading: importing,
-                onPressed: importing ? null : onPick,
-              ),
-            ],
-          );
-        },
       ),
     );
   }
