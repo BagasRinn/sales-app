@@ -1454,6 +1454,11 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             value: value,
             sortValue: item.revenue,
             detail: productDetails.isEmpty ? null : productDetails.join(' · '),
+            // Omzet: porsi terhadap total omzet bulan dipilih.
+            // Margin: margin item terhadap omzet item tersebut.
+            trailingDetail: _showMargin
+                ? '${formatPercentPrecise(item.revenue == 0 ? 0 : item.margin / item.revenue)} margin'
+                : '${formatPercentPrecise(totalValue == 0 ? 0 : value / totalValue)} omzet',
             showTarget: showTarget,
             target: entryTarget,
             targetActual: item.revenue,
@@ -1490,6 +1495,11 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         // sortValue menurun menurut indeks kiri agar SalesRankingList
         // tidak mengurutkan ulang kanan (tetap mengikuti kiri).
         sortValue: leftItems.length - index,
+        // Bulan dipilih: omzet relatif ke total omzet bulan ini,
+        // margin relatif ke omzet item pada bulan ini.
+        trailingDetail: _showMargin
+            ? '${formatPercentPrecise(rightItem == null || rightItem.revenue == 0 ? 0 : rightItem.margin / rightItem.revenue)} margin'
+            : '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',
         showTarget: widget.targets != null,
         target: entryTarget,
         targetActual: rightItem?.revenue ?? 0,
