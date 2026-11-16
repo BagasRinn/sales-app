@@ -4,7 +4,9 @@ import '../../core/auth_storage.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../data/repositories/api_service.dart';
-import 'dashboard_screen.dart';
+// Dashboard (+ seluruh tab-nya) sengaja di-defer: chunk-nya baru diunduh
+// setelah login berhasil, supaya bundle awal layar login tetap kecil.
+import 'dashboard_screen.dart' deferred as dashboard_ui;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -86,9 +88,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      // Ambil chunk dashboard selagi spinner login masih tampil, lalu ganti
+      // halaman. Kalau unduhan gagal, error-nya jatuh ke catch di bawah ini.
+      await dashboard_ui.loadLibrary();
+      if (!mounted) return;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => DashboardScreen(
+          builder: (_) => dashboard_ui.DashboardScreen(
             accessToken: accessToken.toString(),
             refreshToken: refreshToken.toString(),
             username: _usernameController.text.trim(),

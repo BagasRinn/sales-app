@@ -2,6 +2,19 @@
 export 'package:datetime_utils/datetime_utils.dart';
 import 'package:datetime_utils/datetime_utils.dart' as dt_utils;
 
+bool _timezoneReady = false;
+
+/// Siapkan database timezone sekali saja.
+///
+/// Sengaja TIDAK dipanggil dari `main()`: data timezone ±260 KB hanya dipakai
+/// layar setelah login, jadi menaruhnya di jalur dashboard membuat bundle awal
+/// layar login lebih kecil (data itu ikut pindah ke chunk dashboard).
+void ensureTimezoneInitialized() {
+  if (_timezoneReady) return;
+  _timezoneReady = true;
+  dt_utils.initTimezone();
+}
+
 /// Legacy compatibility - parse WITA ISO string (now uses shared package)
 /// @deprecated Use [dt_utils.parseBackendDateTime] from datetime_utils package
 DateTime parseWitaIso(String iso) => dt_utils.parseBackendDateTime(iso);

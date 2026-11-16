@@ -43,7 +43,7 @@ if (!buildId) {
   process.exit(1);
 }
 
-function patch(file, pattern, replacement) {
+function patch(file, pattern, replacement, { optional = false } = {}) {
   const path = join(root, file);
   let before;
   try {
@@ -56,6 +56,10 @@ function patch(file, pattern, replacement) {
   // Cek keberadaan pola terpisah dari "apakah isi berubah", supaya script aman
   // dijalankan dua kali dengan build id yang sama.
   if (!new RegExp(pattern).test(before)) {
+    if (optional) {
+      console.log(`[stamp]   ${file}: pola opsional tidak ada, dilewati`);
+      return;
+    }
     console.error(
       `[stamp] pola tidak ketemu di ${file}. Format output Flutter berubah?\n` +
         `        Pola: ${pattern}`,
@@ -67,6 +71,33 @@ function patch(file, pattern, replacement) {
   console.log(`[stamp]   ${file} -> ?v=${buildId}`);
 }
 
+/**
+ * Menghapus komentar `//# sourceMappingURL=...` yang menunjuk file map yang
+ * tidak ikut di-deploy (mis. flutter.js.map). Kalau dibiarkan, request map-nya
+ * dijawab index.html oleh rewrite SPA dan gagal di-parse.
+ */
+function stripSourceMapReference(file) {
+  const path = join(root, file);
+  let before;
+  try {
+    before = readFileSync(path, 'utf8');
+  } catch {
+    console.error(`[stamp] file tidak ditemukan: ${path}`);
+    process.exit(1);
+  }
+
+  // Komentar ini bisa berada di tengah file: flutter_bootstrap.js adalah isi
+  // flutter.js yang disambung dengan blok konfigurasi build.
+  const after = before.replace(/^\/\/# sourceMappingURL=\S+[ \t\r]*\n?/gm, '');
+  if (after === before) {
+    console.log(`[stamp]   ${file}: tidak ada sourceMappingURL, dilewati`);
+    return;
+  }
+
+  writeFileSync(path, after);
+  console.log(`[stamp]   ${file}: sourceMappingURL dilepas`);
+}
+
 console.log(`[stamp] build id: ${buildId}`);
 
 patch(
@@ -75,11 +106,27 @@ patch(
   `src="flutter_bootstrap.js?v=${buildId}"`,
 );
 
+// Opsional: hanya app yang memasang <link rel="preload"> untuk main.dart.js.
+// Kalau tidak ada, deploy tetap jalan (dipakai bersama sales_web).
+patch(
+  'index.html',
+  /<link rel="preload" href="main\.dart\.js(\?[^"]*)?" as="script">/,
+  `<link rel="preload" href="main.dart.js?v=${buildId}" as="script">`,
+  { optional: true },
+);
+
 patch(
   'flutter_bootstrap.js',
   /"mainJsPath":"main\.dart\.js(\?[^"]*)?"/,
   `"mainJsPath":"main.dart.js?v=${buildId}"`,
 );
+
+// flutter_bootstrap.js adalah salinan flutter.js + config, dan masih membawa
+// komentar `//# sourceMappingURL=flutter.js.map` padahal file map itu tidak
+// ikut di-deploy. Tanpa ini browser/DevTools meminta /flutter.js.map, Firebase
+// me-rewrite ke index.html, lalu map gagal di-parse
+// ("SyntaxError: Unexpected token '<'") dan muncul di laporan Lighthouse.
+stripSourceMapReference('flutter_bootstrap.js');
 
 writeFileSync(
   join(root, 'build-id.json'),

@@ -47,3 +47,8 @@ app.*.map.json
 
 # Claude Code agent artifacts
 .agents/
+
+# Arsip font asli (sumber untuk scripts/subset_web_fonts.py).
+# Tidak perlu di-commit: file aslinya masih ada di riwayat git, pulihkan dengan
+#   git checkout HEAD -- assets/fonts
+/assets/fonts/original/

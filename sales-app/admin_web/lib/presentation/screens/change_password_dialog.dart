@@ -4,8 +4,8 @@ import '../../core/api_exception.dart';
 import '../../core/auth_storage.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive_dialog.dart';
+import '../../core/session_navigation.dart';
 import '../../data/repositories/admin_repository.dart';
-import 'login_screen.dart';
 
 class ChangePasswordDialog extends StatefulWidget {
   final AdminRepository adminRepository;
@@ -81,10 +81,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       // akan tetap menendang user ke login saat request berikutnya 401.
       await AuthStorage().clearTokens();
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
+      // Lewat root navigator: dialog ini bisa dibuka dari halaman mana pun,
+      // jadi seluruh stack (dialog + dashboard) harus dibersihkan.
+      showLoginScreen();
     } else {
       _errSnack(errorMsg ?? 'Gagal mengganti password');
     }

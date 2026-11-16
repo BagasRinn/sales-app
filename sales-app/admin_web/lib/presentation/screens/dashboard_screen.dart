@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_storage.dart';
 import '../../core/branch.dart';
+import '../../core/datetime_utils.dart';
 import '../../core/design_system.dart';
 import '../../core/jwt_utils.dart';
-import '../../core/navigator_key.dart';
+import '../../core/session_navigation.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../data/repositories/api_service.dart';
 import '../providers/admin_provider.dart';
-import 'login_screen.dart';
 import 'orders_tab.dart';
 import 'products_tab.dart';
 import 'sync_tab.dart';
@@ -305,9 +305,6 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   /// Nomor tab yang dipakai `AdminProvider` untuk lazy load & cache.
-  /// Sengaja dipisah dari urutan menu: nomor ini mengikuti urutan lama supaya
-  /// urutan sidebar bisa diubah (mis. Data Penjualan dipindah ke atas) tanpa
-  /// mengubah logika pemuatan data di provider.
   int _providerTabIndex(_DashboardPage page) {
     switch (page) {
       case _DashboardPage.dashboard:
@@ -342,6 +339,9 @@ class _DashboardContentState extends State<_DashboardContent>
   @override
   void initState() {
     super.initState();
+    // Data timezone ikut chunk dashboard, jadi disiapkan di sini — sebelum
+    // tab mana pun memformat tanggal.
+    ensureTimezoneInitialized();
     _adminProvider = context.read<AdminProvider>();
     _apiService = widget.apiService;
     WidgetsBinding.instance.addObserver(this);
@@ -393,16 +393,11 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   void _pushLogin() {
-    final navigator = rootNavigatorKey.currentState;
-    if (navigator == null) return;
     // pushAndRemoveUntil (bukan pushReplacement) supaya SELURUH stack
     // dibersihkan â€” kalau user sedang di sub-screen (mis. detail pesanan),
-    // sub-screen DAN DashboardScreen semuanya hilang, hanya LoginScreen
-    // yang tersisa.
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
+    // sub-screen DAN DashboardScreen semuanya hilang, hanya layar login
+    // yang tersisa. Detailnya ada di core/session_navigation.dart.
+    showLoginScreen();
   }
 
   @override
@@ -562,7 +557,7 @@ class _DashboardContentState extends State<_DashboardContent>
       // panjang akan ke-logout. Hover di desktop tetap aman karena pointer
       // event jarang firing saat idle (tidak ada device input aktif).
       onPointerMove: (_) => _recordActivity(),
-      onPointerSignal: (_) => _recordActivity(), // wheel/trackpad
+      onPointerSignal: (_) => _recordActivity(),
       child: AppShell(
         scaffoldKey: _scaffoldKey,
         title: navItems[_selectedIndex.clamp(0, navItems.length - 1)].label,
@@ -594,12 +589,9 @@ class _DashboardContentState extends State<_DashboardContent>
         onLogout: () async {
           await AuthStorage().clearTokens();
           if (!context.mounted) return;
-          // Pakai rootNavigatorKey langsung supaya drawer (kalau terbuka)
-          // ikut ter-pop oleh pushAndRemoveUntil.
-          rootNavigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (_) => false,
-          );
+          // Ganti seluruh stack lewat root navigator supaya drawer (kalau
+          // terbuka) ikut ter-pop.
+          showLoginScreen();
         },
         body: _buildBody(),
       ),

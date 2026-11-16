@@ -1,6 +1,10 @@
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tzdata;
+// Pakai database 10 tahun, bukan `latest.dart` (semua riwayat).
+// `latest.dart` menanam ±1,1 MB data tz di bundle web; `latest_10y.dart`
+// hanya ±260 KB dan aturan DST/offset 10 tahun terakhir sudah cukup untuk
+// data penjualan. Perbarui komentar ini kalau app butuh tanggal lebih lama.
+import 'package:timezone/data/latest_10y.dart' as tzdata;
 
 /// Initialize timezone database. Call once at app startup.
 void initTimezone() {
