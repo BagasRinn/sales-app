@@ -1116,6 +1116,7 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              showActiveOutlets: true,
               targets: analytics.supplierTargets,
             ),
             _SupplierReturnCard(
@@ -1139,6 +1140,7 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              showActiveOutlets: true,
               comparisonItems: comparisonDetail?['product'],
               comparisonLabel: comparisonLabel,
             ),
@@ -1157,6 +1159,7 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              showActiveOutlets: true,
               targets: analytics.salesTargets,
             ),
           ],
@@ -1190,6 +1193,7 @@ class _AnalyticsBody extends StatelessWidget {
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
+              showActiveOutlets: true,
               targets: analytics.divisiTargets,
               comparisonItems: comparisonDetail?['divisi'],
               comparisonLabel: comparisonLabel,
@@ -1641,6 +1645,7 @@ class _MetricRankingCard extends StatefulWidget {
     required this.totalRevenue,
     required this.totalMargin,
     required this.limit,
+    this.showActiveOutlets = false,
     this.targets,
     this.comparisonItems,
     this.comparisonLabel,
@@ -1651,6 +1656,7 @@ class _MetricRankingCard extends StatefulWidget {
   final int totalRevenue;
   final int totalMargin;
   final int limit;
+  final bool showActiveOutlets;
   final Map<String, int>? targets;
 
   /// Items untuk periode pembanding (nilai sudah rata-rata per bulan).
@@ -1673,7 +1679,8 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         .map((item) {
           final value = _showMargin ? item.margin : item.revenue;
           final itemDetails = [
-            if (item.activeOutlets > 0) 'Jumlah AO ${item.activeOutlets}',
+            if (widget.showActiveOutlets && item.activeOutlets > 0)
+              'Jumlah AO ${item.activeOutlets}',
           ];
           final entryTarget = showTarget && widget.targets != null
               ? widget.targets![item.targetKey]
@@ -1719,7 +1726,9 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       final rightLabel = rightItem?.displayLabel ?? leftItem.displayLabel;
       final entryTarget = widget.targets?[leftItem.targetKey];
       final rightDetails = [
-        if (rightItem != null && rightItem.activeOutlets > 0)
+        if (widget.showActiveOutlets &&
+            rightItem != null &&
+            rightItem.activeOutlets > 0)
           'Jumlah AO ${rightItem.activeOutlets}',
       ];
       return SalesRankingEntry(
