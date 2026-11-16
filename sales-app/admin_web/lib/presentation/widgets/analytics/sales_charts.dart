@@ -1664,6 +1664,9 @@ class _SalesRankingRow extends StatelessWidget {
     return AppColors.success;
   }
 
+  /// Nilai negatif (omzet/margin minus) ditandai merah agar mudah terlihat.
+  bool get _isNegative => entry.value < 0;
+
   @override
   Widget build(BuildContext context) {
     final fraction = maxValue <= 0 ? 0.0 : entry.value.abs() / maxValue;
@@ -1713,7 +1716,9 @@ class _SalesRankingRow extends StatelessWidget {
                   Text(
                     formatRupiah(entry.value),
                     style: AppTextStyles.label.copyWith(
-                      color: AppColors.textPrimary,
+                      color: _isNegative
+                          ? AppColors.danger
+                          : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -1854,7 +1859,9 @@ class _SalesRankingRow extends StatelessWidget {
                       Text(
                         entry.trailingDetail!,
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
+                          color: _isNegative
+                              ? AppColors.danger
+                              : AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
