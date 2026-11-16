@@ -200,6 +200,9 @@ def _dimension_rows(
                 "revenue"
             ),
             func.coalesce(func.sum(ImportedSale.margin), 0).label("margin"),
+            _distinct_identity_count(ImportedSale.customer_kode).label(
+                "active_outlets"
+            ),
             (
                 func.max(ImportedSale.product_kode).label("product_kode")
                 if dimension == PRODUCT_DIMENSION
@@ -228,6 +231,7 @@ def _dimension_rows(
                 "qty": 0,
                 "revenue": 0,
                 "margin": 0,
+                "active_outlets": 0,
                 "retur_revenue": 0,
                 "retur_margin": 0,
                 "retur_rows": 0,
@@ -251,6 +255,7 @@ def _dimension_rows(
         item["qty"] += int(group.qty or 0)
         item["revenue"] += int(group.revenue or 0)
         item["margin"] += int(group.margin or 0)
+        item["active_outlets"] += int(group.active_outlets or 0)
         if dimension == PRODUCT_DIMENSION:
             item["product_kode"] = max(
                 filter(None, (item["product_kode"], group.product_kode)),
@@ -435,6 +440,7 @@ def recompute_summary(
                     qty=group["qty"],
                     revenue=group["revenue"],
                     margin=group["margin"],
+                    active_outlet_count=group["active_outlets"],
                     row_count=0,
                 )
             )
@@ -521,6 +527,25 @@ def ensure_summary(
             .first()
             is not None
         )
+        if has_snapshot:
+            # Older snapshots predate per-ranking active-outlet counts. Rebuild
+            # them once so the new ranking fields are populated immediately.
+            has_legacy_ranking_counts = (
+                db.query(ImportedSalesMonthlySummary.id)
+                .filter(
+                    ImportedSalesMonthlySummary.scope == scope,
+                    ImportedSalesMonthlySummary.month == month,
+                    ImportedSalesMonthlySummary.dimension.in_(
+                        (PRODUCT_DIMENSION, SALES_DIMENSION)
+                    ),
+                    ImportedSalesMonthlySummary.revenue > 0,
+                    ImportedSalesMonthlySummary.active_outlet_count == 0,
+                )
+                .first()
+                is not None
+            )
+            if has_legacy_ranking_counts:
+                has_snapshot = False
         if has_snapshot:
             return False
 
@@ -775,6 +800,7 @@ def read_summary(
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
                     "margin": int(row.margin or 0),
+                    "active_outlets": int(row.active_outlet_count or 0),
                 }
             )
         elif row.dimension == SALES_DIMENSION:
@@ -788,6 +814,7 @@ def read_summary(
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
                     "margin": int(row.margin or 0),
+                    "active_outlets": int(row.active_outlet_count or 0),
                 }
             )
         elif row.dimension == CUSTOMER_DIMENSION:
@@ -924,6 +951,7 @@ def read_summary_range(
                 "qty": group["qty"],
                 "revenue": group["revenue"],
                 "margin": group["margin"],
+                "active_outlets": group["active_outlets"],
             }
             if normalized == "product":
                 item.update({

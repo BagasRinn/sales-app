@@ -24,6 +24,7 @@ class SalesRankItem {
   final int qty;
   final int revenue;
   final int margin;
+  final int activeOutlets;
   final String? motherSku;
   final String? productKode;
 
@@ -33,6 +34,7 @@ class SalesRankItem {
     required this.qty,
     required this.revenue,
     this.margin = 0,
+    this.activeOutlets = 0,
     this.motherSku,
     this.productKode,
   });
@@ -306,6 +308,7 @@ class SalesAnalytics {
             qty: _toInt(row['qty']),
             revenue: _toInt(row['revenue']),
             margin: _toInt(row['margin']),
+            activeOutlets: _toInt(row['active_outlets']),
             motherSku: product ? row['mother_sku']?.toString() : null,
             productKode: product ? row['product_kode']?.toString() : null,
           ),

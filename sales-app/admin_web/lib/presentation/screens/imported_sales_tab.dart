@@ -1677,6 +1677,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
               'Kode ${item.productKode}',
             if (item.motherSku?.isNotEmpty == true)
               'Mother SKU ${item.motherSku}',
+            if (item.activeOutlets > 0) 'Jumlah AO ${item.activeOutlets}',
           ];
           final entryTarget = showTarget && widget.targets != null
               ? widget.targets![item.targetKey]
