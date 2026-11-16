@@ -2148,6 +2148,11 @@ class _PeriodToolbar extends StatelessWidget {
           selected: limit == 50,
           onSelected: loading ? null : () => onLimitChanged(50),
         ),
+        AppChoiceChip(
+          label: 'Top 100',
+          selected: limit == 100,
+          onSelected: loading ? null : () => onLimitChanged(100),
+        ),
         AppButton(
           label: 'Muat ulang',
           icon: Icons.refresh,
