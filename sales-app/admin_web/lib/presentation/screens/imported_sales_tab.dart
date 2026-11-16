@@ -1672,11 +1672,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     return items
         .map((item) {
           final value = _showMargin ? item.margin : item.revenue;
-          final productDetails = [
-            if (item.productKode?.isNotEmpty == true)
-              'Kode ${item.productKode}',
-            if (item.motherSku?.isNotEmpty == true)
-              'Mother SKU ${item.motherSku}',
+          final itemDetails = [
             if (item.activeOutlets > 0) 'Jumlah AO ${item.activeOutlets}',
           ];
           final entryTarget = showTarget && widget.targets != null
@@ -1686,7 +1682,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             label: item.displayLabel,
             value: value,
             sortValue: item.revenue,
-            detail: productDetails.isEmpty ? null : productDetails.join(' · '),
+            detail: itemDetails.isEmpty ? null : itemDetails.join(' · '),
             // Omzet: porsi terhadap total omzet bulan dipilih.
             // Margin: margin item terhadap omzet item tersebut.
             trailingDetail: _showMargin

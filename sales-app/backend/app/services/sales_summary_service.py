@@ -536,7 +536,12 @@ def ensure_summary(
                     ImportedSalesMonthlySummary.scope == scope,
                     ImportedSalesMonthlySummary.month == month,
                     ImportedSalesMonthlySummary.dimension.in_(
-                        (PRODUCT_DIMENSION, SALES_DIMENSION)
+                        (
+                            PRODUCT_DIMENSION,
+                            SALES_DIMENSION,
+                            SUPPLIER_DIMENSION,
+                            DIVISI_DIMENSION,
+                        )
                     ),
                     ImportedSalesMonthlySummary.revenue > 0,
                     ImportedSalesMonthlySummary.active_outlet_count == 0,
@@ -852,6 +857,7 @@ def read_summary(
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
                     "margin": int(row.margin or 0),
+                    "active_outlets": int(row.active_outlet_count or 0),
                 }
             )
         elif row.dimension == SUPPLIER_DIMENSION:
@@ -864,6 +870,7 @@ def read_summary(
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
                     "margin": int(row.margin or 0),
+                    "active_outlets": int(row.active_outlet_count or 0),
                 }
             )
         elif row.dimension == RETURN_SUPPLIER_DIMENSION:
