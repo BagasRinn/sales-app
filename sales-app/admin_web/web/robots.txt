@@ -1,0 +1,7 @@
+# Panel admin Sales Order (aplikasi internal).
+#
+# File ini harus ada sebagai file statis. Tanpa file ini Firebase Hosting
+# mengembalikan index.html untuk /robots.txt (karena rewrite SPA), dan
+# Lighthouse menandainya "robots.txt is not valid".
+User-agent: *
+Allow: /

@@ -1,0 +1,13 @@
+# Admin Web Sales Order
+
+> Panel administrasi internal untuk mengelola pesanan penjualan, pelanggan, outlet, produk,
+> dan laporan penjualan. Aplikasi ini adalah Flutter Web SPA yang memerlukan login.
+
+## Halaman
+
+- [Admin Web Sales Order](https://sales-admin-web.web.app/): aplikasi utama, seluruhnya berada di balik autentikasi.
+
+## Catatan untuk agen
+
+Tidak ada konten publik, katalog produk, atau dokumentasi API yang dapat diakses tanpa
+kredensial. Halaman yang dimuat tanpa login hanya menampilkan formulir masuk.

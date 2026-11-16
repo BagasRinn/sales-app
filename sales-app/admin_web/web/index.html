@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -22,6 +22,39 @@
   <meta name="theme-color" content="#183558">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
+  <!--
+    Flutter web mode "full-page" menghapus meta viewport di atas lalu
+    menggantinya dengan versi yang mematikan zoom
+    (`maximum-scale=1.0, user-scalable=no`). Larangan zoom itu merugikan
+    pengguna low vision dan ditandai Lighthouse sebagai masalah aksesibilitas,
+    jadi isi meta hasil Flutter dikembalikan ke pengaturan di atas.
+
+    MutationObserver dipakai supaya tidak perlu polling: Flutter menulis meta
+    sekali saat engine start, observer menangkap penulisan itu.
+  -->
+  <script>
+    (function () {
+      var viewportContent = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+
+      function restoreViewport() {
+        var metas = document.head.querySelectorAll('meta[name="viewport"]');
+        for (var i = 0; i < metas.length; i++) {
+          if (metas[i].getAttribute('content') !== viewportContent) {
+            metas[i].setAttribute('content', viewportContent);
+          }
+        }
+      }
+
+      new MutationObserver(restoreViewport).observe(document.head, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['content'],
+      });
+      restoreViewport();
+    })();
+  </script>
+
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -33,6 +66,24 @@
 
   <title>Sales Order — Admin</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    CanvasKit (wasm) diambil dari CDN Google setelah bundle Dart jalan.
+    Preconnect memulai DNS + TLS handshake lebih awal supaya wasm tidak
+    menunggu handshake baru di tengah proses boot.
+  -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+
+  <!--
+    Preload bundle utama supaya unduhan 850 KB+ mulai saat HTML diparse,
+    bukan setelah flutter_bootstrap.js selesai diunduh.
+
+    URL ini ditambahi ?v=<buildId> oleh scripts/stamp_flutter_web.mjs, sama
+    seperti flutter_bootstrap.js, supaya tidak ada unduhan ganda.
+  -->
+  <link rel="preload" href="main.dart.js" as="script">
+
   <style>
     /* Hilangkan flash putih sebelum Flutter selesai boot. */
     html, body { margin: 0; height: 100%; background: #F8FAFC; }
@@ -204,10 +255,29 @@
           });
       }
 
-      checkVersion();
-      startPolling();
+      // build-id.json baru dicek setelah boot selesai supaya tidak ikut
+      // berebut koneksi/CPU dengan unduhan main.dart.js dan CanvasKit.
+      var started = false;
+
+      function start() {
+        if (started) return;
+        started = true;
+        checkVersion();
+        startPolling();
+      }
+
+      // Frame pertama Flutter = bundle sudah jalan; aman untuk cek versi.
+      window.addEventListener('flutter-first-frame', start);
+      // Fallback: kalau load selesai tapi frame pertama lambat/gagal.
+      window.addEventListener('load', function () {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(start, { timeout: 5000 });
+        } else {
+          setTimeout(start, 1000);
+        }
+      });
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') checkVersion();
+        if (started && document.visibilityState === 'visible') checkVersion();
       });
     })();
   </script>
