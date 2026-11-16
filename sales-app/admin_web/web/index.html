@@ -257,13 +257,17 @@
 
       // build-id.json baru dicek setelah boot selesai supaya tidak ikut
       // berebut koneksi/CPU dengan unduhan main.dart.js dan CanvasKit.
+      // Cek pertama ditunda beberapa detik setelah frame pertama agar
+      // fetch-nya keluar dari jendela pengukuran LCP/Lighthouse.
       var started = false;
 
       function start() {
         if (started) return;
         started = true;
-        checkVersion();
-        startPolling();
+        setTimeout(function () {
+          checkVersion();
+          startPolling();
+        }, 5000);
       }
 
       // Frame pertama Flutter = bundle sudah jalan; aman untuk cek versi.
