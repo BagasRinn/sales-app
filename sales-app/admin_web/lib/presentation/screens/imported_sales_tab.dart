@@ -1718,6 +1718,10 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
           : (_showMargin ? rightItem.margin : rightItem.revenue);
       final rightLabel = rightItem?.displayLabel ?? leftItem.displayLabel;
       final entryTarget = widget.targets?[leftItem.targetKey];
+      final rightDetails = [
+        if (rightItem != null && rightItem.activeOutlets > 0)
+          'Jumlah AO ${rightItem.activeOutlets}',
+      ];
       return SalesRankingEntry(
         label: rightLabel,
         value: value,
@@ -1726,6 +1730,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         sortValue: leftItems.length - index,
         // Bulan dipilih: omzet relatif ke total omzet bulan ini,
         // margin relatif ke omzet item pada bulan ini.
+        detail: rightDetails.isEmpty ? null : rightDetails.join(' · '),
         trailingDetail: _showMargin
             ? '${formatPercentPrecise(rightItem == null || rightItem.revenue == 0 ? 0 : rightItem.margin / rightItem.revenue)} margin'
             : '${formatPercentPrecise(comparisonTotal == 0 ? 0 : value / comparisonTotal)} omzet',

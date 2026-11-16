@@ -1826,6 +1826,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
+              activeOutlets: toInt(e['active_outlets']),
             ),
           )
           .toList(growable: false),
@@ -1839,6 +1840,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
+              activeOutlets: toInt(e['active_outlets']),
             ),
           )
           .toList(growable: false),
