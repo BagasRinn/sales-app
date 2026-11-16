@@ -1770,7 +1770,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
     final cacheKey =
-        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|detail';
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       _importedSalesComparisonDetail = _parseComparisonDetail(cached);
@@ -1780,6 +1780,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getImportedSalesComparison(
         month: month,
         months: _importedSalesComparisonMonths,
+        limit: _importedSalesLimit,
         include: 'product,customer,divisi',
         branch: branch,
       );

@@ -521,12 +521,14 @@ class AdminRepository {
   Future<Map<String, dynamic>> getImportedSalesComparison({
     required String month,
     int months = 1,
+    int limit = 10,
     String? branch,
     String? include,
   }) async {
     final params = <String, String>{
       'month': month,
       'months': months.toString(),
+      'limit': limit.toString(),
     };
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     if (include != null && include.isNotEmpty) params['include'] = include;
