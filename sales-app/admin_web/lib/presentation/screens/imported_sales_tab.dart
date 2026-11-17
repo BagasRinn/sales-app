@@ -1110,7 +1110,7 @@ class _AnalyticsBody extends StatelessWidget {
           mobileCols: 1,
           children: [
             _MetricRankingCard(
-              title: 'Supplier Teratas',
+              title: 'Pareto Suppliers',
               items: analytics.suppliers,
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
@@ -1127,14 +1127,14 @@ class _AnalyticsBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        // Produk Teratas sendiri dalam satu baris penuh agar nama produk panjang terbaca.
+        // Pareto Product sendiri dalam satu baris penuh agar nama produk panjang terbaca.
         AppResponsiveGrid(
           desktopCols: 1,
           tabletCols: 1,
           mobileCols: 1,
           children: [
             _MetricRankingCard(
-              title: 'Produk Teratas',
+              title: 'Pareto Product',
               items: analytics.products,
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
@@ -1146,14 +1146,14 @@ class _AnalyticsBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        // Sales Teratas (tidak ada pembanding, sesuai keputusan)
+        // Performance by Sales (tidak ada pembanding, sesuai keputusan)
         AppResponsiveGrid(
           desktopCols: 1,
           tabletCols: 1,
           mobileCols: 1,
           children: [
             _MetricRankingCard(
-              title: 'Sales Teratas',
+              title: 'Performance by Sales',
               items: analytics.sales,
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
@@ -1170,7 +1170,7 @@ class _AnalyticsBody extends StatelessWidget {
           mobileCols: 1,
           children: [
             _MetricRankingCard(
-              title: 'Pelanggan Teratas',
+              title: 'Pareto Outlet',
               items: analytics.customers,
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
@@ -1954,9 +1954,9 @@ class _SupplierReturnCardState extends State<_SupplierReturnCard> {
         .toList(growable: false);
 
     return AppCard(
-      title: 'Supplier Diretur',
+      title: 'Retur by Suppliers',
       subtitle:
-          'Top ${widget.limit} · urutan mengikuti Supplier Teratas; '
+          'Top ${widget.limit} · urutan mengikuti Pareto Suppliers; '
           'supplier lain berdasarkan ${_showMargin ? 'margin' : 'omzet'} retur',
       trailing: Wrap(
         spacing: AppSpacing.xs,
@@ -2120,15 +2120,6 @@ class _PeriodToolbar extends StatelessWidget {
       runSpacing: AppSpacing.sm,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(
-          'Pembanding:',
-          style: AppTextStyles.caption.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
         for (final option in const [1, 3, 6, 12])
           AppChoiceChip(
             label: option == 1 ? 'Bulanan' : '$option Bulan',
@@ -2159,9 +2150,9 @@ class _PeriodToolbar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          scopeSelector,
-          const SizedBox(height: AppSpacing.md),
           controls,
+          const SizedBox(height: AppSpacing.md),
+          scopeSelector,
           const SizedBox(height: AppSpacing.sm + 2),
           Row(
             children: [
@@ -2213,7 +2204,8 @@ class _BranchSelector extends StatelessWidget {
     return Tooltip(
       message: 'Filter cabang',
       child: Container(
-        width: 220,
+        width: 194,
+        height: 40,
         padding: const EdgeInsets.only(left: 10, right: 4),
         decoration: BoxDecoration(
           color: AppColors.surface,

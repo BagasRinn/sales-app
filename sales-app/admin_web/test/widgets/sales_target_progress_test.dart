@@ -424,11 +424,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final supplierCard = find.ancestor(
-      of: find.text('Supplier Teratas'),
+      of: find.text('Pareto Suppliers'),
       matching: find.byType(AppCard),
     );
     final returnCard = find.ancestor(
-      of: find.text('Supplier Diretur'),
+      of: find.text('Retur by Suppliers'),
       matching: find.byType(AppCard),
     );
     final supplierBInSales = find.descendant(
@@ -502,7 +502,7 @@ void main() {
 
       Finder returnRows() {
         final returnCard = find.ancestor(
-          of: find.text('Supplier Diretur'),
+          of: find.text('Retur by Suppliers'),
           matching: find.byType(AppCard),
         );
         return find.descendant(
