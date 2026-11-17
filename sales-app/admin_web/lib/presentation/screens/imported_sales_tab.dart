@@ -390,17 +390,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               : () => _pickAndImport(context),
                         ),
                         AppButton(
-                          label: _importingTarget
-                              ? 'Mengimport...'
-                              : 'Import Target',
-                          icon: Icons.flag_outlined,
-                          variant: AppButtonVariant.outline,
-                          isLoading: _importingTarget,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _pickAndImportTargets(context),
-                        ),
-                        AppButton(
                           label: _importingReturn
                               ? 'Mengimport...'
                               : 'Import Retur',
@@ -410,6 +399,17 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                           onPressed: _isImporting
                               ? null
                               : () => _pickAndImportReturns(context),
+                        ),
+                        AppButton(
+                          label: _importingTarget
+                              ? 'Mengimport...'
+                              : 'Import Target',
+                          icon: Icons.flag_outlined,
+                          variant: AppButtonVariant.outline,
+                          isLoading: _importingTarget,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _pickAndImportTargets(context),
                         ),
                         _ActionGroupDivider(),
                         // Grup hapus: aksi destruktif dipisah agar tidak
@@ -423,14 +423,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               : () => _confirmDeleteMonth(context, provider),
                         ),
                         AppButton(
-                          label: 'Hapus target',
-                          icon: Icons.remove_circle_outline,
-                          variant: AppButtonVariant.danger,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _confirmDeleteTargets(context, provider),
-                        ),
-                        AppButton(
                           label: 'Hapus retur',
                           icon: Icons.delete_sweep_outlined,
                           variant: AppButtonVariant.danger,
@@ -440,6 +432,14 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                                   context,
                                   provider,
                                 ),
+                        ),
+                        AppButton(
+                          label: 'Hapus target',
+                          icon: Icons.remove_circle_outline,
+                          variant: AppButtonVariant.danger,
+                          onPressed: _isImporting
+                              ? null
+                              : () => _confirmDeleteTargets(context, provider),
                         ),
                         AppButton(
                           label: 'Hapus semua',
@@ -470,7 +470,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                 onNext: () =>
                     _changeMonth(DateTime(_month.year, _month.month + 1)),
                 onPick: _pickMonth,
-                onRefresh: () => _loadSummary(forceRefresh: true),
                 onLimitChanged: (value) => _loadSummary(limit: value),
                 onComparisonChanged: _changeComparison,
               ),
@@ -2026,7 +2025,6 @@ class _PeriodToolbar extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onPick,
-    required this.onRefresh,
     required this.onLimitChanged,
     required this.onComparisonChanged,
   });
@@ -2044,7 +2042,6 @@ class _PeriodToolbar extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onPick;
-  final VoidCallback onRefresh;
   final ValueChanged<int> onLimitChanged;
   final ValueChanged<int> onComparisonChanged;
 
@@ -2153,13 +2150,6 @@ class _PeriodToolbar extends StatelessWidget {
           selected: limit == 100,
           onSelected: loading ? null : () => onLimitChanged(100),
         ),
-        AppButton(
-          label: 'Muat ulang',
-          icon: Icons.refresh,
-          variant: AppButtonVariant.outline,
-          isLoading: loading,
-          onPressed: loading ? null : onRefresh,
-        ),
       ],
     );
 
@@ -2169,22 +2159,9 @@ class _PeriodToolbar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 760) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    scopeSelector,
-                    const SizedBox(height: AppSpacing.md),
-                    controls,
-                  ],
-                );
-              }
-              return Row(children: [scopeSelector, const Spacer(), controls]);
-            },
-          ),
+          scopeSelector,
+          const SizedBox(height: AppSpacing.md),
+          controls,
           const SizedBox(height: AppSpacing.sm + 2),
           Row(
             children: [
