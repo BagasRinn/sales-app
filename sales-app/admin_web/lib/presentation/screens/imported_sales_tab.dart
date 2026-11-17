@@ -1484,7 +1484,7 @@ class _AllBranchesAnalyticsState extends State<_AllBranchesAnalytics> {
                   ),
           ),
           right: AppCard(
-            title: 'Partisipasi Cabang',
+            title: 'Kontribusi Cabang',
             subtitle: 'Persentase kontribusi omzet setiap cabang',
             child: SalesParticipationChart(
               items: participationItems,
