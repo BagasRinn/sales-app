@@ -25,6 +25,7 @@ import 'change_password_dialog.dart';
 import 'cross_branch_reports_tab.dart';
 import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
+import 'supplier_performance_pivot_tab.dart';
 import '../../core/config.dart';
 
 /// Identitas halaman di dashboard Admin Web. Dipakai agar pemilihan halaman
@@ -40,6 +41,7 @@ enum _DashboardPage {
   sync,
   users,
   performance,
+  supplierPerformance,
   penugasan,
   bulletins,
   importedSales,
@@ -259,6 +261,13 @@ class _DashboardContentState extends State<_DashboardContent>
           group: manajemen,
         ),
         const _NavSpec(
+          page: _DashboardPage.supplierPerformance,
+          icon: Icons.table_chart_outlined,
+          selectedIcon: Icons.table_chart,
+          label: 'Performa Supplier',
+          group: manajemen,
+        ),
+        const _NavSpec(
           page: _DashboardPage.penugasan,
           icon: Icons.assignment_ind_outlined,
           selectedIcon: Icons.assignment_ind,
@@ -325,6 +334,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 7;
       case _DashboardPage.performance:
         return 8;
+      case _DashboardPage.supplierPerformance:
+        return 13;
       case _DashboardPage.penugasan:
         return 9;
       case _DashboardPage.bulletins:
@@ -372,7 +383,9 @@ class _DashboardContentState extends State<_DashboardContent>
       // nomor tab internal provider.
       final specs = _navSpecs();
       _adminProvider.setActiveTab(
-        _providerTabIndex(specs[_selectedIndex.clamp(0, specs.length - 1)].page),
+        _providerTabIndex(
+          specs[_selectedIndex.clamp(0, specs.length - 1)].page,
+        ),
       );
       _adminProvider.loadAll();
 
@@ -447,9 +460,9 @@ class _DashboardContentState extends State<_DashboardContent>
     context.read<AdminProvider>().cancelInFlightLoads();
     // Tell provider tab aktif supaya auto-refresh hanya load data tab ini.
     // Pakai nomor tab internal provider, bukan index sidebar.
-    context
-        .read<AdminProvider>()
-        .setActiveTab(_providerTabIndex(specs[i].page));
+    context.read<AdminProvider>().setActiveTab(
+      _providerTabIndex(specs[i].page),
+    );
   }
 
   Widget _buildBody() {
@@ -513,6 +526,8 @@ class _DashboardContentState extends State<_DashboardContent>
         );
       case _DashboardPage.performance:
         return const PerformanceTab(); // MANAGER & SUPERVISOR
+      case _DashboardPage.supplierPerformance:
+        return const SupplierPerformancePivotTab();
       case _DashboardPage.penugasan:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case _DashboardPage.bulletins:

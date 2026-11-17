@@ -544,11 +544,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tren Omzet Harian per Cabang'), findsOneWidget);
-      expect(find.text('Partisipasi Cabang'), findsOneWidget);
-      expect(find.text('Partisipasi Sales'), findsNothing);
+      expect(find.text('Kontribusi Cabang'), findsOneWidget);
+      expect(find.text('Kontribusi Sales'), findsNothing);
 
       final branchPieCard = find.ancestor(
-        of: find.text('Partisipasi Cabang'),
+        of: find.text('Kontribusi Cabang'),
         matching: find.byType(AppCard),
       );
       expect(

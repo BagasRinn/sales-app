@@ -1,5 +1,5 @@
 """Daily and period order reports - Excel export untuk admin & manager."""
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
 from typing import List, Optional
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload, load_only
 from sqlalchemy.orm import aliased
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier
+from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier, ImportedSale
 from app.core.security import (
     require_admin_or_supervisor,
     require_manager_global,
@@ -30,6 +30,7 @@ from app.schemas.schemas import (
     SalesPerformanceDashboardItem,
     SalesPerformanceDashboardResponse,
     SupplierPerformanceRow,
+    SupplierSalesPivotResponse,
     ReportSummaryResponse,
     ReportSummaryByStatus,
     ReportSummaryByProduct,
@@ -1127,3 +1128,71 @@ def get_supplier_performance(
 
     rows.sort(key=lambda r: (-r.value, r.supplier_name))
     return rows
+
+
+@router.get("/supplier-sales-pivot", response_model=SupplierSalesPivotResponse)
+def get_supplier_sales_pivot(
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date: Optional[date] = Query(None, alias="to"),
+    branch: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_write_access),
+):
+    """Pivot imported sales by supplier, division/channel, and salesperson."""
+    today = date.today()
+    start = from_date or today.replace(day=1)
+    end = to_date or (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    if start > end:
+        raise HTTPException(status_code=400, detail="Tanggal awal harus sebelum tanggal akhir")
+
+    role = current_user.get("role")
+    user_branch = current_user.get("branch")
+    if role == "MANAGER":
+        if branch and not branch_constants.is_valid_branch(branch):
+            raise HTTPException(status_code=400, detail="Cabang tidak dikenal")
+        scope_branch = branch or None
+    else:
+        if branch and branch != user_branch:
+            raise HTTPException(status_code=403, detail="Tidak bisa melihat data cabang lain")
+        scope_branch = user_branch
+
+    supplier = func.coalesce(func.nullif(func.trim(ImportedSale.supplier), ""), "-")
+    channel = func.coalesce(func.nullif(func.trim(ImportedSale.divisi), ""), "-")
+    sales_name = func.coalesce(func.nullif(func.trim(ImportedSale.sales_nama), ""), "-")
+    query = db.query(
+        supplier.label("supplier"),
+        channel.label("channel"),
+        sales_name.label("sales_name"),
+        func.coalesce(func.sum(ImportedSale.total_amount), 0).label("value"),
+        func.coalesce(func.sum(ImportedSale.margin), 0).label("margin"),
+        func.coalesce(func.sum(ImportedSale.qty), 0).label("qty"),
+    ).filter(ImportedSale.sale_date >= start, ImportedSale.sale_date <= end)
+    query = apply_branch_filter(query, ImportedSale, current_user)
+    if scope_branch:
+        query = query.filter(ImportedSale.branch == scope_branch)
+    grouped = query.group_by(supplier, channel, sales_name).all()
+
+    rows_by_key = {}
+    column_totals = {}
+    grand_total = {"value": 0, "margin": 0, "qty": 0}
+    for record in grouped:
+        row_key = (record.supplier, record.channel)
+        row = rows_by_key.setdefault(row_key, {
+            "supplier": record.supplier,
+            "channel": record.channel,
+            "cells": {},
+            "total": {"value": 0, "margin": 0, "qty": 0},
+        })
+        cell = {"value": int(record.value or 0), "margin": int(record.margin or 0), "qty": int(record.qty or 0)}
+        row["cells"][record.sales_name] = cell
+        col = column_totals.setdefault(record.sales_name, {"value": 0, "margin": 0, "qty": 0})
+        for metric, amount in cell.items():
+            row["total"][metric] += amount
+            col[metric] += amount
+            grand_total[metric] += amount
+
+    columns = [{"nama": name, "total": totals} for name, totals in column_totals.items()]
+    columns.sort(key=lambda item: (-item["total"]["value"], item["nama"].casefold()))
+    rows = list(rows_by_key.values())
+    rows.sort(key=lambda item: (-item["total"]["value"], item["supplier"].casefold(), item["channel"].casefold()))
+    return {"columns": columns, "rows": rows, "total": grand_total, "from": start.isoformat(), "to": end.isoformat()}

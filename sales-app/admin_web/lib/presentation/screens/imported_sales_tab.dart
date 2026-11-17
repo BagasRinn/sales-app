@@ -1098,7 +1098,7 @@ class _AnalyticsBody extends StatelessWidget {
             rightFlex: 2,
             left: _TrendCard(analytics: analytics),
             right: AppCard(
-              title: 'Partisipasi Sales',
+              title: 'Kontribusi Sales',
               subtitle: 'Persentase kontribusi omzet setiap sales',
               child: _SalesParticipation(analytics: analytics),
             ),

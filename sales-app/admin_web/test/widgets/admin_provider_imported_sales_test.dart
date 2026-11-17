@@ -137,6 +137,17 @@ AdminProvider _provider(_FakeImportedSalesRepository repo) {
 }
 
 void main() {
+  test('manager and supervisor defaults use 6 months and top 50', () {
+    final repo = _FakeImportedSalesRepository();
+    final manager = AdminProvider(repo)..setUserRole('MANAGER');
+    expect(manager.importedSalesComparisonMonths, 6);
+    expect(manager.importedSalesLimit, 50);
+
+    final supervisor = AdminProvider(repo)..setUserRole('SUPERVISOR');
+    expect(supervisor.importedSalesComparisonMonths, 6);
+    expect(supervisor.importedSalesLimit, 50);
+  });
+
   test('summary is only fetched when the version changes', () async {
     final repo = _FakeImportedSalesRepository();
     final p = _provider(repo);

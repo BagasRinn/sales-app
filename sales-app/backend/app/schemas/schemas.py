@@ -936,6 +936,32 @@ class SupplierPerformanceRow(BaseModel):
     order_type: str = "REGULER"
 
 
+class SupplierSalesMetric(BaseModel):
+    value: int = 0
+    margin: int = 0
+    qty: int = 0
+
+
+class SupplierSalesPivotColumn(BaseModel):
+    nama: str
+    total: SupplierSalesMetric
+
+
+class SupplierSalesPivotRow(BaseModel):
+    supplier: str
+    channel: str
+    cells: dict[str, SupplierSalesMetric]
+    total: SupplierSalesMetric
+
+
+class SupplierSalesPivotResponse(BaseModel):
+    columns: list[SupplierSalesPivotColumn]
+    rows: list[SupplierSalesPivotRow]
+    total: SupplierSalesMetric
+    from_date: str = Field(alias="from")
+    to_date: str = Field(alias="to")
+
+
 class SupplierTargetUpdate(BaseModel):
     target_value: int = Field(..., ge=0)
 

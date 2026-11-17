@@ -16,6 +16,7 @@ import '../../data/models/bulletin.dart';
 import '../widgets/analytics/sales_analytics_models.dart';
 import '../../data/models/branch_report.dart';
 import '../../data/models/supplier_performance.dart';
+import '../../data/models/supplier_sales_pivot.dart';
 import '../../data/models/supplier.dart';
 import '../../core/api_exception.dart';
 import '../../core/config.dart';
@@ -408,6 +409,13 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_userRole != role) {
       // Role menentukan scope ringkasan penjualan (GLOBAL vs cabang).
       _importedSalesBranchFilter = null;
+      if (role == 'MANAGER' || role == 'SUPERVISOR') {
+        _importedSalesLimit = 50;
+        _importedSalesComparisonMonths = 6;
+      } else {
+        _importedSalesLimit = 10;
+        _importedSalesComparisonMonths = 1;
+      }
       invalidateImportedSalesCache(clearSummary: true);
     }
     _userRole = role;
@@ -2221,6 +2229,36 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _supplierPerformanceError = e is ApiException ? e.message : e.toString();
     } finally {
       _supplierPerformanceLoading = false;
+      notifyListeners();
+    }
+  }
+
+  SupplierSalesPivot? _supplierSalesPivot;
+  bool _supplierSalesPivotLoading = false;
+  String? _supplierSalesPivotError;
+  SupplierSalesPivot? get supplierSalesPivot => _supplierSalesPivot;
+  bool get supplierSalesPivotLoading => _supplierSalesPivotLoading;
+  String? get supplierSalesPivotError => _supplierSalesPivotError;
+
+  Future<void> loadSupplierSalesPivot({
+    required DateTime from,
+    required DateTime to,
+    String? branch,
+  }) async {
+    _supplierSalesPivotLoading = true;
+    _supplierSalesPivotError = null;
+    notifyListeners();
+    try {
+      _supplierSalesPivot = await _repo.getSupplierSalesPivot(
+        from: from,
+        to: to,
+        branch: branch,
+      );
+    } catch (e) {
+      _supplierSalesPivot = null;
+      _supplierSalesPivotError = e is ApiException ? e.message : e.toString();
+    } finally {
+      _supplierSalesPivotLoading = false;
       notifyListeners();
     }
   }

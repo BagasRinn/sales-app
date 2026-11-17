@@ -17,6 +17,7 @@ import '../models/bulletin.dart';
 import '../models/branch_report.dart';
 import '../models/supplier_target.dart';
 import '../models/supplier_performance.dart';
+import '../models/supplier_sales_pivot.dart';
 import '../models/supplier.dart';
 
 class AdminRepository {
@@ -1051,6 +1052,29 @@ class AdminRepository {
         .map(SupplierPerformanceRow.fromJson)
         .toList();
   }
+
+  Future<SupplierSalesPivot> getSupplierSalesPivot({
+    required DateTime from,
+    required DateTime to,
+    String? branch,
+  }) async {
+    final params = <String, String>{
+      'from': _dateParam(from),
+      'to': _dateParam(to),
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+    };
+    final qs = params.entries
+        .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+    final data = await _api.get(
+      '/reports/supplier-sales-pivot?$qs',
+      receiveTimeout: const Duration(seconds: 60),
+    );
+    return SupplierSalesPivot.fromJson(data as Map<String, dynamic>);
+  }
+
+  String _dateParam(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   /// Active branches — for the MANAGER branch picker in Performa Sales.
   Future<List<BranchOption>> getBranches() async {
