@@ -387,6 +387,7 @@ def test_import_bumps_branch_and_global_versions():
                 "qty": 3,
                 "revenue": 25000,
                 "margin": 0,
+                "active_outlets": 1,
             }
         ]
         # Daily series feeds the analytics trend chart. All fixture rows share
@@ -712,6 +713,7 @@ def test_summary_limit_and_include_reduce_payload():
                 "qty": 3,
                 "revenue": 60000,
                 "margin": 0,
+                "active_outlets": 1,
             }
         ]
         assert only_supplier["by_product"] == []
@@ -821,26 +823,36 @@ def _live_products(scope: str) -> list[dict]:
     with engine.begin() as conn:
         rows = conn.execute(
             text(
-                "SELECT product_kode, product_nama, "
+                # Mirror the API aggregation: one group per produk fisik
+                # (mother SKU bila ada, else kode item), kode/label diambil
+                # dari baris grup, plus jumlah outlet aktif unik.
+                "SELECT COALESCE(NULLIF(MAX(mother_sku), ''), "
+                "  MAX(product_kode)) AS dim_key, "
+                "MAX(product_kode) AS product_kode, "
+                "MAX(product_nama) AS product_nama, "
                 "MAX(mother_sku) AS mother_sku, "
                 "COALESCE(SUM(qty), 0) AS qty, "
                 "COALESCE(SUM(total_amount), 0) AS revenue, "
-                "COALESCE(SUM(margin), 0) AS margin "
+                "COALESCE(SUM(margin), 0) AS margin, "
+                "COUNT(DISTINCT CONCAT(COALESCE(branch, ''), '|', "
+                "  COALESCE(customer_kode, ''))) AS active_outlets "
                 f"FROM imported_sales WHERE {where} "
-                "GROUP BY product_kode, product_nama "
-                "ORDER BY revenue DESC, COALESCE(product_nama, '') ASC, "
-                "COALESCE(product_kode, '') ASC LIMIT 100"
+                "GROUP BY COALESCE(NULLIF(mother_sku, ''), product_kode) "
+                "ORDER BY SUM(total_amount) DESC, "
+                "COALESCE(MAX(product_nama), '') ASC, "
+                "COALESCE(MAX(product_kode), '') ASC LIMIT 100"
             ),
             params,
         ).all()
     return [
         {
-            "product_kode": row.product_kode,
             "product_nama": row.product_nama,
             "mother_sku": row.mother_sku,
+            "product_kode": row.product_kode,
             "qty": int(row.qty),
             "revenue": int(row.revenue),
             "margin": int(row.margin),
+            "active_outlets": int(row.active_outlets),
         }
         for row in rows
     ]
@@ -1423,5 +1435,53 @@ def test_comparison_include_nets_returns():
         # read_summary_range returns "revenue" as net already
         assert by_product["P001"]["revenue"] == 400
         assert by_product["P001"]["average_revenue"] == 400
+    finally:
+        _cleanup()
+
+
+def test_summary_normalizes_mother_sku_and_picks_mode_label():
+    """Mother SKU dinormalisasi (kapital + spasi) dan grup digabung lintas cabang.
+
+    Dua cabang membawa kode item berbeda untuk produk fisik yang sama, dengan
+    ejaan Mother SKU yang berbeda kapital dan ada spasi berlebih. Snapshot
+    harus menggabungkannya jadi satu grup, dan nama produk yang tampil adalah
+    nama yang paling sering muncul (mode), bukan urutan abjad terbesar.
+    """
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    headers = APP_HEADERS + ["Mother SKU"]
+    rows = [
+        # Cabang 1: kode lain, Mother SKU huruf kecil + spasi berlebih.
+        _row("T1", "PALM-A", 1, 300, sale_date=f"{TEST_MONTH}-10") + [" sku-palm15 "],
+        # Cabang 2: kode beda lagi, Mother SKU sudah rapi.
+        _row("T2", "PALM-B", 1, 200, branch=OTHER_BRANCH, sale_date=f"{TEST_MONTH}-11") + ["SKU-PALM15"],
+        _row("T3", "PALM-B", 1, 100, branch=OTHER_BRANCH, sale_date=f"{TEST_MONTH}-12") + ["SKU-PALM15"],
+    ]
+
+    try:
+        resp = client.post(
+            f"{API}/sales-imports/excel",
+            headers=_headers(token),
+            files={
+                "file": (
+                    f"{TEST_PREFIX}sales.xlsx",
+                    _xlsx(rows, headers),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+        s = _summary(client, token, "include=product&limit=50").json()
+        products = [p for p in s["by_product"] if p["mother_sku"]]
+        assert len(products) == 1, s["by_product"]
+        p = products[0]
+        assert p["mother_sku"] == "SKU-PALM15"
+        assert p["revenue"] == 600
+        # Nama "Produk PALM-B" muncul di 2 baris vs 1 → dipilih sebagai label.
+        assert p["product_nama"] == "Produk PALM-B"
     finally:
         _cleanup()

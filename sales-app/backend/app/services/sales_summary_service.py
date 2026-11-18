@@ -266,6 +266,46 @@ def _dimension_rows(
                 default=None,
             )
 
+    # Label grup dipilih berdasarkan kemunculan terbanyak (mode), bukan
+    # max() leksikografis. Kode produk bisa berbeda antar cabang, dan nama
+    # yang tersimpan pun bisa berbeda ejaan; label abjad-terbesar membuat
+    # GLOBAL dan filter cabang menampilkan nama berbeda untuk produk sama.
+    # Satu query tambahan per dimensi hanya berjalan saat snapshot dibangun.
+    # Grouping memakai kolom label mentah karena `sales_label` itu agregat.
+    model = ImportedSale
+    if dimension == PRODUCT_DIMENSION:
+        raw_label = model.product_nama
+    elif dimension == SALES_DIMENSION:
+        raw_label = model.sales_nama
+    elif dimension == CUSTOMER_DIMENSION:
+        raw_label = model.customer_nama
+    elif dimension == CHANNEL_DIMENSION:
+        raw_label = model.channel
+    elif dimension == DIVISI_DIMENSION:
+        raw_label = model.divisi
+    else:
+        raw_label = model.supplier
+    label_counts: Dict[str, Dict[str, int]] = {}
+    for row in (
+        sales_query.with_entities(
+            sales_key.label("dim_key"),
+            raw_label.label("dim_label"),
+            func.count().label("n"),
+        )
+        .group_by(sales_key, raw_label)
+        .all()
+    ):
+        key = _normalized_key(row.dim_key)
+        label = _as_text(row.dim_label, 200)
+        if not key or not label:
+            continue
+        counts = label_counts.setdefault(key, {})
+        counts[label] = counts.get(label, 0) + int(row.n or 0)
+    best_labels = {
+        key: min(counts, key=lambda label: (-counts[label], label))
+        for key, counts in label_counts.items()
+    }
+
     return_key, return_label = _dimension_columns(dimension, returns=True)
     if return_key is not None:
         return_groups = (
@@ -317,6 +357,13 @@ def _dimension_rows(
                     filter(None, (item["mother_sku"], group.mother_sku)),
                     default=None,
                 )
+
+    # Override label hasil merge dengan nama yang paling sering muncul di
+    # sisi penjualan. Grup yang hanya punya baris retur memakai perilaku lama.
+    for item in merged.values():
+        best = best_labels.get(item["dim_key"])
+        if best:
+            item["dim_label"] = best
 
     for item in merged.values():
         item["revenue"] -= item["retur_revenue"]

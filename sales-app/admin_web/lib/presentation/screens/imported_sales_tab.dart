@@ -1710,15 +1710,14 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     List<SalesRankItem> leftItems,
     int comparisonTotal,
   ) {
-    final byKey = <String, SalesRankItem>{};
-    for (final item in comparisonItems) {
-      final key = item.code.isNotEmpty ? item.code : item.label;
-      if (key.isNotEmpty) byKey[key] = item;
-    }
+    // Satu item pembanding bisa dicocokkan lewat beberapa kunci
+    // (mother_sku / product_kode / nama). Nilai product_kode hasil agregasi
+    // GLOBAL adalah max() lintas cabang sehingga bisa berbeda dari payload
+    // pembanding; fallback kunci mencegah "Bulan ini" keliru tampil Rp 0.
+    final byKey = buildRankMatchIndex(comparisonItems);
     return List<SalesRankingEntry>.generate(leftItems.length, (index) {
       final leftItem = leftItems[index];
-      final key = leftItem.code.isNotEmpty ? leftItem.code : leftItem.label;
-      final rightItem = byKey[key];
+      final rightItem = matchRankItem(byKey, leftItem);
       final value = rightItem == null
           ? 0
           : (_showMargin ? rightItem.margin : rightItem.revenue);

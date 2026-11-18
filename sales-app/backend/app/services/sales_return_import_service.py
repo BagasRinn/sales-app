@@ -21,6 +21,7 @@ from app.services.sales_import_keys import build_dedupe_key, canonical_return_ke
 from app.services.sales_import_service import (
     MAX_ROW_ERRORS,
     _add_error,
+    _clean_identifier,
     _clean_str,
     _iter_sales_excel,
     _resolve_row_branch,
@@ -257,9 +258,9 @@ def import_returns_from_excel(
                 ReturnRow(
                     branch=branch,
                     sale_date=sale_date,
-                    product_kode=product_kode,
+                    product_kode=_clean_identifier(row.get("product_kode"), 50),
                     product_nama=_clean_str(row.get("product_nama")),
-                    mother_sku=_clean_str(row.get("mother_sku")),
+                    mother_sku=_clean_identifier(row.get("mother_sku"), 100),
                     divisi=_clean_str(row.get("divisi")),
                     supplier=supplier,
                     customer_kode=customer_kode,

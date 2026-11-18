@@ -18,6 +18,61 @@ const List<Color> salesChartPalette = <Color>[
   Color(0xFF64748B), // slate
 ];
 
+/// Kunci pencocokan ternormalisasi: huruf besar + spasi dirapatkan, agar
+/// variasi kapital/spasi pada nama produk tidak mematahkan pencocokan.
+String normalizeRankMatchKey(String value) =>
+    value.trim().toUpperCase().split(RegExp(r'\s+')).join(' ');
+
+/// Kandidat kunci pencocokan untuk satu item ranking, urut prioritas:
+/// mother_sku (kunci grup produk di backend, stabil lintas cabang),
+/// product_kode, lalu label ternormalisasi.
+///
+/// Nilai `product_kode` hasil agregasi GLOBAL di backend adalah `max()`
+/// lintas cabang/bulan sehingga bisa berbeda antara payload ringkasan dan
+/// payload pembanding; fallback kunci mencegah kolom pembanding Pareto
+/// Product keliru menampilkan Rp 0 untuk produk yang datanya sebenarnya ada.
+List<String> rankMatchKeys(SalesRankItem item) {
+  final keys = <String>[];
+  void add(String? value) {
+    final normalized = normalizeRankMatchKey(value ?? '');
+    if (normalized.isNotEmpty && !keys.contains(normalized)) {
+      keys.add(normalized);
+    }
+  }
+
+  add(item.motherSku);
+  add(item.code);
+  add(item.label);
+  return keys;
+}
+
+/// Bangun indeks kunci -> item untuk pencocokan dua payload ranking.
+/// Item pertama yang memiliki sebuah kunci menang (payload lebih awal
+/// biasanya sudah diurutkan berdasarkan peringkat).
+Map<String, SalesRankItem> buildRankMatchIndex(
+  Iterable<SalesRankItem> items,
+) {
+  final byKey = <String, SalesRankItem>{};
+  for (final item in items) {
+    for (final key in rankMatchKeys(item)) {
+      byKey.putIfAbsent(key, () => item);
+    }
+  }
+  return byKey;
+}
+
+/// Cari item di [index] yang cocok dengan [item] lewat salah satu kuncinya.
+SalesRankItem? matchRankItem(
+  Map<String, SalesRankItem> index,
+  SalesRankItem item,
+) {
+  for (final key in rankMatchKeys(item)) {
+    final found = index[key];
+    if (found != null) return found;
+  }
+  return null;
+}
+
 class SalesRankItem {
   final String code;
   final String label;

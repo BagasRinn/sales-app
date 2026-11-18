@@ -839,6 +839,23 @@ def _clean_str(value: Any) -> Optional[str]:
     return s if s else None
 
 
+def _clean_identifier(value: Any, max_len: int) -> Optional[str]:
+    """Normalize a shared product identifier (mother SKU / product code).
+
+    ``product_kode`` dan ``mother_sku`` jadi kunci penggabungan produk lintas
+    cabang di dashboard. Nilai yang sama dengan beda kapital/spasi
+    (``sku-palm15 `` vs ``SKU-PALM15``) harus runtuh ke satu bentuk kanonik,
+    kalau tidak grup agregasi GLOBAL terbelah dan Pareto Product kehilangan
+    baris. Simpan bentuk ternormalisasi di sumbernya (impor), bukan hanya di
+    lapisan tampilan.
+    """
+    s = _clean_str(value)
+    if not s:
+        return None
+    normalized = " ".join(s.upper().split())
+    return normalized[:max_len] if normalized else None
+
+
 def _resolve_row_branch(value: Any) -> Optional[str]:
     """Resolve a ``Cabang`` cell to a branch code.
 
@@ -1054,7 +1071,7 @@ def import_sales_from_excel(
         row_branch = account_branch
         if global_manager:
             row_branch = _resolve_row_branch(row.get("branch"))
-        product_kode = _clean_str(row.get("product_kode"))
+        product_kode = _clean_identifier(row.get("product_kode"), 50)
         product_nama = _clean_str(row.get("product_nama"))
         if key_mode == "v2":
             if not row_branch or row_branch not in get_valid_branch_codes():
@@ -1101,7 +1118,7 @@ def import_sales_from_excel(
                 net_per_unit=net_per_unit,
                 total_amount=total_amount,
                 margin=margin,
-                mother_sku=_clean_str(row.get("mother_sku")),
+                mother_sku=_clean_identifier(row.get("mother_sku"), 100),
                 divisi=_clean_str(row.get("divisi")),
                 sales_kode=_clean_str(row.get("sales_kode")),
                 sales_nama=_clean_str(row.get("sales_nama")),
