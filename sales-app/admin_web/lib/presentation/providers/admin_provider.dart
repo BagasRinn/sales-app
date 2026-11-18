@@ -1887,7 +1887,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getProductStockSummary(
         month: targetMonth,
         branch: branch,
-        limit: _importedSalesLimit,
+        // Ranking stok dipakai sebagai lookup untuk semua item di ranking
+        // sales, bukan hanya Top 10/50 berdasarkan Value Stok.
+        limit: 5000,
       );
       final parsed = ProductStockSummary.fromMap(data);
       _productStockSummary = parsed;

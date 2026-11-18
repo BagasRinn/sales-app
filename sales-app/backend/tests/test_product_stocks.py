@@ -169,6 +169,29 @@ def test_delete_product_stock_month_branch_scoped():
         _cleanup()
 
 
+def test_summary_limit_can_cover_all_products_for_sales_lookup():
+    """Ringkasan stok tidak terpotong pada Top 10/50 sales ranking."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        rows = [
+            _stock_row("BANJARMASIN", f"CCODE-{i:04d}", 10000 - i)
+            for i in range(105)
+        ]
+        response = _import(client, token, rows)
+        assert response.status_code == 200, response.text
+
+        summary = _summary(client, token, "limit=5000").json()
+        # Lebih banyak dari limit ranking sales yang umum (Top 50), semua
+        # baris tersedia untuk Value Stok lookup pada item sales.
+        assert len(summary["by_product"]) == 105
+    finally:
+        _cleanup()
+
+
 def _summary(client: TestClient, token: str, query: str = ""):
     suffix = f"&{query}" if query else ""
     return client.get(

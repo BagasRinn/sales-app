@@ -77,7 +77,7 @@ def import_product_stock_excel(
 def product_stock_summary(
     month: str = Query(..., description="Bulan snapshot (YYYY-MM)"),
     branch: str | None = Query(None, description="Filter cabang (global manager saja)"),
-    limit: int = Query(100, ge=1, le=100),
+    limit: int = Query(5000, ge=1, le=5000),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager_global),
 ):

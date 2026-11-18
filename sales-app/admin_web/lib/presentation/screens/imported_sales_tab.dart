@@ -1166,19 +1166,33 @@ class _AnalyticsBody extends StatelessWidget {
 
   /// Resolver Value Stok per dimensi kartu (lihat ProductStockSummary).
   int? _supplierValueStok(SalesRankItem item) =>
-      productStock?.supplierByKey[normalizeRankMatchKey(item.displayLabel)];
+      productStock == null || productStock!.isEmpty
+          ? null
+          : productStock!.supplierByKey[
+                  normalizeRankMatchKey(item.displayLabel)
+                ] ??
+                0;
 
   int? _divisiValueStok(SalesRankItem item) =>
-      productStock?.divisiByKey[normalizeRankMatchKey(item.displayLabel)];
+      productStock == null || productStock!.isEmpty
+          ? null
+          : productStock!.divisiByKey[
+                  normalizeRankMatchKey(item.displayLabel)
+                ] ??
+                0;
 
   int? _productValueStok(SalesRankItem item) {
     final map = productStock?.productByKey;
-    if (map == null) return null;
+    if (productStock == null || productStock!.isEmpty || map == null) {
+      return null;
+    }
     for (final key in rankMatchKeys(item)) {
       final found = map[key];
       if (found != null) return found;
     }
-    return null;
+    // Snapshot ada tetapi item tidak ditemukan di file stok: tampilkan Rp 0,
+    // jangan menghilangkan Value Stok dari baris ranking.
+    return 0;
   }
 
   @override

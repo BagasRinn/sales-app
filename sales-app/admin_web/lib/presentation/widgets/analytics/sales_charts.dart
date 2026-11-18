@@ -1639,7 +1639,15 @@ class SalesRankingList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.md),
+          if (i > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 32),
+              child: Divider(
+                height: AppSpacing.md,
+                thickness: 1,
+                color: AppColors.border,
+              ),
+            ),
           _SalesRankingRow(rank: i + 1, entry: rows[i], maxValue: maxValue),
         ],
       ],
