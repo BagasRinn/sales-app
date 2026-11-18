@@ -1164,6 +1164,23 @@ class _AnalyticsBody extends StatelessWidget {
   final VoidCallback onImportReturns;
   final ProductStockSummary? productStock;
 
+  /// Resolver Value Stok per dimensi kartu (lihat ProductStockSummary).
+  int? _supplierValueStok(SalesRankItem item) =>
+      productStock?.supplierByKey[normalizeRankMatchKey(item.displayLabel)];
+
+  int? _divisiValueStok(SalesRankItem item) =>
+      productStock?.divisiByKey[normalizeRankMatchKey(item.displayLabel)];
+
+  int? _productValueStok(SalesRankItem item) {
+    final map = productStock?.productByKey;
+    if (map == null) return null;
+    for (final key in rankMatchKeys(item)) {
+      final found = map[key];
+      if (found != null) return found;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final insights = buildSalesInsights(analytics);
@@ -1249,8 +1266,7 @@ class _AnalyticsBody extends StatelessWidget {
               limit: limit,
               showActiveOutlets: true,
               targets: analytics.supplierTargets,
-              valueGoodItems: productStock?.suppliers,
-              valueGoodTotal: productStock?.totalGoodAmount,
+              valueStokOf: _supplierValueStok,
             ),
             _SupplierReturnCard(
               analytics: analytics,
@@ -1276,8 +1292,7 @@ class _AnalyticsBody extends StatelessWidget {
               showActiveOutlets: true,
               comparisonItems: comparisonDetail?['product'],
               comparisonLabel: comparisonLabel,
-              valueGoodItems: productStock?.products,
-              valueGoodTotal: productStock?.totalGoodAmount,
+              valueStokOf: _productValueStok,
             ),
           ],
         ),
@@ -1332,8 +1347,7 @@ class _AnalyticsBody extends StatelessWidget {
               targets: analytics.divisiTargets,
               comparisonItems: comparisonDetail?['divisi'],
               comparisonLabel: comparisonLabel,
-              valueGoodItems: productStock?.divisi,
-              valueGoodTotal: productStock?.totalGoodAmount,
+              valueStokOf: _divisiValueStok,
             ),
           ],
         ),
@@ -1786,8 +1800,7 @@ class _MetricRankingCard extends StatefulWidget {
     this.targets,
     this.comparisonItems,
     this.comparisonLabel,
-    this.valueGoodItems,
-    this.valueGoodTotal,
+    this.valueStokOf,
   });
 
   final String title;
@@ -1802,11 +1815,10 @@ class _MetricRankingCard extends StatefulWidget {
   final List<SalesRankItem>? comparisonItems;
   final String? comparisonLabel; // mis. "3 Bulan Sebelumnya (Agu–Okt 2026)"
 
-  /// Snapshot stok (Value Good) untuk dimensi kartu ini. Bila tersedia,
-  /// chip ketiga "Value Good" muncul: ranking single-list berdasarkan
-  /// Value Good untuk analisa plan penjualan.
-  final List<StockRankItem>? valueGoodItems;
-  final int? valueGoodTotal;
+  /// Resolver snapshot stok (GOOD AMOUNT) per item — ditampilkan langsung
+  /// di baris entri utama (sebaris Target / menggantikan posisi persen),
+  /// bukan sebagai mode chip terpisah.
+  final int? Function(SalesRankItem item)? valueStokOf;
 
   @override
   State<_MetricRankingCard> createState() => _MetricRankingCardState();
@@ -1814,30 +1826,6 @@ class _MetricRankingCard extends StatefulWidget {
 
 class _MetricRankingCardState extends State<_MetricRankingCard> {
   bool _showMargin = false;
-  bool _showValueGood = false;
-
-  bool get _hasValueGood =>
-      widget.valueGoodItems != null && widget.valueGoodItems!.isNotEmpty;
-
-  /// Entri mode Value Good: urut good_amount desc, share terhadap total.
-  List<SalesRankingEntry> _buildValueGoodEntries() {
-    final items = [...widget.valueGoodItems!]
-      ..sort((a, b) => b.goodAmount.compareTo(a.goodAmount));
-    final total = widget.valueGoodTotal != null && widget.valueGoodTotal! > 0
-        ? widget.valueGoodTotal!
-        : items.fold<int>(0, (sum, item) => sum + item.goodAmount);
-    return items
-        .map(
-          (item) => SalesRankingEntry(
-            label: item.displayLabel,
-            value: item.goodAmount,
-            sortValue: item.goodAmount,
-            trailingDetail:
-                '${formatPercentPrecise(total == 0 ? 0 : item.goodAmount / total)} value',
-          ),
-        )
-        .toList(growable: false);
-  }
 
   List<SalesRankingEntry> _buildEntries(
     List<SalesRankItem> items,
@@ -1867,6 +1855,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
             showTarget: showTarget,
             target: entryTarget,
             targetActual: item.revenue,
+            valueStok: widget.valueStokOf?.call(item),
           );
         })
         .toList(growable: false);
@@ -1914,6 +1903,9 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         showTarget: widget.targets != null,
         target: entryTarget,
         targetActual: rightItem?.revenue ?? 0,
+        valueStok: rightItem != null
+            ? widget.valueStokOf?.call(rightItem)
+            : widget.valueStokOf?.call(leftItem),
       );
     }, growable: false);
   }
@@ -1921,11 +1913,6 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   @override
   Widget build(BuildContext context) {
     final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
-
-    // Mode Value Good: analisa stok terpisah dari omzet/margin.
-    if (_showValueGood && _hasValueGood) {
-      return _buildValueGoodCard();
-    }
 
     if (!_hasComparison) {
       return _buildSingleCard(totalValue);
@@ -2024,11 +2011,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   bool get _hasComparison =>
       widget.comparisonItems != null && widget.comparisonItems!.isNotEmpty;
 
-  /// Chip pemilih mode: Omzet | Margin | Value Stok (bila stok tersedia).
-  /// Margin tidak butuh data pembanding — dihitung dari item kartu itu
-  /// sendiri, jadi selalu tampil (termasuk kartu tanpa pembanding seperti
-  /// Pareto Suppliers). Pindah mode selalu mereset yang lain supaya tepat
-  /// satu chip terpilih.
+  /// Chip pemilih mode: Omzet | Margin.
   Widget _buildModeChips() {
     return Wrap(
       spacing: AppSpacing.xs,
@@ -2036,46 +2019,16 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
         AppChoiceChip(
           label: 'Omzet',
           dense: true,
-          selected: !_showMargin && !_showValueGood,
-          onSelected: () => setState(() {
-            _showMargin = false;
-            _showValueGood = false;
-          }),
+          selected: !_showMargin,
+          onSelected: () => setState(() => _showMargin = false),
         ),
         AppChoiceChip(
           label: 'Margin',
           dense: true,
-          selected: _showMargin && !_showValueGood,
-          onSelected: () => setState(() {
-            _showMargin = true;
-            _showValueGood = false;
-          }),
+          selected: _showMargin,
+          onSelected: () => setState(() => _showMargin = true),
         ),
-        if (_hasValueGood)
-          AppChoiceChip(
-            label: 'Value Stok',
-            dense: true,
-            selected: _showValueGood,
-            onSelected: () => setState(() {
-              _showMargin = false;
-              _showValueGood = true;
-            }),
-          ),
       ],
-    );
-  }
-
-  /// Mode Value Stok: ranking single-list berdasarkan GOOD AMOUNT stok.
-  Widget _buildValueGoodCard() {
-    final entries = _buildValueGoodEntries();
-    final total = widget.valueGoodTotal ?? 0;
-    return AppCard(
-      title: widget.title,
-      subtitle: total > 0
-          ? 'Value Stok ${formatRupiah(total)} · Top ${widget.limit}'
-          : 'Value Stok belum tersedia untuk periode ini',
-      trailing: _buildModeChips(),
-      child: SalesRankingList(entries: entries, maxItems: widget.limit),
     );
   }
 

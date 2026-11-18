@@ -1667,6 +1667,16 @@ class _SalesRankingRow extends StatelessWidget {
   /// Nilai negatif (omzet/margin minus) ditandai merah agar mudah terlihat.
   bool get _isNegative => entry.value < 0;
 
+  Widget? get _valueStokLabel => entry.valueStok == null
+      ? null
+      : Text(
+          'Value Stok ${formatRupiah(entry.valueStok!)}',
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        );
+
   @override
   Widget build(BuildContext context) {
     final fraction = maxValue <= 0 ? 0.0 : entry.value.abs() / maxValue;
@@ -1745,26 +1755,48 @@ class _SalesRankingRow extends StatelessWidget {
               ),
               if (entry.showTarget) ...[
                 const SizedBox(height: AppSpacing.sm),
+                // Value Stok diletakkan sebaris dengan baris Target.
                 if (entry.target == null)
-                  Text(
-                    'Target belum di-set',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Target belum di-set',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else if (entry.target! <= 0)
-                  Text(
-                    'Target Rp 0 · progres tidak dapat dihitung',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Target Rp 0 · progres tidak dapat dihitung',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else if (targetProgress == null)
-                  Text(
-                    'Progres tidak dapat dihitung',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Progres tidak dapat dihitung',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else ...[
                   Semantics(
@@ -1834,6 +1866,10 @@ class _SalesRankingRow extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (_valueStokLabel != null) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        _valueStokLabel!,
+                      ],
                     ],
                   ),
                 ],
@@ -1841,6 +1877,7 @@ class _SalesRankingRow extends StatelessWidget {
               const SizedBox(height: 4),
               if (entry.detail != null || entry.trailingDetail != null)
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (entry.detail != null)
                       Expanded(
@@ -1855,7 +1892,27 @@ class _SalesRankingRow extends StatelessWidget {
                       )
                     else
                       const Spacer(),
-                    if (entry.trailingDetail != null)
+                    // Kartu tanpa baris Target (mis. produk): Value Stok
+                    // mengambil posisi persen, persen turun ke bawahnya.
+                    if (entry.valueStok != null && !entry.showTarget)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _valueStokLabel!,
+                          if (entry.trailingDetail != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              entry.trailingDetail!,
+                              style: AppTextStyles.caption.copyWith(
+                                color: _isNegative
+                                    ? AppColors.danger
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      )
+                    else if (entry.trailingDetail != null)
                       Text(
                         entry.trailingDetail!,
                         style: AppTextStyles.caption.copyWith(

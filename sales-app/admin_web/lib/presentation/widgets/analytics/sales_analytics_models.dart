@@ -202,6 +202,7 @@ class SalesRankingEntry {
     this.showTarget = false,
     this.target,
     this.targetActual,
+    this.valueStok,
   });
 
   final String label;
@@ -212,6 +213,11 @@ class SalesRankingEntry {
   final bool showTarget;
   final int? target;
   final int? targetActual;
+
+  /// Snapshot stok (GOOD AMOUNT) item ini. Render: sebaris dengan Target
+  /// bila kartu punya baris target; kalau tidak (mis. produk), menggantikan
+  /// posisi persen dan persen turun ke bawahnya.
+  final int? valueStok;
 }
 
 class SupplierReturnRankItem {
