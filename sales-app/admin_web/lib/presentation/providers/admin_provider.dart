@@ -1904,12 +1904,16 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     List<int> fileBytes,
     String fileName, {
     required String month,
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
   }) async {
     try {
       final result = await _repo.importProductStockExcel(
         fileBytes,
         fileName,
         month: month,
+        jobId: jobId,
+        onSendProgress: onSendProgress,
       );
       _productStockImportResult = result;
       notifyListeners();

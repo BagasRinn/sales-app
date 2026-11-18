@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.branch import is_valid_branch
 from app.models.models import ImportLog, ImportedProductStock
+from app.services.import_progress import ImportProgressReporter
 from app.services.sales_import_service import (
     _add_error,
     _clean_identifier,
@@ -177,6 +178,7 @@ def import_product_stock_from_excel(
     month: str,
     db: Session,
     current_user: Dict[str, Any],
+    progress: Optional[ImportProgressReporter] = None,
 ) -> Dict[str, Any]:
     """Import snapshot stok: replace penuh per (month, cabang dari file).
 
@@ -185,6 +187,7 @@ def import_product_stock_from_excel(
     Semua perubahan dalam satu transaksi (ImportLog + baris stok).
     """
     normalized_month, _, _ = parse_month(month)
+    progress = progress or ImportProgressReporter(None, None)
 
     import_log = ImportLog(
         user_id=current_user.get("user_id"),
@@ -200,6 +203,7 @@ def import_product_stock_from_excel(
         rows = _read_stock_excel(file_bytes, file_name)
     except ValueError as exc:
         db.rollback()
+        progress.fail(str(exc))
         raise HTTPException(status_code=400, detail=str(exc))
 
     validation_errors: List[Dict[str, Any]] = []
@@ -210,6 +214,8 @@ def import_product_stock_from_excel(
     # (branch, grup generalisasi) -> baris agregat.
     by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
     branches_touched: set[str] = set()
+
+    progress.update(10, "Membaca baris stok...")
 
     for row_num, row in enumerate(rows, start=2):
         total_rows += 1
@@ -297,6 +303,7 @@ def import_product_stock_from_excel(
 
     if not by_key:
         db.rollback()
+        progress.fail("Tidak ada baris stok valid untuk diimpor")
         raise HTTPException(
             status_code=400,
             detail=(
@@ -306,12 +313,14 @@ def import_product_stock_from_excel(
         )
 
     # Replace penuh per (month, cabang) yang tersentuh.
+    progress.update(60, "Mengganti snapshot lama...")
     for branch in sorted(branches_touched):
         db.query(ImportedProductStock).filter(
             ImportedProductStock.branch == branch,
             ImportedProductStock.month == normalized_month,
         ).delete(synchronize_session=False)
 
+    progress.update(80, "Menyimpan snapshot stok...")
     inserted = 0
     for row in by_key.values():
         db.add(ImportedProductStock(**row, import_log_id=import_log.id))
@@ -321,6 +330,7 @@ def import_product_stock_from_excel(
     import_log.inserted = inserted
     import_log.skipped = skipped
     db.commit()
+    progress.finish(f"Impor stok selesai ({inserted:,} produk)".replace(",", "."))
 
     per_branch = {
         branch: sum(1 for (b, _key) in by_key if b == branch)

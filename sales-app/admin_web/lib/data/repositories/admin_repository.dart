@@ -463,11 +463,15 @@ class AdminRepository {
     List<int> fileBytes,
     String fileName, {
     required String month,
+    String? jobId,
+    void Function(int sent, int total)? onSendProgress,
   }) async {
     final data = await _api.postFile(
       '/product-stocks/import-excel?month=${Uri.encodeQueryComponent(month)}',
       fileBytes,
       fileName,
+      jobId: jobId,
+      onSendProgress: onSendProgress,
     );
     return Map<String, dynamic>.from(data as Map);
   }

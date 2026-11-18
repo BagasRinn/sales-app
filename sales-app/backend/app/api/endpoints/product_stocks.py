@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.core.branch import is_valid_branch
 from app.core.security import CurrentUser, require_manager_global
+from app.api.endpoints.import_progress import import_progress_reporter
 from app.models.database import get_db
 from app.models.models import ImportLog, ImportedProductStock
+from app.services.import_progress import ImportProgressReporter
 from app.services.product_stock_import_service import (
     IMPORT_TYPE_PRODUCT_STOCK,
     import_product_stock_from_excel,
@@ -34,6 +36,7 @@ def import_product_stock_excel(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_manager_global),
+    progress: ImportProgressReporter = Depends(import_progress_reporter),
 ):
     """Upload file Excel laporan stok gudang → tabel `imported_product_stocks`.
 
@@ -63,6 +66,7 @@ def import_product_stock_excel(
             month=month,
             db=db,
             current_user=current_user,
+            progress=progress,
         )
     finally:
         tmp_path.unlink(missing_ok=True)

@@ -300,10 +300,19 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     if (!context.mounted) return;
     final provider = context.read<AdminProvider>();
     setState(() => _importingStock = true);
-    final success = await provider.importProductStockExcel(
-      file.bytes!,
-      file.name,
-      month: _monthKey,
+    final success = await ImportProgressOverlay.run<bool>(
+      context,
+      title: 'Mengimport Data Produk',
+      fileName: file.name,
+      fileSize: file.size,
+      progressFetcher: provider.fetchImportProgress,
+      task: (session) => provider.importProductStockExcel(
+        file.bytes!,
+        file.name,
+        month: _monthKey,
+        jobId: session.jobId,
+        onSendProgress: session.onSendProgress,
+      ),
     );
     if (!context.mounted) return;
     setState(() => _importingStock = false);
