@@ -13,7 +13,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.branch import is_valid_branch
-from app.core.security import CurrentUser, require_manager_global
+from app.core.security import (
+    CurrentUser,
+    require_manager_global,
+    require_supervisor_or_manager_global,
+)
 from app.api.endpoints.import_progress import import_progress_reporter
 from app.models.database import get_db
 from app.models.models import ImportLog, ImportedProductStock
@@ -79,7 +83,7 @@ def product_stock_summary(
     branch: str | None = Query(None, description="Filter cabang (global manager saja)"),
     limit: int = Query(5000, ge=1, le=5000),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_manager_global),
+    current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
 ):
     """Agregasi Value Good per produk/supplier/divisi untuk scope pemanggil."""
     scope = resolve_scope(current_user, branch)

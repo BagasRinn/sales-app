@@ -292,6 +292,24 @@ def test_import_merges_mother_sku_and_replaces_on_reimport():
         assert s_bjm["total_good_amount"] == 500
         assert s_bjm["sku_count"] == 2
 
+        # SUPERVISOR dapat membaca snapshot cabangnya sendiri,
+        # tetapi tidak dapat melakukan override ke cabang lain.
+        supervisor_id = _seed_user("SUPERVISOR", "BANJARMASIN")
+        supervisor_token = _token(supervisor_id, "SUPERVISOR", "BANJARMASIN")
+        branch_summary_response = client.get(
+            f"{API}/product-stocks/summary?month={TEST_MONTH}",
+            headers={"Authorization": f"Bearer {supervisor_token}"},
+        )
+        assert branch_summary_response.status_code == 200
+        assert branch_summary_response.json()["scope"] == "BANJARMASIN"
+        assert branch_summary_response.json()["total_good_amount"] == 500
+
+        cross_branch_response = client.get(
+            f"{API}/product-stocks/summary?month={TEST_MONTH}&branch=BARABAI",
+            headers={"Authorization": f"Bearer {supervisor_token}"},
+        )
+        assert cross_branch_response.status_code == 403
+
         # Re-import cabang BANJARMASIN dengan nilai baru -> replace penuh,
         # BARABAI tidak tersentuh.
         rows2 = [_stock_row("BANJARMASIN", "SKU-A-1", 1000, mother_sku="SKU-PALM15")]
