@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports, import_progress
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports, import_progress, product_stocks
 from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -264,6 +264,40 @@ def _ensure_imported_returns() -> None:
         logger.warning("[STARTUP] Could not ensure imported returns: %s", e)
 
 
+def _ensure_imported_product_stocks() -> None:
+    """Widen imported_product_stocks.product_kode on existing installs.
+
+    Kode barang di laporan stok nyata berupa deskripsi panjang (>50
+    karakter), dan kolom ini juga menyimpan kunci grup (mother_sku).
+    Tabel baru sudah dibuat dengan VARCHAR(200) oleh create_all; instalasi
+    lama yang terlanjur punya VARCHAR(50) dilebarkan di sini. Idempotent.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            length = conn.execute(text(
+                "SELECT character_maximum_length "
+                "FROM information_schema.columns "
+                "WHERE table_name = 'imported_product_stocks' "
+                "AND column_name = 'product_kode'"
+            )).scalar()
+            if length is not None and length < 200:
+                conn.execute(text(
+                    "ALTER TABLE imported_product_stocks "
+                    "ALTER COLUMN product_kode TYPE VARCHAR(200)"
+                ))
+                logger.info(
+                    "[STARTUP] imported_product_stocks.product_kode "
+                    "widened from VARCHAR(%s) to VARCHAR(200).",
+                    length,
+                )
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning(
+            "[STARTUP] Could not ensure imported_product_stocks columns: %s", e
+        )
+
+
 def _demo_seed_allowed() -> bool:
     """Demo user seeding hanya boleh jalan di lingkungan non-produksi.
 
@@ -293,6 +327,7 @@ async def lifespan(app: FastAPI):
     _ensure_imported_sales_dedupe_key()
     _ensure_imported_sales_template_v2_columns()
     _ensure_imported_returns()
+    _ensure_imported_product_stocks()
     # Load branch labels/names from DB into in-memory cache. Falls back to
     # hardcoded constants if the branches table doesn't exist yet (pre-migration).
     from app.core import branch as branch_constants
@@ -396,6 +431,7 @@ app.include_router(branches.router, prefix="/api/v1")
 app.include_router(supplier_targets.router, prefix="/api/v1")
 app.include_router(suppliers.router, prefix="/api/v1")
 app.include_router(sales_imports.router, prefix="/api/v1")
+app.include_router(product_stocks.router, prefix="/api/v1")
 app.include_router(import_progress.router, prefix="/api/v1")
 
 

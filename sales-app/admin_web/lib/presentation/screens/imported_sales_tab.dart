@@ -35,11 +35,13 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   bool _importing = false;
   bool _importingReturn = false;
   bool _importingTarget = false;
+  bool _importingStock = false;
   Map<String, dynamic>? _dismissedImportResult;
   Map<String, dynamic>? _dismissedReturnImportResult;
   Map<String, dynamic>? _dismissedTargetImportResult;
 
-  bool get _isImporting => _importing || _importingReturn || _importingTarget;
+  bool get _isImporting =>
+      _importing || _importingReturn || _importingTarget || _importingStock;
 
   @override
   void initState() {
@@ -263,6 +265,72 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     }
   }
 
+  /// Impor snapshot stok produk (Value Good). Global manager only; bulan
+  /// dari month picker, cabang dari kolom `Cabang` di file.
+  Future<void> _pickAndImportProductStock(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 30 * 1024 * 1024) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ukuran file stok maksimal 30 MB'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal membaca file stok'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    final provider = context.read<AdminProvider>();
+    setState(() => _importingStock = true);
+    final success = await provider.importProductStockExcel(
+      file.bytes!,
+      file.name,
+      month: _monthKey,
+    );
+    if (!context.mounted) return;
+    setState(() => _importingStock = false);
+    if (success) {
+      final importResult = provider.productStockImportResult;
+      final inserted = (importResult?['inserted'] as num?)?.toInt() ?? 0;
+      final skipped = (importResult?['skipped'] as num?)?.toInt() ?? 0;
+      final total = (importResult?['total_good_amount'] as num?)?.toInt() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Import stok selesai: $inserted produk · $skipped dilewati · '
+            'Value Good ${formatRupiah(total)} ($_monthKey)',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Import stok gagal'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Future<void> _pickAndImportTargets(BuildContext context) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -372,82 +440,113 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                     'Analisis omzet, tren harian, kanal, dan performa dari laporan Excel.',
                 actions: [
                   if (!widget.readOnly && provider.isGlobalManager)
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Grup import: aksi penambahan data.
-                        AppButton(
-                          label: _importing
-                              ? 'Mengimport...'
-                              : 'Import Penjualan',
-                          icon: Icons.upload_file,
-                          variant: AppButtonVariant.outline,
-                          isLoading: _importing,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _pickAndImport(context),
+                        // Grup import: aksi penambahan data (baris atas).
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          alignment: WrapAlignment.end,
+                          children: [
+                            AppButton(
+                              label: _importing
+                                  ? 'Mengimport...'
+                                  : 'Import Penjualan',
+                              icon: Icons.upload_file,
+                              variant: AppButtonVariant.outline,
+                              isLoading: _importing,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _pickAndImport(context),
+                            ),
+                            AppButton(
+                              label: _importingReturn
+                                  ? 'Mengimport...'
+                                  : 'Import Retur',
+                              icon: Icons.assignment_return_outlined,
+                              variant: AppButtonVariant.outline,
+                              isLoading: _importingReturn,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _pickAndImportReturns(context),
+                            ),
+                            AppButton(
+                              label: _importingTarget
+                                  ? 'Mengimport...'
+                                  : 'Import Target',
+                              icon: Icons.flag_outlined,
+                              variant: AppButtonVariant.outline,
+                              isLoading: _importingTarget,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _pickAndImportTargets(context),
+                            ),
+                            AppButton(
+                              label: _importingStock
+                                  ? 'Mengimport...'
+                                  : 'Import Data Produk',
+                              icon: Icons.inventory_2_outlined,
+                              variant: AppButtonVariant.outline,
+                              isLoading: _importingStock,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _pickAndImportProductStock(context),
+                            ),
+                          ],
                         ),
-                        AppButton(
-                          label: _importingReturn
-                              ? 'Mengimport...'
-                              : 'Import Retur',
-                          icon: Icons.assignment_return_outlined,
-                          variant: AppButtonVariant.outline,
-                          isLoading: _importingReturn,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _pickAndImportReturns(context),
-                        ),
-                        AppButton(
-                          label: _importingTarget
-                              ? 'Mengimport...'
-                              : 'Import Target',
-                          icon: Icons.flag_outlined,
-                          variant: AppButtonVariant.outline,
-                          isLoading: _importingTarget,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _pickAndImportTargets(context),
-                        ),
-                        _ActionGroupDivider(),
-                        // Grup hapus: aksi destruktif dipisah agar tidak
-                        // salah klik di samping tombol import.
-                        AppButton(
-                          label: 'Hapus bulan',
-                          icon: Icons.delete_outline,
-                          variant: AppButtonVariant.danger,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _confirmDeleteMonth(context, provider),
-                        ),
-                        AppButton(
-                          label: 'Hapus retur',
-                          icon: Icons.delete_sweep_outlined,
-                          variant: AppButtonVariant.danger,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _confirmDeleteReturnsMonth(
-                                  context,
-                                  provider,
-                                ),
-                        ),
-                        AppButton(
-                          label: 'Hapus target',
-                          icon: Icons.remove_circle_outline,
-                          variant: AppButtonVariant.danger,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _confirmDeleteTargets(context, provider),
-                        ),
-                        AppButton(
-                          label: 'Hapus semua',
-                          icon: Icons.delete_forever_outlined,
-                          variant: AppButtonVariant.danger,
-                          onPressed: _isImporting
-                              ? null
-                              : () => _confirmDeleteAll(context, provider),
+                        const SizedBox(height: AppSpacing.sm),
+                        // Grup hapus: aksi destruktif di baris bawah, tidak
+                        // bersebelahan dengan tombol import.
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          alignment: WrapAlignment.end,
+                          children: [
+                            AppButton(
+                              label: 'Hapus bulan',
+                              icon: Icons.delete_outline,
+                              variant: AppButtonVariant.danger,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _confirmDeleteMonth(context, provider),
+                            ),
+                            AppButton(
+                              label: 'Hapus retur',
+                              icon: Icons.delete_sweep_outlined,
+                              variant: AppButtonVariant.danger,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () =>
+                                      _confirmDeleteReturnsMonth(context, provider),
+                            ),
+                            AppButton(
+                              label: 'Hapus target',
+                              icon: Icons.remove_circle_outline,
+                              variant: AppButtonVariant.danger,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () =>
+                                      _confirmDeleteTargets(context, provider),
+                            ),
+                            AppButton(
+                              label: 'Hapus Data Produk',
+                              icon: Icons.inventory_outlined,
+                              variant: AppButtonVariant.danger,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () =>
+                                      _confirmDeleteProductStock(context, provider),
+                            ),
+                            AppButton(
+                              label: 'Hapus semua',
+                              icon: Icons.delete_forever_outlined,
+                              variant: AppButtonVariant.danger,
+                              onPressed: _isImporting
+                                  ? null
+                                  : () => _confirmDeleteAll(context, provider),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -599,6 +698,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                   canImportReturns:
                       !widget.readOnly && provider.isGlobalManager,
                   onImportReturns: () => _pickAndImportReturns(context),
+                  productStock: provider.productStockSummary,
                 ),
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -675,6 +775,38 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
           success
               ? 'Target $_monthKey berhasil dihapus'
               : provider.errorMessage ?? 'Gagal menghapus target',
+        ),
+        backgroundColor: success ? AppColors.success : AppColors.error,
+      ),
+    );
+  }
+
+  /// Hapus snapshot stok produk (Value Good) satu bulan untuk scope aktif.
+  Future<void> _confirmDeleteProductStock(
+    BuildContext context,
+    AdminProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteTargetsDialog(
+        period: _monthKey,
+        scope: provider.importedSalesBranchFilter ?? 'Semua cabang',
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final branch = provider.importedSalesBranchFilter;
+    final success = await provider.deleteProductStock(
+      _monthKey,
+      branch: branch,
+      allBranches: branch == null,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Data produk $_monthKey berhasil dihapus'
+              : provider.errorMessage ?? 'Gagal menghapus data produk',
         ),
         backgroundColor: success ? AppColors.success : AppColors.error,
       ),
@@ -836,21 +968,6 @@ class _DeleteMonthDialogState extends State<_DeleteMonthDialog> {
               : null,
         ),
       ],
-    );
-  }
-}
-
-/// Pemisah vertikal antar grup tombol aksi di header Data Penjualan.
-class _ActionGroupDivider extends StatelessWidget {
-  const _ActionGroupDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 26,
-      width: 1,
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      color: AppColors.border,
     );
   }
 }
@@ -1018,6 +1135,7 @@ class _AnalyticsBody extends StatelessWidget {
     required this.month,
     required this.canImportReturns,
     required this.onImportReturns,
+    this.productStock,
   });
 
   final SalesAnalytics analytics;
@@ -1035,6 +1153,7 @@ class _AnalyticsBody extends StatelessWidget {
   final DateTime month;
   final bool canImportReturns;
   final VoidCallback onImportReturns;
+  final ProductStockSummary? productStock;
 
   @override
   Widget build(BuildContext context) {
@@ -1042,7 +1161,11 @@ class _AnalyticsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SalesHeroCard(analytics: analytics, comparison: comparison),
+        SalesHeroCard(
+          analytics: analytics,
+          comparison: comparison,
+          valueGood: productStock?.totalGoodAmount,
+        ),
         const SizedBox(height: AppSpacing.md),
         if (analytics.divisi.isEmpty)
           AppCard(
@@ -1117,6 +1240,8 @@ class _AnalyticsBody extends StatelessWidget {
               limit: limit,
               showActiveOutlets: true,
               targets: analytics.supplierTargets,
+              valueGoodItems: productStock?.suppliers,
+              valueGoodTotal: productStock?.totalGoodAmount,
             ),
             _SupplierReturnCard(
               analytics: analytics,
@@ -1142,6 +1267,8 @@ class _AnalyticsBody extends StatelessWidget {
               showActiveOutlets: true,
               comparisonItems: comparisonDetail?['product'],
               comparisonLabel: comparisonLabel,
+              valueGoodItems: productStock?.products,
+              valueGoodTotal: productStock?.totalGoodAmount,
             ),
           ],
         ),
@@ -1196,6 +1323,8 @@ class _AnalyticsBody extends StatelessWidget {
               targets: analytics.divisiTargets,
               comparisonItems: comparisonDetail?['divisi'],
               comparisonLabel: comparisonLabel,
+              valueGoodItems: productStock?.divisi,
+              valueGoodTotal: productStock?.totalGoodAmount,
             ),
           ],
         ),
@@ -1648,6 +1777,8 @@ class _MetricRankingCard extends StatefulWidget {
     this.targets,
     this.comparisonItems,
     this.comparisonLabel,
+    this.valueGoodItems,
+    this.valueGoodTotal,
   });
 
   final String title;
@@ -1662,12 +1793,42 @@ class _MetricRankingCard extends StatefulWidget {
   final List<SalesRankItem>? comparisonItems;
   final String? comparisonLabel; // mis. "3 Bulan Sebelumnya (Agu–Okt 2026)"
 
+  /// Snapshot stok (Value Good) untuk dimensi kartu ini. Bila tersedia,
+  /// chip ketiga "Value Good" muncul: ranking single-list berdasarkan
+  /// Value Good untuk analisa plan penjualan.
+  final List<StockRankItem>? valueGoodItems;
+  final int? valueGoodTotal;
+
   @override
   State<_MetricRankingCard> createState() => _MetricRankingCardState();
 }
 
 class _MetricRankingCardState extends State<_MetricRankingCard> {
   bool _showMargin = false;
+  bool _showValueGood = false;
+
+  bool get _hasValueGood =>
+      widget.valueGoodItems != null && widget.valueGoodItems!.isNotEmpty;
+
+  /// Entri mode Value Good: urut good_amount desc, share terhadap total.
+  List<SalesRankingEntry> _buildValueGoodEntries() {
+    final items = [...widget.valueGoodItems!]
+      ..sort((a, b) => b.goodAmount.compareTo(a.goodAmount));
+    final total = widget.valueGoodTotal != null && widget.valueGoodTotal! > 0
+        ? widget.valueGoodTotal!
+        : items.fold<int>(0, (sum, item) => sum + item.goodAmount);
+    return items
+        .map(
+          (item) => SalesRankingEntry(
+            label: item.displayLabel,
+            value: item.goodAmount,
+            sortValue: item.goodAmount,
+            trailingDetail:
+                '${formatPercentPrecise(total == 0 ? 0 : item.goodAmount / total)} value',
+          ),
+        )
+        .toList(growable: false);
+  }
 
   List<SalesRankingEntry> _buildEntries(
     List<SalesRankItem> items,
@@ -1751,10 +1912,13 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   @override
   Widget build(BuildContext context) {
     final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
-    final hasComparison =
-        widget.comparisonItems != null && widget.comparisonItems!.isNotEmpty;
 
-    if (!hasComparison) {
+    // Mode Value Good: analisa stok terpisah dari omzet/margin.
+    if (_showValueGood && _hasValueGood) {
+      return _buildValueGoodCard();
+    }
+
+    if (!_hasComparison) {
       return _buildSingleCard(totalValue);
     }
 
@@ -1778,23 +1942,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     return AppCard(
       title: widget.title,
       subtitle: 'Top ${widget.limit} berdasarkan omzet',
-      trailing: Wrap(
-        spacing: AppSpacing.xs,
-        children: [
-          AppChoiceChip(
-            label: 'Omzet',
-            dense: true,
-            selected: !_showMargin,
-            onSelected: () => setState(() => _showMargin = false),
-          ),
-          AppChoiceChip(
-            label: 'Margin',
-            dense: true,
-            selected: _showMargin,
-            onSelected: () => setState(() => _showMargin = true),
-          ),
-        ],
-      ),
+      trailing: _buildModeChips(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1861,6 +2009,67 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     );
   }
 
+  /// Kartu punya data pembanding? Properti kartu, bukan mode aktif — chip
+  /// Margin harus tetap tampil di semua mode (bug: chip Margin hilang di
+  /// Pareto Suppliers dan saat Value Good dipilih).
+  bool get _hasComparison =>
+      widget.comparisonItems != null && widget.comparisonItems!.isNotEmpty;
+
+  /// Chip pemilih mode: Omzet | Margin | Value Stok (bila stok tersedia).
+  /// Margin tidak butuh data pembanding — dihitung dari item kartu itu
+  /// sendiri, jadi selalu tampil (termasuk kartu tanpa pembanding seperti
+  /// Pareto Suppliers). Pindah mode selalu mereset yang lain supaya tepat
+  /// satu chip terpilih.
+  Widget _buildModeChips() {
+    return Wrap(
+      spacing: AppSpacing.xs,
+      children: [
+        AppChoiceChip(
+          label: 'Omzet',
+          dense: true,
+          selected: !_showMargin && !_showValueGood,
+          onSelected: () => setState(() {
+            _showMargin = false;
+            _showValueGood = false;
+          }),
+        ),
+        AppChoiceChip(
+          label: 'Margin',
+          dense: true,
+          selected: _showMargin && !_showValueGood,
+          onSelected: () => setState(() {
+            _showMargin = true;
+            _showValueGood = false;
+          }),
+        ),
+        if (_hasValueGood)
+          AppChoiceChip(
+            label: 'Value Stok',
+            dense: true,
+            selected: _showValueGood,
+            onSelected: () => setState(() {
+              _showMargin = false;
+              _showValueGood = true;
+            }),
+          ),
+      ],
+    );
+  }
+
+  /// Mode Value Stok: ranking single-list berdasarkan GOOD AMOUNT stok.
+  Widget _buildValueGoodCard() {
+    final entries = _buildValueGoodEntries();
+    final total = widget.valueGoodTotal ?? 0;
+    return AppCard(
+      title: widget.title,
+      subtitle: total > 0
+          ? 'Value Stok ${formatRupiah(total)} · Top ${widget.limit}'
+          : 'Value Stok belum tersedia untuk periode ini',
+      trailing: _buildModeChips(),
+      child: SalesRankingList(entries: entries, maxItems: widget.limit),
+    );
+  }
+
   Widget _buildSingleCard(int totalValue) {
     final entries = _buildEntries(
       widget.items,
@@ -1870,23 +2079,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     return AppCard(
       title: widget.title,
       subtitle: 'Top ${widget.limit} berdasarkan omzet',
-      trailing: Wrap(
-        spacing: AppSpacing.xs,
-        children: [
-          AppChoiceChip(
-            label: 'Omzet',
-            dense: true,
-            selected: !_showMargin,
-            onSelected: () => setState(() => _showMargin = false),
-          ),
-          AppChoiceChip(
-            label: 'Margin',
-            dense: true,
-            selected: _showMargin,
-            onSelected: () => setState(() => _showMargin = true),
-          ),
-        ],
-      ),
+      trailing: _buildModeChips(),
       child: SalesRankingList(entries: entries, maxItems: widget.limit),
     );
   }

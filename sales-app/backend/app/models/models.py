@@ -780,3 +780,50 @@ class BulletinDismiss(Base):
 
     bulletin = relationship("Bulletin")
     user = relationship("User")
+
+
+class ImportedProductStock(Base):
+    """Snapshot stok produk dari file Excel laporan stok gudang.
+
+    Terpisah dari tabel `products` (master produk untuk sinkronisasi/halaman
+    produk) karena ini hasil impor berkala untuk analisa Value Good di
+    dashboard analytics. Satu baris per (cabang, bulan, grup produk).
+
+    * `month` berasal dari month picker dashboard (file tidak punya kolom
+      periode); re-import bulan yang sama untuk cabang yang sama menghapus
+      baris lama scope itu (replace penuh).
+    * `product_kode` adalah kunci grup produk ternormalisasi:
+      `coalesce(nullif(mother_sku,''), kode_barang)` — konsisten dengan
+      pengelompokan Pareto Product penjualan.
+    * `good_amount` diambil langsung dari kolom GOOD AMOUNT file (value
+      barang berstatus baik untuk dijual), bukan dihitung sistem.
+    """
+    __tablename__ = "imported_product_stocks"
+    __table_args__ = (
+        UniqueConstraint(
+            "branch",
+            "month",
+            "product_kode",
+            name="uq_imported_product_stocks_row",
+        ),
+        Index("ix_imported_product_stocks_lookup", "branch", "month"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch = Column(String(20), nullable=False)
+    # YYYY-MM, sama format dengan summary penjualan.
+    month = Column(String(7), nullable=False)
+    # Kunci grup: mother_sku bila ada, else kode barang. Di file laporan stok
+    # "kode barang" bisa berupa deskripsi panjang (>50 karakter), jadi 200.
+    product_kode = Column(String(200), nullable=False)
+    product_nama = Column(String(200), nullable=False, default="")
+    mother_sku = Column(String(100), nullable=True)
+    divisi = Column(String(100), nullable=True)
+    supplier = Column(String(200), nullable=True)
+    satuan = Column(String(50), nullable=True)
+    stok_good = Column(BigInteger, nullable=False, default=0)
+    good_amount = Column(BigInteger, nullable=False, default=0)
+    import_log_id = Column(
+        UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

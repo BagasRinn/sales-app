@@ -457,6 +457,57 @@ class AdminRepository {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Impor snapshot stok produk (Value Good). Bulan dari month picker,
+  /// cabang dari kolom `Cabang` di file; global MANAGER only.
+  Future<Map<String, dynamic>> importProductStockExcel(
+    List<int> fileBytes,
+    String fileName, {
+    required String month,
+  }) async {
+    final data = await _api.postFile(
+      '/product-stocks/import-excel?month=${Uri.encodeQueryComponent(month)}',
+      fileBytes,
+      fileName,
+    );
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Agregasi Value Good per produk/supplier/divisi untuk scope pemanggil.
+  Future<Map<String, dynamic>> getProductStockSummary({
+    required String month,
+    String? branch,
+    int limit = 100,
+  }) async {
+    final params = <String, String>{
+      'month': month,
+      'limit': limit.toString(),
+    };
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.get('/product-stocks/summary?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Hapus permanen snapshot stok satu bulan (opsional per cabang / semua).
+  Future<Map<String, dynamic>> deleteProductStock({
+    required String month,
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    final params = <String, String>{
+      'month': month,
+      'all_branches': allBranches.toString(),
+    };
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    final data = await _api.delete('/product-stocks/month?$queryString');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   /// Snapshot progres import dari backend. Null saat job belum terdaftar
   /// (biasanya karena upload masih berjalan).
   Future<Map<String, dynamic>?> getImportProgress(String jobId) async {

@@ -73,6 +73,94 @@ SalesRankItem? matchRankItem(
   return null;
 }
 
+/// Satu baris ranking Value Good (produk/supplier/divisi).
+class StockRankItem {
+  final String key;
+  final String label;
+  final int goodAmount;
+
+  const StockRankItem({
+    required this.key,
+    required this.label,
+    required this.goodAmount,
+  });
+
+  String get displayLabel => label.trim().isEmpty ? key : label.trim();
+}
+
+/// Hasil GET /product-stocks/summary: total + top-N Value Good per dimensi.
+/// Map `*ByKey` memetakan kunci ternormalisasi -> good_amount supaya kartu
+/// ranking bisa mencocokkan item omzet dengan stok lewat `rankMatchKeys`
+/// (mother_sku -> kode -> label), konsisten dengan perbaikan Pareto Product.
+class ProductStockSummary {
+  final String month;
+  final String scope;
+  final int totalGoodAmount;
+  final int skuCount;
+  final List<StockRankItem> products;
+  final List<StockRankItem> suppliers;
+  final List<StockRankItem> divisi;
+  final Map<String, int> productByKey;
+  final Map<String, int> supplierByKey;
+  final Map<String, int> divisiByKey;
+
+  const ProductStockSummary({
+    required this.month,
+    required this.scope,
+    required this.totalGoodAmount,
+    required this.skuCount,
+    required this.products,
+    required this.suppliers,
+    required this.divisi,
+    required this.productByKey,
+    required this.supplierByKey,
+    required this.divisiByKey,
+  });
+
+  bool get isEmpty => totalGoodAmount == 0 && products.isEmpty;
+
+  static Map<String, int> _keyMap(Iterable<StockRankItem> items) {
+    final map = <String, int>{};
+    for (final item in items) {
+      final key = normalizeRankMatchKey(item.key);
+      if (key.isNotEmpty) map.putIfAbsent(key, () => item.goodAmount);
+    }
+    return Map.unmodifiable(map);
+  }
+
+  factory ProductStockSummary.fromMap(Map<String, dynamic> map) {
+    List<StockRankItem> parseBucket(dynamic raw) {
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map(
+            (row) => StockRankItem(
+              key: row['key']?.toString().trim() ?? '',
+              label: row['label']?.toString().trim() ?? '',
+              goodAmount: _toInt(row['good_amount']),
+            ),
+          )
+          .toList(growable: false);
+    }
+
+    final products = parseBucket(map['by_product']);
+    final suppliers = parseBucket(map['by_supplier']);
+    final divisi = parseBucket(map['by_divisi']);
+    return ProductStockSummary(
+      month: map['month']?.toString() ?? '',
+      scope: map['scope']?.toString() ?? '',
+      totalGoodAmount: _toInt(map['total_good_amount']),
+      skuCount: _toInt(map['sku_count']),
+      products: products,
+      suppliers: suppliers,
+      divisi: divisi,
+      productByKey: _keyMap(products),
+      supplierByKey: _keyMap(suppliers),
+      divisiByKey: _keyMap(divisi),
+    );
+  }
+}
+
 class SalesRankItem {
   final String code;
   final String label;

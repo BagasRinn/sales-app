@@ -95,6 +95,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Detail dimensi pembanding: kode dimensi -> daftar SalesRankItem.
   Map<String, List<SalesRankItem>>? _importedSalesComparisonDetail;
 
+  /// Snapshot stok produk (Value Good) untuk bulan/scope aktif.
+  ProductStockSummary? _productStockSummary;
+  final Map<String, ProductStockSummary> _productStockCache = {};
+  Map<String, dynamic>? _productStockImportResult;
+
   /// Branch the global MANAGER is currently inspecting. null = GLOBAL
   /// (all branches). Branch-scoped roles ignore this field; the backend
   /// always resolves them to their own branch.
@@ -342,6 +347,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, dynamic>? get salesReturnImportResult => _salesReturnImportResult;
   Map<String, dynamic>? get salesTargetImportResult => _salesTargetImportResult;
+  ProductStockSummary? get productStockSummary => _productStockSummary;
+  Map<String, dynamic>? get productStockImportResult =>
+      _productStockImportResult;
   Map<String, int> get stats => _stats;
   String? get loadingMessage => _loadingMessage;
   bool get isLoading => _state == AdminState.loading;
@@ -1627,6 +1635,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (contextChanged) {
       _importedSalesComparison = null;
       _importedSalesComparisonDetail = null;
+      _productStockSummary = null;
     }
     notifyListeners();
 
@@ -1664,6 +1673,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         // The summary cache and comparison/detail cache are independent.
         // Always restore the latter when the summary itself is still current.
         await fetchImportedSalesComparison();
+        loadProductStockSummary();
         return true;
       }
 
@@ -1695,6 +1705,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Fetch pembanding di latar belakang; tidak menunggu sebelum menampilkan
       // ringkasan bulan terpilih.
       fetchImportedSalesComparison();
+      loadProductStockSummary();
       return true;
     } catch (e) {
       if (requestId != _importedSalesRequestId) return false;
@@ -1853,6 +1864,91 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           )
           .toList(growable: false),
     };
+  }
+
+  /// Muat snapshot stok produk (Value Good) untuk bulan/scope aktif.
+  /// Fitur analisa pendamping: gagal di-silent agar dashboard tetap tampil.
+  Future<void> loadProductStockSummary({
+    String? month,
+    bool forceRefresh = false,
+  }) async {
+    final targetMonth = month ?? _importedSalesMonth ?? _currentImportedSalesMonth();
+    final branch = isGlobalManager ? _importedSalesBranchFilter : null;
+    final cacheKey = '$targetMonth|${branch ?? _importedSalesScope ?? ''}';
+    if (!forceRefresh) {
+      final cached = _productStockCache[cacheKey];
+      if (cached != null) {
+        _productStockSummary = cached;
+        notifyListeners();
+        return;
+      }
+    }
+    try {
+      final data = await _repo.getProductStockSummary(
+        month: targetMonth,
+        branch: branch,
+        limit: _importedSalesLimit,
+      );
+      final parsed = ProductStockSummary.fromMap(data);
+      _productStockSummary = parsed;
+      _productStockCache[cacheKey] = parsed;
+      notifyListeners();
+    } catch (_) {
+      // Silent: chip/tile Value Good disembunyikan saat data tidak tersedia.
+    }
+  }
+
+  /// Impor snapshot stok produk (global MANAGER only). Bulan dari month
+  /// picker; cabang per baris dari kolom `Cabang` file (server-side).
+  Future<bool> importProductStockExcel(
+    List<int> fileBytes,
+    String fileName, {
+    required String month,
+  }) async {
+    try {
+      final result = await _repo.importProductStockExcel(
+        fileBytes,
+        fileName,
+        month: month,
+      );
+      _productStockImportResult = result;
+      notifyListeners();
+      // Impor mengganti snapshot bulan itu; muat ulang ringkasan stok.
+      await loadProductStockSummary(month: month, forceRefresh: true);
+      return true;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Hapus permanen snapshot stok satu bulan. [branch] null + [allBranches]
+  /// false = semua cabang bulan itu. Global MANAGER only (server-side).
+  Future<bool> deleteProductStock(
+    String month, {
+    String? branch,
+    bool allBranches = false,
+  }) async {
+    try {
+      final result = await _repo.deleteProductStock(
+        month: month,
+        branch: branch,
+        allBranches: allBranches,
+      );
+      _productStockImportResult = result;
+      // Buang cache stok yang menyentuh bulan itu.
+      _productStockCache.removeWhere(
+        (key, _) => key.startsWith('$month|'),
+      );
+      await loadProductStockSummary(month: month, forceRefresh: true);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e is ApiException ? e.message : e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<Map<String, int>> getImportedSalesMonthTotals(String month) async {

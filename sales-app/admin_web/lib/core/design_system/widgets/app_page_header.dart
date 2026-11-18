@@ -74,10 +74,15 @@ class AppPageHeader extends StatelessWidget {
             Expanded(child: heading),
             if (actions.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: actions,
+              // Flexible: actions boleh wrap ke beberapa baris saat tombol
+              // bertambah, bukan overflow ke kanan.
+              Flexible(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: actions,
+                ),
               ),
             ],
           ],

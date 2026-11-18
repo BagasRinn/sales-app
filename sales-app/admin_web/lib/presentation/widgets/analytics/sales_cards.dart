@@ -10,10 +10,19 @@ import 'sales_analytics_models.dart';
 // ---------------------------------------------------------------------------
 
 class SalesHeroCard extends StatelessWidget {
-  const SalesHeroCard({super.key, required this.analytics, this.comparison});
+  const SalesHeroCard({
+    super.key,
+    required this.analytics,
+    this.comparison,
+    this.valueGood,
+  });
 
   final SalesAnalytics analytics;
   final SalesComparison? comparison;
+
+  /// Total Value Good (snapshot stok) untuk bulan/scope aktif. Null saat
+  /// belum ada impor stok — tile tidak ditampilkan.
+  final int? valueGood;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +146,9 @@ class SalesHeroCard extends StatelessWidget {
         label: 'Margin / omzet',
         value: formatPercent(analytics.marginPercent),
       ),
+      // Value Stok hanya tampil bila snapshot stok bulan itu sudah diimpor.
+      if (valueGood != null)
+        _HeroMetric(label: 'Value Stok', value: formatRupiah(valueGood!)),
     ];
 
     return Container(
