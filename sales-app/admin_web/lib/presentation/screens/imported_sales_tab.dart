@@ -1839,9 +1839,8 @@ class _MetricRankingCard extends StatefulWidget {
   final List<SalesRankItem>? comparisonItems;
   final String? comparisonLabel;
 
-  /// Resolver snapshot stok (GOOD AMOUNT) per item — ditampilkan di footer
-  /// baris entri (tumpukan rata kanan: Value Stok, Jumlah AO, persen),
-  /// bukan sebagai mode chip terpisah.
+  /// Resolver snapshot stok (GOOD AMOUNT) per item — sebaris dengan baris
+  /// Target pada bulan berjalan, atau di tumpukan footer periode pembanding.
   final int? Function(SalesRankItem item)? valueStokOf;
 
   @override

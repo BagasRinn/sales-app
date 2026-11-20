@@ -1913,26 +1913,48 @@ class _SalesRankingRow extends StatelessWidget {
               ),
               if (entry.showTarget) ...[
                 const SizedBox(height: AppSpacing.sm),
+                // Value Stok sebaris dengan status/persen target.
                 if (entry.target == null)
-                  Text(
-                    'Target belum di-set',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Target belum di-set',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else if (entry.target! <= 0)
-                  Text(
-                    'Target Rp 0 · progres tidak dapat dihitung',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Target Rp 0 · progres tidak dapat dihitung',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else if (targetProgress == null)
-                  Text(
-                    'Progres tidak dapat dihitung',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Progres tidak dapat dihitung',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      ?_valueStokLabel,
+                    ],
                   )
                 else ...[
                   Semantics(
@@ -2001,15 +2023,20 @@ class _SalesRankingRow extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (_valueStokLabel != null) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        _valueStokLabel!,
+                      ],
                     ],
                   ),
                 ],
               ],
               const SizedBox(height: 4),
-              // Value Stok, detail (Jumlah AO), lalu persen ditumpuk rata
-              // kanan: urutannya Value Stok → Jumlah AO → omzet/margin, baik
-              // untuk periode pembanding maupun bulan berjalan.
-              if (entry.valueStok != null)
+              // Periode pembanding (tanpa baris Target): Value Stok, Jumlah AO,
+              // lalu persen ditumpuk rata kanan. Bulan berjalan sudah punya
+              // Value Stok sebaris dengan Target, jadi footernya hanya
+              // menumpuk Jumlah AO lalu omzet/margin.
+              if (entry.valueStok != null && !entry.showTarget)
                 Align(
                   alignment: Alignment.centerRight,
                   child: Column(
@@ -2030,6 +2057,37 @@ class _SalesRankingRow extends StatelessWidget {
                       ],
                       if (entry.trailingDetail != null) ...[
                         const SizedBox(height: 2),
+                        Text(
+                          entry.trailingDetail!,
+                          style: AppTextStyles.caption.copyWith(
+                            color: _isNegative
+                                ? AppColors.danger
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              else if (entry.valueStok != null &&
+                  (entry.detail != null || entry.trailingDetail != null))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (entry.detail != null)
+                        Text(
+                          entry.detail!,
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (entry.trailingDetail != null) ...[
+                        if (entry.detail != null) const SizedBox(height: 2),
                         Text(
                           entry.trailingDetail!,
                           style: AppTextStyles.caption.copyWith(

@@ -345,8 +345,8 @@ void main() {
       moreOrLessEquals(tester.getTopRight(find.text('49,24% omzet')).dx),
     );
 
-    // Baris dengan Target harus memakai tumpukan yang sama, bukan
-    // menaruh Jumlah AO di kiri baris persen.
+    // Bulan berjalan (punya baris Target): Value Stok sebaris dengan status
+    // target, lalu Jumlah AO dan persen menumpuk di bawahnya.
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -371,13 +371,46 @@ void main() {
     final outletTop2 = tester.getTopLeft(find.text('Jumlah AO 12'));
     final shareTop2 = tester.getTopLeft(find.text('0,02% omzet'));
 
-    expect(targetTop.dy, lessThan(stockTop2.dy));
+    expect(targetTop.dy, moreOrLessEquals(stockTop2.dy));
     expect(stockTop2.dy, lessThan(outletTop2.dy));
     expect(outletTop2.dy, lessThan(shareTop2.dy));
     expect(
       tester.getTopRight(find.text('Jumlah AO 12')).dx,
       moreOrLessEquals(tester.getTopRight(find.text('0,02% omzet')).dx),
     );
+
+    // Value Stok juga sebaris dengan persen target yang punya chip progres.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SalesRankingList(
+            entries: [
+              SalesRankingEntry(
+                label: 'SMART (MI)',
+                value: 2494341687,
+                detail: 'Jumlah AO 450',
+                trailingDetail: '45,52% omzet',
+                valueStok: 4539112637,
+                showTarget: true,
+                target: 5114000000,
+                targetActual: 2494341687,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final chipTop = tester.getTopLeft(find.text('48,77%'));
+    final stockTop3 = tester.getTopLeft(
+      find.text('Value Stok Rp 4.539.112.637'),
+    );
+    final outletTop3 = tester.getTopLeft(find.text('Jumlah AO 450'));
+    final shareTop3 = tester.getTopLeft(find.text('45,52% omzet'));
+
+    expect(chipTop.dy, moreOrLessEquals(stockTop3.dy));
+    expect(stockTop3.dy, lessThan(outletTop3.dy));
+    expect(outletTop3.dy, lessThan(shareTop3.dy));
   });
 
   testWidgets('paired ranking keeps ranks aligned without target bar', (
