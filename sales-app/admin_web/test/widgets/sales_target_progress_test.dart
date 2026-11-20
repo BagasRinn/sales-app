@@ -143,10 +143,7 @@ void main() {
 
     expect(find.text('Rp 1.160.000'), findsOneWidget);
     expect(find.text('58,00%'), findsOneWidget);
-    expect(
-      find.textContaining('dari target · Rp 2.000.000'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('dari target · Rp 2.000.000'), findsOneWidget);
     expect(find.text('100,00% omzet'), findsOneWidget);
     expect(find.byType(FractionallySizedBox), findsNWidgets(2));
 
@@ -311,6 +308,42 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(FractionallySizedBox), findsOneWidget);
+  });
+
+  testWidgets('value stok row stacks stock, outlet count, then percentage', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SalesRankingList(
+            entries: [
+              SalesRankingEntry(
+                label: 'SMART ( MI)',
+                value: 4935434879,
+                detail: 'Jumlah AO 1181',
+                trailingDetail: '49,24% omzet',
+                valueStok: 4539112637,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final stockTop = tester.getTopLeft(
+      find.text('Value Stok Rp 4.539.112.637'),
+    );
+    final outletTop = tester.getTopLeft(find.text('Jumlah AO 1181'));
+    final shareTop = tester.getTopLeft(find.text('49,24% omzet'));
+
+    expect(stockTop.dy, lessThan(outletTop.dy));
+    expect(outletTop.dy, lessThan(shareTop.dy));
+    // Ditumpuk rata kanan, jadi ujung kanannya sejajar.
+    expect(
+      tester.getTopRight(find.text('Jumlah AO 1181')).dx,
+      moreOrLessEquals(tester.getTopRight(find.text('49,24% omzet')).dx),
+    );
   });
 
   testWidgets('margin display keeps ranking sorted by revenue', (tester) async {

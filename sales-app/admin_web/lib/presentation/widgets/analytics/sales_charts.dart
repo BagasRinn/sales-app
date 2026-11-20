@@ -1882,7 +1882,43 @@ class _SalesRankingRow extends StatelessWidget {
                 ],
               ],
               const SizedBox(height: 4),
-              if (entry.detail != null || entry.trailingDetail != null)
+              // Kartu tanpa baris Target (mis. pembanding supplier/divisi):
+              // Value Stok, detail (Jumlah AO), lalu persen ditumpuk rata
+              // kanan agar tidak berdesakan dengan label di kiri.
+              if (entry.valueStok != null && !entry.showTarget)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _valueStokLabel!,
+                      if (entry.detail != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          entry.detail!,
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (entry.trailingDetail != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          entry.trailingDetail!,
+                          style: AppTextStyles.caption.copyWith(
+                            color: _isNegative
+                                ? AppColors.danger
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              else if (entry.detail != null || entry.trailingDetail != null)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1899,27 +1935,7 @@ class _SalesRankingRow extends StatelessWidget {
                       )
                     else
                       const Spacer(),
-                    // Kartu tanpa baris Target (mis. produk): Value Stok
-                    // mengambil posisi persen, persen turun ke bawahnya.
-                    if (entry.valueStok != null && !entry.showTarget)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _valueStokLabel!,
-                          if (entry.trailingDetail != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              entry.trailingDetail!,
-                              style: AppTextStyles.caption.copyWith(
-                                color: _isNegative
-                                    ? AppColors.danger
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      )
-                    else if (entry.trailingDetail != null)
+                    if (entry.trailingDetail != null)
                       Text(
                         entry.trailingDetail!,
                         style: AppTextStyles.caption.copyWith(
