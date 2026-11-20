@@ -845,6 +845,7 @@ class AdminRepository {
     required String role,
     String? nama,
     String? branch,
+    String? whatsappNumber,
   }) async {
     final data = await _api.post(
       '/users',
@@ -854,6 +855,8 @@ class AdminRepository {
         'role': role,
         if (nama != null && nama.isNotEmpty) 'nama': nama,
         if (branch != null && branch.isNotEmpty) 'branch': branch,
+        if (whatsappNumber != null && whatsappNumber.isNotEmpty)
+          'whatsapp_number': whatsappNumber,
       },
     );
     return UserItem.fromJson(data);

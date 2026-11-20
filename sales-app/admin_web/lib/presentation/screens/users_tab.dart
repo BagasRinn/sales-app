@@ -180,6 +180,12 @@ class _UsersTabState extends State<UsersTab> {
                     ],
                     fields: [
                       DataField(label: 'USERNAME', value: u.username),
+                      if (u.whatsappNumber != null &&
+                          u.whatsappNumber!.isNotEmpty)
+                        DataField(
+                          label: 'WHATSAPP',
+                          value: u.whatsappNumber!,
+                        ),
                       DataField(
                         label: 'STATUS',
                         valueWidget: _StatusBadge(active: u.isActive),
@@ -389,12 +395,29 @@ class _UsersTabState extends State<UsersTab> {
             width: colWidths[1],
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Text(
-                user.username,
-                style: AppTextStyles.bodySmall,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    user.username,
+                    style: AppTextStyles.bodySmall,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (user.whatsappNumber != null &&
+                      user.whatsappNumber!.isNotEmpty)
+                    Text(
+                      user.whatsappNumber!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
             ),
           ),
@@ -532,6 +555,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
   late TextEditingController _usernameC;
   late TextEditingController _passwordC;
   late TextEditingController _namaC;
+  late TextEditingController _whatsappC;
   String _role = 'SALES';
   String? _branch;
   bool _isActive = true;
@@ -547,6 +571,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     _usernameC = TextEditingController(text: e?.username ?? '');
     _passwordC = TextEditingController();
     _namaC = TextEditingController(text: e?.nama ?? '');
+    _whatsappC = TextEditingController(text: e?.whatsappNumber ?? '');
     _role = e?.role ?? 'SALES';
     _isActive = e?.isActive ?? true;
     // Initial branch: existing user's branch wins; otherwise current user's
@@ -563,6 +588,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     _usernameC.dispose();
     _passwordC.dispose();
     _namaC.dispose();
+    _whatsappC.dispose();
     super.dispose();
   }
 
@@ -570,6 +596,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
     final username = _usernameC.text.trim();
     final password = _passwordC.text;
     final nama = _namaC.text.trim();
+    final whatsapp = _whatsappC.text.trim();
 
     if (!_isEdit && (username.isEmpty || password.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -622,6 +649,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           'role': _role,
           'is_active': _isActive,
           'branch': _branch,
+          'whatsapp_number': whatsapp.isEmpty ? null : whatsapp,
         };
         if (password.isNotEmpty) body['password'] = password;
         ok = await provider.updateUser(widget.existing!.id, body);
@@ -632,6 +660,7 @@ class _UserEditDialogState extends State<_UserEditDialog> {
           role: _role,
           nama: nama.isEmpty ? null : nama,
           branch: _branch,
+          whatsappNumber: whatsapp.isEmpty ? null : whatsapp,
         );
       }
     } catch (e) {
@@ -753,6 +782,20 @@ class _UserEditDialogState extends State<_UserEditDialog> {
                   labelText: 'Nama',
                   hintText: 'cth: Budi Santoso',
                   border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _whatsappC,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Nomor WhatsApp',
+                  hintText: 'cth: 0812 3456 7890',
+                  helperText:
+                      'Dipakai untuk mencocokkan absensi kunjungan di grup WA. '
+                      'Kosongkan jika tidak ada.',
+                  border: OutlineInputBorder(),
                   isDense: true,
                 ),
               ),

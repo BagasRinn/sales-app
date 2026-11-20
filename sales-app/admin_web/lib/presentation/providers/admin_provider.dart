@@ -1015,6 +1015,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     required String role,
     String? nama,
     String? branch,
+    String? whatsappNumber,
   }) async {
     _setLoading(true, 'Membuat user...');
     try {
@@ -1024,6 +1025,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         role: role,
         nama: nama,
         branch: branch,
+        whatsappNumber: whatsappNumber,
       );
       _users = [..._users, newUser];
       _sortUsers();

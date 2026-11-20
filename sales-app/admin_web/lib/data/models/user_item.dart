@@ -6,6 +6,7 @@ class UserItem {
   final bool isActive;
   final String? branch;
   final String? branchNama;
+  final String? whatsappNumber;
 
   UserItem({
     required this.id,
@@ -15,6 +16,7 @@ class UserItem {
     required this.isActive,
     this.branch,
     this.branchNama,
+    this.whatsappNumber,
   });
 
   factory UserItem.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class UserItem {
       isActive: json['is_active'] as bool? ?? true,
       branch: json['branch'] as String?,
       branchNama: json['branch_nama'] as String?,
+      whatsappNumber: json['whatsapp_number'] as String?,
     );
   }
 
