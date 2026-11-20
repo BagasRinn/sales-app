@@ -1963,68 +1963,12 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       title: widget.title,
       subtitle: 'Top ${widget.limit} berdasarkan omzet',
       trailing: _buildModeChips(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.comparisonLabel ?? 'Bulan sebelumnya',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.onPrimaryMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      SalesRankingList(
-                        entries: leftEntries,
-                        maxItems: widget.limit,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bulan ini',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.onPrimaryMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      SalesRankingList(
-                        entries: rightEntries,
-                        maxItems: widget.limit,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: SalesRankingPairList(
+        leftEntries: leftEntries,
+        rightEntries: rightEntries,
+        leftHeader: widget.comparisonLabel ?? 'Bulan sebelumnya',
+        rightHeader: 'Bulan ini',
+        maxItems: widget.limit,
       ),
     );
   }

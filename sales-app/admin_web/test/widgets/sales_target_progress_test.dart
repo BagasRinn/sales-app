@@ -380,6 +380,81 @@ void main() {
     );
   });
 
+  testWidgets('paired ranking keeps ranks aligned without target bar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SalesRankingPairList(
+            maxItems: 3,
+            leftHeader: '6 Bulan Sebelumnya',
+            rightHeader: 'Bulan ini',
+            leftEntries: [
+              SalesRankingEntry(
+                label: 'Alpha',
+                value: 300,
+                trailingDetail: '50,00% omzet',
+              ),
+              SalesRankingEntry(
+                label: 'Beta',
+                value: 200,
+                trailingDetail: '33,33% omzet',
+              ),
+              SalesRankingEntry(
+                label: 'Gamma',
+                value: 100,
+                trailingDetail: '16,67% omzet',
+              ),
+            ],
+            rightEntries: [
+              SalesRankingEntry(
+                label: 'Alpha',
+                value: 300,
+                trailingDetail: '50,00% omzet',
+                showTarget: true,
+                target: 1000,
+                targetActual: 300,
+              ),
+              SalesRankingEntry(
+                label: 'Beta',
+                value: 200,
+                trailingDetail: '33,33% omzet',
+                showTarget: true,
+              ),
+              SalesRankingEntry(
+                label: 'Gamma',
+                value: 100,
+                trailingDetail: '16,67% omzet',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    for (final label in ['Alpha', 'Beta', 'Gamma']) {
+      final rows = find.text(label);
+      expect(rows, findsNWidgets(2));
+      expect(
+        tester.getTopLeft(rows.at(0)).dy,
+        moreOrLessEquals(tester.getTopLeft(rows.at(1)).dy),
+        reason: 'Baris $label kiri dan kanan harus sejajar',
+      );
+    }
+
+    // Nomor ranking juga sejajar walau baris kanan punya bar Target.
+    for (final rank in ['2', '3']) {
+      final ranks = find.text(rank);
+      expect(ranks, findsNWidgets(2));
+      expect(
+        tester.getTopLeft(ranks.at(0)).dy,
+        moreOrLessEquals(tester.getTopLeft(ranks.at(1)).dy),
+        reason: 'Ranking $rank kiri dan kanan harus sejajar',
+      );
+    }
+  });
+
   testWidgets('margin display keeps ranking sorted by revenue', (tester) async {
     const entries = [
       SalesRankingEntry(label: 'Revenue Leader', value: 100, sortValue: 1000),

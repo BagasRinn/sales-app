@@ -1655,6 +1655,156 @@ class SalesRankingList extends StatelessWidget {
   }
 }
 
+/// Dua daftar ranking berdampingan dengan baris yang selalu sejajar.
+///
+/// Setiap baris adalah satu pasangan (kiri, kanan) yang dirender dalam satu
+/// [Row] ber-[IntrinsicHeight], sehingga tinggi baris mengikuti sisi yang
+/// paling tinggi. Sisi yang tidak punya bar Target (mis. periode pembanding)
+/// tidak lagi menggeser nomor ranking sisi lainnya.
+class SalesRankingPairList extends StatelessWidget {
+  const SalesRankingPairList({
+    super.key,
+    required this.leftEntries,
+    required this.rightEntries,
+    this.leftHeader,
+    this.rightHeader,
+    this.maxItems = 10,
+    this.emptyMessage = 'Belum ada data untuk periode ini.',
+  });
+
+  /// Entri sisi kiri; indeks ke-i berpasangan dengan [rightEntries] ke-i.
+  final List<SalesRankingEntry> leftEntries;
+  final List<SalesRankingEntry> rightEntries;
+  final String? leftHeader;
+  final String? rightHeader;
+  final int maxItems;
+  final String emptyMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final pairCount = math.min(leftEntries.length, rightEntries.length);
+    if (pairCount == 0) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text(emptyMessage, style: AppTextStyles.bodyMuted),
+      );
+    }
+
+    // Urutkan pasangan mengikuti ranking kiri (aturan sama dengan
+    // SalesRankingList), lalu ambil Top N.
+    final order = List<int>.generate(pairCount, (index) => index)
+      ..sort((a, b) {
+        final leftA = leftEntries[a];
+        final leftB = leftEntries[b];
+        final byValue = (leftB.sortValue ?? leftB.value).compareTo(
+          leftA.sortValue ?? leftA.value,
+        );
+        return byValue != 0 ? byValue : leftA.label.compareTo(leftB.label);
+      });
+    final rows = order.take(maxItems).toList(growable: false);
+
+    final leftMaxValue = rows.fold<int>(
+      0,
+      (maximum, index) => math.max(maximum, leftEntries[index].value.abs()),
+    );
+    final rightMaxValue = rows.fold<int>(
+      0,
+      (maximum, index) => math.max(maximum, rightEntries[index].value.abs()),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (leftHeader != null || rightHeader != null)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _headerCell(leftHeader)),
+                const VerticalDivider(width: 1),
+                Expanded(child: _headerCell(rightHeader)),
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.xs),
+        for (var i = 0; i < rows.length; i++)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _rankCell(
+                    rank: i + 1,
+                    entry: leftEntries[rows[i]],
+                    maxValue: leftMaxValue,
+                    showDivider: i > 0,
+                  ),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: _rankCell(
+                    rank: i + 1,
+                    entry: rightEntries[rows[i]],
+                    maxValue: rightMaxValue,
+                    showDivider: i > 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _headerCell(String? label) {
+    if (label == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.caption.copyWith(
+          color: AppColors.onPrimaryMuted,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _rankCell({
+    required int rank,
+    required SalesRankingEntry entry,
+    required int maxValue,
+    required bool showDivider,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showDivider)
+            Padding(
+              padding: const EdgeInsets.only(left: 32),
+              child: Divider(
+                height: AppSpacing.md,
+                thickness: 1,
+                color: AppColors.border,
+              ),
+            ),
+          _SalesRankingRow(rank: rank, entry: entry, maxValue: maxValue),
+        ],
+      ),
+    );
+  }
+}
+
 class _SalesRankingRow extends StatelessWidget {
   const _SalesRankingRow({
     required this.rank,
