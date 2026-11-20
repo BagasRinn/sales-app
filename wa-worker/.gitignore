@@ -1,0 +1,8 @@
+node_modules/
+auth_info_baileys/
+.env
+.env.*
+!.env.example
+# Root .gitignore mengabaikan semua package-lock.json; worker butuh lock agar
+# build Docker deterministik (npm ci).
+!package-lock.json

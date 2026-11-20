@@ -1,0 +1,21 @@
+{
+  "name": "wa-attendance-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Worker WhatsApp (Baileys) yang meneruskan absensi kunjungan sales ke FastAPI",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
+    "dotenv": "^16.4.7",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
