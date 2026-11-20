@@ -1268,7 +1268,7 @@ class _AnalyticsBody extends StatelessWidget {
           ),
         const SizedBox(height: AppSpacing.md),
         AppResponsiveGrid(
-          desktopCols: 2,
+          desktopCols: 1,
           tabletCols: 1,
           mobileCols: 1,
           children: [
@@ -1284,6 +1284,14 @@ class _AnalyticsBody extends StatelessWidget {
               comparisonLabel: comparisonLabel,
               valueStokOf: _supplierValueStok,
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppResponsiveGrid(
+          desktopCols: 1,
+          tabletCols: 1,
+          mobileCols: 1,
+          children: [
             _SupplierReturnCard(
               analytics: analytics,
               limit: limit,
