@@ -10,6 +10,7 @@ import '../../data/models/customer_submission.dart';
 import '../../data/models/sales_user.dart';
 import '../../data/models/sales_assignment.dart';
 import '../../data/models/user_item.dart';
+import '../../data/models/sales_attendance.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
@@ -36,6 +37,7 @@ class CacheConfig {
   static const users = Duration(minutes: 10);
   static const orders = Duration(minutes: 2);
   static const importedSales = Duration(minutes: 5);
+  static const attendances = Duration(minutes: 2);
 }
 
 /// In-memory summary cache entry. The version is the authoritative freshness
@@ -314,7 +316,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  AdminProvider(this._repo);
+  AdminProvider(this._repo) {
+    // Default halaman absensi: hari ini (local perangkat). User bisa
+    // menghapus filter untuk melihat semua tanggal.
+    _attendanceDate = _todayWita();
+  }
 
   /// Expose repo untuk widget yang butuh akses langsung (mis. download file).
   AdminRepository get adminRepository => _repo;
@@ -512,6 +518,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         // different page (e.g. cross-branch) and must not trigger this probe.
         needsRefresh = AppConfig.enableImportedSales;
         break;
+      case 14: // Absensi kunjungan outlet
+        needsRefresh = !_isCacheValid(
+          _attendancesCacheTime,
+          CacheConfig.attendances,
+        );
+        break;
     }
 
     if (needsRefresh) {
@@ -560,6 +572,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _bulletinsCacheTime = null;
     _usersCacheTime = null;
     _ordersCacheTime = null;
+    _attendancesCacheTime = null;
     invalidateImportedSalesCache();
   }
 
@@ -1102,6 +1115,44 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
+  // ===== Absensi kunjungan outlet (integrasi WhatsApp) =====
+  List<SalesAttendance> _attendances = [];
+  bool _attendancesLoading = false;
+  String? _attendancesError;
+  DateTime? _attendanceDate;
+  DateTime? _attendancesCacheTime;
+
+  List<SalesAttendance> get attendances => _attendances;
+  bool get attendancesLoading => _attendancesLoading;
+  String? get attendancesError => _attendancesError;
+  DateTime? get attendanceDate => _attendanceDate;
+
+  /// Ganti filter tanggal. Null = semua tanggal.
+  Future<void> setAttendanceDate(DateTime? date) async {
+    _attendanceDate = date;
+    _attendancesCacheTime = null;
+    await loadAttendances(forceRefresh: true);
+  }
+
+  Future<void> loadAttendances({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _isCacheValid(_attendancesCacheTime, CacheConfig.attendances)) {
+      return;
+    }
+    _attendancesLoading = true;
+    _attendancesError = null;
+    notifyListeners();
+    try {
+      _attendances = await _repo.getSalesAttendances(date: _attendanceDate);
+      _attendancesCacheTime = DateTime.now();
+    } catch (e) {
+      _attendancesError = e is ApiException ? e.message : e.toString();
+    } finally {
+      _attendancesLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _loadStats({DateTime? date, CancelToken? cancelToken}) async {
     try {
       // Default: hitung berdasarkan tanggal local perangkat (WIB/WITA/WIT).
@@ -1186,6 +1237,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           // When the feature is disabled this index is another page.
           cacheValid = !AppConfig.enableImportedSales;
           break;
+        case 14: // Absensi kunjungan outlet
+          cacheValid = _isCacheValid(
+            _attendancesCacheTime,
+            CacheConfig.attendances,
+          );
+          break;
         default:
           cacheValid = false;
       }
@@ -1230,6 +1287,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else if (tab == 11 && AppConfig.enableImportedSales) {
         // Data Penjualan: version probe + summary only if the version changed.
         await loadImportedSalesSummary(month: _importedSalesMonth);
+      } else if (tab == 14) {
+        // Absensi kunjungan outlet.
+        await loadAttendances(forceRefresh: true);
       }
       _state = AdminState.loaded;
     } catch (e) {

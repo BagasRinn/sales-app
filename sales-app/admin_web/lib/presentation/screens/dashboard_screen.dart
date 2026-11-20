@@ -23,6 +23,7 @@ import 'penugasan_sales_tab.dart';
 import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
 import 'cross_branch_reports_tab.dart';
+import 'attendance_tab.dart';
 import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
 import 'supplier_performance_pivot_tab.dart';
@@ -46,6 +47,7 @@ enum _DashboardPage {
   bulletins,
   importedSales,
   crossBranch,
+  attendance,
 }
 
 class _NavSpec {
@@ -245,6 +247,13 @@ class _DashboardContentState extends State<_DashboardContent>
         label: 'Sinkronisasi',
         group: operasional,
       ),
+      const _NavSpec(
+        page: _DashboardPage.attendance,
+        icon: Icons.fact_check_outlined,
+        selectedIcon: Icons.fact_check,
+        label: 'Absensi Kunjungan',
+        group: operasional,
+      ),
       if (widget.role != 'ADMIN') ...[
         const _NavSpec(
           page: _DashboardPage.users,
@@ -344,6 +353,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 11;
       case _DashboardPage.crossBranch:
         return 12;
+      case _DashboardPage.attendance:
+        return 14;
     }
   }
 
@@ -540,6 +551,8 @@ class _DashboardContentState extends State<_DashboardContent>
       case _DashboardPage.crossBranch:
         if (_isGlobalManager) return const CrossBranchReportsTab();
         break;
+      case _DashboardPage.attendance:
+        return const AttendanceTab();
     }
     return StatsTab(
       role: widget.role,

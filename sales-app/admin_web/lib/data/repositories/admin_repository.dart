@@ -11,6 +11,7 @@ import '../models/customer_submission.dart';
 import '../models/sales_user.dart';
 import '../models/sales_assignment.dart';
 import '../models/user_item.dart';
+import '../models/sales_attendance.dart';
 import '../models/sales_performance.dart';
 import '../models/sales_target.dart';
 import '../models/bulletin.dart';
@@ -865,6 +866,37 @@ class AdminRepository {
   Future<UserItem> updateUser(String userId, Map<String, dynamic> body) async {
     final data = await _api.put('/users/$userId', body: body);
     return UserItem.fromJson(data);
+  }
+
+  /// Absensi kunjungan outlet dari grup WhatsApp (worker Baileys).
+  ///
+  /// [date] dikirim sebagai `YYYY-MM-DD`; null = semua tanggal. Scope branch
+  /// ditentukan backend dari JWT, jadi client tidak perlu mengirim branch.
+  Future<List<SalesAttendance>> getSalesAttendances({
+    DateTime? date,
+    String? salesId,
+    bool? isRegisteredSales,
+    String? outletChannel,
+    int limit = 500,
+    int offset = 0,
+  }) async {
+    final params = <String, String>{
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
+    if (date != null) params['date'] = witaDateStr(date);
+    if (salesId != null && salesId.isNotEmpty) params['sales_id'] = salesId;
+    if (isRegisteredSales != null) {
+      params['is_registered_sales'] = isRegisteredSales.toString();
+    }
+    if (outletChannel != null && outletChannel.isNotEmpty) {
+      params['outlet_channel'] = outletChannel;
+    }
+    final qs = '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _api.get('/sales-attendances$qs');
+    return (data as List)
+        .map((e) => SalesAttendance.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // Soft-delete User dihapus: fitur nonaktifkan (is_active=false) sudah cukup
