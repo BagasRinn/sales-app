@@ -1763,48 +1763,26 @@ class _SalesRankingRow extends StatelessWidget {
               ),
               if (entry.showTarget) ...[
                 const SizedBox(height: AppSpacing.sm),
-                // Value Stok diletakkan sebaris dengan baris Target.
                 if (entry.target == null)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Target belum di-set',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      ?_valueStokLabel,
-                    ],
+                  Text(
+                    'Target belum di-set',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   )
                 else if (entry.target! <= 0)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Target Rp 0 · progres tidak dapat dihitung',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      ?_valueStokLabel,
-                    ],
+                  Text(
+                    'Target Rp 0 · progres tidak dapat dihitung',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   )
                 else if (targetProgress == null)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Progres tidak dapat dihitung',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      ?_valueStokLabel,
-                    ],
+                  Text(
+                    'Progres tidak dapat dihitung',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   )
                 else ...[
                   Semantics(
@@ -1873,19 +1851,15 @@ class _SalesRankingRow extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (_valueStokLabel != null) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        _valueStokLabel!,
-                      ],
                     ],
                   ),
                 ],
               ],
               const SizedBox(height: 4),
-              // Kartu tanpa baris Target (mis. pembanding supplier/divisi):
               // Value Stok, detail (Jumlah AO), lalu persen ditumpuk rata
-              // kanan agar tidak berdesakan dengan label di kiri.
-              if (entry.valueStok != null && !entry.showTarget)
+              // kanan: urutannya Value Stok → Jumlah AO → omzet/margin, baik
+              // untuk periode pembanding maupun bulan berjalan.
+              if (entry.valueStok != null)
                 Align(
                   alignment: Alignment.centerRight,
                   child: Column(

@@ -214,9 +214,8 @@ class SalesRankingEntry {
   final int? target;
   final int? targetActual;
 
-  /// Snapshot stok (GOOD AMOUNT) item ini. Render: sebaris dengan Target
-  /// bila kartu punya baris target; kalau tidak (mis. produk), menggantikan
-  /// posisi persen dan persen turun ke bawahnya.
+  /// Snapshot stok (GOOD AMOUNT) item ini. Bila tersedia, footer baris
+  /// menumpuk rata kanan: Value Stok, detail (mis. Jumlah AO), lalu persen.
   final int? valueStok;
 }
 

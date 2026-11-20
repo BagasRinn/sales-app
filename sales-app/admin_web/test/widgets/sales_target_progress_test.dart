@@ -310,7 +310,7 @@ void main() {
     expect(find.byType(FractionallySizedBox), findsOneWidget);
   });
 
-  testWidgets('value stok row stacks stock, outlet count, then percentage', (
+  testWidgets('stock footer stacks stock, outlet count, then percentage', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -343,6 +343,40 @@ void main() {
     expect(
       tester.getTopRight(find.text('Jumlah AO 1181')).dx,
       moreOrLessEquals(tester.getTopRight(find.text('49,24% omzet')).dx),
+    );
+
+    // Baris dengan Target harus memakai tumpukan yang sama, bukan
+    // menaruh Jumlah AO di kiri baris persen.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SalesRankingList(
+            entries: [
+              SalesRankingEntry(
+                label: 'SINAR DISTRIBUSI NUSANTARA (DIXI)',
+                value: 1271512,
+                detail: 'Jumlah AO 12',
+                trailingDetail: '0,02% omzet',
+                valueStok: 3215376,
+                showTarget: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final targetTop = tester.getTopLeft(find.text('Target belum di-set'));
+    final stockTop2 = tester.getTopLeft(find.text('Value Stok Rp 3.215.376'));
+    final outletTop2 = tester.getTopLeft(find.text('Jumlah AO 12'));
+    final shareTop2 = tester.getTopLeft(find.text('0,02% omzet'));
+
+    expect(targetTop.dy, lessThan(stockTop2.dy));
+    expect(stockTop2.dy, lessThan(outletTop2.dy));
+    expect(outletTop2.dy, lessThan(shareTop2.dy));
+    expect(
+      tester.getTopRight(find.text('Jumlah AO 12')).dx,
+      moreOrLessEquals(tester.getTopRight(find.text('0,02% omzet')).dx),
     );
   });
 
