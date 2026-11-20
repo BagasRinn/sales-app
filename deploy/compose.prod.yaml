@@ -80,6 +80,36 @@ services:
         max-file: "3"
     networks: [internal, web]
 
+  # Worker WhatsApp (Baileys) → POST /api/v1/webhooks/wa-attendance.
+  # Scan QR pertama kali lewat `docker compose logs -f wa-worker`; sesi
+  # tersimpan di volume wa_auth sehingga restart tidak perlu scan ulang.
+  wa-worker:
+    build:
+      context: ../wa-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      FASTAPI_URL: http://api:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY di deploy/.env.production}
+      ALLOWED_GROUP_JIDS: ${ALLOWED_GROUP_JIDS:-}
+      AUTH_DIR: /app/auth_info_baileys
+      TZ: Asia/Makassar
+      LOG_LEVEL: ${WA_LOG_LEVEL:-info}
+    volumes:
+      - wa_auth:/app/auth_info_baileys
+    depends_on:
+      api:
+        condition: service_healthy
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Butuh egress internet untuk koneksi WhatsApp; api juga ada di network ini.
+    networks: [web]
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -108,6 +138,7 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  wa_auth:
 
 networks:
   internal:

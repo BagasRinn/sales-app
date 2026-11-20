@@ -14,7 +14,7 @@ Internet ──► Caddy :443 (HTTPS otomatis)
 
 | File | Fungsi |
 |---|---|
-| `compose.prod.yaml` | Definisi service `db`, `api`, `caddy` |
+| `compose.prod.yaml` | Definisi service `db`, `api`, `caddy`, `wa-worker` |
 | `Caddyfile` | Reverse proxy + TLS otomatis |
 | `.env.production.example` | Template environment produksi |
 | `backup.env.example` | Template konfigurasi backup |
@@ -109,6 +109,7 @@ Isi `.env.production`:
 3. `DATABASE_URL` → **sama persis** dengan password di atas.
 4. `SECRET_KEY` → salin nilai lama dari Railway (jangan dirotasi saat migrasi).
 5. `CORS_ORIGINS` → origin Firebase yang sekarang.
+6. `INTERNAL_API_KEY` → hasil `openssl rand -hex 32` (shared secret worker WA).
 
 Jangan memakai karakter khusus di password database. Kalau terpaksa, URL-encode
 nilainya di `DATABASE_URL` (mis. `@` menjadi `%40`).
@@ -165,6 +166,8 @@ Saat startup, backend akan:
 
 - membuat tabel yang belum ada (`create_all`),
 - menambahkan kolom/index `imported_sales` yang belum ada,
+- menambahkan kolom `users.whatsapp_number` + index unik dan index unik
+  `sales_attendance.wa_message_id` bila belum ada,
 - memuat branch cache,
 - menjalankan scheduler dengan timezone `Asia/Makassar`.
 
@@ -178,6 +181,19 @@ curl -sSI https://api.<domain>/api/v1/products
 ```
 
 `/docs` dan `/openapi.json` harus 404 karena `ENVIRONMENT=production`.
+
+## 5b. Jalankan worker absensi WhatsApp
+
+```bash
+docker compose --env-file .env.production -f compose.prod.yaml up -d --build wa-worker
+docker compose --env-file .env.production -f compose.prod.yaml logs -f wa-worker
+```
+
+Pada run pertama, log menampilkan QR: scan lewat WhatsApp → Perangkat Tertaut.
+Sesi tersimpan di volume `wa_auth`, jadi restart tidak perlu scan ulang.
+`ALLOWED_GROUP_JIDS` opsional untuk membatasi grup yang diproses (kosong =
+semua grup). Kalau `INTERNAL_API_KEY` di `wa-worker` dan `api` berbeda, webhook
+akan ditolak 401.
 
 ## 6. Update frontend dan mobile
 
