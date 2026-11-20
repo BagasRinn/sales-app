@@ -96,6 +96,7 @@ services:
       AUTH_DIR: /app/auth_info_baileys
       TZ: Asia/Makassar
       LOG_LEVEL: ${WA_LOG_LEVEL:-info}
+      CONTROL_PORT: 3000
     volumes:
       - wa_auth:/app/auth_info_baileys
     depends_on:

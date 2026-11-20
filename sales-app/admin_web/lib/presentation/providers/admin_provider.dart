@@ -11,6 +11,7 @@ import '../../data/models/sales_user.dart';
 import '../../data/models/sales_assignment.dart';
 import '../../data/models/user_item.dart';
 import '../../data/models/sales_attendance.dart';
+import '../../data/models/wa_session_status.dart';
 import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/bulletin.dart';
@@ -38,6 +39,7 @@ class CacheConfig {
   static const orders = Duration(minutes: 2);
   static const importedSales = Duration(minutes: 5);
   static const attendances = Duration(minutes: 2);
+  static const waSession = Duration(seconds: 30);
 }
 
 /// In-memory summary cache entry. The version is the authoritative freshness
@@ -524,6 +526,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           CacheConfig.attendances,
         );
         break;
+      case 15: // Sesi WhatsApp (pairing QR)
+        needsRefresh = !_isCacheValid(
+          _waSessionCacheTime,
+          CacheConfig.waSession,
+        );
+        break;
     }
 
     if (needsRefresh) {
@@ -573,6 +581,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _usersCacheTime = null;
     _ordersCacheTime = null;
     _attendancesCacheTime = null;
+    _waSessionCacheTime = null;
     invalidateImportedSalesCache();
   }
 
@@ -1153,6 +1162,56 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  // ===== Sesi WhatsApp (pairing QR) =====
+  WaSessionStatus? _waSession;
+  bool _waSessionLoading = false;
+  String? _waSessionError;
+  DateTime? _waSessionCacheTime;
+
+  WaSessionStatus? get waSession => _waSession;
+  bool get waSessionLoading => _waSessionLoading;
+  String? get waSessionError => _waSessionError;
+
+  /// Ambil status sesi terbaru dari worker. Cache 30 detik; paksa refresh
+  /// setelah tombol "Putuskan & scan ulang" ditekan.
+  Future<void> loadWaSession({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _isCacheValid(_waSessionCacheTime, CacheConfig.waSession)) {
+      return;
+    }
+    _waSessionLoading = true;
+    _waSessionError = null;
+    notifyListeners();
+    try {
+      _waSession = await _repo.getWaSession();
+      _waSessionCacheTime = DateTime.now();
+    } catch (e) {
+      _waSessionError = e is ApiException ? e.message : e.toString();
+    } finally {
+      _waSessionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Putuskan sesi WhatsApp dan minta QR baru. Setelah ini, admin web
+  /// mem-poll status untuk menunggu QR baru muncul.
+  Future<WaSessionStatus?> logoutWaSession() async {
+    _waSessionLoading = true;
+    _waSessionError = null;
+    notifyListeners();
+    try {
+      _waSession = await _repo.logoutWaSession();
+      _waSessionCacheTime = DateTime.now();
+      return _waSession;
+    } catch (e) {
+      _waSessionError = e is ApiException ? e.message : e.toString();
+      return null;
+    } finally {
+      _waSessionLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _loadStats({DateTime? date, CancelToken? cancelToken}) async {
     try {
       // Default: hitung berdasarkan tanggal local perangkat (WIB/WITA/WIT).
@@ -1243,6 +1302,12 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
             CacheConfig.attendances,
           );
           break;
+        case 15: // Sesi WhatsApp (pairing QR)
+          cacheValid = _isCacheValid(
+            _waSessionCacheTime,
+            CacheConfig.waSession,
+          );
+          break;
         default:
           cacheValid = false;
       }
@@ -1290,6 +1355,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else if (tab == 14) {
         // Absensi kunjungan outlet.
         await loadAttendances(forceRefresh: true);
+      } else if (tab == 15) {
+        // Sesi WhatsApp (pairing QR).
+        await loadWaSession(forceRefresh: true);
       }
       _state = AdminState.loaded;
     } catch (e) {

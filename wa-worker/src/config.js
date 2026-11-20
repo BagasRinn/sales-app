@@ -2,6 +2,8 @@
 
 const DEFAULTS = {
   authDir: './auth_info_baileys',
+  controlHost: '127.0.0.1',
+  controlPort: 3000,
   logLevel: 'info',
   maxRetries: 3,
   retryBaseDelayMs: 1000,
@@ -33,6 +35,8 @@ export function loadConfig(env = process.env) {
       .map((value) => value.trim())
       .filter(Boolean),
     authDir: (env.AUTH_DIR || DEFAULTS.authDir).trim(),
+    controlHost: (env.CONTROL_HOST || DEFAULTS.controlHost).trim(),
+    controlPort: toPositiveInt(env.CONTROL_PORT, DEFAULTS.controlPort),
     logLevel: (env.LOG_LEVEL || DEFAULTS.logLevel).trim(),
     maxRetries: toPositiveInt(env.MAX_RETRIES, DEFAULTS.maxRetries),
     retryBaseDelayMs: toPositiveInt(

@@ -1141,6 +1141,18 @@ class WAAttendanceWebhookResponse(BaseSchema):
     message: str
 
 
+class WASessionStatusResponse(BaseSchema):
+    """Status sesi WhatsApp dari worker Baileys (dipakai halaman admin)."""
+
+    status: str = "unknown"
+    connected: bool = False
+    qr: Optional[str] = None
+    phone: Optional[str] = None
+    name: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    message: Optional[str] = None
+
+
 class SalesAttendanceResponse(BaseSchema):
     id: UUID
     sales_id: Optional[UUID] = None

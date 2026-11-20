@@ -12,6 +12,7 @@ import '../models/sales_user.dart';
 import '../models/sales_assignment.dart';
 import '../models/user_item.dart';
 import '../models/sales_attendance.dart';
+import '../models/wa_session_status.dart';
 import '../models/sales_performance.dart';
 import '../models/sales_target.dart';
 import '../models/bulletin.dart';
@@ -897,6 +898,24 @@ class AdminRepository {
     return (data as List)
         .map((e) => SalesAttendance.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Status sesi WhatsApp worker (QR, connected, phone).
+  ///
+  /// Endpoint ini dilindungi JWT + MANAGER global di backend. Client hanya
+  /// perlu mengirim Authorization header (sudah ditangani auth interceptor).
+  Future<WaSessionStatus> getWaSession() async {
+    final data = await _api.get('/wa/session');
+    return WaSessionStatus.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Putuskan sesi WhatsApp dan minta worker menyiapkan QR baru.
+  ///
+  /// Dipakai saat nomor diganti atau sesi terputus. Respons 202; admin web
+  /// mem-poll status untuk menunggu QR baru muncul.
+  Future<WaSessionStatus> logoutWaSession() async {
+    final data = await _api.post('/wa/session/logout');
+    return WaSessionStatus.fromJson(data as Map<String, dynamic>);
   }
 
   // Soft-delete User dihapus: fitur nonaktifkan (is_active=false) sudah cukup

@@ -24,6 +24,7 @@ import 'bulletins_tab.dart';
 import 'change_password_dialog.dart';
 import 'cross_branch_reports_tab.dart';
 import 'attendance_tab.dart';
+import 'wa_qr_scanner_page.dart';
 import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
 import 'supplier_performance_pivot_tab.dart';
@@ -48,6 +49,7 @@ enum _DashboardPage {
   importedSales,
   crossBranch,
   attendance,
+  waSession,
 }
 
 class _NavSpec {
@@ -254,6 +256,14 @@ class _DashboardContentState extends State<_DashboardContent>
         label: 'Absensi Kunjungan',
         group: operasional,
       ),
+      if (_isGlobalManager)
+        const _NavSpec(
+          page: _DashboardPage.waSession,
+          icon: Icons.sim_card_outlined,
+          selectedIcon: Icons.sim_card,
+          label: 'Sesi WhatsApp',
+          group: operasional,
+        ),
       if (widget.role != 'ADMIN') ...[
         const _NavSpec(
           page: _DashboardPage.users,
@@ -355,6 +365,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 12;
       case _DashboardPage.attendance:
         return 14;
+      case _DashboardPage.waSession:
+        return 15;
     }
   }
 
@@ -553,6 +565,9 @@ class _DashboardContentState extends State<_DashboardContent>
         break;
       case _DashboardPage.attendance:
         return const AttendanceTab();
+      case _DashboardPage.waSession:
+        if (_isGlobalManager) return const WaQrScannerPage();
+        break;
     }
     return StatsTab(
       role: widget.role,
