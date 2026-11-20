@@ -56,6 +56,22 @@ per sheet. Setiap import dicatat pada `import_logs` dengan tipe
 
 ## Tampilan
 
+## Stok Inventaris Supplier
+
+Halaman **Stok Inventaris** tersedia untuk `SUPERVISOR` dan `MANAGER` pada menu
+Manajemen. Nilai `Stock` berasal dari snapshot `GOOD AMOUNT` yang diimpor melalui
+tombol **Import Data Produk** di Dashboard, bukan dari stok operasional pada menu
+Sinkronisasi. Setiap baris snapshot wajib memiliki `Supplier` agar dapat
+diagregasikan.
+
+Untuk bulan `M`, `AP3M` adalah penjualan net pada tiga bulan kalender sebelum
+`M`, `Average per week = AP3M / 4`, dan `Week of Inventory = Stock /
+Average per week`. Penjualan bulan `M` ditampilkan terpisah. Status inventory
+adalah `Habis` jika Stock <= 0, `Tidak ada riwayat` jika tidak ada average
+mingguan, `Aman` untuk 0 sampai 6 minggu, dan `Overstock` jika lebih dari 6
+minggu. Manager dapat memilih semua cabang atau satu cabang; supervisor hanya
+dapat melihat cabangnya sendiri.
+
 Realisasi omzet NET (penjualan dikurangi retur) pada periode yang dipilih
 dibagi target omzet untuk sales atau supplier yang namanya cocok. Target
 supplier dijumlahkan lintas cabang pada scope GLOBAL; filter satu cabang

@@ -966,6 +966,36 @@ class SupplierPerformanceRow(BaseModel):
     order_type: str = "REGULER"
 
 
+class InventoryTrackerRow(BaseModel):
+    supplier_name: str
+    stock: int = 0
+    sales_month_1: int = 0
+    sales_month_2: int = 0
+    sales_month_3: int = 0
+    ap3m: int = 0
+    average_per_week: float = 0
+    week_of_inventory: Optional[float] = None
+    sales_current_month: int = 0
+    inventory_status: str
+
+
+class InventoryTrackerResponse(BaseModel):
+    month: str
+    previous_months: List[str]
+    scope: str
+    division: Optional[str] = None
+    divisions: List[str] = []
+    stock_snapshot_available: bool = False
+    sales_history_available: bool = False
+    total_stock: int = 0
+    total_ap3m: int = 0
+    total_average_per_week: float = 0
+    total_sales_current_month: int = 0
+    supplier_count: int = 0
+    overstock_count: int = 0
+    rows: List[InventoryTrackerRow]
+
+
 class SupplierSalesMetric(BaseModel):
     value: int = 0
     margin: int = 0

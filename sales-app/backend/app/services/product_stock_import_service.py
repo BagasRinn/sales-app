@@ -223,6 +223,7 @@ def import_product_stock_from_excel(
         # "Kode barang" di laporan stok bisa berupa deskripsi panjang, dan
         # kunci grup bisa berupa mother_sku; sampai 200 karakter.
         product_kode = _clean_identifier(row.get("product_kode"), 200)
+        supplier = _clean_str(row.get("supplier"))
         if not branch or not product_kode:
             skipped += 1
             _add_error(
@@ -230,6 +231,15 @@ def import_product_stock_from_excel(
                 row_num,
                 row,
                 "Cabang atau Kode Barang kosong/tidak dikenal",
+            )
+            continue
+        if not supplier:
+            skipped += 1
+            _add_error(
+                validation_errors,
+                row_num,
+                row,
+                "Supplier kosong. Supplier wajib untuk analisa Stok Inventaris.",
             )
             continue
         if not is_valid_branch(branch):
@@ -271,7 +281,7 @@ def import_product_stock_from_excel(
             "product_nama": _clean_str(row.get("product_nama")) or "",
             "mother_sku": mother_sku,
             "divisi": _clean_str(row.get("divisi")),
-            "supplier": _clean_str(row.get("supplier")),
+            "supplier": supplier,
             "satuan": _clean_str(row.get("satuan")),
             "stok_good": _to_int(row.get("stok_good")) or 0,
             "good_amount": good_amount,

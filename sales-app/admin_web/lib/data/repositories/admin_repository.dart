@@ -19,6 +19,7 @@ import '../models/bulletin.dart';
 import '../models/branch_report.dart';
 import '../models/supplier_target.dart';
 import '../models/supplier_performance.dart';
+import '../models/inventory_tracker.dart';
 import '../models/supplier_sales_pivot.dart';
 import '../models/supplier.dart';
 
@@ -484,10 +485,7 @@ class AdminRepository {
     String? branch,
     int limit = 100,
   }) async {
-    final params = <String, String>{
-      'month': month,
-      'limit': limit.toString(),
-    };
+    final params = <String, String>{'month': month, 'limit': limit.toString()};
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     final queryString = params.entries
         .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
@@ -1160,6 +1158,28 @@ class AdminRepository {
         .cast<Map<String, dynamic>>()
         .map(SupplierPerformanceRow.fromJson)
         .toList();
+  }
+
+  Future<InventoryTrackerResponse> getInventoryTracker({
+    String? month,
+    String? branch,
+    String? division,
+  }) async {
+    final params = <String, String>{
+      if (month != null && month.isNotEmpty) 'month': month,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+      if (division != null && division.isNotEmpty) 'division': division,
+    };
+    final qs = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+    final data = await _api.get(
+      '/reports/inventory-tracker$qs',
+      receiveTimeout: const Duration(seconds: 60),
+    );
+    return InventoryTrackerResponse.fromJson(
+      Map<String, dynamic>.from(data as Map),
+    );
   }
 
   Future<SupplierSalesPivot> getSupplierSalesPivot({

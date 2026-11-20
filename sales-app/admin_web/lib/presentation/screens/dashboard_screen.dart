@@ -28,6 +28,7 @@ import 'wa_qr_scanner_page.dart';
 import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
 import 'supplier_performance_pivot_tab.dart';
+import 'inventory_tracker_tab.dart';
 import '../../core/config.dart';
 
 /// Identitas halaman di dashboard Admin Web. Dipakai agar pemilihan halaman
@@ -44,6 +45,7 @@ enum _DashboardPage {
   users,
   performance,
   supplierPerformance,
+  inventoryTracker,
   penugasan,
   bulletins,
   importedSales,
@@ -287,6 +289,13 @@ class _DashboardContentState extends State<_DashboardContent>
           group: manajemen,
         ),
         const _NavSpec(
+          page: _DashboardPage.inventoryTracker,
+          icon: Icons.inventory_outlined,
+          selectedIcon: Icons.inventory,
+          label: 'Stok Inventaris',
+          group: manajemen,
+        ),
+        const _NavSpec(
           page: _DashboardPage.penugasan,
           icon: Icons.assignment_ind_outlined,
           selectedIcon: Icons.assignment_ind,
@@ -355,6 +364,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 8;
       case _DashboardPage.supplierPerformance:
         return 13;
+      case _DashboardPage.inventoryTracker:
+        return 16;
       case _DashboardPage.penugasan:
         return 9;
       case _DashboardPage.bulletins:
@@ -551,6 +562,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return const PerformanceTab(); // MANAGER & SUPERVISOR
       case _DashboardPage.supplierPerformance:
         return const SupplierPerformancePivotTab();
+      case _DashboardPage.inventoryTracker:
+        return const InventoryTrackerTab();
       case _DashboardPage.penugasan:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case _DashboardPage.bulletins:

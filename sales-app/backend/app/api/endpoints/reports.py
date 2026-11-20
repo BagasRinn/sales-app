@@ -2,6 +2,7 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,12 +11,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from sqlalchemy import case, cast, func
-from sqlalchemy.types import Integer
+from sqlalchemy.types import Integer, String
 from sqlalchemy.orm import Session, joinedload, load_only
 from sqlalchemy.orm import aliased
 
 from app.models.database import get_db
-from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier, ImportedSale
+from app.models.models import Order, OrderItem, Product, Customer, User, CustomerRegistrationSubmission, SupplierTarget, Supplier, ImportedSale, ImportedReturn, ImportedProductStock
 from app.core.security import (
     require_admin_or_supervisor,
     require_manager_global,
@@ -36,9 +37,178 @@ from app.schemas.schemas import (
     ReportSummaryByProduct,
     ReportSummaryBySales,
     ReportSummaryByBranch,
+    InventoryTrackerResponse,
+    InventoryTrackerRow,
 )
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+
+@router.get("/inventory-tracker", response_model=InventoryTrackerResponse)
+def get_inventory_tracker(
+    month: Optional[str] = Query(None, description="Bulan laporan (YYYY-MM)"),
+    branch: Optional[str] = Query(None, description="Filter cabang untuk MANAGER"),
+    division: Optional[str] = Query(None, description="Filter divisi"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_write_access),
+):
+    """Supplier inventory coverage from dashboard stock and imported sales."""
+    # require_write_access includes ADMIN, so explicitly restrict this new
+    # management page to the same roles as supplier performance.
+    if current_user.get("role") not in {"MANAGER", "SUPERVISOR"}:
+        raise HTTPException(status_code=403, detail="Akses Stok Inventaris ditolak")
+
+    from app.services.sales_import_versions import months_before, parse_month, resolve_scope
+
+    normalized, start, end = parse_month(month)
+    scope = resolve_scope(current_user, branch)
+    previous_months = months_before(normalized, 3)
+    all_months = previous_months + [normalized]
+
+    def supplier_key(value: Optional[str]) -> str:
+        normalized_name = re.sub(r"[^A-Z0-9 ]+", " ", (value or "").upper())
+        parts = [part for part in normalized_name.split() if part not in {"PT", "CV", "TBK", "UD"}]
+        return " ".join(parts)
+
+    stock_query = db.query(
+        ImportedProductStock.supplier,
+        func.coalesce(func.sum(ImportedProductStock.good_amount), 0),
+    ).filter(
+        ImportedProductStock.month == normalized,
+        ImportedProductStock.supplier.isnot(None),
+        func.trim(ImportedProductStock.supplier) != "",
+    )
+    if scope != "GLOBAL":
+        stock_query = stock_query.filter(ImportedProductStock.branch == scope)
+    if division:
+        stock_query = stock_query.filter(ImportedProductStock.divisi == division)
+    stock_map = {}
+    for supplier, value in stock_query.group_by(ImportedProductStock.supplier).all():
+        key = supplier_key(supplier)
+        stock_map[key] = stock_map.get(key, 0) + int(value or 0)
+    stock_names = {}
+    stock_names_query = db.query(ImportedProductStock.supplier).filter(
+        ImportedProductStock.month == normalized,
+        ImportedProductStock.supplier.isnot(None),
+        func.trim(ImportedProductStock.supplier) != "",
+    )
+    if scope != "GLOBAL":
+        stock_names_query = stock_names_query.filter(ImportedProductStock.branch == scope)
+    if division:
+        stock_names_query = stock_names_query.filter(ImportedProductStock.divisi == division)
+    for supplier, in stock_names_query.distinct().all():
+        key = supplier_key(supplier)
+        stock_names.setdefault(key, (supplier or "").strip())
+
+    sales_query = db.query(
+        ImportedSale.supplier,
+        ImportedSale.sale_date,
+        func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
+    ).filter(
+        ImportedSale.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
+        ImportedSale.sale_date < end.date(),
+        ImportedSale.supplier.isnot(None),
+        func.trim(ImportedSale.supplier) != "",
+    )
+    if scope != "GLOBAL":
+        sales_query = sales_query.filter(ImportedSale.branch == scope)
+    if division:
+        sales_query = sales_query.filter(ImportedSale.divisi == division)
+    sales_map = {}
+    for supplier, sale_date, revenue in sales_query.group_by(
+        ImportedSale.supplier, ImportedSale.sale_date
+    ).all():
+        period = sale_date.strftime("%Y-%m")
+        if period not in all_months:
+            continue
+        key = (supplier_key(supplier), period)
+        sales_map[key] = sales_map.get(key, 0) + int(revenue or 0)
+
+    # Returns have the same supplier dimension and reduce net sales.
+    return_query = db.query(
+        ImportedReturn.supplier,
+        ImportedReturn.sale_date,
+        func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
+    ).filter(
+        ImportedReturn.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
+        ImportedReturn.sale_date < end.date(),
+        ImportedReturn.supplier.isnot(None),
+        func.trim(ImportedReturn.supplier) != "",
+    )
+    if scope != "GLOBAL":
+        return_query = return_query.filter(ImportedReturn.branch == scope)
+    if division:
+        return_query = return_query.filter(ImportedReturn.divisi == division)
+    for supplier, sale_date, revenue in return_query.group_by(
+        ImportedReturn.supplier, ImportedReturn.sale_date
+    ).all():
+        period = sale_date.strftime("%Y-%m")
+        if period not in all_months:
+            continue
+        key = (supplier_key(supplier), period)
+        sales_map[key] = sales_map.get(key, 0) - int(revenue or 0)
+
+    divisions_query = db.query(ImportedSale.divisi).filter(
+        ImportedSale.divisi.isnot(None), func.trim(ImportedSale.divisi) != ""
+    )
+    if scope != "GLOBAL":
+        divisions_query = divisions_query.filter(ImportedSale.branch == scope)
+    divisions = {value.strip() for (value,) in divisions_query.distinct().all() if value and value.strip()}
+    stock_divisions_query = db.query(ImportedProductStock.divisi).filter(
+        ImportedProductStock.divisi.isnot(None),
+        func.trim(ImportedProductStock.divisi) != "",
+        ImportedProductStock.month == normalized,
+    )
+    if scope != "GLOBAL":
+        stock_divisions_query = stock_divisions_query.filter(ImportedProductStock.branch == scope)
+    divisions.update(value.strip() for (value,) in stock_divisions_query.distinct().all() if value and value.strip())
+    suppliers = sorted(set(stock_map) | {key[0] for key in sales_map})
+    rows = []
+    for supplier in suppliers:
+        monthly = [sales_map.get((supplier, period), 0) for period in all_months]
+        ap3m = sum(monthly[:3])
+        average_per_week = ap3m / 4
+        stock = stock_map.get(supplier, 0)
+        weeks = stock / average_per_week if average_per_week > 0 else None
+        if stock <= 0:
+            status = "Habis"
+        elif weeks is None:
+            status = "Tidak ada riwayat"
+        elif weeks <= 6:
+            status = "Aman"
+        else:
+            status = "Overstock"
+        rows.append(InventoryTrackerRow(
+            supplier_name=stock_names.get(supplier, supplier),
+            stock=stock,
+            sales_month_1=monthly[0],
+            sales_month_2=monthly[1],
+            sales_month_3=monthly[2],
+            ap3m=ap3m,
+            average_per_week=average_per_week,
+            week_of_inventory=weeks,
+            sales_current_month=monthly[3],
+            inventory_status=status,
+        ))
+
+    status_order = {"Habis": 0, "Tidak ada riwayat": 1, "Aman": 2, "Overstock": 3}
+    rows.sort(key=lambda row: (status_order[row.inventory_status], row.week_of_inventory or 0, row.supplier_name.lower()))
+    return InventoryTrackerResponse(
+        month=normalized,
+        previous_months=previous_months,
+        scope=scope,
+        division=division,
+        divisions=sorted(divisions),
+        stock_snapshot_available=bool(stock_map),
+        sales_history_available=any(sales_map.get((supplier, period), 0) != 0 for supplier in suppliers for period in previous_months),
+        total_stock=sum(row.stock for row in rows),
+        total_ap3m=sum(row.ap3m for row in rows),
+        total_average_per_week=sum(row.average_per_week for row in rows),
+        total_sales_current_month=sum(row.sales_current_month for row in rows),
+        supplier_count=len(rows),
+        overstock_count=sum(row.inventory_status == "Overstock" for row in rows),
+        rows=rows,
+    )
 
 
 def _layer_cut_value(type_val: str, percent: int, nominal: int, running: int) -> int:

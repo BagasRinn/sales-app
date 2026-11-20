@@ -19,6 +19,7 @@ import '../widgets/analytics/sales_analytics_models.dart';
 import '../../data/models/branch_report.dart';
 import '../../data/models/supplier_performance.dart';
 import '../../data/models/supplier_sales_pivot.dart';
+import '../../data/models/inventory_tracker.dart';
 import '../../data/models/supplier.dart';
 import '../../core/api_exception.dart';
 import '../../core/config.dart';
@@ -2016,7 +2017,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? month,
     bool forceRefresh = false,
   }) async {
-    final targetMonth = month ?? _importedSalesMonth ?? _currentImportedSalesMonth();
+    final targetMonth =
+        month ?? _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
     final cacheKey = '$targetMonth|${branch ?? _importedSalesScope ?? ''}';
     if (!forceRefresh) {
@@ -2088,9 +2090,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       _productStockImportResult = result;
       // Buang cache stok yang menyentuh bulan itu.
-      _productStockCache.removeWhere(
-        (key, _) => key.startsWith('$month|'),
-      );
+      _productStockCache.removeWhere((key, _) => key.startsWith('$month|'));
       await loadProductStockSummary(month: month, forceRefresh: true);
       notifyListeners();
       return true;
@@ -2475,6 +2475,35 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _supplierPerformanceError = e is ApiException ? e.message : e.toString();
     } finally {
       _supplierPerformanceLoading = false;
+      notifyListeners();
+    }
+  }
+
+  InventoryTrackerResponse? _inventoryTracker;
+  bool _inventoryTrackerLoading = false;
+  String? _inventoryTrackerError;
+  InventoryTrackerResponse? get inventoryTracker => _inventoryTracker;
+  bool get inventoryTrackerLoading => _inventoryTrackerLoading;
+  String? get inventoryTrackerError => _inventoryTrackerError;
+
+  Future<void> loadInventoryTracker({
+    String? month,
+    String? branch,
+    String? division,
+  }) async {
+    _inventoryTrackerLoading = true;
+    _inventoryTrackerError = null;
+    notifyListeners();
+    try {
+      _inventoryTracker = await _repo.getInventoryTracker(
+        month: month,
+        branch: branch,
+        division: division,
+      );
+    } catch (e) {
+      _inventoryTrackerError = e is ApiException ? e.message : e.toString();
+    } finally {
+      _inventoryTrackerLoading = false;
       notifyListeners();
     }
   }
