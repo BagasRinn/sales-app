@@ -1867,8 +1867,7 @@ class _SalesRankingRow extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
-                          'dari target · ${formatRupiah(entry.targetActual!)} / '
-                          '${formatRupiah(entry.target!)}',
+                          'dari target · ${formatRupiah(entry.target!)}',
                           style: AppTextStyles.caption.copyWith(
                             color: AppColors.textSecondary,
                           ),

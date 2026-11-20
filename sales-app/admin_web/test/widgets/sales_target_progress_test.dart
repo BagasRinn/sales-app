@@ -144,7 +144,7 @@ void main() {
     expect(find.text('Rp 1.160.000'), findsOneWidget);
     expect(find.text('58,00%'), findsOneWidget);
     expect(
-      find.textContaining('dari target · Rp 1.160.000 / Rp 2.000.000'),
+      find.textContaining('dari target · Rp 2.000.000'),
       findsOneWidget,
     );
     expect(find.text('100,00% omzet'), findsOneWidget);
