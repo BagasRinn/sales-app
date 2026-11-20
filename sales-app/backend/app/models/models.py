@@ -9,6 +9,11 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # Nomor WA unik (banyak NULL diperbolehkan PostgreSQL). Nama index
+        # disamakan dengan DDL startup di main._ensure_sales_attendance().
+        Index("ix_users_whatsapp_number", "whatsapp_number", unique=True),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(50), unique=True, index=True)
@@ -20,6 +25,9 @@ class User(Base):
     branch = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     token_version = Column(Integer, default=0, nullable=False)
+    # Nomor WhatsApp untuk integrasi absensi grup (format 628...).
+    # Nullable: akun lama/manager/supervisor boleh belum punya nomor.
+    whatsapp_number = Column(String(30), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -827,3 +835,48 @@ class ImportedProductStock(Base):
         UUID(as_uuid=True), ForeignKey("import_logs.id"), nullable=True
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SalesAttendance(Base):
+    """Absensi kunjungan sales yang dikirim ke grup WhatsApp.
+
+    Ditulis oleh webhook worker WhatsApp (``POST /api/v1/webhooks/wa-attendance``).
+    ``sales_id`` NULL = nomor pengirim belum terdaftar sebagai user SALES; nama
+    yang dipakai adalah ``sender_push_name`` (profil WhatsApp).
+    """
+
+    __tablename__ = "sales_attendance"
+    __table_args__ = (
+        # Nama index disamakan dengan DDL startup di main._ensure_sales_attendance().
+        Index(
+            "uq_sales_attendance_wa_message_id",
+            "wa_message_id",
+            unique=True,
+        ),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sales_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
+    )
+    # Nama resmi sales (users.nama/username) atau pushName bila belum terdaftar.
+    sales_name = Column(String(150), nullable=True)
+    sender_phone = Column(String(30), nullable=False, index=True)
+    sender_push_name = Column(String(150), nullable=True)
+    is_registered_sales = Column(Boolean, nullable=False, default=False)
+    outlet_code = Column(String(50), nullable=False, index=True)
+    outlet_name = Column(String(200), nullable=False)
+    outlet_channel = Column(String(100), nullable=False, index=True)
+    has_photo_proof = Column(Boolean, nullable=False, default=False)
+    wa_group_id = Column(String(100), nullable=True)
+    # ID pesan WhatsApp (msg.key.id) untuk mencegah duplikat saat worker
+    # mengirim ulang pesan yang sama (reconnect / history sync).
+    wa_message_id = Column(String(150), nullable=True)
+    # Waktu kirim dari server WhatsApp (bukan waktu input manual).
+    visited_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    raw_message = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    sales = relationship("User", foreign_keys=[sales_id])

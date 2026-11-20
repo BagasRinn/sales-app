@@ -40,8 +40,29 @@ def _user_to_response(u: User) -> UserResponse:
         branch=u.branch,
         branch_nama=branch_constants.get_branch_nama(u.branch),
         is_active=u.is_active,
+        whatsapp_number=u.whatsapp_number,
         created_at=u.created_at,
     )
+
+
+def _assert_whatsapp_available(
+    db: Session, whatsapp_number: Optional[str], exclude_id: Optional[UUID] = None
+) -> None:
+    """Tolak nomor WA yang sudah dipakai user lain (unique constraint ramah).
+
+    Termasuk user yang sudah soft-deleted: unique index database berlaku untuk
+    semua baris, jadi nomor milik akun lama tetap tidak boleh dipakai ulang.
+    """
+    if not whatsapp_number:
+        return
+    query = db.query(User).filter(User.whatsapp_number == whatsapp_number)
+    if exclude_id is not None:
+        query = query.filter(User.id != exclude_id)
+    if query.first():
+        raise HTTPException(
+            status_code=409,
+            detail="Nomor WhatsApp sudah digunakan user lain",
+        )
 
 
 def _exclude_deleted(query):
@@ -119,12 +140,15 @@ def create_user(
     if existing:
         raise HTTPException(status_code=409, detail="Username sudah digunakan")
 
+    _assert_whatsapp_available(db, user.whatsapp_number)
+
     new_user = User(
         username=user.username,
         password_hash=get_password_hash(user.password),
         role=user.role.upper(),
         branch=effective_branch,
         nama=user.nama,
+        whatsapp_number=user.whatsapp_number,
         is_active=True,
     )
     db.add(new_user)
@@ -225,6 +249,9 @@ def update_user(
     # Only a global MANAGER can reach here (role ceiling above).
     if data.get("role") == "MANAGER":
         data["branch"] = None
+
+    if "whatsapp_number" in data:
+        _assert_whatsapp_available(db, data["whatsapp_number"], exclude_id=target_user.id)
 
     # Tangkap sebelum pop - deteksi request yang punya field password.
     had_password_change = "password" in data

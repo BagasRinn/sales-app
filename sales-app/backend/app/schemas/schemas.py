@@ -4,6 +4,8 @@ from typing import List, Optional
 from datetime import datetime, timezone, timedelta, date
 from enum import Enum
 
+from app.core.phone import normalize_phone_number
+
 
 # Backend menyimpan dan mengirim timestamp sebagai UTC. Konversi ke WIB,
 # WITA, atau WIT dilakukan di client berdasarkan timezone device pengguna.
@@ -64,6 +66,13 @@ class OrderStatus(str, Enum):
     # job yang set status ke EXPIRED, dan DB tidak pernah mencatat status ini.
 
 
+def _normalize_optional_phone(value: Optional[str]) -> Optional[str]:
+    """Normalisasi nomor WA opsional; string kosong dianggap tidak diisi."""
+    if value is None:
+        return None
+    return normalize_phone_number(value) or None
+
+
 # ==================== AUTH ====================
 
 class UserCreate(BaseSchema):
@@ -72,6 +81,16 @@ class UserCreate(BaseSchema):
     role: str = Field(..., description="ADMIN, SUPERVISOR, MANAGER, atau SALES")
     nama: Optional[str] = Field(None, max_length=100)
     branch: Optional[str] = Field(None, description="Branch code. Required for ADMIN/SUPERVISOR/SALES. Omit or null for global MANAGER.")
+    whatsapp_number: Optional[str] = Field(
+        None,
+        max_length=30,
+        description="Nomor WhatsApp untuk absensi grup (disimpan sebagai 628...).",
+    )
+
+    @field_validator("whatsapp_number")
+    @classmethod
+    def _normalize_whatsapp_number(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_optional_phone(value)
 
 
 class UserUpdate(BaseSchema):
@@ -81,6 +100,16 @@ class UserUpdate(BaseSchema):
     password: Optional[str] = Field(None, min_length=8, max_length=72)
     is_active: Optional[bool] = None
     branch: Optional[str] = Field(None, description="Branch code. Null = global MANAGER.")
+    whatsapp_number: Optional[str] = Field(
+        None,
+        max_length=30,
+        description="Nomor WhatsApp (628...). Kirim null untuk menghapus.",
+    )
+
+    @field_validator("whatsapp_number")
+    @classmethod
+    def _normalize_whatsapp_number(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_optional_phone(value)
 
 
 class ChangePasswordRequest(BaseSchema):
@@ -97,6 +126,7 @@ class UserResponse(BaseSchema):
     branch: Optional[str] = None
     branch_nama: Optional[str] = None  # populated via JOIN to branches table
     is_active: bool = True
+    whatsapp_number: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:
@@ -1038,3 +1068,91 @@ class SupplierResponse(BaseSchema):
     product_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# ==================== SALES ATTENDANCE ====================
+
+class WAAttendanceWebhookPayload(BaseSchema):
+    """Payload dari worker WhatsApp (Baileys) untuk satu pesan absensi.
+
+    Worker sudah mem-parse teks ``KODE OUTLET#NAMA OUTLET#CHANNEL OUTLET`` dan
+    hanya memanggil endpoint ini bila formatnya valid.
+    """
+
+    sender_phone: str = Field(..., min_length=1, max_length=30)
+    sender_push_name: Optional[str] = Field(None, max_length=150)
+    outlet_code: str = Field(..., min_length=1, max_length=50)
+    outlet_name: str = Field(..., min_length=1, max_length=200)
+    outlet_channel: str = Field(..., min_length=1, max_length=100)
+    has_photo_proof: bool = False
+    wa_group_id: Optional[str] = Field(None, max_length=100)
+    wa_message_id: Optional[str] = Field(None, max_length=150)
+    message_timestamp: datetime = Field(
+        ..., description="Waktu kirim pesan dari WhatsApp (ISO 8601 / epoch seconds)."
+    )
+    raw_message: Optional[str] = None
+
+    @field_validator("sender_phone")
+    @classmethod
+    def _normalize_sender_phone(cls, value: str) -> str:
+        normalized = normalize_phone_number(value)
+        if not normalized:
+            raise ValueError("Nomor pengirim tidak valid")
+        return normalized
+
+    @field_validator("outlet_code", "outlet_name", "outlet_channel")
+    @classmethod
+    def _strip_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Field ini wajib diisi")
+        return stripped
+
+    @field_validator("message_timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value):
+        """Terima epoch detik/milidetik dari Baileys maupun string ISO."""
+        if isinstance(value, (int, float)):
+            seconds = value / 1000 if value > 10_000_000_000 else value
+            return datetime.fromtimestamp(seconds, tz=UTC)
+        if isinstance(value, str):
+            text = value.strip()
+            if text.isdigit():
+                seconds = int(text)
+                if seconds > 10_000_000_000:
+                    seconds = seconds / 1000
+                return datetime.fromtimestamp(seconds, tz=UTC)
+        return value
+
+    @field_validator("message_timestamp")
+    @classmethod
+    def _ensure_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+
+class WAAttendanceWebhookResponse(BaseSchema):
+    status: str
+    attendance_id: Optional[UUID] = None
+    duplicate: bool = False
+    is_registered_sales: bool = False
+    sales_id: Optional[UUID] = None
+    message: str
+
+
+class SalesAttendanceResponse(BaseSchema):
+    id: UUID
+    sales_id: Optional[UUID] = None
+    sales_name: Optional[str] = None
+    sender_phone: str
+    sender_push_name: Optional[str] = None
+    is_registered_sales: bool = False
+    outlet_code: str
+    outlet_name: str
+    outlet_channel: str
+    has_photo_proof: bool = False
+    wa_group_id: Optional[str] = None
+    wa_message_id: Optional[str] = None
+    visited_at: datetime
+    created_at: Optional[datetime] = None

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 from app.models.database import engine
 from app.models.models import Base
-from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports, import_progress, product_stocks
+from app.api.endpoints import auth, products, orders, customers, customer_submissions, users, reports, sales_targets, bulletins, sales, branches, supplier_targets, suppliers, sales_imports, import_progress, product_stocks, attendance
 from app.api.endpoints.bulletins_scheduler import expire_bulletins, reset_all_bulletins
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -298,6 +298,37 @@ def _ensure_imported_product_stocks() -> None:
         )
 
 
+def _ensure_sales_attendance() -> None:
+    """Kolom integrasi WhatsApp pada ``users`` + ``sales_attendance``.
+
+    Proyek ini tidak memakai Alembic: ``create_all`` tidak mengubah tabel
+    existing, jadi kolom/index baru diterapkan lewat DDL idempotent di startup.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE users "
+                "ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(30)"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_whatsapp_number "
+                "ON users (whatsapp_number)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE sales_attendance "
+                "ADD COLUMN IF NOT EXISTS wa_message_id VARCHAR(150)"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_sales_attendance_wa_message_id "
+                "ON sales_attendance (wa_message_id)"
+            ))
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning("[STARTUP] Could not ensure sales attendance schema: %s", e)
+
+
 def _demo_seed_allowed() -> bool:
     """Demo user seeding hanya boleh jalan di lingkungan non-produksi.
 
@@ -328,6 +359,7 @@ async def lifespan(app: FastAPI):
     _ensure_imported_sales_template_v2_columns()
     _ensure_imported_returns()
     _ensure_imported_product_stocks()
+    _ensure_sales_attendance()
     # Load branch labels/names from DB into in-memory cache. Falls back to
     # hardcoded constants if the branches table doesn't exist yet (pre-migration).
     from app.core import branch as branch_constants
@@ -433,6 +465,7 @@ app.include_router(suppliers.router, prefix="/api/v1")
 app.include_router(sales_imports.router, prefix="/api/v1")
 app.include_router(product_stocks.router, prefix="/api/v1")
 app.include_router(import_progress.router, prefix="/api/v1")
+app.include_router(attendance.router, prefix="/api/v1")
 
 
 @app.get("/")
