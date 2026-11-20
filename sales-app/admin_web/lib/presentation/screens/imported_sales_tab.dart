@@ -1280,6 +1280,8 @@ class _AnalyticsBody extends StatelessWidget {
               limit: limit,
               showActiveOutlets: true,
               targets: analytics.supplierTargets,
+              comparisonItems: comparisonDetail?['supplier'],
+              comparisonLabel: comparisonLabel,
               valueStokOf: _supplierValueStok,
             ),
             _SupplierReturnCard(
@@ -1827,7 +1829,7 @@ class _MetricRankingCard extends StatefulWidget {
 
   /// Items untuk periode pembanding (nilai sudah rata-rata per bulan).
   final List<SalesRankItem>? comparisonItems;
-  final String? comparisonLabel; // mis. "3 Bulan Sebelumnya (Agu–Okt 2026)"
+  final String? comparisonLabel;
 
   /// Resolver snapshot stok (GOOD AMOUNT) per item — ditampilkan langsung
   /// di baris entri utama (sebaris Target / menggantikan posisi persen),

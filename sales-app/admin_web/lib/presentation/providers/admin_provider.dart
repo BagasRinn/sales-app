@@ -1773,7 +1773,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       _importedSalesComparisonCache[cacheKey] = data;
       _importedSalesComparison = data;
-      // Fetch detail dimensi (produk/pelanggan/divisi) untuk ranking
+      // Fetch detail dimensi (produk/pelanggan/divisi/supplier) untuk ranking
       // pembanding di latar belakang; error di-silent.
       await fetchImportedSalesComparisonDetail();
     } catch (_) {
@@ -1783,13 +1783,13 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Fetch detail dimensi pembanding (produk, pelanggan, divisi) sebagai
+  /// Fetch detail dimensi pembanding (produk, pelanggan, divisi, supplier) sebagai
   /// daftar SalesRankItem dengan nilai rata-rata per bulan.
   Future<void> fetchImportedSalesComparisonDetail() async {
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
     final cacheKey =
-        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail';
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       _importedSalesComparisonDetail = _parseComparisonDetail(cached);
@@ -1800,7 +1800,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         month: month,
         months: _importedSalesComparisonMonths,
         limit: _importedSalesLimit,
-        include: 'product,customer,divisi',
+        include: 'product,customer,divisi,supplier',
         branch: branch,
       );
       _importedSalesComparisonCache[cacheKey] = data;
@@ -1856,6 +1856,20 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
             (e) => SalesRankItem(
               code: e['divisi']?.toString().trim() ?? '',
               label: e['divisi']?.toString().trim() ?? '',
+              qty: toInt(e['qty']),
+              revenue: toInt(e['average_revenue'] ?? e['revenue']),
+              margin: toInt(e['average_margin'] ?? e['margin']),
+              activeOutlets: toInt(e['active_outlets']),
+            ),
+          )
+          .toList(growable: false),
+      'supplier': (data['by_supplier'] as List? ?? const [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .map(
+            (e) => SalesRankItem(
+              code: e['supplier']?.toString().trim() ?? '',
+              label: e['supplier']?.toString().trim() ?? '',
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
