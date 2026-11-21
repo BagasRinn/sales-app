@@ -46,6 +46,8 @@ class InventoryTrackerResponse {
   final String dimension;
   final String? division;
   final List<String> divisions;
+  final String? supplier;
+  final List<String> suppliers;
   final bool stockSnapshotAvailable;
   final bool salesHistoryAvailable;
   final int totalStock;
@@ -63,6 +65,8 @@ class InventoryTrackerResponse {
     required this.dimension,
     required this.division,
     required this.divisions,
+    required this.supplier,
+    required this.suppliers,
     required this.stockSnapshotAvailable,
     required this.salesHistoryAvailable,
     required this.totalStock,
@@ -84,6 +88,10 @@ class InventoryTrackerResponse {
       dimension: json['dimension']?.toString() ?? 'supplier',
       division: json['division']?.toString(),
       divisions: (json['divisions'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      supplier: json['supplier']?.toString(),
+      suppliers: (json['suppliers'] as List? ?? [])
           .map((e) => e.toString())
           .toList(),
       stockSnapshotAvailable: json['stock_snapshot_available'] == true,

@@ -989,6 +989,8 @@ class InventoryTrackerResponse(BaseModel):
     dimension: str = "supplier"
     division: Optional[str] = None
     divisions: List[str] = []
+    supplier: Optional[str] = None
+    suppliers: List[str] = []
     stock_snapshot_available: bool = False
     sales_history_available: bool = False
     total_stock: int = 0

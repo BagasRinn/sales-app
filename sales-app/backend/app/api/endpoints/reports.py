@@ -49,6 +49,7 @@ def get_inventory_tracker(
     month: Optional[str] = Query(None, description="Bulan laporan (YYYY-MM)"),
     branch: Optional[str] = Query(None, description="Filter cabang untuk MANAGER"),
     division: Optional[str] = Query(None, description="Filter divisi"),
+    supplier: Optional[str] = Query(None, description="Filter supplier untuk mode SKU"),
     dimension: str = Query("supplier", pattern="^(supplier|sku)$", description="Grup baris: supplier atau sku (produk)"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_write_access),
@@ -115,6 +116,8 @@ def get_inventory_tracker(
         stock_query = stock_query.filter(ImportedProductStock.branch == scope)
     if division:
         stock_query = stock_query.filter(ImportedProductStock.divisi == division)
+    if supplier and is_sku:
+        stock_query = stock_query.filter(ImportedProductStock.supplier == supplier)
     stock_map = {}
     for value, amount in stock_query.group_by(stock_dim_col).all():
         key = group_key(value)
@@ -129,6 +132,8 @@ def get_inventory_tracker(
         stock_names_query = stock_names_query.filter(ImportedProductStock.branch == scope)
     if division:
         stock_names_query = stock_names_query.filter(ImportedProductStock.divisi == division)
+    if supplier and is_sku:
+        stock_names_query = stock_names_query.filter(ImportedProductStock.supplier == supplier)
     for value, in stock_names_query.distinct().all():
         key = group_key(value)
         stock_names.setdefault(key, (value or "").strip())
@@ -147,6 +152,8 @@ def get_inventory_tracker(
         sales_query = sales_query.filter(ImportedSale.branch == scope)
     if division:
         sales_query = sales_query.filter(ImportedSale.divisi == division)
+    if supplier and is_sku:
+        sales_query = sales_query.filter(ImportedSale.supplier == supplier)
     sales_map = {}
     for value, sale_date, revenue in sales_query.group_by(sales_dim_col, ImportedSale.sale_date).all():
         period = sale_date.strftime("%Y-%m")
@@ -170,6 +177,8 @@ def get_inventory_tracker(
         return_query = return_query.filter(ImportedReturn.branch == scope)
     if division:
         return_query = return_query.filter(ImportedReturn.divisi == division)
+    if supplier and is_sku:
+        return_query = return_query.filter(ImportedReturn.supplier == supplier)
     for value, sale_date, revenue in return_query.group_by(return_dim_col, ImportedReturn.sale_date).all():
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
@@ -191,9 +200,27 @@ def get_inventory_tracker(
     if scope != "GLOBAL":
         stock_divisions_query = stock_divisions_query.filter(ImportedProductStock.branch == scope)
     divisions.update(value.strip() for (value,) in stock_divisions_query.distinct().all() if value and value.strip())
-    suppliers = sorted(set(stock_map) | {key[0] for key in sales_map})
+    suppliers_query = db.query(ImportedProductStock.supplier).filter(
+        ImportedProductStock.supplier.isnot(None),
+        func.trim(ImportedProductStock.supplier) != "",
+        ImportedProductStock.month == normalized,
+    )
+    if scope != "GLOBAL":
+        suppliers_query = suppliers_query.filter(ImportedProductStock.branch == scope)
+    if division:
+        suppliers_query = suppliers_query.filter(ImportedProductStock.divisi == division)
+    supplier_options = {value.strip() for (value,) in suppliers_query.distinct().all() if value and value.strip()}
+    sales_suppliers_query = db.query(ImportedSale.supplier).filter(
+        ImportedSale.supplier.isnot(None), func.trim(ImportedSale.supplier) != ""
+    )
+    if scope != "GLOBAL":
+        sales_suppliers_query = sales_suppliers_query.filter(ImportedSale.branch == scope)
+    if division:
+        sales_suppliers_query = sales_suppliers_query.filter(ImportedSale.divisi == division)
+    supplier_options.update(value.strip() for (value,) in sales_suppliers_query.distinct().all() if value and value.strip())
+    items = sorted(set(stock_map) | {key[0] for key in sales_map})
     rows = []
-    for item in suppliers:
+    for item in items:
         monthly = [sales_map.get((item, period), 0) for period in all_months]
         ap3m = sum(monthly[:3])
         average_per_week = ap3m / 4
@@ -230,8 +257,10 @@ def get_inventory_tracker(
         dimension=dimension,
         division=division,
         divisions=sorted(divisions),
+        supplier=supplier,
+        suppliers=sorted(supplier_options),
         stock_snapshot_available=bool(stock_map),
-        sales_history_available=any(sales_map.get((item, period), 0) != 0 for item in suppliers for period in previous_months),
+        sales_history_available=any(sales_map.get((item, period), 0) != 0 for item in items for period in previous_months),
         total_stock=sum(row.stock for row in rows),
         total_ap3m=sum(row.ap3m for row in rows),
         total_average_per_week=sum(row.average_per_week for row in rows),

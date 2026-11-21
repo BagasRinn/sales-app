@@ -2494,6 +2494,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? month,
     String? branch,
     String? division,
+    String? supplier,
     String dimension = 'supplier',
   }) async {
     // Halaman supplier & SKU berbagi state; kosongkan cache saat dimensi
@@ -2509,6 +2510,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         month: month,
         branch: branch,
         division: division,
+        supplier: supplier,
         dimension: dimension,
       );
       _inventoryTrackerDimension = dimension;

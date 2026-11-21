@@ -25,6 +25,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   late DateTime _month;
   String _branch = '';
   String _division = '';
+  String _supplier = '';
   bool _initialized = false;
   // Lazy rendering: tabel hanya membangun sebagian baris per tahap supaya
   // halaman tetap lancar saat data ribuan (mis. Stok By SKU).
@@ -65,6 +66,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       month: _monthKey,
       branch: provider.isManager && _branch.isNotEmpty ? _branch : null,
       division: _division.isNotEmpty ? _division : null,
+      supplier: _isSku && _supplier.isNotEmpty ? _supplier : null,
       dimension: _dimensionParam,
     );
     if (provider.isManager && provider.branchOptions.isEmpty) {
@@ -213,6 +215,22 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
             _load(provider);
           },
         ),
+        if (_isSku)
+          _selector(
+            icon: Icons.local_shipping_outlined,
+            tooltip: 'Filter supplier',
+            width: 240,
+            value: _supplier,
+            items: [
+              ('', 'Semua supplier'),
+              ...?data?.suppliers.map((s) => (s, s)),
+            ],
+            loading: false,
+            onChanged: (value) {
+              setState(() => _supplier = value);
+              _load(provider);
+            },
+          ),
       ],
     ),
   );
