@@ -292,21 +292,30 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   /// Kolom angka memakai lebar tetap; kolom Supplier fleksibel menyesuaikan
   /// lebar card (min. [_colWidthSupplier]) supaya tabel pas dengan container.
   /// Di layar sempit tabel tetap bisa di-scroll horizontal.
+  ///
+  /// `DataCell`/`DataColumn` menambahkan padding horizontal 16px di tiap sisi
+  /// (32px per kolom), jadi SizedBox konten = lebar kolom - 32 dan total
+  /// lebar tetap memperhitungkan 9 kolom x 32px + horizontalMargin.
   static const _colWidthNum = 150.0;
   static const _colWidthSmall = 130.0;
   static const _colWidthSupplier = 220.0;
+  static const _dataCellPadding = 32.0;
+  static const _columnCount = 9;
   static const _fixedColsWidth =
-      _colWidthNum * 7 + _colWidthSmall + 32.0; // + horizontalMargin
+      _colWidthNum * 7 + // Stock + 3 bulan + AP3M + Avg/Week + bulan ini
+      _colWidthSmall +
+      (_columnCount * _dataCellPadding) + // padding tiap kolom
+      32.0; // horizontalMargin kiri + kanan
 
-  double _supplierWidth(double cardWidth) =>
-      (cardWidth - _fixedColsWidth).clamp(_colWidthSupplier, double.infinity);
+  double _supplierWidth(double cardWidth) => (cardWidth - _fixedColsWidth)
+      .clamp(_colWidthSupplier - _dataCellPadding, double.infinity);
 
   Widget _headerCell(
     String label, {
     double width = _colWidthNum,
     bool endAlign = true,
   }) => SizedBox(
-    width: width,
+    width: width - _dataCellPadding,
     child: Text(
       label,
       maxLines: 1,
@@ -322,7 +331,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     bool endAlign = true,
     bool muted = false,
   }) => SizedBox(
-    width: width,
+    width: width - _dataCellPadding,
     child: Text(
       text,
       maxLines: 1,
@@ -339,7 +348,8 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       builder: (context, constraints) {
         final supplierWidth = _supplierWidth(constraints.maxWidth);
         final fits =
-            constraints.maxWidth >= _fixedColsWidth + _colWidthSupplier;
+            constraints.maxWidth >=
+            _fixedColsWidth + _colWidthSupplier - _dataCellPadding;
         final table = DataTable(
           columnSpacing: 16,
           horizontalMargin: 16,
