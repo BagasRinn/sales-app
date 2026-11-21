@@ -518,7 +518,8 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               variant: AppButtonVariant.danger,
                               onPressed: _isImporting
                                   ? null
-                                  : () => _confirmDeleteMonth(context, provider),
+                                  : () =>
+                                        _confirmDeleteMonth(context, provider),
                             ),
                             AppButton(
                               label: 'Hapus retur',
@@ -526,8 +527,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               variant: AppButtonVariant.danger,
                               onPressed: _isImporting
                                   ? null
-                                  : () =>
-                                      _confirmDeleteReturnsMonth(context, provider),
+                                  : () => _confirmDeleteReturnsMonth(
+                                      context,
+                                      provider,
+                                    ),
                             ),
                             AppButton(
                               label: 'Hapus target',
@@ -535,8 +538,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               variant: AppButtonVariant.danger,
                               onPressed: _isImporting
                                   ? null
-                                  : () =>
-                                      _confirmDeleteTargets(context, provider),
+                                  : () => _confirmDeleteTargets(
+                                      context,
+                                      provider,
+                                    ),
                             ),
                             AppButton(
                               label: 'Hapus Data Produk',
@@ -544,8 +549,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                               variant: AppButtonVariant.danger,
                               onPressed: _isImporting
                                   ? null
-                                  : () =>
-                                      _confirmDeleteProductStock(context, provider),
+                                  : () => _confirmDeleteProductStock(
+                                      context,
+                                      provider,
+                                    ),
                             ),
                             AppButton(
                               label: 'Hapus semua',
@@ -1167,19 +1174,15 @@ class _AnalyticsBody extends StatelessWidget {
   /// Resolver Value Stok per dimensi kartu (lihat ProductStockSummary).
   int? _supplierValueStok(SalesRankItem item) =>
       productStock == null || productStock!.isEmpty
-          ? null
-          : productStock!.supplierByKey[
-                  normalizeRankMatchKey(item.displayLabel)
-                ] ??
-                0;
+      ? null
+      : productStock!.supplierByKey[normalizeRankMatchKey(item.displayLabel)] ??
+            0;
 
   int? _divisiValueStok(SalesRankItem item) =>
       productStock == null || productStock!.isEmpty
-          ? null
-          : productStock!.divisiByKey[
-                  normalizeRankMatchKey(item.displayLabel)
-                ] ??
-                0;
+      ? null
+      : productStock!.divisiByKey[normalizeRankMatchKey(item.displayLabel)] ??
+            0;
 
   int? _productValueStok(SalesRankItem item) {
     final map = productStock?.productByKey;
@@ -1856,6 +1859,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     bool showTarget,
   ) {
     return items
+        .take(widget.limit)
         .map((item) {
           final value = _showMargin ? item.margin : item.revenue;
           final itemDetails = [

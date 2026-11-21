@@ -1727,6 +1727,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? (_importedSalesMonth ?? _currentImportedSalesMonth())
         : month.trim();
     final effectiveLimit = limit ?? _importedSalesLimit;
+    // Keep the display limit small, but fetch the full summary so Pareto's
+    // current-month lookup can find comparison outlets outside top-100.
+    const fetchLimit = 5000;
     final effectiveRangeMonths = rangeMonths ?? _importedSalesRangeMonths;
     const include =
         'product,sales,all_sales,customer,channel,divisi,supplier,supplier_retur,day,sales_day';
@@ -1745,7 +1748,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     final cacheKey = _importedSalesCacheKey(
       targetMonth,
       localScope,
-      effectiveLimit,
+      fetchLimit,
       effectiveRangeMonths,
       include,
     );
@@ -1786,7 +1789,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final serverKey = _importedSalesCacheKey(
         targetMonth,
         serverScope,
-        effectiveLimit,
+        fetchLimit,
         effectiveRangeMonths,
         include,
       );
@@ -1811,7 +1814,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getImportedSalesSummary(
         month: targetMonth,
         rangeMonths: effectiveRangeMonths,
-        limit: effectiveLimit,
+        limit: fetchLimit,
         include: include,
         branch: branchFilter,
       );
@@ -1824,7 +1827,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _importedSalesCache[_importedSalesCacheKey(
         targetMonth,
         dataScope,
-        effectiveLimit,
+        fetchLimit,
         effectiveRangeMonths,
         include,
       )] = _ImportedSalesCacheEntry(

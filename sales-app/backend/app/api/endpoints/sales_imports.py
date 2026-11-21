@@ -347,7 +347,7 @@ def imported_sales_summary(
     month: Optional[str] = None,
     branch: Optional[str] = None,
     range_months: int = Query(1, ge=1, le=12),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=5000),
     include: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_supervisor_or_manager_global),
