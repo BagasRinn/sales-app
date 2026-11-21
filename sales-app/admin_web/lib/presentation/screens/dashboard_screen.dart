@@ -200,6 +200,14 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Dashboard',
           group: utama,
         ),
+      if (widget.role != 'ADMIN')
+        const _NavSpec(
+          page: _DashboardPage.inventoryTracker,
+          icon: Icons.inventory_outlined,
+          selectedIcon: Icons.inventory,
+          label: 'Stok By Supplier',
+          group: utama,
+        ),
       // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
       // bentrok dengan menu Dashboard di atas.
       const _NavSpec(

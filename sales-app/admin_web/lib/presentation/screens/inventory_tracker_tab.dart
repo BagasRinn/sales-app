@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system.dart';
@@ -77,7 +76,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Stok Inventaris', style: AppTextStyles.headlineSmall),
+            Text('Stok By Supplier', style: AppTextStyles.headlineSmall),
             const SizedBox(height: 6),
             Text(
               'Analisa nilai stok supplier berdasarkan penjualan tiga bulan sebelumnya.',
@@ -86,91 +85,8 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
               ),
             ),
             const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _moveMonth(provider, -1),
-                  child: const Icon(Icons.chevron_left),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _pickMonth(provider),
-                  icon: const Icon(Icons.calendar_month_outlined),
-                  label: Text(DateFormat('MMMM yyyy', 'id_ID').format(_month)),
-                ),
-                OutlinedButton(
-                  onPressed: () => _moveMonth(provider, 1),
-                  child: const Icon(Icons.chevron_right),
-                ),
-                if (provider.isManager)
-                  SizedBox(
-                    width: 220,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _branch,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Cabang',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('Semua cabang'),
-                        ),
-                        ...provider.branchOptions.map(
-                          (b) => DropdownMenuItem(
-                            value: b.code,
-                            child: Text(
-                              b.nama,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _branch = value ?? '');
-                        _load(provider);
-                      },
-                    ),
-                  ),
-                const SizedBox(width: 220),
-                if (data != null)
-                  SizedBox(
-                    width: 220,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _division,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Divisi',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('Semua divisi'),
-                        ),
-                        ...data.divisions.map(
-                          (division) => DropdownMenuItem(
-                            value: division,
-                            child: Text(
-                              division,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _division = value ?? '');
-                        _load(provider);
-                      },
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
+            _toolbar(context, provider, data),
+            const SizedBox(height: AppSpacing.md),
             if (provider.inventoryTrackerLoading && data == null)
               const Center(
                 child: Padding(
@@ -201,6 +117,141 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         ),
       );
     },
+  );
+
+  //Toolbar and filters
+  Widget _toolbar(
+    BuildContext context,
+    AdminProvider provider,
+    InventoryTrackerResponse? data,
+  ) => AppCard(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    child: Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (provider.isManager)
+          _selector(
+            icon: Icons.account_balance_outlined,
+            tooltip: 'Filter cabang',
+            width: 194,
+            value: _branch,
+            items: [
+              ('', 'Semua cabang'),
+              ...provider.branchOptions.map((b) => (b.code, b.nama)),
+            ],
+            loading: provider.branchOptionsLoading,
+            onChanged: (value) {
+              setState(() => _branch = value);
+              _load(provider);
+            },
+          ),
+        _SquareIconButton(
+          icon: Icons.chevron_left,
+          tooltip: 'Bulan sebelumnya',
+          onPressed: () => _moveMonth(provider, -1),
+        ),
+        _monthButton(provider),
+        _SquareIconButton(
+          icon: Icons.chevron_right,
+          tooltip: 'Bulan berikutnya',
+          onPressed: () => _moveMonth(provider, 1),
+        ),
+        _selector(
+          icon: Icons.category_outlined,
+          tooltip: 'Filter divisi',
+          width: 194,
+          value: _division,
+          items: [('', 'Semua divisi'), ...?data?.divisions.map((d) => (d, d))],
+          loading: false,
+          onChanged: (value) {
+            setState(() => _division = value);
+            _load(provider);
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _monthButton(AdminProvider provider) => Material(
+    color: AppColors.surface,
+    borderRadius: AppRadius.md,
+    child: InkWell(
+      onTap: () => _pickMonth(provider),
+      borderRadius: AppRadius.md,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.md,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.calendar_month_outlined,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(formatMonthLong(_month), style: AppTextStyles.h3),
+            const SizedBox(width: AppSpacing.xs),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _selector({
+    required IconData icon,
+    required String tooltip,
+    required double width,
+    required String value,
+    required List<(String, String)> items,
+    required bool loading,
+    required ValueChanged<String> onChanged,
+  }) => Tooltip(
+    message: tooltip,
+    child: Container(
+      width: width,
+      height: 40,
+      padding: const EdgeInsets.only(left: 10, right: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.md,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          icon: const Icon(
+            Icons.arrow_drop_down,
+            color: AppColors.textSecondary,
+          ),
+          dropdownColor: AppColors.surface,
+          items: [
+            for (final (code, label) in items)
+              DropdownMenuItem(
+                value: code,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: loading ? null : (v) => onChanged(v ?? ''),
+        ),
+      ),
+    ),
   );
 
   Widget _summary(InventoryTrackerResponse data) => Wrap(
@@ -279,5 +330,39 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       borderRadius: BorderRadius.circular(12),
     ),
     child: Text(text),
+  );
+}
+
+class _SquareIconButton extends StatelessWidget {
+  const _SquareIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: Material(
+      color: AppColors.surface,
+      borderRadius: AppRadius.md,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: AppRadius.md,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.md,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+        ),
+      ),
+    ),
   );
 }
