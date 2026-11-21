@@ -349,13 +349,6 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
           DataColumn(
             label: _headerCell('Week of Inventory', width: _colWidthSmall),
           ),
-          DataColumn(
-            label: _headerCell(
-              'Status',
-              width: _colWidthSmall,
-              endAlign: false,
-            ),
-          ),
           DataColumn(label: _headerCell(data.month)),
         ],
         rows: data.rows.map(_row).toList(),
@@ -363,7 +356,16 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     ),
   );
 
+  /// Overstock: Week of Inventory > 6 minggu → baris merah lembut.
+  bool _isOverstock(InventoryTrackerRow row) =>
+      (row.weekOfInventory ?? 0) > 6;
+
   DataRow _row(InventoryTrackerRow row) => DataRow(
+    color: WidgetStateProperty.resolveWith(
+      (states) => _isOverstock(row)
+          ? AppColors.error.withValues(alpha: 0.12)
+          : Colors.transparent,
+    ),
     cells: [
       DataCell(
         _cell(row.supplierName, width: _colWidthSupplier, endAlign: false),
@@ -376,10 +378,8 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         _cell(
           row.weekOfInventory?.toStringAsFixed(1) ?? '-',
           width: _colWidthSmall,
+          endAlign: true,
         ),
-      ),
-      DataCell(
-        _cell(row.inventoryStatus, width: _colWidthSmall, endAlign: false),
       ),
       DataCell(_cell(formatRupiah(row.salesCurrentMonth))),
     ],
