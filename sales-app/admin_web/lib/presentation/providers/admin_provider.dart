@@ -2490,6 +2490,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? month,
     String? branch,
     String? division,
+    String dimension = 'supplier',
   }) async {
     _inventoryTrackerLoading = true;
     _inventoryTrackerError = null;
@@ -2499,6 +2500,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         month: month,
         branch: branch,
         division: division,
+        dimension: dimension,
       );
     } catch (e) {
       _inventoryTrackerError = e is ApiException ? e.message : e.toString();

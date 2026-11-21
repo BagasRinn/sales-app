@@ -7,8 +7,15 @@ import '../../data/models/inventory_tracker.dart';
 import '../widgets/analytics/sales_analytics_models.dart';
 import '../providers/admin_provider.dart';
 
+enum InventoryTrackerDimension { supplier, sku }
+
 class InventoryTrackerTab extends StatefulWidget {
-  const InventoryTrackerTab({super.key});
+  const InventoryTrackerTab({
+    super.key,
+    this.dimension = InventoryTrackerDimension.supplier,
+  });
+
+  final InventoryTrackerDimension dimension;
 
   @override
   State<InventoryTrackerTab> createState() => _InventoryTrackerTabState();
@@ -19,6 +26,11 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   String _branch = '';
   String _division = '';
   bool _initialized = false;
+
+  bool get _isSku => widget.dimension == InventoryTrackerDimension.sku;
+  String get _pageTitle => _isSku ? 'Stok By SKU' : 'Stok By Supplier';
+  String get _firstColumnTitle => _isSku ? 'Nama Produk' : 'Supplier';
+  String get _dimensionParam => _isSku ? 'sku' : 'supplier';
 
   @override
   void initState() {
@@ -35,6 +47,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       month: _monthKey,
       branch: provider.isManager && _branch.isNotEmpty ? _branch : null,
       division: _division.isNotEmpty ? _division : null,
+      dimension: _dimensionParam,
     );
     if (provider.isManager && provider.branchOptions.isEmpty) {
       provider.loadBranchOptions();
@@ -76,10 +89,10 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Stok By Supplier', style: AppTextStyles.headlineSmall),
+            Text(_pageTitle, style: AppTextStyles.headlineSmall),
             const SizedBox(height: 6),
             Text(
-              'Analisa nilai stok supplier berdasarkan penjualan tiga bulan sebelumnya.',
+              'Analisa nilai stok ${_isSku ? 'produk' : 'supplier'} berdasarkan penjualan tiga bulan sebelumnya.',
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.textSubtle,
               ),
@@ -262,7 +275,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       _card('AP3M', formatRupiah(data.totalAp3m)),
       _card('Average / Week', formatRupiah(data.totalAveragePerWeek.round())),
       _card('Penjualan Bulan Ini', formatRupiah(data.totalSalesCurrentMonth)),
-      _card('Supplier', '${data.supplierCount}'),
+      _card(_isSku ? 'Produk' : 'Supplier', '${data.supplierCount}'),
       _card('Overstock', '${data.overstockCount}'),
     ],
   );
@@ -355,7 +368,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
               children: [
-                _col('Supplier', endAlign: false),
+                _col(_firstColumnTitle, endAlign: false),
                 _col('Stock'),
                 ...data.previousMonths.map((m) => _col(m)),
                 _col('AP3M'),
@@ -392,7 +405,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         color: overstock ? AppColors.error.withValues(alpha: 0.12) : null,
       ),
       children: [
-        padded(_cell(row.supplierName, endAlign: false)),
+        padded(_cell(row.name, endAlign: false)),
         padded(_cell(formatRupiah(row.stock))),
         ...row.previousSales.map((v) => padded(_cell(formatRupiah(v)))),
         padded(_cell(formatRupiah(row.ap3m))),

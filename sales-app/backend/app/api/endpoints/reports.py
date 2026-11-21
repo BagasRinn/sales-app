@@ -49,10 +49,12 @@ def get_inventory_tracker(
     month: Optional[str] = Query(None, description="Bulan laporan (YYYY-MM)"),
     branch: Optional[str] = Query(None, description="Filter cabang untuk MANAGER"),
     division: Optional[str] = Query(None, description="Filter divisi"),
+    dimension: str = Query("supplier", pattern="^(supplier|sku)$", description="Grup baris: supplier atau sku (produk)"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_write_access),
 ):
-    """Supplier inventory coverage from dashboard stock and imported sales."""
+    """Inventory coverage grouped by supplier or product (SKU), from dashboard
+    stock snapshots and imported sales."""
     # require_write_access includes ADMIN, so explicitly restrict this new
     # management page to the same roles as supplier performance.
     if current_user.get("role") not in {"MANAGER", "SUPERVISOR"}:
@@ -65,87 +67,90 @@ def get_inventory_tracker(
     previous_months = months_before(normalized, 3)
     all_months = previous_months + [normalized]
 
-    def supplier_key(value: Optional[str]) -> str:
+    is_sku = dimension == "sku"
+    stock_dim_col = ImportedProductStock.product_nama if is_sku else ImportedProductStock.supplier
+    sales_dim_col = ImportedSale.product_nama if is_sku else ImportedSale.supplier
+    return_dim_col = ImportedReturn.product_nama if is_sku else ImportedReturn.supplier
+
+    def group_key(value: Optional[str]) -> str:
+        if is_sku:
+            return " ".join((value or "").upper().split())
         normalized_name = re.sub(r"[^A-Z0-9 ]+", " ", (value or "").upper())
         parts = [part for part in normalized_name.split() if part not in {"PT", "CV", "TBK", "UD"}]
         return " ".join(parts)
 
     stock_query = db.query(
-        ImportedProductStock.supplier,
+        stock_dim_col,
         func.coalesce(func.sum(ImportedProductStock.good_amount), 0),
     ).filter(
         ImportedProductStock.month == normalized,
-        ImportedProductStock.supplier.isnot(None),
-        func.trim(ImportedProductStock.supplier) != "",
+        stock_dim_col.isnot(None),
+        func.trim(stock_dim_col) != "",
     )
     if scope != "GLOBAL":
         stock_query = stock_query.filter(ImportedProductStock.branch == scope)
     if division:
         stock_query = stock_query.filter(ImportedProductStock.divisi == division)
     stock_map = {}
-    for supplier, value in stock_query.group_by(ImportedProductStock.supplier).all():
-        key = supplier_key(supplier)
-        stock_map[key] = stock_map.get(key, 0) + int(value or 0)
+    for value, amount in stock_query.group_by(stock_dim_col).all():
+        key = group_key(value)
+        stock_map[key] = stock_map.get(key, 0) + int(amount or 0)
     stock_names = {}
-    stock_names_query = db.query(ImportedProductStock.supplier).filter(
+    stock_names_query = db.query(stock_dim_col).filter(
         ImportedProductStock.month == normalized,
-        ImportedProductStock.supplier.isnot(None),
-        func.trim(ImportedProductStock.supplier) != "",
+        stock_dim_col.isnot(None),
+        func.trim(stock_dim_col) != "",
     )
     if scope != "GLOBAL":
         stock_names_query = stock_names_query.filter(ImportedProductStock.branch == scope)
     if division:
         stock_names_query = stock_names_query.filter(ImportedProductStock.divisi == division)
-    for supplier, in stock_names_query.distinct().all():
-        key = supplier_key(supplier)
-        stock_names.setdefault(key, (supplier or "").strip())
+    for value, in stock_names_query.distinct().all():
+        key = group_key(value)
+        stock_names.setdefault(key, (value or "").strip())
 
     sales_query = db.query(
-        ImportedSale.supplier,
+        sales_dim_col,
         ImportedSale.sale_date,
         func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
     ).filter(
         ImportedSale.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
         ImportedSale.sale_date < end.date(),
-        ImportedSale.supplier.isnot(None),
-        func.trim(ImportedSale.supplier) != "",
+        sales_dim_col.isnot(None),
+        func.trim(sales_dim_col) != "",
     )
     if scope != "GLOBAL":
         sales_query = sales_query.filter(ImportedSale.branch == scope)
     if division:
         sales_query = sales_query.filter(ImportedSale.divisi == division)
     sales_map = {}
-    for supplier, sale_date, revenue in sales_query.group_by(
-        ImportedSale.supplier, ImportedSale.sale_date
-    ).all():
+    for value, sale_date, revenue in sales_query.group_by(sales_dim_col, ImportedSale.sale_date).all():
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
-        key = (supplier_key(supplier), period)
+        key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) + int(revenue or 0)
 
-    # Returns have the same supplier dimension and reduce net sales.
+    # Returns share the same dimension and reduce net sales.
     return_query = db.query(
-        ImportedReturn.supplier,
+        return_dim_col,
         ImportedReturn.sale_date,
         func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
     ).filter(
         ImportedReturn.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
         ImportedReturn.sale_date < end.date(),
-        ImportedReturn.supplier.isnot(None),
-        func.trim(ImportedReturn.supplier) != "",
+        return_dim_col.isnot(None),
+        func.trim(return_dim_col) != "",
     )
     if scope != "GLOBAL":
         return_query = return_query.filter(ImportedReturn.branch == scope)
     if division:
         return_query = return_query.filter(ImportedReturn.divisi == division)
-    for supplier, sale_date, revenue in return_query.group_by(
-        ImportedReturn.supplier, ImportedReturn.sale_date
-    ).all():
+    for value, sale_date, revenue in return_query.group_by(return_dim_col, ImportedReturn.sale_date).all():
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
-        key = (supplier_key(supplier), period)
+        key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) - int(revenue or 0)
 
     divisions_query = db.query(ImportedSale.divisi).filter(
@@ -164,11 +169,11 @@ def get_inventory_tracker(
     divisions.update(value.strip() for (value,) in stock_divisions_query.distinct().all() if value and value.strip())
     suppliers = sorted(set(stock_map) | {key[0] for key in sales_map})
     rows = []
-    for supplier in suppliers:
-        monthly = [sales_map.get((supplier, period), 0) for period in all_months]
+    for item in suppliers:
+        monthly = [sales_map.get((item, period), 0) for period in all_months]
         ap3m = sum(monthly[:3])
         average_per_week = ap3m / 4
-        stock = stock_map.get(supplier, 0)
+        stock = stock_map.get(item, 0)
         weeks = stock / average_per_week if average_per_week > 0 else None
         if stock <= 0:
             status = "Habis"
@@ -179,7 +184,8 @@ def get_inventory_tracker(
         else:
             status = "Overstock"
         rows.append(InventoryTrackerRow(
-            supplier_name=stock_names.get(supplier, supplier),
+            name=stock_names.get(item, item),
+            supplier_name=stock_names.get(item, item),
             stock=stock,
             sales_month_1=monthly[0],
             sales_month_2=monthly[1],
@@ -191,16 +197,17 @@ def get_inventory_tracker(
             inventory_status=status,
         ))
 
-    # Urutan alfabetis supplier; status overstock tetap ditandai warna di UI.
-    rows.sort(key=lambda row: row.supplier_name.lower())
+    # Urutan alfabetis; status overstock tetap ditandai warna di UI.
+    rows.sort(key=lambda row: row.name.lower())
     return InventoryTrackerResponse(
         month=normalized,
         previous_months=previous_months,
         scope=scope,
+        dimension=dimension,
         division=division,
         divisions=sorted(divisions),
         stock_snapshot_available=bool(stock_map),
-        sales_history_available=any(sales_map.get((supplier, period), 0) != 0 for supplier in suppliers for period in previous_months),
+        sales_history_available=any(sales_map.get((item, period), 0) != 0 for item in suppliers for period in previous_months),
         total_stock=sum(row.stock for row in rows),
         total_ap3m=sum(row.ap3m for row in rows),
         total_average_per_week=sum(row.average_per_week for row in rows),

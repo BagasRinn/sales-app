@@ -1164,11 +1164,13 @@ class AdminRepository {
     String? month,
     String? branch,
     String? division,
+    String dimension = 'supplier',
   }) async {
     final params = <String, String>{
       if (month != null && month.isNotEmpty) 'month': month,
       if (branch != null && branch.isNotEmpty) 'branch': branch,
       if (division != null && division.isNotEmpty) 'division': division,
+      'dimension': dimension,
     };
     final qs = params.isEmpty
         ? ''

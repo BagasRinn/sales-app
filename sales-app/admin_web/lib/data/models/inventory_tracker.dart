@@ -1,5 +1,6 @@
 class InventoryTrackerRow {
-  final String supplierName;
+  // `name` = supplier atau nama produk, tergantung dimension response.
+  final String name;
   final int stock;
   final List<int> previousSales;
   final int ap3m;
@@ -9,7 +10,7 @@ class InventoryTrackerRow {
   final String inventoryStatus;
 
   const InventoryTrackerRow({
-    required this.supplierName,
+    required this.name,
     required this.stock,
     required this.previousSales,
     required this.ap3m,
@@ -21,7 +22,7 @@ class InventoryTrackerRow {
 
   factory InventoryTrackerRow.fromJson(Map<String, dynamic> json) {
     return InventoryTrackerRow(
-      supplierName: json['supplier_name']?.toString() ?? '',
+      name: (json['name'] ?? json['supplier_name'])?.toString() ?? '',
       stock: (json['stock'] as num?)?.toInt() ?? 0,
       previousSales: [
         (json['sales_month_1'] as num?)?.toInt() ?? 0,

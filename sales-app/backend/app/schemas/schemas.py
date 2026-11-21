@@ -967,7 +967,10 @@ class SupplierPerformanceRow(BaseModel):
 
 
 class InventoryTrackerRow(BaseModel):
-    supplier_name: str
+    # `name` = supplier (dimension=supplier) atau nama produk (dimension=sku).
+    # `supplier_name` dipertahankan sebagai alias lama.
+    name: str
+    supplier_name: str = ""
     stock: int = 0
     sales_month_1: int = 0
     sales_month_2: int = 0
@@ -983,6 +986,7 @@ class InventoryTrackerResponse(BaseModel):
     month: str
     previous_months: List[str]
     scope: str
+    dimension: str = "supplier"
     division: Optional[str] = None
     divisions: List[str] = []
     stock_snapshot_available: bool = False

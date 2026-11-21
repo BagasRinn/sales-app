@@ -46,6 +46,7 @@ enum _DashboardPage {
   performance,
   supplierPerformance,
   inventoryTracker,
+  inventoryTrackerSku,
   penugasan,
   bulletins,
   importedSales,
@@ -208,6 +209,14 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Stok By Supplier',
           group: utama,
         ),
+      if (widget.role != 'ADMIN')
+        const _NavSpec(
+          page: _DashboardPage.inventoryTrackerSku,
+          icon: Icons.inventory_2_outlined,
+          selectedIcon: Icons.inventory_2,
+          label: 'Stok By SKU',
+          group: utama,
+        ),
       // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
       // bentrok dengan menu Dashboard di atas.
       const _NavSpec(
@@ -297,13 +306,6 @@ class _DashboardContentState extends State<_DashboardContent>
           group: manajemen,
         ),
         const _NavSpec(
-          page: _DashboardPage.inventoryTracker,
-          icon: Icons.inventory_outlined,
-          selectedIcon: Icons.inventory,
-          label: 'Stok Inventaris',
-          group: manajemen,
-        ),
-        const _NavSpec(
           page: _DashboardPage.penugasan,
           icon: Icons.assignment_ind_outlined,
           selectedIcon: Icons.assignment_ind,
@@ -374,6 +376,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 13;
       case _DashboardPage.inventoryTracker:
         return 16;
+      case _DashboardPage.inventoryTrackerSku:
+        return 17;
       case _DashboardPage.penugasan:
         return 9;
       case _DashboardPage.bulletins:
@@ -572,6 +576,10 @@ class _DashboardContentState extends State<_DashboardContent>
         return const SupplierPerformancePivotTab();
       case _DashboardPage.inventoryTracker:
         return const InventoryTrackerTab();
+      case _DashboardPage.inventoryTrackerSku:
+        return const InventoryTrackerTab(
+          dimension: InventoryTrackerDimension.sku,
+        );
       case _DashboardPage.penugasan:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case _DashboardPage.bulletins:
