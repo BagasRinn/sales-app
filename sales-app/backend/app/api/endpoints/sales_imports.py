@@ -533,6 +533,11 @@ def imported_sales_comparison(
                     )
                     if count
                     else 0,
+                    "average_active_outlets": (
+                        int(item.get("active_outlets") or 0) // count
+                    )
+                    if count
+                    else 0,
                 }
                 for item in items
             ]

@@ -1963,7 +1963,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
-              activeOutlets: toInt(e['active_outlets']),
+              activeOutlets: toInt(
+                e['average_active_outlets'] ?? e['active_outlets'],
+              ),
               motherSku: e['mother_sku']?.toString(),
               productKode: e['product_kode']?.toString(),
             ),
@@ -1979,7 +1981,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
-              activeOutlets: toInt(e['active_outlets']),
+              activeOutlets: toInt(
+                e['average_active_outlets'] ?? e['active_outlets'],
+              ),
             ),
           )
           .toList(growable: false),
@@ -1993,7 +1997,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
-              activeOutlets: toInt(e['active_outlets']),
+              activeOutlets: toInt(
+                e['average_active_outlets'] ?? e['active_outlets'],
+              ),
             ),
           )
           .toList(growable: false),
@@ -2007,7 +2013,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               qty: toInt(e['qty']),
               revenue: toInt(e['average_revenue'] ?? e['revenue']),
               margin: toInt(e['average_margin'] ?? e['margin']),
-              activeOutlets: toInt(e['active_outlets']),
+              activeOutlets: toInt(
+                e['average_active_outlets'] ?? e['active_outlets'],
+              ),
             ),
           )
           .toList(growable: false),
