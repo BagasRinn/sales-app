@@ -43,9 +43,13 @@ from app.models.models import (
 from app.services.db_locks import acquire_advisory_xact_lock
 from app.services.sales_import_versions import GLOBAL_SCOPE
 
-# The API caps `limit` at 100, so storing the top 100 per dimension is enough
-# to satisfy every possible request. Totals are always stored in full.
-SUMMARY_TOP_N = 100
+# The API caps `limit` at 100, but the dashboard comparison lookup also needs
+# entities outside the displayed top-100 (e.g. Pareto Outlet "Bulan ini" shows
+# Rp 0 for a ranked outlet whose current-month revenue fell below the old
+# top-100 cutoff). Storing up to 5000 groups per dimension keeps every real
+# group (worst observed month: ~3200 distinct customers). Totals are always
+# stored in full.
+SUMMARY_TOP_N = 5000
 RETURN_SUPPLIER_SNAPSHOT_TOP_N = SUMMARY_TOP_N * 2
 
 # Number of sales lines drawn on the multi-series daily chart. Ten is enough to

@@ -611,8 +611,9 @@ class ImportedSalesMonthlySummary(Base):
     row of the month on each request. With thousands of rows that is both CPU
     and DB→app egress. The table is recomputed in the import transaction (and
     lazily backfilled for legacy data), so reads become a small indexed
-    lookup. ``limit`` is capped at ``SUMMARY_TOP_N`` (100) by the API, so the
-    stored top-100 always satisfies any request.
+    lookup. The read API caps ``limit`` at 100, but the stored top-N is wider
+    (``SUMMARY_TOP_N``) so dashboard comparisons still find entities whose
+    current-month revenue falls outside the displayed top-100.
     """
     __tablename__ = "imported_sales_monthly_summary"
     __table_args__ = (
