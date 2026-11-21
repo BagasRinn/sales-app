@@ -289,19 +289,74 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     ),
   );
 
+  /// Kolom angka memakai lebar tetap (px) agar tabel stabil di semua ukuran
+  /// layar; melebihi lebar card di-scroll horizontal. Kolom angka rata kanan.
+  static const _colWidthNum = 150.0;
+  static const _colWidthSmall = 130.0;
+  static const _colWidthSupplier = 220.0;
+
+  Widget _headerCell(
+    String label, {
+    double width = _colWidthNum,
+    bool endAlign = true,
+  }) => SizedBox(
+    width: width,
+    child: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: endAlign ? TextAlign.end : TextAlign.start,
+      style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+    ),
+  );
+
+  Widget _cell(
+    String text, {
+    double width = _colWidthNum,
+    bool endAlign = true,
+    bool muted = false,
+  }) => SizedBox(
+    width: width,
+    child: Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: endAlign ? TextAlign.end : TextAlign.start,
+      style: AppTextStyles.bodySmall.copyWith(
+        color: muted ? AppColors.textSubtle : AppColors.textPrimary,
+      ),
+    ),
+  );
+
   Widget _table(InventoryTrackerResponse data) => Card(
     child: SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
+        columnSpacing: 16,
+        horizontalMargin: 16,
         columns: [
-          const DataColumn(label: Text('Supplier')),
-          const DataColumn(label: Text('Stock')),
-          ...data.previousMonths.map((m) => DataColumn(label: Text(m))),
-          const DataColumn(label: Text('AP3M')),
-          const DataColumn(label: Text('Avg / Week')),
-          const DataColumn(label: Text('Week of Inventory')),
-          const DataColumn(label: Text('Status')),
-          DataColumn(label: Text(data.month)),
+          DataColumn(
+            label: _headerCell(
+              'Supplier',
+              width: _colWidthSupplier,
+              endAlign: false,
+            ),
+          ),
+          DataColumn(label: _headerCell('Stock')),
+          ...data.previousMonths.map((m) => DataColumn(label: _headerCell(m))),
+          DataColumn(label: _headerCell('AP3M')),
+          DataColumn(label: _headerCell('Avg / Week')),
+          DataColumn(
+            label: _headerCell('Week of Inventory', width: _colWidthSmall),
+          ),
+          DataColumn(
+            label: _headerCell(
+              'Status',
+              width: _colWidthSmall,
+              endAlign: false,
+            ),
+          ),
+          DataColumn(label: _headerCell(data.month)),
         ],
         rows: data.rows.map(_row).toList(),
       ),
@@ -310,14 +365,23 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
 
   DataRow _row(InventoryTrackerRow row) => DataRow(
     cells: [
-      DataCell(Text(row.supplierName)),
-      DataCell(Text(formatRupiah(row.stock))),
-      ...row.previousSales.map((v) => DataCell(Text(formatRupiah(v)))),
-      DataCell(Text(formatRupiah(row.ap3m))),
-      DataCell(Text(formatRupiah(row.averagePerWeek.round()))),
-      DataCell(Text(row.weekOfInventory?.toStringAsFixed(1) ?? '-')),
-      DataCell(Text(row.inventoryStatus)),
-      DataCell(Text(formatRupiah(row.salesCurrentMonth))),
+      DataCell(
+        _cell(row.supplierName, width: _colWidthSupplier, endAlign: false),
+      ),
+      DataCell(_cell(formatRupiah(row.stock))),
+      ...row.previousSales.map((v) => DataCell(_cell(formatRupiah(v)))),
+      DataCell(_cell(formatRupiah(row.ap3m))),
+      DataCell(_cell(formatRupiah(row.averagePerWeek.round()))),
+      DataCell(
+        _cell(
+          row.weekOfInventory?.toStringAsFixed(1) ?? '-',
+          width: _colWidthSmall,
+        ),
+      ),
+      DataCell(
+        _cell(row.inventoryStatus, width: _colWidthSmall, endAlign: false),
+      ),
+      DataCell(_cell(formatRupiah(row.salesCurrentMonth))),
     ],
   );
 
