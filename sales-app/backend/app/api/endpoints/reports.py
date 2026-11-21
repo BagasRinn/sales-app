@@ -191,8 +191,8 @@ def get_inventory_tracker(
             inventory_status=status,
         ))
 
-    status_order = {"Habis": 0, "Tidak ada riwayat": 1, "Aman": 2, "Overstock": 3}
-    rows.sort(key=lambda row: (status_order[row.inventory_status], row.week_of_inventory or 0, row.supplier_name.lower()))
+    # Urutan alfabetis supplier; status overstock tetap ditandai warna di UI.
+    rows.sort(key=lambda row: row.supplier_name.lower())
     return InventoryTrackerResponse(
         month=normalized,
         previous_months=previous_months,
