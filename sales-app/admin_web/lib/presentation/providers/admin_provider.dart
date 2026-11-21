@@ -2480,6 +2480,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   InventoryTrackerResponse? _inventoryTracker;
+  String? _inventoryTrackerDimension;
   bool _inventoryTrackerLoading = false;
   String? _inventoryTrackerError;
   InventoryTrackerResponse? get inventoryTracker => _inventoryTracker;
@@ -2492,6 +2493,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     String? division,
     String dimension = 'supplier',
   }) async {
+    // Halaman supplier & SKU berbagi state; kosongkan cache saat dimensi
+    // berubah supaya data halaman lain tidak ikut tampil.
+    if (_inventoryTracker != null && _inventoryTrackerDimension != dimension) {
+      _inventoryTracker = null;
+    }
     _inventoryTrackerLoading = true;
     _inventoryTrackerError = null;
     notifyListeners();
@@ -2502,6 +2508,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         division: division,
         dimension: dimension,
       );
+      _inventoryTrackerDimension = dimension;
     } catch (e) {
       _inventoryTrackerError = e is ApiException ? e.message : e.toString();
     } finally {

@@ -68,9 +68,33 @@ def get_inventory_tracker(
     all_months = previous_months + [normalized]
 
     is_sku = dimension == "sku"
-    stock_dim_col = ImportedProductStock.product_nama if is_sku else ImportedProductStock.supplier
-    sales_dim_col = ImportedSale.product_nama if is_sku else ImportedSale.supplier
-    return_dim_col = ImportedReturn.product_nama if is_sku else ImportedReturn.supplier
+    # Snapshot GOOD AMOUNT sering menyimpan product_nama kosong (nama produk
+    # ada di product_kode hasil coalesce mother_sku/kode_barang), jadi dimensi
+    # SKU memakai coalesce(product_nama, product_kode).
+    stock_dim_col = (
+        func.coalesce(
+            func.nullif(func.trim(ImportedProductStock.product_nama), ""),
+            ImportedProductStock.product_kode,
+        )
+        if is_sku
+        else ImportedProductStock.supplier
+    )
+    sales_dim_col = (
+        func.coalesce(
+            func.nullif(func.trim(ImportedSale.product_nama), ""),
+            ImportedSale.product_kode,
+        )
+        if is_sku
+        else ImportedSale.supplier
+    )
+    return_dim_col = (
+        func.coalesce(
+            func.nullif(func.trim(ImportedReturn.product_nama), ""),
+            ImportedReturn.product_kode,
+        )
+        if is_sku
+        else ImportedReturn.supplier
+    )
 
     def group_key(value: Optional[str]) -> str:
         if is_sku:
