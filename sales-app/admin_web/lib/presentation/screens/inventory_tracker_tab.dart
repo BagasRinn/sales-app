@@ -289,11 +289,17 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     ),
   );
 
-  /// Kolom angka memakai lebar tetap (px) agar tabel stabil di semua ukuran
-  /// layar; melebihi lebar card di-scroll horizontal. Kolom angka rata kanan.
+  /// Kolom angka memakai lebar tetap; kolom Supplier fleksibel menyesuaikan
+  /// lebar card (min. [_colWidthSupplier]) supaya tabel pas dengan container.
+  /// Di layar sempit tabel tetap bisa di-scroll horizontal.
   static const _colWidthNum = 150.0;
   static const _colWidthSmall = 130.0;
   static const _colWidthSupplier = 220.0;
+  static const _fixedColsWidth =
+      _colWidthNum * 7 + _colWidthSmall + 32.0; // + horizontalMargin
+
+  double _supplierWidth(double cardWidth) =>
+      (cardWidth - _fixedColsWidth).clamp(_colWidthSupplier, double.infinity);
 
   Widget _headerCell(
     String label, {
@@ -329,47 +335,55 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   );
 
   Widget _table(InventoryTrackerResponse data) => Card(
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 16,
-        horizontalMargin: 16,
-        columns: [
-          DataColumn(
-            label: _headerCell(
-              'Supplier',
-              width: _colWidthSupplier,
-              endAlign: false,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final supplierWidth = _supplierWidth(constraints.maxWidth);
+        final fits =
+            constraints.maxWidth >= _fixedColsWidth + _colWidthSupplier;
+        final table = DataTable(
+          columnSpacing: 16,
+          horizontalMargin: 16,
+          columns: [
+            DataColumn(
+              label: _headerCell(
+                'Supplier',
+                width: supplierWidth,
+                endAlign: false,
+              ),
             ),
-          ),
-          DataColumn(label: _headerCell('Stock')),
-          ...data.previousMonths.map((m) => DataColumn(label: _headerCell(m))),
-          DataColumn(label: _headerCell('AP3M')),
-          DataColumn(label: _headerCell('Avg / Week')),
-          DataColumn(
-            label: _headerCell('Week of Inventory', width: _colWidthSmall),
-          ),
-          DataColumn(label: _headerCell(data.month)),
-        ],
-        rows: data.rows.map(_row).toList(),
-      ),
+            DataColumn(label: _headerCell('Stock')),
+            ...data.previousMonths.map(
+              (m) => DataColumn(label: _headerCell(m)),
+            ),
+            DataColumn(label: _headerCell('AP3M')),
+            DataColumn(label: _headerCell('Avg / Week')),
+            DataColumn(
+              label: _headerCell('Week of Inventory', width: _colWidthSmall),
+            ),
+            DataColumn(label: _headerCell(data.month)),
+          ],
+          rows: data.rows.map((row) => _row(row, supplierWidth)).toList(),
+        );
+        if (fits) return table;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: table,
+        );
+      },
     ),
   );
 
   /// Overstock: Week of Inventory > 6 minggu → baris merah lembut.
-  bool _isOverstock(InventoryTrackerRow row) =>
-      (row.weekOfInventory ?? 0) > 6;
+  bool _isOverstock(InventoryTrackerRow row) => (row.weekOfInventory ?? 0) > 6;
 
-  DataRow _row(InventoryTrackerRow row) => DataRow(
+  DataRow _row(InventoryTrackerRow row, double supplierWidth) => DataRow(
     color: WidgetStateProperty.resolveWith(
       (states) => _isOverstock(row)
           ? AppColors.error.withValues(alpha: 0.12)
           : Colors.transparent,
     ),
     cells: [
-      DataCell(
-        _cell(row.supplierName, width: _colWidthSupplier, endAlign: false),
-      ),
+      DataCell(_cell(row.supplierName, width: supplierWidth, endAlign: false)),
       DataCell(_cell(formatRupiah(row.stock))),
       ...row.previousSales.map((v) => DataCell(_cell(formatRupiah(v)))),
       DataCell(_cell(formatRupiah(row.ap3m))),
