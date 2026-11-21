@@ -248,8 +248,14 @@ def get_inventory_tracker(
             inventory_status=status,
         ))
 
-    # Urutan alfabetis; status overstock tetap ditandai warna di UI.
-    rows.sort(key=lambda row: row.name.lower())
+    # Prioritaskan overstock untuk ditindaklanjuti, lalu urutkan alfabetis
+    # berdasarkan nama supplier atau nama produk sesuai dimension.
+    rows.sort(
+        key=lambda row: (
+            0 if row.inventory_status == "Overstock" else 1,
+            row.name.lower(),
+        )
+    )
     return InventoryTrackerResponse(
         month=normalized,
         previous_months=previous_months,
