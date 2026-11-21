@@ -43,6 +43,7 @@ class InventoryTrackerResponse {
   final String month;
   final List<String> previousMonths;
   final String scope;
+  final String dimension;
   final String? division;
   final List<String> divisions;
   final bool stockSnapshotAvailable;
@@ -59,6 +60,7 @@ class InventoryTrackerResponse {
     required this.month,
     required this.previousMonths,
     required this.scope,
+    required this.dimension,
     required this.division,
     required this.divisions,
     required this.stockSnapshotAvailable,
@@ -79,6 +81,7 @@ class InventoryTrackerResponse {
           .map((e) => e.toString())
           .toList(),
       scope: json['scope']?.toString() ?? '',
+      dimension: json['dimension']?.toString() ?? 'supplier',
       division: json['division']?.toString(),
       divisions: (json['divisions'] as List? ?? [])
           .map((e) => e.toString())

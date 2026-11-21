@@ -94,6 +94,18 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         });
       }
       final data = provider.inventoryTracker;
+      if (data != null &&
+          data.dimension != _dimensionParam &&
+          !provider.inventoryTrackerLoading) {
+        // IndexedStack keeps both tracker pages alive. Reload immediately when
+        // the shared provider currently contains the other dimension.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              !context.read<AdminProvider>().inventoryTrackerLoading) {
+            _load(context.read<AdminProvider>());
+          }
+        });
+      }
       final responsive = Responsive.of(MediaQuery.sizeOf(context).width);
       return SingleChildScrollView(
         padding: EdgeInsets.all(responsive.contentPadding),

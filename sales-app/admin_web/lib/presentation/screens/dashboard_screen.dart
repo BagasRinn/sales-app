@@ -418,7 +418,7 @@ class _DashboardContentState extends State<_DashboardContent>
     }
 
     // Set role di provider supaya loadAll() tahu endpoint mana yang boleh dipanggil.
-    // loadAll + auto-refresh dijalankan SETELAH frame pertama selesai â€” supaya
+    // loadAll + auto-refresh dijalankan SETELAH frame pertama selesai supaya
     // notifyListeners tidak terjadi di tengah build phase (yang bisa trigger _dirty).
     _adminProvider.setUserRole(widget.role);
     _adminProvider.setUserBranch(widget.branch);
@@ -438,7 +438,7 @@ class _DashboardContentState extends State<_DashboardContent>
       if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') {
         _adminProvider.loadSalesPerformanceDashboard();
       }
-      // Idle timer baru mulai setelah load pertama selesai â€” supaya
+      // Idle timer baru mulai setelah load pertama selesai supaya
       // activity "load" dari internal tidak dihitung interaksi user.
       _lastActivity = DateTime.now();
       _idleTimer = Timer.periodic(_idleCheckInterval, (_) => _checkIdle());
@@ -501,7 +501,7 @@ class _DashboardContentState extends State<_DashboardContent>
       context.read<AdminProvider>().clearNewPendingBadge();
     }
     setState(() => _selectedIndex = i);
-    // Cancel any in-flight loadAll requests â€” user sudah pindah tab,
+    // Cancel any in-flight loadAll requests user sudah pindah tab,
     // response dari tab lama tidak relevan.
     context.read<AdminProvider>().cancelInFlightLoads();
     // Tell provider tab aktif supaya auto-refresh hanya load data tab ini.
@@ -514,15 +514,15 @@ class _DashboardContentState extends State<_DashboardContent>
   Widget _buildBody() {
     final specs = _navSpecs();
     final i = _selectedIndex.clamp(0, specs.length - 1);
-    // Permission BEDA per fitur â€” bukan satu flag global. Backend endpoint
+    // Permission BEDA per fitur — bukan satu flag global. Backend endpoint
     // masing-masing tab punya aturan sendiri, jadi UI harus match.
     //
     // Pesanan (orders):
-    //   - POST /orders/{id}/approve pakai require_admin â†’ hanya ADMIN write.
+    //   - POST /orders/{id}/approve pakai require_admin → hanya ADMIN write.
     //   - SUPERVISOR & MANAGER murni monitoring.
     // Master data (Toko, Pengajuan Customer, Produk, Bulletin, Sync):
     //   read-only untuk semua role (ADMIN/SUPERVISOR/MANAGER memantau).
-    //   Create/edit di backend pakai require_supervisor_or_manager_global â†’
+    //   Create/edit di backend pakai require_supervisor_or_manager_global →
     //   ADMIN, SUPERVISOR & MANAGER boleh write.
     final orderReadOnly = widget.role != 'ADMIN';
     // Users tab: ADMIN, SUPERVISOR, MANAGER boleh add/edit user.
@@ -575,9 +575,12 @@ class _DashboardContentState extends State<_DashboardContent>
       case _DashboardPage.supplierPerformance:
         return const SupplierPerformancePivotTab();
       case _DashboardPage.inventoryTracker:
-        return const InventoryTrackerTab();
+        return const InventoryTrackerTab(
+          key: ValueKey('inventory-tracker-supplier'),
+        );
       case _DashboardPage.inventoryTrackerSku:
         return const InventoryTrackerTab(
+          key: ValueKey('inventory-tracker-sku'),
           dimension: InventoryTrackerDimension.sku,
         );
       case _DashboardPage.penugasan:
@@ -618,14 +621,14 @@ class _DashboardContentState extends State<_DashboardContent>
     final navItems = _navItems(hasNewPending: hasNewPending);
 
     // Listener (translucent) di paling luar: setiap pointer event di dashboard
-    // dianggap aktivitas user. Tanpa throttle â€” Timer._checkIdle sudah jalan
+    // dianggap aktivitas user. Tanpa throttle Timer._checkIdle sudah jalan
     // setiap 30 detik, jadi tidak perlu debounce di sisi Listener.
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _recordActivity(),
       // Track any pointer movement (touch scroll, mouse hover, drag). Tanpa
       // gate buttons != 0 supaya touch scroll di mobile ikut dihitung sebagai
-      // aktivitas â€” kalau gate tetap, mobile user yang cuma scroll list
+      // aktivitas — kalau gate tetap, mobile user yang cuma scroll list
       // panjang akan ke-logout. Hover di desktop tetap aman karena pointer
       // event jarang firing saat idle (tidak ada device input aktif).
       onPointerMove: (_) => _recordActivity(),
