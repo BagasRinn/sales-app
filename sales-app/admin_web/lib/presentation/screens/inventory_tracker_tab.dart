@@ -357,9 +357,13 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   static const _colWidthNum = 150.0;
   static const _colWidthSmall = 130.0;
   static const _colWidthSupplier = 220.0;
+  static const _colWidthProduct = 360.0;
   static const _visibleStep = 200;
-  static const _minTableWidth =
-      _colWidthSupplier + _colWidthNum * 7 + _colWidthSmall;
+
+  double get _minTableWidth =>
+      (_isSku ? _colWidthProduct : _colWidthSupplier) +
+      _colWidthNum * 7 +
+      _colWidthSmall;
 
   Widget _headerCell(String label, {bool endAlign = true}) => Align(
     alignment: endAlign ? Alignment.centerRight : Alignment.centerLeft,
@@ -550,7 +554,13 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         color: overstock ? AppColors.error.withValues(alpha: 0.12) : null,
       ),
       children: [
-        padded(_cell(row.name, endAlign: false)),
+        padded(
+          Tooltip(
+            message: row.name,
+            waitDuration: const Duration(milliseconds: 350),
+            child: _cell(row.name, endAlign: false),
+          ),
+        ),
         padded(_cell(formatRupiah(row.salesCurrentMonth))),
         padded(_cell(formatRupiah(row.stock))),
         ...row.previousSales.map((v) => padded(_cell(formatRupiah(v)))),
