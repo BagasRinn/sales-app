@@ -26,6 +26,17 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   String _branch = '';
   String _division = '';
   bool _initialized = false;
+  // Lazy rendering: tabel hanya membangun sebagian baris per tahap supaya
+  // halaman tetap lancar saat data ribuan (mis. Stok By SKU).
+  int _visibleCount = 100;
+  final TextEditingController _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   bool get _isSku => widget.dimension == InventoryTrackerDimension.sku;
   String get _pageTitle => _isSku ? 'Stok By SKU' : 'Stok By Supplier';
@@ -309,6 +320,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   static const _colWidthNum = 150.0;
   static const _colWidthSmall = 130.0;
   static const _colWidthSupplier = 220.0;
+  static const _visibleStep = 200;
   static const _minTableWidth =
       _colWidthSupplier + _colWidthNum * 7 + _colWidthSmall;
 
@@ -341,53 +353,149 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     ),
   );
 
-  Widget _table(InventoryTrackerResponse data) => Card(
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final fits = constraints.maxWidth >= _minTableWidth;
-        final table = Table(
-          columnWidths: const {
-            0: FlexColumnWidth(),
-            1: FixedColumnWidth(_colWidthNum), // Stock
-            2: FixedColumnWidth(_colWidthNum),
-            3: FixedColumnWidth(_colWidthNum),
-            4: FixedColumnWidth(_colWidthNum),
-            5: FixedColumnWidth(_colWidthNum), // AP3M
-            6: FixedColumnWidth(_colWidthNum), // Avg / Week
-            7: FixedColumnWidth(_colWidthSmall), // Week of Inventory
-            8: FixedColumnWidth(_colWidthNum), // bulan berjalan
-          },
-          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-          border: const TableBorder(
-            horizontalInside: BorderSide(color: AppColors.border),
-          ),
+  /// Baris setelah filter pencarian klien (huruf besar-kecil diabaikan).
+  List<InventoryTrackerRow> _filteredRows(InventoryTrackerResponse data) {
+    final query = _search.trim().toUpperCase();
+    if (query.isEmpty) return data.rows;
+    return data.rows
+        .where((r) => r.name.toUpperCase().contains(query))
+        .toList();
+  }
+
+  Widget _table(InventoryTrackerResponse data) {
+    final filtered = _filteredRows(data);
+    final visible = filtered.take(_visibleCount).toList();
+    final hasMore = filtered.length > visible.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            TableRow(
-              decoration: const BoxDecoration(
-                color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+            SizedBox(
+              width: 260,
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() {
+                  _search = v;
+                  _visibleCount = 100;
+                }),
+                style: AppTextStyles.bodySmall,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Cari ${_firstColumnTitle.toLowerCase()}...',
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  suffixIcon: _search.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _search = '';
+                              _visibleCount = 100;
+                            });
+                          },
+                        ),
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  contentPadding: EdgeInsets.zero,
+                  border: OutlineInputBorder(
+                    borderRadius: AppRadius.md,
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppRadius.md,
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                ),
               ),
-              children: [
-                _col(_firstColumnTitle, endAlign: false),
-                _col('Stock'),
-                ...data.previousMonths.map((m) => _col(m)),
-                _col('AP3M'),
-                _col('Avg / Week'),
-                _col('Week of Inventory'),
-                _col(data.month),
-              ],
             ),
-            ...data.rows.map(_row),
+            Text(
+              'Menampilkan ${visible.length} dari ${filtered.length} baris',
+              style: AppTextStyles.caption,
+            ),
           ],
-        );
-        if (fits) return table;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(width: _minTableWidth, child: table),
-        );
-      },
-    ),
-  );
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Card(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final fits = constraints.maxWidth >= _minTableWidth;
+              final table = Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(),
+                  1: FixedColumnWidth(_colWidthNum), // Stock
+                  2: FixedColumnWidth(_colWidthNum),
+                  3: FixedColumnWidth(_colWidthNum),
+                  4: FixedColumnWidth(_colWidthNum),
+                  5: FixedColumnWidth(_colWidthNum), // AP3M
+                  6: FixedColumnWidth(_colWidthNum), // Avg / Week
+                  7: FixedColumnWidth(_colWidthSmall), // Week of Inventory
+                  8: FixedColumnWidth(_colWidthNum), // bulan berjalan
+                },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                border: const TableBorder(
+                  horizontalInside: BorderSide(color: AppColors.border),
+                ),
+                children: [
+                  TableRow(
+                    decoration: const BoxDecoration(
+                      color: AppColors.surfaceMuted,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(12),
+                      ),
+                    ),
+                    children: [
+                      _col(_firstColumnTitle, endAlign: false),
+                      _col('Stock'),
+                      ...data.previousMonths.map((m) => _col(m)),
+                      _col('AP3M'),
+                      _col('Avg / Week'),
+                      _col('Week of Inventory'),
+                      _col(data.month),
+                    ],
+                  ),
+                  ...visible.map(_row),
+                ],
+              );
+              final content = fits
+                  ? table
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(width: _minTableWidth, child: table),
+                    );
+              if (!hasMore) return content;
+              return Column(
+                children: [
+                  content,
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _visibleCount += _visibleStep),
+                      icon: const Icon(Icons.expand_more, size: 18),
+                      label: Text(
+                        'Tampilkan $_visibleStep baris lagi '
+                        '(${filtered.length - visible.length} tersisa)',
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Overstock: Week of Inventory > 6 minggu → baris merah lembut.
   bool _isOverstock(InventoryTrackerRow row) => (row.weekOfInventory ?? 0) > 6;
