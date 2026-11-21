@@ -43,6 +43,13 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   String get _firstColumnTitle => _isSku ? 'Nama Produk' : 'Supplier';
   String get _dimensionParam => _isSku ? 'sku' : 'supplier';
 
+  String _monthLabel(String value) {
+    final parts = value.split('-');
+    if (parts.length != 2) return value;
+    final parsed = DateTime.tryParse('${parts[0]}-${parts[1]}-01');
+    return parsed == null ? value : formatMonthLong(parsed);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -444,14 +451,14 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
               final table = Table(
                 columnWidths: const {
                   0: FlexColumnWidth(),
-                  1: FixedColumnWidth(_colWidthNum), // Stock
-                  2: FixedColumnWidth(_colWidthNum),
+                  1: FixedColumnWidth(_colWidthNum), // bulan berjalan
+                  2: FixedColumnWidth(_colWidthNum), // Stock
                   3: FixedColumnWidth(_colWidthNum),
                   4: FixedColumnWidth(_colWidthNum),
-                  5: FixedColumnWidth(_colWidthNum), // AP3M
-                  6: FixedColumnWidth(_colWidthNum), // Avg / Week
-                  7: FixedColumnWidth(_colWidthSmall), // Week of Inventory
-                  8: FixedColumnWidth(_colWidthNum), // bulan berjalan
+                  5: FixedColumnWidth(_colWidthNum),
+                  6: FixedColumnWidth(_colWidthNum), // AP3M
+                  7: FixedColumnWidth(_colWidthNum), // Avg / Week
+                  8: FixedColumnWidth(_colWidthSmall), // Week of Inventory
                 },
                 defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 border: const TableBorder(
@@ -467,12 +474,12 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
                     ),
                     children: [
                       _col(_firstColumnTitle, endAlign: false),
+                      _col(_monthLabel(data.month)),
                       _col('Stock'),
-                      ...data.previousMonths.map((m) => _col(m)),
+                      ...data.previousMonths.map((m) => _col(_monthLabel(m))),
                       _col('AP3M'),
                       _col('Avg / Week'),
                       _col('Week of Inventory'),
-                      _col(data.month),
                     ],
                   ),
                   ...visible.map(_row),
@@ -526,12 +533,12 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       ),
       children: [
         padded(_cell(row.name, endAlign: false)),
+        padded(_cell(formatRupiah(row.salesCurrentMonth))),
         padded(_cell(formatRupiah(row.stock))),
         ...row.previousSales.map((v) => padded(_cell(formatRupiah(v)))),
         padded(_cell(formatRupiah(row.ap3m))),
         padded(_cell(formatRupiah(row.averagePerWeek.round()))),
         padded(_cell(row.weekOfInventory?.toStringAsFixed(1) ?? '-')),
-        padded(_cell(formatRupiah(row.salesCurrentMonth))),
       ],
     );
   }
