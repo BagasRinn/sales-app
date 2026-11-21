@@ -289,95 +289,88 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     ),
   );
 
-  /// Kolom angka memakai lebar tetap; kolom Supplier fleksibel menyesuaikan
-  /// lebar card (min. [_colWidthSupplier]) supaya tabel pas dengan container.
-  /// Di layar sempit tabel tetap bisa di-scroll horizontal.
-  ///
-  /// `DataCell`/`DataColumn` menambahkan padding horizontal 16px di tiap sisi
-  /// (32px per kolom), jadi SizedBox konten = lebar kolom - 32 dan total
-  /// lebar tetap memperhitungkan 9 kolom x 32px + horizontalMargin.
+  /// Tabel memakai widget `Table` langsung (bukan `DataTable`) supaya kolom
+  /// Supplier bisa `FlexColumnWidth` — melebar sampai mentok tepi kanan
+  /// container seperti kotak filter. Kolom angka tetap (px); di layar sempit
+  /// tabel di-scroll horizontal dengan lebar minimum.
   static const _colWidthNum = 150.0;
   static const _colWidthSmall = 130.0;
   static const _colWidthSupplier = 220.0;
-  static const _dataCellPadding = 32.0;
-  static const _columnCount = 9;
-  static const _fixedColsWidth =
-      _colWidthNum * 7 + // Stock + 3 bulan + AP3M + Avg/Week + bulan ini
-      _colWidthSmall +
-      (_columnCount * _dataCellPadding) + // padding tiap kolom
-      32.0; // horizontalMargin kiri + kanan
+  static const _minTableWidth =
+      _colWidthSupplier + _colWidthNum * 7 + _colWidthSmall;
 
-  double _supplierWidth(double cardWidth) => (cardWidth - _fixedColsWidth)
-      .clamp(_colWidthSupplier - _dataCellPadding, double.infinity);
-
-  Widget _headerCell(
-    String label, {
-    double width = _colWidthNum,
-    bool endAlign = true,
-  }) => SizedBox(
-    width: width - _dataCellPadding,
+  Widget _headerCell(String label, {bool endAlign = true}) => Align(
+    alignment: endAlign ? Alignment.centerRight : Alignment.centerLeft,
     child: Text(
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      textAlign: endAlign ? TextAlign.end : TextAlign.start,
       style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
     ),
   );
 
-  Widget _cell(
-    String text, {
-    double width = _colWidthNum,
-    bool endAlign = true,
-    bool muted = false,
-  }) => SizedBox(
-    width: width - _dataCellPadding,
+  Widget _cell(String text, {bool endAlign = true, bool bold = false}) => Align(
+    alignment: endAlign ? Alignment.centerRight : Alignment.centerLeft,
     child: Text(
       text,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      textAlign: endAlign ? TextAlign.end : TextAlign.start,
       style: AppTextStyles.bodySmall.copyWith(
-        color: muted ? AppColors.textSubtle : AppColors.textPrimary,
+        fontWeight: bold ? FontWeight.w600 : null,
       ),
+    ),
+  );
+
+  TableCell _col(String label, {bool endAlign = true}) => TableCell(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: _headerCell(label, endAlign: endAlign),
     ),
   );
 
   Widget _table(InventoryTrackerResponse data) => Card(
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final supplierWidth = _supplierWidth(constraints.maxWidth);
-        final fits =
-            constraints.maxWidth >=
-            _fixedColsWidth + _colWidthSupplier - _dataCellPadding;
-        final table = DataTable(
-          columnSpacing: 16,
-          horizontalMargin: 16,
-          columns: [
-            DataColumn(
-              label: _headerCell(
-                'Supplier',
-                width: supplierWidth,
-                endAlign: false,
+        final fits = constraints.maxWidth >= _minTableWidth;
+        final table = Table(
+          columnWidths: const {
+            0: FlexColumnWidth(),
+            1: FixedColumnWidth(_colWidthNum), // Stock
+            2: FixedColumnWidth(_colWidthNum),
+            3: FixedColumnWidth(_colWidthNum),
+            4: FixedColumnWidth(_colWidthNum),
+            5: FixedColumnWidth(_colWidthNum), // AP3M
+            6: FixedColumnWidth(_colWidthNum), // Avg / Week
+            7: FixedColumnWidth(_colWidthSmall), // Week of Inventory
+            8: FixedColumnWidth(_colWidthNum), // bulan berjalan
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          border: const TableBorder(
+            horizontalInside: BorderSide(color: AppColors.border),
+          ),
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               ),
+              children: [
+                _col('Supplier', endAlign: false),
+                _col('Stock'),
+                ...data.previousMonths.map((m) => _col(m)),
+                _col('AP3M'),
+                _col('Avg / Week'),
+                _col('Week of Inventory'),
+                _col(data.month),
+              ],
             ),
-            DataColumn(label: _headerCell('Stock')),
-            ...data.previousMonths.map(
-              (m) => DataColumn(label: _headerCell(m)),
-            ),
-            DataColumn(label: _headerCell('AP3M')),
-            DataColumn(label: _headerCell('Avg / Week')),
-            DataColumn(
-              label: _headerCell('Week of Inventory', width: _colWidthSmall),
-            ),
-            DataColumn(label: _headerCell(data.month)),
+            ...data.rows.map(_row),
           ],
-          rows: data.rows.map((row) => _row(row, supplierWidth)).toList(),
         );
         if (fits) return table;
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: table,
+          child: SizedBox(width: _minTableWidth, child: table),
         );
       },
     ),
@@ -386,28 +379,29 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   /// Overstock: Week of Inventory > 6 minggu → baris merah lembut.
   bool _isOverstock(InventoryTrackerRow row) => (row.weekOfInventory ?? 0) > 6;
 
-  DataRow _row(InventoryTrackerRow row, double supplierWidth) => DataRow(
-    color: WidgetStateProperty.resolveWith(
-      (states) => _isOverstock(row)
-          ? AppColors.error.withValues(alpha: 0.12)
-          : Colors.transparent,
-    ),
-    cells: [
-      DataCell(_cell(row.supplierName, width: supplierWidth, endAlign: false)),
-      DataCell(_cell(formatRupiah(row.stock))),
-      ...row.previousSales.map((v) => DataCell(_cell(formatRupiah(v)))),
-      DataCell(_cell(formatRupiah(row.ap3m))),
-      DataCell(_cell(formatRupiah(row.averagePerWeek.round()))),
-      DataCell(
-        _cell(
-          row.weekOfInventory?.toStringAsFixed(1) ?? '-',
-          width: _colWidthSmall,
-          endAlign: true,
-        ),
+  TableRow _row(InventoryTrackerRow row) {
+    final overstock = _isOverstock(row);
+    TableCell padded(Widget child) => TableCell(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: child,
       ),
-      DataCell(_cell(formatRupiah(row.salesCurrentMonth))),
-    ],
-  );
+    );
+    return TableRow(
+      decoration: BoxDecoration(
+        color: overstock ? AppColors.error.withValues(alpha: 0.12) : null,
+      ),
+      children: [
+        padded(_cell(row.supplierName, endAlign: false)),
+        padded(_cell(formatRupiah(row.stock))),
+        ...row.previousSales.map((v) => padded(_cell(formatRupiah(v)))),
+        padded(_cell(formatRupiah(row.ap3m))),
+        padded(_cell(formatRupiah(row.averagePerWeek.round()))),
+        padded(_cell(row.weekOfInventory?.toStringAsFixed(1) ?? '-')),
+        padded(_cell(formatRupiah(row.salesCurrentMonth))),
+      ],
+    );
+  }
 
   Widget _message(String text, bool error) => Container(
     width: double.infinity,
