@@ -1899,8 +1899,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
+    // The comparison endpoint caps its per-dimension payload at 100 rows;
+    // the summary endpoint can use the larger ranking limit independently.
+    final comparisonLimit = _importedSalesLimit.clamp(1, 100);
     final cacheKey =
-        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$comparisonLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       if (requestId != _importedSalesComparisonRequestId) return;
@@ -1914,7 +1917,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getImportedSalesComparison(
         month: month,
         months: _importedSalesComparisonMonths,
-        limit: _importedSalesLimit,
+        limit: comparisonLimit,
         include: 'product,customer,divisi,supplier',
         branch: branch,
       );
@@ -1945,8 +1948,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> fetchImportedSalesComparisonDetail() async {
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
+    final comparisonLimit = _importedSalesLimit.clamp(1, 100);
     final cacheKey =
-        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$comparisonLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       _importedSalesComparison = cached;
@@ -1957,7 +1961,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getImportedSalesComparison(
         month: month,
         months: _importedSalesComparisonMonths,
-        limit: _importedSalesLimit,
+        limit: comparisonLimit,
         include: 'product,customer,divisi,supplier',
         branch: branch,
       );
