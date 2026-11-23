@@ -1891,11 +1891,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
     final cacheKey =
-        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths';
+        '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
       _importedSalesComparison = cached;
-      await fetchImportedSalesComparisonDetail();
+      _importedSalesComparisonDetail = _parseComparisonDetail(cached);
       notifyListeners();
       return;
     }
@@ -1903,15 +1903,16 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       final data = await _repo.getImportedSalesComparison(
         month: month,
         months: _importedSalesComparisonMonths,
+        limit: _importedSalesLimit,
+        include: 'product,customer,divisi,supplier',
         branch: branch,
       );
       _importedSalesComparisonCache[cacheKey] = data;
       _importedSalesComparison = data;
-      // Fetch detail dimensi (produk/pelanggan/divisi/supplier) untuk ranking
-      // pembanding di latar belakang; error di-silent.
-      await fetchImportedSalesComparisonDetail();
+      _importedSalesComparisonDetail = _parseComparisonDetail(data);
     } catch (_) {
       _importedSalesComparison = null;
+      _importedSalesComparisonDetail = null;
     } finally {
       notifyListeners();
     }
@@ -1926,6 +1927,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
+      _importedSalesComparison = cached;
       _importedSalesComparisonDetail = _parseComparisonDetail(cached);
       return;
     }
@@ -1938,6 +1940,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         branch: branch,
       );
       _importedSalesComparisonCache[cacheKey] = data;
+      _importedSalesComparison = data;
       _importedSalesComparisonDetail = _parseComparisonDetail(data);
     } catch (_) {
       _importedSalesComparisonDetail = null;
