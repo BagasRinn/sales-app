@@ -352,8 +352,17 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get importedSalesRangeMonths => _importedSalesRangeMonths;
   int get importedSalesComparisonMonths => _importedSalesComparisonMonths;
   Map<String, dynamic>? get importedSalesComparison => _importedSalesComparison;
-  Map<String, List<SalesRankItem>>? get importedSalesComparisonDetail =>
-      _importedSalesComparisonDetail;
+  Map<String, List<SalesRankItem>>? get importedSalesComparisonDetail {
+    // Keep the ranking cards coupled to the comparison payload. Older cached
+    // states may contain the raw comparison response but miss the parsed
+    // detail map; deriving it here prevents all cards from silently falling
+    // back to the current-month-only layout.
+    final detail = _importedSalesComparisonDetail;
+    if (detail != null) return detail;
+    final comparison = _importedSalesComparison;
+    return comparison == null ? null : _parseComparisonDetail(comparison);
+  }
+
   bool get importedSalesComparisonLoading => _importedSalesComparisonLoading;
   String? get importedSalesBranchFilter => _importedSalesBranchFilter;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
@@ -1914,6 +1923,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     try {
+      // Comparison is a separate endpoint with a hard API limit. Keep the
+      // request bounded here even when the summary fetch uses 5000 rows.
       final data = await _repo.getImportedSalesComparison(
         month: month,
         months: _importedSalesComparisonMonths,

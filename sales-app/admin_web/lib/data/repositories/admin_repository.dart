@@ -584,7 +584,10 @@ class AdminRepository {
     final params = <String, String>{
       'month': month,
       'months': months.toString(),
-      'limit': limit.toString(),
+      // /sales-imports/comparison accepts at most 100 rows per dimension.
+      // Summary requests may use 5000 independently, so never forward that
+      // larger summary limit into this endpoint.
+      'limit': limit.clamp(1, 100).toString(),
     };
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
     if (include != null && include.isNotEmpty) params['include'] = include;
