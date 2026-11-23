@@ -424,6 +424,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     final returnImportResult = provider.salesReturnImportResult;
     final targetImportResult = provider.salesTargetImportResult;
     final comparisonMonths = provider.importedSalesComparisonMonths;
+    final comparisonLoading = provider.importedSalesComparisonLoading;
 
     // Never label old-month data with the newly selected month: only render
     // the summary when the payload actually belongs to the visible period.
@@ -689,6 +690,8 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                     ),
                   ],
                 )
+              else if (comparisonLoading)
+                const _LoadingView()
               else
                 _AnalyticsBody(
                   analytics: analytics,

@@ -96,9 +96,11 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Rata-rata omzet N bulan sebelum bulan terpilih (payload pembanding).
   Map<String, dynamic>? _importedSalesComparison;
   final Map<String, Map<String, dynamic>> _importedSalesComparisonCache = {};
+  int _importedSalesComparisonRequestId = 0;
 
   /// Detail dimensi pembanding: kode dimensi -> daftar SalesRankItem.
   Map<String, List<SalesRankItem>>? _importedSalesComparisonDetail;
+  bool _importedSalesComparisonLoading = false;
 
   /// Snapshot stok produk (Value Good) untuk bulan/scope aktif.
   ProductStockSummary? _productStockSummary;
@@ -352,6 +354,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, dynamic>? get importedSalesComparison => _importedSalesComparison;
   Map<String, List<SalesRankItem>>? get importedSalesComparisonDetail =>
       _importedSalesComparisonDetail;
+  bool get importedSalesComparisonLoading => _importedSalesComparisonLoading;
   String? get importedSalesBranchFilter => _importedSalesBranchFilter;
   Map<String, dynamic>? get salesImportResult => _salesImportResult;
   Map<String, dynamic>? get salesReturnImportResult => _salesReturnImportResult;
@@ -1836,9 +1839,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         scope: dataScope,
         fetchedAt: DateTime.now(),
       );
-      // Fetch pembanding di latar belakang; tidak menunggu sebelum menampilkan
-      // ringkasan bulan terpilih.
-      fetchImportedSalesComparison();
+      // Pembanding adalah bagian wajib dari ranking card. Tunggu payload
+      // pembanding agar card tidak berpindah dari satu kolom ke dua kolom
+      // lalu kembali lagi saat request lama selesai belakangan.
+      await fetchImportedSalesComparison();
       loadProductStockSummary();
       return true;
     } catch (e) {
@@ -1881,6 +1885,8 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_importedSalesComparisonMonths == months) return;
     _importedSalesComparisonMonths = months;
     _importedSalesComparison = null;
+    _importedSalesComparisonDetail = null;
+    _importedSalesComparisonLoading = true;
     notifyListeners();
     await fetchImportedSalesComparison();
   }
@@ -1888,14 +1894,19 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Fetch payload pembanding untuk bulan/skope saat ini. Silence errors:
   /// pembanding adalah hiasan, tidak boleh memblokir tampilan utama.
   Future<void> fetchImportedSalesComparison() async {
+    final requestId = ++_importedSalesComparisonRequestId;
+    _importedSalesComparisonLoading = true;
+    notifyListeners();
     final month = _importedSalesMonth ?? _currentImportedSalesMonth();
     final branch = isGlobalManager ? _importedSalesBranchFilter : null;
     final cacheKey =
         '$month|${_importedSalesScope ?? ''}|$_importedSalesComparisonMonths|$_importedSalesLimit|detail-v2-supplier';
     final cached = _importedSalesComparisonCache[cacheKey];
     if (cached != null) {
+      if (requestId != _importedSalesComparisonRequestId) return;
       _importedSalesComparison = cached;
       _importedSalesComparisonDetail = _parseComparisonDetail(cached);
+      _importedSalesComparisonLoading = false;
       notifyListeners();
       return;
     }
@@ -1907,14 +1918,25 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         include: 'product,customer,divisi,supplier',
         branch: branch,
       );
+      if (requestId != _importedSalesComparisonRequestId) return;
       _importedSalesComparisonCache[cacheKey] = data;
       _importedSalesComparison = data;
       _importedSalesComparisonDetail = _parseComparisonDetail(data);
     } catch (_) {
+      if (requestId != _importedSalesComparisonRequestId) return;
+      // Keep the last complete pair visible if a superseded/background
+      // refresh fails. Do not collapse a mandatory two-sided card to one side.
+      if (_importedSalesComparison != null &&
+          _importedSalesComparisonDetail != null) {
+        return;
+      }
       _importedSalesComparison = null;
       _importedSalesComparisonDetail = null;
     } finally {
-      notifyListeners();
+      if (requestId == _importedSalesComparisonRequestId) {
+        _importedSalesComparisonLoading = false;
+        notifyListeners();
+      }
     }
   }
 
