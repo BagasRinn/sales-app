@@ -188,6 +188,14 @@ class SalesRankItem {
     return 'Tidak diketahui';
   }
 
+  /// Label stabil lintas cabang untuk ranking Pareto Product.
+  /// Jangan gunakan nama item sebagai fallback karena nilainya bisa berbeda
+  /// antar cabang; jika tidak tersedia, jangan ganti dengan nama item/kode.
+  String get displayMotherSku {
+    if (motherSku?.trim().isNotEmpty == true) return motherSku!.trim();
+    return 'Tidak diketahui';
+  }
+
   String get targetKey =>
       normalizeSalesTargetName(label.trim().isNotEmpty ? label : code);
 }

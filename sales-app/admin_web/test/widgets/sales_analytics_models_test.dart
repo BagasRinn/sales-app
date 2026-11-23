@@ -67,6 +67,26 @@ void main() {
       expect(analytics.returRows, 2);
       expect(analytics.marginPercent, -0.05);
       expect(analytics.products.single.motherSku, 'M001');
+      expect(analytics.products.single.displayMotherSku, 'M001');
+      expect(
+        const SalesRankItem(
+          code: 'P001',
+          label: 'Nama Item Cabang',
+          qty: 1,
+          revenue: 100,
+          motherSku: 'Nama Normalisasi',
+        ).displayMotherSku,
+        'Nama Normalisasi',
+      );
+      expect(
+        const SalesRankItem(
+          code: 'P002',
+          label: 'Nama Item Cabang',
+          qty: 1,
+          revenue: 100,
+        ).displayMotherSku,
+        'Tidak diketahui',
+      );
       expect(analytics.topDivisi?.displayLabel, 'Bangunan');
       expect(analytics.suppliers.single.displayLabel, 'Supplier Utama');
       expect(analytics.supplierRetur.single.revenue, 15000);

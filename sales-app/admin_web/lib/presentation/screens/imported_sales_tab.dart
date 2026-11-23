@@ -1316,6 +1316,7 @@ class _AnalyticsBody extends StatelessWidget {
             _MetricRankingCard(
               title: 'Pareto Product',
               items: analytics.products,
+              showMotherSku: true,
               totalRevenue: analytics.totalRevenue,
               totalMargin: analytics.totalMargin,
               limit: limit,
@@ -1827,6 +1828,7 @@ class _MetricRankingCard extends StatefulWidget {
     required this.totalMargin,
     required this.limit,
     this.showActiveOutlets = false,
+    this.showMotherSku = false,
     this.targets,
     this.comparisonItems,
     this.comparisonLabel,
@@ -1839,6 +1841,7 @@ class _MetricRankingCard extends StatefulWidget {
   final int totalMargin;
   final int limit;
   final bool showActiveOutlets;
+  final bool showMotherSku;
   final Map<String, int>? targets;
 
   /// Items untuk periode pembanding (nilai sudah rata-rata per bulan).
@@ -1873,7 +1876,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
               ? widget.targets![item.targetKey]
               : null;
           return SalesRankingEntry(
-            label: item.displayLabel,
+            label: _displayLabel(item),
             value: value,
             sortValue: item.revenue,
             detail: itemDetails.isEmpty ? null : itemDetails.join(' · '),
@@ -1910,7 +1913,7 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       final value = rightItem == null
           ? 0
           : (_showMargin ? rightItem.margin : rightItem.revenue);
-      final rightLabel = rightItem?.displayLabel ?? leftItem.displayLabel;
+      final rightLabel = _displayLabel(rightItem ?? leftItem);
       final entryTarget = widget.targets?[leftItem.targetKey];
       final rightDetails = [
         if (widget.showActiveOutlets &&
@@ -1939,6 +1942,9 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       );
     }, growable: false);
   }
+
+  String _displayLabel(SalesRankItem item) =>
+      widget.showMotherSku ? item.displayMotherSku : item.displayLabel;
 
   @override
   Widget build(BuildContext context) {
