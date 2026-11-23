@@ -48,6 +48,7 @@ from app.services.sales_import_versions import (
 )
 from app.services.sales_summary_service import (
     ensure_summary,
+    read_active_outlets_by_month,
     read_daily_series,
     read_monthly_comparison,
     read_sales_daily_series,
@@ -506,6 +507,13 @@ def imported_sales_comparison(
             sections,
             limit,
             include_all_sales=False,
+            include_dimension_keys=True,
+        )
+        active_outlets_by_month = read_active_outlets_by_month(
+            db,
+            scope,
+            [parse_month(key)[1:] for key in month_keys],
+            sections,
         )
         # section name ("product") → result key ("by_product")
         section_to_key = {
@@ -520,9 +528,14 @@ def imported_sales_comparison(
             if section not in sections:
                 continue
             items = range_summary.get(result_key, [])
+            monthly_active_outlets = active_outlets_by_month.get(section, {})
             detail[result_key] = [
                 {
-                    **item,
+                    **{
+                        key: value
+                        for key, value in item.items()
+                        if key != "_dimension_key"
+                    },
                     "average_revenue": (
                         int(item.get("revenue") or 0) // count
                     )
@@ -534,7 +547,11 @@ def imported_sales_comparison(
                     if count
                     else 0,
                     "average_active_outlets": (
-                        int(item.get("active_outlets") or 0) // count
+                        int(
+                            monthly_active_outlets.get(
+                                item.get("_dimension_key"), 0
+                            )
+                        ) // count
                     )
                     if count
                     else 0,

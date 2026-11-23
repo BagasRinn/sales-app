@@ -951,6 +951,7 @@ def read_summary_range(
     dimensions: Iterable[str],
     limit: int,
     include_all_sales: bool = False,
+    include_dimension_keys: bool = False,
 ) -> Dict[str, Any]:
     """Aggregate a multi-month range from source rows, netting returns first."""
     sales_totals = _scope_query(db, scope, start, month_end).with_entities(
@@ -1011,6 +1012,8 @@ def read_summary_range(
                 "margin": group["margin"],
                 "active_outlets": group["active_outlets"],
             }
+            if include_dimension_keys:
+                item["_dimension_key"] = group["dim_key"]
             if normalized == "product":
                 item.update({
                     "product_kode": _or_none(
@@ -1074,6 +1077,58 @@ def read_summary_range(
             if group["retur_rows"]
         ]
     return result
+
+
+def read_active_outlets_by_month(
+    db: Session,
+    scope: str,
+    month_ranges: Iterable[Tuple[datetime, datetime]],
+    dimensions: Iterable[str],
+) -> Dict[str, Dict[str, int]]:
+    """Sum distinct outlet counts per item without merging identities across months."""
+    dimension_map = {
+        "product": PRODUCT_DIMENSION,
+        "sales": SALES_DIMENSION,
+        "customer": CUSTOMER_DIMENSION,
+        "channel": CHANNEL_DIMENSION,
+        "divisi": DIVISI_DIMENSION,
+        "supplier": SUPPLIER_DIMENSION,
+    }
+    requested = {dimension.lower() for dimension in dimensions}
+    totals: Dict[str, Dict[str, int]] = {
+        name: {} for name in requested if name in dimension_map
+    }
+    ranges = list(month_ranges)
+    if not ranges:
+        return totals
+    start = min(month_range[0] for month_range in ranges)
+    month_end = max(month_range[1] for month_range in ranges)
+    month_expr = func.to_char(ImportedSale.sale_date, "YYYY-MM")
+    for name, dimension in dimension_map.items():
+        if name not in totals:
+            continue
+        dimension_key, _ = _dimension_columns(dimension)
+        normalized_dimension_key = func.upper(
+            func.regexp_replace(func.trim(dimension_key), r"\s+", " ", "g")
+        )
+        rows = (
+            _scope_query(db, scope, start, month_end)
+            .with_entities(
+                normalized_dimension_key.label("dim_key"),
+                month_expr.label("month"),
+                _distinct_identity_count(ImportedSale.customer_kode).label(
+                    "active_outlets"
+                ),
+            )
+            .group_by(normalized_dimension_key, month_expr)
+            .all()
+        )
+        for row in rows:
+            key = str(row.dim_key or "")[:100]
+            totals[name][key] = totals[name].get(key, 0) + int(
+                row.active_outlets or 0
+            )
+    return totals
 
 
 def read_monthly_comparison(

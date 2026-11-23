@@ -1384,6 +1384,9 @@ def test_comparison_include_product_gives_average_per_item():
         assert set(by_product.keys()) == {"P001", "P002"}
         assert by_product["P001"]["revenue"] == 300
         assert by_product["P001"]["average_revenue"] == 150
+        # Outlet C001 is active in both months. Average distinct monthly AO is
+        # 1, not distinct outlets across the full range (1) divided by 2.
+        assert by_product["P001"]["average_active_outlets"] == 1
         assert by_product["P002"]["revenue"] == 300
         assert by_product["P002"]["average_revenue"] == 150
         # Produk C (bulan terpilih) tidak boleh muncul
