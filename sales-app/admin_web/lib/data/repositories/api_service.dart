@@ -19,7 +19,10 @@ class ApiService {
       BaseOptions(
         baseUrl: AppConfig.baseUrl,
         connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        // Dashboard comparison requests over 6/12 months can legitimately
+        // take 15–20 seconds. Keep connect timeout short, but let GETs finish
+        // instead of being canceled by Dio before the API returns 200.
+        receiveTimeout: const Duration(seconds: 60),
         headers: {
           'Content-Type': 'application/json',
           'X-Timezone-Offset-Minutes': DateTime.now().timeZoneOffset.inMinutes
