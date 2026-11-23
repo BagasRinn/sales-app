@@ -594,7 +594,12 @@ class AdminRepository {
     final queryString = params.entries
         .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
         .join('&');
-    final data = await _api.get('/sales-imports/comparison?$queryString');
+    final data = await _api.get(
+      '/sales-imports/comparison?$queryString',
+      // Six/twelve-month comparisons aggregate a much larger range than the
+      // normal dashboard request and can take longer than the API default.
+      receiveTimeout: const Duration(seconds: 60),
+    );
     return Map<String, dynamic>.from(data as Map);
   }
 
