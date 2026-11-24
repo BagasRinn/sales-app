@@ -46,6 +46,48 @@ List<String> rankMatchKeys(SalesRankItem item) {
   return keys;
 }
 
+/// Kunci pencocokan Pareto Outlet.
+///
+/// Outlet diidentifikasi oleh (cabang, kode pelanggan): kode yang sama di dua
+/// cabang adalah dua toko berbeda. Nama hanya dipakai sebagai cadangan kalau
+/// kode kosong, dan tetap dibatasi cabangnya agar toko senama di cabang lain
+/// tidak tertukar.
+List<String> outletMatchKeys(SalesRankItem item) {
+  final branch = normalizeRankMatchKey(item.branch ?? '');
+  final code = normalizeRankMatchKey(item.code);
+  final label = normalizeRankMatchKey(item.label);
+  final keys = <String>[];
+  if (code.isNotEmpty) keys.add('$branch|$code');
+  if (label.isNotEmpty) keys.add('$branch|NAME|$label');
+  return keys;
+}
+
+/// Indeks pencocokan outlet. Tidak memakai [rankMatchKeys] karena kunci itu
+/// mengabaikan cabang dan akan menukar outlet berkode sama.
+Map<String, SalesRankItem> buildOutletMatchIndex(
+  Iterable<SalesRankItem> items,
+) {
+  final byKey = <String, SalesRankItem>{};
+  for (final item in items) {
+    for (final key in outletMatchKeys(item)) {
+      byKey.putIfAbsent(key, () => item);
+    }
+  }
+  return byKey;
+}
+
+/// Cari outlet di [index] yang cabang dan identitasnya sama dengan [item].
+SalesRankItem? matchOutletItem(
+  Map<String, SalesRankItem> index,
+  SalesRankItem item,
+) {
+  for (final key in outletMatchKeys(item)) {
+    final found = index[key];
+    if (found != null) return found;
+  }
+  return null;
+}
+
 /// Bangun indeks kunci -> item untuk pencocokan dua payload ranking.
 /// Item pertama yang memiliki sebuah kunci menang (payload lebih awal
 /// biasanya sudah diurutkan berdasarkan peringkat).
@@ -171,6 +213,10 @@ class SalesRankItem {
   final String? motherSku;
   final String? productKode;
 
+  /// Cabang outlet. Kode pelanggan hanya unik di dalam satu cabang, jadi
+  /// pencocokan Pareto Outlet harus memakai (branch, kode), bukan kode saja.
+  final String? branch;
+
   const SalesRankItem({
     required this.code,
     required this.label,
@@ -180,6 +226,7 @@ class SalesRankItem {
     this.activeOutlets = 0,
     this.motherSku,
     this.productKode,
+    this.branch,
   });
 
   String get displayLabel {
@@ -373,6 +420,7 @@ class SalesAnalytics {
         summary['by_customer'],
         'customer_kode',
         'customer_nama',
+        branchKey: 'customer_branch',
       ),
       channels: _rankList(summary['by_channel'], 'channel', null),
       divisi: _rankList(summary['by_divisi'], 'divisi', null),
@@ -452,6 +500,7 @@ class SalesAnalytics {
     String codeKey,
     String? labelKey, {
     bool product = false,
+    String? branchKey,
   }) {
     if (raw is! List) return const [];
     return raw
@@ -468,6 +517,9 @@ class SalesAnalytics {
             activeOutlets: _toInt(row['active_outlets']),
             motherSku: product ? row['mother_sku']?.toString() : null,
             productKode: product ? row['product_kode']?.toString() : null,
+            branch: branchKey == null
+                ? null
+                : row[branchKey]?.toString().trim(),
           ),
         )
         .toList(growable: false);
@@ -633,6 +685,7 @@ class SalesComparison {
         m['by_customer'],
         'customer_kode',
         'customer_nama',
+        branchKey: 'customer_branch',
       ),
       byDivisi: _rankListFromComparison(m['by_divisi'], 'divisi', null),
     );
@@ -646,6 +699,7 @@ class SalesComparison {
     String codeKey,
     String? labelKey, {
     bool product = false,
+    String? branchKey,
   }) {
     if (raw is! List) return const [];
     return raw
@@ -662,6 +716,9 @@ class SalesComparison {
             margin: _toInt(row['average_margin'] ?? row['margin']),
             motherSku: product ? row['mother_sku']?.toString() : null,
             productKode: product ? row['product_kode']?.toString() : null,
+            branch: branchKey == null
+                ? null
+                : row[branchKey]?.toString().trim(),
           ),
         )
         .toList(growable: false);

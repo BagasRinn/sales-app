@@ -50,7 +50,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AdminProvider>();
-      _loadSummary();
+      // DashboardScreen.loadAll() starts this same probe for the initially
+      // selected imported-sales tab. Avoid invalidating that request with a
+      // duplicate requestId when both post-frame callbacks run at startup.
+      if (!provider.importedSalesLoading) _loadSummary();
       if (provider.isGlobalManager && provider.branchOptions.isEmpty) {
         provider.loadBranchOptions();
       }
@@ -690,8 +693,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                     ),
                   ],
                 )
-              else if (comparisonLoading)
-                const _LoadingView()
               else
                 _AnalyticsBody(
                   analytics: analytics,
@@ -703,6 +704,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                       : null,
                   comparisonMonths: comparisonMonths,
                   comparisonDetail: provider.importedSalesComparisonDetail,
+                  comparisonLoading: comparisonLoading,
                   comparisonLabel: _comparisonLabel(comparisonMonths),
                   limit: limit,
                   allBranches:
@@ -1143,6 +1145,7 @@ class _AnalyticsBody extends StatelessWidget {
     required this.comparison,
     required this.comparisonMonths,
     required this.comparisonDetail,
+    required this.comparisonLoading,
     required this.comparisonLabel,
     required this.limit,
     required this.allBranches,
@@ -1161,6 +1164,7 @@ class _AnalyticsBody extends StatelessWidget {
   final SalesComparison? comparison;
   final int comparisonMonths;
   final Map<String, List<SalesRankItem>>? comparisonDetail;
+  final bool comparisonLoading;
   final String comparisonLabel;
   final int limit;
   final bool allBranches;
@@ -1287,6 +1291,7 @@ class _AnalyticsBody extends StatelessWidget {
               showActiveOutlets: true,
               targets: analytics.supplierTargets,
               comparisonItems: comparisonDetail?['supplier'],
+              comparisonLoading: comparisonLoading,
               comparisonLabel: comparisonLabel,
               valueStokOf: _supplierValueStok,
             ),
@@ -1322,6 +1327,7 @@ class _AnalyticsBody extends StatelessWidget {
               limit: limit,
               showActiveOutlets: true,
               comparisonItems: comparisonDetail?['product'],
+              comparisonLoading: comparisonLoading,
               comparisonLabel: comparisonLabel,
               valueStokOf: _productValueStok,
             ),
@@ -1358,7 +1364,9 @@ class _AnalyticsBody extends StatelessWidget {
               totalMargin: analytics.totalMargin,
               limit: limit,
               comparisonItems: comparisonDetail?['customer'],
+              comparisonLoading: comparisonLoading,
               comparisonLabel: comparisonLabel,
+              matchOutlets: true,
             ),
           ],
         ),
@@ -1377,6 +1385,7 @@ class _AnalyticsBody extends StatelessWidget {
               showActiveOutlets: true,
               targets: analytics.divisiTargets,
               comparisonItems: comparisonDetail?['divisi'],
+              comparisonLoading: comparisonLoading,
               comparisonLabel: comparisonLabel,
               valueStokOf: _divisiValueStok,
             ),
@@ -1831,8 +1840,10 @@ class _MetricRankingCard extends StatefulWidget {
     this.showMotherSku = false,
     this.targets,
     this.comparisonItems,
+    this.comparisonLoading = false,
     this.comparisonLabel,
     this.valueStokOf,
+    this.matchOutlets = false,
   });
 
   final String title;
@@ -1846,11 +1857,16 @@ class _MetricRankingCard extends StatefulWidget {
 
   /// Items untuk periode pembanding (nilai sudah rata-rata per bulan).
   final List<SalesRankItem>? comparisonItems;
+  final bool comparisonLoading;
   final String? comparisonLabel;
 
   /// Resolver snapshot stok (GOOD AMOUNT) per item — sebaris dengan baris
   /// Target pada bulan berjalan, atau di tumpukan footer periode pembanding.
   final int? Function(SalesRankItem item)? valueStokOf;
+
+  /// Pareto Outlet: cocokkan baris lewat (cabang, kode), bukan kode saja.
+  /// Kode pelanggan hanya unik di dalam satu cabang.
+  final bool matchOutlets;
 
   @override
   State<_MetricRankingCard> createState() => _MetricRankingCardState();
@@ -1902,14 +1918,18 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     List<SalesRankItem> leftItems,
     int comparisonTotal,
   ) {
-    // Satu item pembanding bisa dicocokkan lewat beberapa kunci
-    // (mother_sku / product_kode / nama). Nilai product_kode hasil agregasi
-    // GLOBAL adalah max() lintas cabang sehingga bisa berbeda dari payload
-    // pembanding; fallback kunci mencegah "Bulan ini" keliru tampil Rp 0.
-    final byKey = buildRankMatchIndex(comparisonItems);
+    // Produk dicocokkan lewat beberapa kunci (mother_sku / product_kode /
+    // nama) karena product_kode hasil agregasi GLOBAL adalah max() lintas
+    // cabang. Outlet tidak boleh memakai kunci itu: kode pelanggan hanya unik
+    // di dalam satu cabang, jadi pencocokannya memakai (cabang, kode).
+    final byKey = widget.matchOutlets
+        ? buildOutletMatchIndex(comparisonItems)
+        : buildRankMatchIndex(comparisonItems);
     return List<SalesRankingEntry>.generate(leftItems.length, (index) {
       final leftItem = leftItems[index];
-      final rightItem = matchRankItem(byKey, leftItem);
+      final rightItem = widget.matchOutlets
+          ? matchOutletItem(byKey, leftItem)
+          : matchRankItem(byKey, leftItem);
       final value = rightItem == null
           ? 0
           : (_showMargin ? rightItem.margin : rightItem.revenue);
@@ -1949,6 +1969,20 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
   @override
   Widget build(BuildContext context) {
     final totalValue = _showMargin ? widget.totalMargin : widget.totalRevenue;
+
+    if (widget.comparisonLoading && widget.comparisonItems == null) {
+      return AppCard(
+        title: widget.title,
+        subtitle: 'Memuat data pembanding…',
+        trailing: _buildModeChips(),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          child: Center(
+            child: SizedBox(width: 180, child: LinearProgressIndicator()),
+          ),
+        ),
+      );
+    }
 
     if (!_hasComparison) {
       return _buildSingleCard(totalValue);

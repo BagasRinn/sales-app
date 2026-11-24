@@ -75,4 +75,75 @@ void main() {
           isNull);
     });
   });
+
+  group('outletMatchKeys', () {
+    SalesRankItem outlet({
+      required String branch,
+      required String code,
+      required String label,
+      int revenue = 0,
+    }) {
+      return SalesRankItem(
+        code: code,
+        label: label,
+        qty: 1,
+        revenue: revenue,
+        branch: branch,
+      );
+    }
+
+    test('kode sama di cabang berbeda tidak saling tertukar', () {
+      // Kode pelanggan hanya unik per cabang. Pareto Outlet pernah menempelkan
+      // omzet Bobby FC ke TK. Tribus Lestari karena keduanya berkode C001.
+      final index = buildOutletMatchIndex([
+        outlet(
+          branch: 'BANJARMASIN',
+          code: 'C001',
+          label: 'Bobby FC',
+          revenue: 88250000,
+        ),
+        outlet(
+          branch: 'BARABAI',
+          code: 'C001',
+          label: 'TK. Tribus Lestari',
+          revenue: 123550000,
+        ),
+      ]);
+
+      final bobby = matchOutletItem(
+        index,
+        outlet(branch: 'Banjarmasin', code: 'c001', label: 'BOBBY FC'),
+      );
+      final tribus = matchOutletItem(
+        index,
+        outlet(branch: 'BARABAI', code: 'C001', label: 'Toko Lain'),
+      );
+
+      expect(bobby?.label, 'Bobby FC');
+      expect(bobby?.revenue, 88250000);
+      expect(tribus?.label, 'TK. Tribus Lestari');
+      expect(tribus?.revenue, 123550000);
+    });
+
+    test('outlet tanpa kode tetap cocok lewat nama di cabang yang sama', () {
+      final index = buildOutletMatchIndex([
+        outlet(branch: 'BANJARMASIN', code: '', label: 'Mentari', revenue: 10),
+      ]);
+
+      expect(
+        matchOutletItem(
+          index,
+          outlet(branch: 'BANJARMASIN', code: '', label: 'MENTARI'),
+        )?.revenue,
+        10,
+      );
+      expect(
+        matchOutletItem(
+          index,
+          outlet(branch: 'BARABAI', code: '', label: 'Mentari'),
+        ),
+        isNull,
+      );
+    });
+  });
 }

@@ -114,6 +114,20 @@ def _normalized_key(value: Any) -> str:
     return " ".join(str(value).strip().upper().split())[:100]
 
 
+def _split_customer_key(value: Any) -> Tuple[str, str]:
+    """Pisahkan ``branch|kode`` menjadi (branch, kode) untuk response API.
+
+    Snapshot lama menyimpan kode pelanggan tanpa prefiks cabang; nilai seperti
+    itu dikembalikan apa adanya dengan branch kosong supaya pembaca lama tetap
+    jalan (snapshot akan dihitung ulang oleh ``ensure_summary``).
+    """
+    text = _as_text(value, 100)
+    if "|" not in text:
+        return "", text
+    branch, kode = text.rsplit("|", 1)
+    return branch, kode
+
+
 def _distinct_identity_count(column):
     """Count non-empty branch + source-code identities without null collapsing."""
     identity = func.concat(
@@ -148,7 +162,17 @@ def _dimension_columns(dimension: str, returns: bool = False):
                 func.max(model.sales_nama),
             )
         if dimension == CUSTOMER_DIMENSION:
-            return model.customer_kode, func.max(model.customer_nama)
+            # Customer identity = (branch, kode): kode hanya unik di dalam
+            # satu cabang (lihat model Customer), jadi kode yang sama di dua
+            # cabang adalah outlet berbeda dan tidak boleh digabung.
+            return (
+                func.concat(
+                    func.coalesce(model.branch, ""),
+                    "|",
+                    func.coalesce(model.customer_kode, ""),
+                ),
+                func.max(model.customer_nama),
+            )
         if dimension == DIVISI_DIMENSION:
             return model.divisi, func.max(model.divisi)
         if dimension == SUPPLIER_DIMENSION:
@@ -177,7 +201,15 @@ def _dimension_columns(dimension: str, returns: bool = False):
             func.max(model.sales_nama),
         )
     if dimension == CUSTOMER_DIMENSION:
-        return model.customer_kode, func.max(model.customer_nama)
+        # Sama seperti sisi retur: outlet diidentifikasi oleh (branch, kode).
+        return (
+            func.concat(
+                func.coalesce(model.branch, ""),
+                "|",
+                func.coalesce(model.customer_kode, ""),
+            ),
+            func.max(model.customer_nama),
+        )
     if dimension == CHANNEL_DIMENSION:
         return model.channel, func.max(model.channel)
     if dimension == DIVISI_DIMENSION:
@@ -191,8 +223,15 @@ def _dimension_rows(
     start: datetime,
     month_end: datetime,
     dimension: str,
+    with_active_outlets: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Aggregate gross sales and returns, then net before top-N ordering."""
+    """Aggregate gross sales and returns, then net before top-N ordering.
+
+    ``with_active_outlets=False`` skips the ``COUNT(DISTINCT ...)`` aggregate.
+    The comparison endpoint only needs the per-month outlet counts (fetched
+    separately for the displayed top-N keys), so skipping this expensive
+    aggregate here saves one distinct pass per dimension.
+    """
     sales_key, sales_label = _dimension_columns(dimension)
     sales_query = _scope_query(db, scope, start, month_end)
     sales_groups = (
@@ -204,9 +243,11 @@ def _dimension_rows(
                 "revenue"
             ),
             func.coalesce(func.sum(ImportedSale.margin), 0).label("margin"),
-            _distinct_identity_count(ImportedSale.customer_kode).label(
-                "active_outlets"
-            ),
+            (
+                _distinct_identity_count(ImportedSale.customer_kode)
+                if with_active_outlets
+                else literal(0)
+            ).label("active_outlets"),
             (
                 func.max(ImportedSale.product_kode).label("product_kode")
                 if dimension == PRODUCT_DIMENSION
@@ -603,6 +644,24 @@ def ensure_summary(
             if has_legacy_ranking_counts:
                 has_snapshot = False
         if has_snapshot:
+            # Older snapshots keyed customers by kode alone, merging outlets
+            # that share a kode across branches. New keys are ``branch|kode``,
+            # so any customer row without the separator needs a rebuild.
+            has_legacy_customer_keys = (
+                db.query(ImportedSalesMonthlySummary.id)
+                .filter(
+                    ImportedSalesMonthlySummary.scope == scope,
+                    ImportedSalesMonthlySummary.month == month,
+                    ImportedSalesMonthlySummary.dimension
+                    == CUSTOMER_DIMENSION,
+                    ~ImportedSalesMonthlySummary.dim_key.contains("|"),
+                )
+                .first()
+                is not None
+            )
+            if has_legacy_customer_keys:
+                has_snapshot = False
+        if has_snapshot:
             return False
 
     recompute_summary(db, scope, month, start, month_end, version)
@@ -877,10 +936,12 @@ def read_summary(
             bucket = result["by_customer"]
             if len(bucket) >= limit:
                 continue
+            branch, kode = _split_customer_key(row.dim_key)
             bucket.append(
                 {
-                    "customer_kode": _or_none(row.dim_key),
+                    "customer_kode": _or_none(kode),
                     "customer_nama": _or_none(row.dim_label),
+                    "customer_branch": _or_none(branch),
                     "qty": int(row.qty or 0),
                     "revenue": int(row.revenue or 0),
                     "margin": int(row.margin or 0),
@@ -952,23 +1013,36 @@ def read_summary_range(
     limit: int,
     include_all_sales: bool = False,
     include_dimension_keys: bool = False,
+    include_totals: bool = True,
+    include_active_outlets: bool = True,
 ) -> Dict[str, Any]:
-    """Aggregate a multi-month range from source rows, netting returns first."""
-    sales_totals = _scope_query(db, scope, start, month_end).with_entities(
-        func.coalesce(func.sum(ImportedSale.total_amount), 0),
-        func.coalesce(func.sum(ImportedSale.qty), 0),
-        func.coalesce(func.sum(ImportedSale.margin), 0),
-        func.count(ImportedSale.id),
-        _distinct_identity_count(ImportedSale.trans_no),
-        _distinct_identity_count(ImportedSale.customer_kode),
-    ).one()
-    return_totals = _scope_return_query(
-        db, scope, start, month_end
-    ).with_entities(
-        func.coalesce(func.sum(ImportedReturn.revenue), 0),
-        func.coalesce(func.sum(ImportedReturn.margin), 0),
-        func.count(ImportedReturn.id),
-    ).one()
+    """Aggregate a multi-month range from source rows, netting returns first.
+
+    ``include_totals=False`` skips the two range-total queries and returns
+    zeros for them; callers that only read the per-dimension buckets (the
+    comparison endpoint) save a full scan of the range.
+    ``include_active_outlets=False`` skips the range-wide distinct-outlet
+    aggregate inside every dimension query.
+    """
+    if include_totals:
+        sales_totals = _scope_query(db, scope, start, month_end).with_entities(
+            func.coalesce(func.sum(ImportedSale.total_amount), 0),
+            func.coalesce(func.sum(ImportedSale.qty), 0),
+            func.coalesce(func.sum(ImportedSale.margin), 0),
+            func.count(ImportedSale.id),
+            _distinct_identity_count(ImportedSale.trans_no),
+            _distinct_identity_count(ImportedSale.customer_kode),
+        ).one()
+        return_totals = _scope_return_query(
+            db, scope, start, month_end
+        ).with_entities(
+            func.coalesce(func.sum(ImportedReturn.revenue), 0),
+            func.coalesce(func.sum(ImportedReturn.margin), 0),
+            func.count(ImportedReturn.id),
+        ).one()
+    else:
+        sales_totals = (0, 0, 0, 0, 0, 0)
+        return_totals = (0, 0, 0)
     result: Dict[str, Any] = {
         "total_revenue": int(sales_totals[0] or 0) - int(return_totals[0] or 0),
         "total_qty": int(sales_totals[1] or 0),
@@ -1001,7 +1075,12 @@ def read_summary_range(
         if normalized not in requested:
             continue
         groups = _dimension_rows(
-            db, scope, start, month_end, dimension
+            db,
+            scope,
+            start,
+            month_end,
+            dimension,
+            with_active_outlets=include_active_outlets,
         )
         if normalized != "sales" or not include_all_sales:
             groups = groups[:limit]
@@ -1038,13 +1117,13 @@ def read_summary_range(
                     ),
                 })
             elif normalized == "customer":
+                branch, kode = _split_customer_key(group["dim_key"])
                 item.update({
-                    "customer_kode": _or_none(
-                        _as_text(group["dim_key"], 100)
-                    ),
+                    "customer_kode": _or_none(kode),
                     "customer_nama": _or_none(
                         _as_text(group["dim_label"], 200)
                     ),
+                    "customer_branch": _or_none(branch),
                 })
             elif normalized == "channel":
                 item["channel"] = _or_none(
@@ -1084,8 +1163,15 @@ def read_active_outlets_by_month(
     scope: str,
     month_ranges: Iterable[Tuple[datetime, datetime]],
     dimensions: Iterable[str],
+    keys_by_dimension: Optional[Dict[str, Iterable[str]]] = None,
 ) -> Dict[str, Dict[str, int]]:
-    """Sum distinct outlet counts per item without merging identities across months."""
+    """Sum distinct outlet counts per item without merging identities across months.
+
+    ``keys_by_dimension`` limits the work to the keys that are actually
+    displayed (the comparison endpoint's top-N per dimension). Restricting the
+    ``GROUP BY`` to those keys keeps the distinct hash small instead of
+    building one bucket per item in the whole range.
+    """
     dimension_map = {
         "product": PRODUCT_DIMENSION,
         "sales": SALES_DIMENSION,
@@ -1095,6 +1181,8 @@ def read_active_outlets_by_month(
         "supplier": SUPPLIER_DIMENSION,
     }
     requested = {dimension.lower() for dimension in dimensions}
+    if keys_by_dimension is not None:
+        requested &= set(keys_by_dimension)
     totals: Dict[str, Dict[str, int]] = {
         name: {} for name in requested if name in dimension_map
     }
@@ -1107,20 +1195,48 @@ def read_active_outlets_by_month(
     for name, dimension in dimension_map.items():
         if name not in totals:
             continue
+        filter_keys: Optional[List[str]] = None
+        if keys_by_dimension is not None:
+            filter_keys = sorted(
+                {
+                    str(key)
+                    for key in keys_by_dimension.get(name, ())
+                    if key
+                }
+            )
+            if not filter_keys:
+                continue
         dimension_key, _ = _dimension_columns(dimension)
         normalized_dimension_key = func.upper(
             func.regexp_replace(func.trim(dimension_key), r"\s+", " ", "g")
         )
-        rows = (
-            _scope_query(db, scope, start, month_end)
-            .with_entities(
-                normalized_dimension_key.label("dim_key"),
-                month_expr.label("month"),
-                _distinct_identity_count(ImportedSale.customer_kode).label(
-                    "active_outlets"
-                ),
+        query = _scope_query(db, scope, start, month_end).with_entities(
+            normalized_dimension_key.label("dim_key"),
+            month_expr.label("month"),
+            ImportedSale.branch.label("branch"),
+            ImportedSale.customer_kode.label("customer_kode"),
+        ).filter(
+            ImportedSale.customer_kode.isnot(None),
+            ImportedSale.customer_kode != "",
+        )
+        if filter_keys is not None:
+            # _dimension_rows returns keys normalised to 100 chars, so compare
+            # against the same truncated form.
+            query = query.filter(
+                func.left(normalized_dimension_key, 100).in_(filter_keys)
             )
-            .group_by(normalized_dimension_key, month_expr)
+        # PostgreSQL's COUNT(DISTINCT concat(...)) on the full multi-month
+        # range spills a large sort/hash to disk (the production work_mem is
+        # 4MB). Deduplicating the identity tuples first, then counting rows in
+        # the small outer aggregate, avoids that expensive distinct aggregate.
+        identities = query.distinct().subquery()
+        rows = (
+            db.query(
+                identities.c.dim_key,
+                identities.c.month,
+                func.count().label("active_outlets"),
+            )
+            .group_by(identities.c.dim_key, identities.c.month)
             .all()
         )
         for row in rows:

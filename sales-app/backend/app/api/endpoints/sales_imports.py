@@ -496,9 +496,24 @@ def imported_sales_comparison(
 
     sections = {d.strip().lower() for d in (include or "").split(",") if d.strip()}
     detail: Dict[str, Any] = {}
+    # section name ("product") → result key ("by_product")
+    section_to_key = {
+        "product": "by_product",
+        "customer": "by_customer",
+        "divisi": "by_divisi",
+        "sales": "by_sales",
+        "channel": "by_channel",
+        "supplier": "by_supplier",
+    }
+    # Only these cards render "Jumlah AO" in the comparison column, so only
+    # they need the per-month distinct-outlet query.
+    active_outlet_sections = {"product", "supplier", "divisi"} & sections
     if sections:
-        # read_summary_range mengembalikan total kasar (net) untuk seluruh
-        # rentang pembanding. Kita turunkan jadi rata-rata per item di sini.
+        # The response only carries the top-`limit` rows per dimension, so the
+        # range-wide totals and range-wide distinct outlet counts are never
+        # read. Skipping both removes a full scan + a distinct pass per
+        # dimension; the per-month outlet counts below are restricted to the
+        # displayed keys so their distinct hash stays small.
         range_summary = read_summary_range(
             db,
             scope,
@@ -508,22 +523,24 @@ def imported_sales_comparison(
             limit,
             include_all_sales=False,
             include_dimension_keys=True,
+            include_totals=False,
+            include_active_outlets=False,
         )
+        keys_by_dimension = {
+            section: [
+                item["_dimension_key"]
+                for item in range_summary.get(section_to_key[section], [])
+                if item.get("_dimension_key")
+            ]
+            for section in active_outlet_sections
+        }
         active_outlets_by_month = read_active_outlets_by_month(
             db,
             scope,
             [parse_month(key)[1:] for key in month_keys],
-            sections,
+            active_outlet_sections,
+            keys_by_dimension=keys_by_dimension,
         )
-        # section name ("product") → result key ("by_product")
-        section_to_key = {
-            "product": "by_product",
-            "customer": "by_customer",
-            "divisi": "by_divisi",
-            "sales": "by_sales",
-            "channel": "by_channel",
-            "supplier": "by_supplier",
-        }
         for section, result_key in section_to_key.items():
             if section not in sections:
                 continue

@@ -1817,8 +1817,9 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
           cachedTargetUpdatedAt == targetUpdatedAt) {
         _importedSalesSummary = serverCached.data;
         // The summary cache and comparison/detail cache are independent.
-        // Always restore the latter when the summary itself is still current.
-        await fetchImportedSalesComparison();
+        // Restore/refresh the latter without holding the main dashboard
+        // loading state open; the summary is already current and renderable.
+        unawaited(fetchImportedSalesComparison());
         loadProductStockSummary();
         return true;
       }
@@ -1848,10 +1849,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
         scope: dataScope,
         fetchedAt: DateTime.now(),
       );
-      // Pembanding adalah bagian wajib dari ranking card. Tunggu payload
-      // pembanding agar card tidak berpindah dari satu kolom ke dua kolom
-      // lalu kembali lagi saat request lama selesai belakangan.
-      await fetchImportedSalesComparison();
+      // Comparison is secondary to the current-month summary. Start it in the
+      // background so the dashboard can render as soon as its main payload is
+      // ready, even if a longer comparison range is still being aggregated.
+      unawaited(fetchImportedSalesComparison());
       loadProductStockSummary();
       return true;
     } catch (e) {
@@ -2024,6 +2025,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
               activeOutlets: toInt(
                 e['average_active_outlets'] ?? e['active_outlets'],
               ),
+              branch: e['customer_branch']?.toString().trim(),
             ),
           )
           .toList(growable: false),

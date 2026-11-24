@@ -110,6 +110,29 @@ void main() {
     expect(analytics.suppliers.single.targetKey, 'CANDRA FOOD CV');
   });
 
+  test('customer ranking keeps the branch with the outlet code', () {
+    final analytics = SalesAnalytics.fromSummary({
+      'by_customer': [
+        {
+          'customer_kode': 'C001',
+          'customer_nama': 'Bobby FC',
+          'customer_branch': 'BANJARMASIN',
+          'revenue': 100,
+        },
+        {
+          'customer_kode': 'C001',
+          'customer_nama': 'TK. Tribus Lestari',
+          'customer_branch': 'BARABAI',
+          'revenue': 200,
+        },
+      ],
+    }, DateTime(2026, 11));
+
+    expect(analytics.customers, hasLength(2));
+    expect(analytics.customers.first.branch, 'BANJARMASIN');
+    expect(analytics.customers.last.branch, 'BARABAI');
+  });
+
   test('formatPercent preserves negative margin rates', () {
     expect(formatPercent(-0.125), '-12,5%');
   });

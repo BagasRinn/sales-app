@@ -247,7 +247,7 @@ void main() {
     },
   );
 
-  test('changing limit uses a separate cache key', () async {
+  test('changing display limit reuses the full summary payload', () async {
     final repo = _FakeImportedSalesRepository();
     final p = _provider(repo);
 
@@ -255,7 +255,9 @@ void main() {
     expect(repo.summaryCalls, 1);
 
     await p.loadImportedSalesSummary(month: '2026-01', limit: 50);
-    expect(repo.summaryCalls, 2);
+    // The provider always fetches the full 5000-row summary; the display
+    // limit only changes how many already-fetched rows the UI renders.
+    expect(repo.summaryCalls, 1);
     expect(p.importedSalesLimit, 50);
   });
 

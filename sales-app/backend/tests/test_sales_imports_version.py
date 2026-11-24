@@ -234,13 +234,14 @@ def _row(
     sales_nama: str = "Budi",
     sale_date: str | None = None,
     customer_kode: str | None = None,
+    customer_nama: str = "Toko A",
 ) -> list:
     return [
         sale_date or f"{TEST_MONTH}-15",
         trans_no,
         branch,
         customer_kode or "C001",
-        "Toko A",
+        customer_nama,
         product,
         f"Produk {product}",
         qty,
@@ -1413,8 +1414,123 @@ def test_comparison_include_customer_and_divisi():
         by_customer = {cu["customer_kode"]: cu for cu in c["by_customer"]}
         assert by_customer["C001"]["revenue"] == 300
         assert by_customer["C001"]["average_revenue"] == 150
+        assert by_customer["C001"]["customer_branch"] == USER_BRANCH
         assert by_customer["C002"]["revenue"] == 300
         assert by_customer["C002"]["average_revenue"] == 150
+    finally:
+        _cleanup()
+
+
+def test_customer_ranking_scopes_outlets_by_branch():
+    """Kode pelanggan unik per cabang; outlet berbeda tidak boleh digabung."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        # Kode C001 dipakai dua cabang untuk outlet yang berbeda.
+        _import(
+            client,
+            token,
+            [
+                _row(
+                    "T1",
+                    "P001",
+                    1,
+                    100,
+                    branch=USER_BRANCH,
+                    customer_kode="C001",
+                    customer_nama="Bobby FC",
+                ),
+                _row(
+                    "T2",
+                    "P001",
+                    1,
+                    200,
+                    branch=OTHER_BRANCH,
+                    customer_kode="C001",
+                    customer_nama="TK. Tribus Lestari",
+                ),
+            ],
+        )
+
+        summary = _summary(client, token, "include=customer&limit=100").json()
+        rows = {
+            (item["customer_branch"], item["customer_kode"]): item
+            for item in summary["by_customer"]
+        }
+        assert set(rows) == {
+            (USER_BRANCH, "C001"),
+            (OTHER_BRANCH, "C001"),
+        }
+        assert rows[(USER_BRANCH, "C001")]["customer_nama"] == "Bobby FC"
+        assert rows[(USER_BRANCH, "C001")]["revenue"] == 100
+        assert (
+            rows[(OTHER_BRANCH, "C001")]["customer_nama"]
+            == "TK. Tribus Lestari"
+        )
+        assert rows[(OTHER_BRANCH, "C001")]["revenue"] == 200
+    finally:
+        _cleanup()
+
+
+def test_comparison_customer_detail_keeps_branch_identity():
+    """Detail pembanding juga memisahkan outlet dengan kode sama antarcabang."""
+    _cleanup()
+    manager = _seed_user("MANAGER", None)
+    token = _token(manager, "MANAGER", None)
+    client = TestClient(app)
+
+    try:
+        previous_month = "2098-12-15"
+        _import(
+            client,
+            token,
+            [
+                _row(
+                    "T1",
+                    "P001",
+                    1,
+                    100,
+                    branch=USER_BRANCH,
+                    sale_date=previous_month,
+                    customer_kode="C001",
+                    customer_nama="Bobby FC",
+                ),
+                _row(
+                    "T2",
+                    "P001",
+                    1,
+                    200,
+                    branch=OTHER_BRANCH,
+                    sale_date=previous_month,
+                    customer_kode="C001",
+                    customer_nama="TK. Tribus Lestari",
+                ),
+            ],
+        )
+
+        payload = _comparison(
+            client, token, "months=1&include=customer&limit=100"
+        ).json()
+        rows = {
+            (item["customer_branch"], item["customer_kode"]): item
+            for item in payload["by_customer"]
+        }
+        assert set(rows) == {
+            (USER_BRANCH, "C001"),
+            (OTHER_BRANCH, "C001"),
+        }
+        assert rows[(USER_BRANCH, "C001")]["average_revenue"] == 100
+        assert (
+            rows[(USER_BRANCH, "C001")]["customer_nama"] == "Bobby FC"
+        )
+        assert rows[(OTHER_BRANCH, "C001")]["average_revenue"] == 200
+        assert (
+            rows[(OTHER_BRANCH, "C001")]["customer_nama"]
+            == "TK. Tribus Lestari"
+        )
     finally:
         _cleanup()
 
