@@ -2,6 +2,7 @@ import 'package:admin_web/data/repositories/admin_repository.dart';
 import 'package:admin_web/data/repositories/api_service.dart';
 import 'package:admin_web/core/design_system/app_colors.dart';
 import 'package:admin_web/core/design_system/widgets/app_card.dart';
+import 'package:admin_web/core/design_system/widgets/app_sticky_header.dart';
 import 'package:admin_web/core/design_system/widgets/app_stat_card.dart';
 import 'package:admin_web/data/models/branch_report.dart';
 import 'package:admin_web/presentation/providers/admin_provider.dart';
@@ -605,6 +606,13 @@ void main() {
     final returnCard = find.ancestor(
       of: find.text('Retur by Suppliers'),
       matching: find.byType(AppCard),
+    );
+    expect(
+      find.descendant(
+        of: returnCard,
+        matching: find.byType(AppStickyHeader),
+      ),
+      findsOneWidget,
     );
     final supplierBInSales = find.descendant(
       of: supplierCard,

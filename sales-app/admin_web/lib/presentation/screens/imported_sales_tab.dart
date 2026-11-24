@@ -2190,49 +2190,95 @@ class _SupplierReturnCardState extends State<_SupplierReturnCard> {
         )
         .toList(growable: false);
 
+    final title = 'Retur by Suppliers';
+    final subtitle =
+        'Top ${widget.limit} · urutan mengikuti Pareto Suppliers; '
+        'supplier lain berdasarkan ${_showMargin ? 'margin' : 'omzet'} retur';
+    final trailing = _buildModeChips();
+
+    if (entries.isEmpty) {
+      return AppCard(
+        title: title,
+        subtitle: subtitle,
+        trailing: trailing,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Belum ada retur periode ini'),
+            if (widget.canImport) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                label: 'Import Retur',
+                icon: Icons.assignment_return_outlined,
+                variant: AppButtonVariant.outline,
+                onPressed: widget.onImport,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return AppCard(
-      title: 'Retur by Suppliers',
-      subtitle:
-          'Top ${widget.limit} · urutan mengikuti Pareto Suppliers; '
-          'supplier lain berdasarkan ${_showMargin ? 'margin' : 'omzet'} retur',
-      trailing: Wrap(
-        spacing: AppSpacing.xs,
-        children: [
-          AppChoiceChip(
-            label: 'Omzet',
-            dense: true,
-            selected: !_showMargin,
-            onSelected: () => setState(() => _showMargin = false),
+      clipBehavior: Clip.none,
+      child: AppStickyHeader(
+        header: _buildStickyHeader(title, subtitle, trailing),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
           ),
-          AppChoiceChip(
-            label: 'Margin',
-            dense: true,
-            selected: _showMargin,
-            onSelected: () => setState(() => _showMargin = true),
+          child: SalesRankingList(
+            entries: entries,
+            maxItems: widget.limit,
+            emptyMessage: 'Belum ada retur periode ini',
           ),
-        ],
+        ),
       ),
-      child: entries.isEmpty
-          ? Column(
+    );
+  }
+
+  Widget _buildModeChips() => Wrap(
+    spacing: AppSpacing.xs,
+    children: [
+      AppChoiceChip(
+        label: 'Omzet',
+        dense: true,
+        selected: !_showMargin,
+        onSelected: () => setState(() => _showMargin = false),
+      ),
+      AppChoiceChip(
+        label: 'Margin',
+        dense: true,
+        selected: _showMargin,
+        onSelected: () => setState(() => _showMargin = true),
+      ),
+    ],
+  );
+
+  Widget _buildStickyHeader(String title, String subtitle, Widget trailing) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Belum ada retur periode ini'),
-                if (widget.canImport) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  AppButton(
-                    label: 'Import Retur',
-                    icon: Icons.assignment_return_outlined,
-                    variant: AppButtonVariant.outline,
-                    onPressed: widget.onImport,
-                  ),
-                ],
+                Text(title, style: AppTextStyles.h2),
+                const SizedBox(height: 2),
+                Text(subtitle, style: AppTextStyles.caption),
               ],
-            )
-          : SalesRankingList(
-              entries: entries,
-              maxItems: widget.limit,
-              emptyMessage: 'Belum ada retur periode ini',
             ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          trailing,
+        ],
+      ),
     );
   }
 
