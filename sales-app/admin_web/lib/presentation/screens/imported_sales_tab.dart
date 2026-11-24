@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system.dart';
+import '../../core/page_capture.dart';
 import '../../core/responsive.dart';
 import '../../data/models/branch_report.dart';
 import '../../data/repositories/admin_repository.dart';
@@ -39,6 +40,10 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   Map<String, dynamic>? _dismissedImportResult;
   Map<String, dynamic>? _dismissedReturnImportResult;
   Map<String, dynamic>? _dismissedTargetImportResult;
+  // Tombol "Ambil Gambar": halaman dirasterisasi penuh (termasuk bagian di
+  // bawah lipatan layar) jadi satu PNG lalu diunduh.
+  final GlobalKey _captureKey = GlobalKey();
+  bool _capturing = false;
 
   bool get _isImporting =>
       _importing || _importingReturn || _importingTarget || _importingStock;
@@ -81,6 +86,37 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
       limit: limit,
       rangeMonths: 1,
     );
+  }
+
+  /// Rasterisasi seluruh halaman Dashboard (termasuk bagian di bawah lipatan
+  /// layar) jadi satu PNG dan unduh. Tombol disembunyikan selama capture
+  /// supaya tidak ikut masuk gambar.
+  Future<void> _captureAnalytics() async {
+    if (_capturing) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _capturing = true);
+    try {
+      // Dua endOfFrame: pertama membangun ulang halaman tanpa tombol,
+      // kedua memastikan frame tersebut benar-benar selesai dirasterisasi.
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      await captureFullPage(
+        boundaryKey: _captureKey,
+        filename: 'data-penjualan-$_monthKey.png',
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Gambar halaman berhasil diunduh.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengambil gambar: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
   }
 
   Future<void> _changeMonth(DateTime next) async {
@@ -444,285 +480,300 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
         final resp = Responsive.of(constraints.maxWidth);
         return SingleChildScrollView(
           padding: EdgeInsets.all(resp.contentPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppPageHeader(
-                title: 'Data Penjualan',
-                subtitle:
-                    'Analisis omzet, tren harian, kanal, dan performa dari laporan Excel.',
-                actions: [
-                  if (!widget.readOnly && provider.isGlobalManager)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Grup import: aksi penambahan data (baris atas).
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          alignment: WrapAlignment.end,
-                          children: [
-                            AppButton(
-                              label: _importing
-                                  ? 'Mengimport...'
-                                  : 'Import Penjualan',
-                              icon: Icons.upload_file,
-                              variant: AppButtonVariant.outline,
-                              isLoading: _importing,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _pickAndImport(context),
-                            ),
-                            AppButton(
-                              label: _importingReturn
-                                  ? 'Mengimport...'
-                                  : 'Import Retur',
-                              icon: Icons.assignment_return_outlined,
-                              variant: AppButtonVariant.outline,
-                              isLoading: _importingReturn,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _pickAndImportReturns(context),
-                            ),
-                            AppButton(
-                              label: _importingTarget
-                                  ? 'Mengimport...'
-                                  : 'Import Target',
-                              icon: Icons.flag_outlined,
-                              variant: AppButtonVariant.outline,
-                              isLoading: _importingTarget,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _pickAndImportTargets(context),
-                            ),
-                            AppButton(
-                              label: _importingStock
-                                  ? 'Mengimport...'
-                                  : 'Import Data Produk',
-                              icon: Icons.inventory_2_outlined,
-                              variant: AppButtonVariant.outline,
-                              isLoading: _importingStock,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _pickAndImportProductStock(context),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        // Grup hapus: aksi destruktif di baris bawah, tidak
-                        // bersebelahan dengan tombol import.
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          alignment: WrapAlignment.end,
-                          children: [
-                            AppButton(
-                              label: 'Hapus bulan',
-                              icon: Icons.delete_outline,
-                              variant: AppButtonVariant.danger,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () =>
-                                        _confirmDeleteMonth(context, provider),
-                            ),
-                            AppButton(
-                              label: 'Hapus retur',
-                              icon: Icons.delete_sweep_outlined,
-                              variant: AppButtonVariant.danger,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _confirmDeleteReturnsMonth(
-                                      context,
-                                      provider,
-                                    ),
-                            ),
-                            AppButton(
-                              label: 'Hapus target',
-                              icon: Icons.remove_circle_outline,
-                              variant: AppButtonVariant.danger,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _confirmDeleteTargets(
-                                      context,
-                                      provider,
-                                    ),
-                            ),
-                            AppButton(
-                              label: 'Hapus Data Produk',
-                              icon: Icons.inventory_outlined,
-                              variant: AppButtonVariant.danger,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _confirmDeleteProductStock(
-                                      context,
-                                      provider,
-                                    ),
-                            ),
-                            AppButton(
-                              label: 'Hapus semua',
-                              icon: Icons.delete_forever_outlined,
-                              variant: AppButtonVariant.danger,
-                              onPressed: _isImporting
-                                  ? null
-                                  : () => _confirmDeleteAll(context, provider),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _PeriodToolbar(
-                month: _month,
-                loading: isLoading,
-                limit: limit,
-                comparisonMonths: comparisonMonths,
-                updatedAt: analytics?.updatedAt,
-                rowCount: analytics?.totalRows,
-                showBranchFilter: provider.isGlobalManager,
-                branchOptions: provider.branchOptions,
-                selectedBranch: provider.importedSalesBranchFilter,
-                onBranchChanged: _changeBranch,
-                onPrevious: () =>
-                    _changeMonth(DateTime(_month.year, _month.month - 1)),
-                onNext: () =>
-                    _changeMonth(DateTime(_month.year, _month.month + 1)),
-                onPick: _pickMonth,
-                onLimitChanged: (value) => _loadSummary(limit: value),
-                onComparisonChanged: _changeComparison,
-              ),
-              if (errorMessage != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorCard(message: errorMessage),
-              ],
-              if (importResult != null &&
-                  !identical(importResult, _dismissedImportResult)) ...[
-                const SizedBox(height: AppSpacing.md),
-                SalesImportBanner(
-                  result: importResult,
-                  onDismiss: () =>
-                      setState(() => _dismissedImportResult = importResult),
-                ),
-              ],
-              if (returnImportResult != null &&
-                  !identical(
-                    returnImportResult,
-                    _dismissedReturnImportResult,
-                  )) ...[
-                const SizedBox(height: AppSpacing.md),
-                SalesImportBanner(
-                  result: returnImportResult,
-                  onDismiss: () => setState(
-                    () => _dismissedReturnImportResult = returnImportResult,
-                  ),
-                ),
-              ],
-              if (targetImportResult != null &&
-                  !identical(
-                    targetImportResult,
-                    _dismissedTargetImportResult,
-                  )) ...[
-                const SizedBox(height: AppSpacing.md),
-                _SalesTargetImportBanner(
-                  result: targetImportResult,
-                  onDismiss: () => setState(
-                    () => _dismissedTargetImportResult = targetImportResult,
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              if (analytics == null)
-                isLoading
-                    ? const _LoadingView()
-                    : Column(
+          child: RepaintBoundary(
+            key: _captureKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppPageHeader(
+                  title: 'Data Penjualan',
+                  subtitle:
+                      'Analisis omzet, tren harian, kanal, dan performa dari laporan Excel.',
+                  actions: [
+                    if (analytics != null && !_capturing)
+                      AppButton(
+                        label: 'Ambil Gambar',
+                        icon: Icons.photo_camera_outlined,
+                        variant: AppButtonVariant.outline,
+                        onPressed: _captureAnalytics,
+                      ),
+                    if (!widget.readOnly && provider.isGlobalManager)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          SalesEmptyStateCard(
-                            title: 'Belum ada data ${formatMonthLong(_month)}',
-                            message: errorMessage != null
-                                ? 'Data gagal dimuat. Coba muat ulang periode ini.'
-                                : 'Import laporan penjualan (.xlsx/.xls) untuk '
-                                      'periode ini agar tren, kanal, dan ranking '
-                                      'bisa dianalisis.',
-                            action: widget.readOnly || !provider.isGlobalManager
-                                ? null
-                                : AppButton(
-                                    label: 'Import Penjualan',
-                                    icon: Icons.upload_file,
-                                    onPressed: () => _pickAndImport(context),
-                                  ),
+                          // Grup import: aksi penambahan data (baris atas).
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              AppButton(
+                                label: _importing
+                                    ? 'Mengimport...'
+                                    : 'Import Penjualan',
+                                icon: Icons.upload_file,
+                                variant: AppButtonVariant.outline,
+                                isLoading: _importing,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _pickAndImport(context),
+                              ),
+                              AppButton(
+                                label: _importingReturn
+                                    ? 'Mengimport...'
+                                    : 'Import Retur',
+                                icon: Icons.assignment_return_outlined,
+                                variant: AppButtonVariant.outline,
+                                isLoading: _importingReturn,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _pickAndImportReturns(context),
+                              ),
+                              AppButton(
+                                label: _importingTarget
+                                    ? 'Mengimport...'
+                                    : 'Import Target',
+                                icon: Icons.flag_outlined,
+                                variant: AppButtonVariant.outline,
+                                isLoading: _importingTarget,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _pickAndImportTargets(context),
+                              ),
+                              AppButton(
+                                label: _importingStock
+                                    ? 'Mengimport...'
+                                    : 'Import Data Produk',
+                                icon: Icons.inventory_2_outlined,
+                                variant: AppButtonVariant.outline,
+                                isLoading: _importingStock,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _pickAndImportProductStock(context),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          _SupplierReturnCard(
-                            analytics: SalesAnalytics.fromSummary(
-                              const <String, dynamic>{},
-                              _month,
-                            ),
-                            limit: 10,
-                            canImport:
-                                !widget.readOnly && provider.isGlobalManager,
-                            onImport: () => _pickAndImportReturns(context),
+                          const SizedBox(height: AppSpacing.sm),
+                          // Grup hapus: aksi destruktif di baris bawah, tidak
+                          // bersebelahan dengan tombol import.
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              AppButton(
+                                label: 'Hapus bulan',
+                                icon: Icons.delete_outline,
+                                variant: AppButtonVariant.danger,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _confirmDeleteMonth(
+                                        context,
+                                        provider,
+                                      ),
+                              ),
+                              AppButton(
+                                label: 'Hapus retur',
+                                icon: Icons.delete_sweep_outlined,
+                                variant: AppButtonVariant.danger,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _confirmDeleteReturnsMonth(
+                                        context,
+                                        provider,
+                                      ),
+                              ),
+                              AppButton(
+                                label: 'Hapus target',
+                                icon: Icons.remove_circle_outline,
+                                variant: AppButtonVariant.danger,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _confirmDeleteTargets(
+                                        context,
+                                        provider,
+                                      ),
+                              ),
+                              AppButton(
+                                label: 'Hapus Data Produk',
+                                icon: Icons.inventory_outlined,
+                                variant: AppButtonVariant.danger,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () => _confirmDeleteProductStock(
+                                        context,
+                                        provider,
+                                      ),
+                              ),
+                              AppButton(
+                                label: 'Hapus semua',
+                                icon: Icons.delete_forever_outlined,
+                                variant: AppButtonVariant.danger,
+                                onPressed: _isImporting
+                                    ? null
+                                    : () =>
+                                          _confirmDeleteAll(context, provider),
+                              ),
+                            ],
                           ),
                         ],
-                      )
-              else if (analytics.isEmpty)
-                Column(
-                  children: [
-                    SalesEmptyStateCard(
-                      title:
-                          'Tidak ada penjualan di ${formatMonthLong(_month)}',
-                      message:
-                          'File untuk periode ini sudah diimport, tetapi belum ada '
-                          'baris penjualan yang tercatat. Periksa kembali isi file '
-                          'atau pilih periode lain.',
-                      action: widget.readOnly || !provider.isGlobalManager
-                          ? null
-                          : AppButton(
-                              label: 'Import ulang',
-                              icon: Icons.upload_file,
-                              variant: AppButtonVariant.outline,
-                              onPressed: () => _pickAndImport(context),
-                            ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _SupplierReturnCard(
-                      analytics: analytics,
-                      limit: limit,
-                      canImport: !widget.readOnly && provider.isGlobalManager,
-                      onImport: () => _pickAndImportReturns(context),
-                    ),
+                      ),
                   ],
-                )
-              else
-                _AnalyticsBody(
-                  analytics: analytics,
-                  comparison: provider.importedSalesComparison != null
-                      ? SalesComparison.fromMap(
-                          provider.importedSalesComparison!,
-                          months: comparisonMonths,
-                        )
-                      : null,
-                  comparisonMonths: comparisonMonths,
-                  comparisonDetail: provider.importedSalesComparisonDetail,
-                  comparisonLoading: comparisonLoading,
-                  comparisonLabel: _comparisonLabel(comparisonMonths),
-                  limit: limit,
-                  allBranches:
-                      provider.isGlobalManager &&
-                      provider.importedSalesBranchFilter == null,
-                  branchOptions: provider.branchOptions,
-                  branchOptionsLoading: provider.branchOptionsLoading,
-                  branchOptionsError: provider.branchOptionsError,
-                  onRetryBranches: provider.loadBranchOptions,
-                  repository: provider.repository,
-                  month: _month,
-                  canImportReturns:
-                      !widget.readOnly && provider.isGlobalManager,
-                  onImportReturns: () => _pickAndImportReturns(context),
-                  productStock: provider.productStockSummary,
                 ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
+                const SizedBox(height: AppSpacing.lg),
+                _PeriodToolbar(
+                  month: _month,
+                  loading: isLoading,
+                  limit: limit,
+                  comparisonMonths: comparisonMonths,
+                  updatedAt: analytics?.updatedAt,
+                  rowCount: analytics?.totalRows,
+                  showBranchFilter: provider.isGlobalManager,
+                  branchOptions: provider.branchOptions,
+                  selectedBranch: provider.importedSalesBranchFilter,
+                  onBranchChanged: _changeBranch,
+                  onPrevious: () =>
+                      _changeMonth(DateTime(_month.year, _month.month - 1)),
+                  onNext: () =>
+                      _changeMonth(DateTime(_month.year, _month.month + 1)),
+                  onPick: _pickMonth,
+                  onLimitChanged: (value) => _loadSummary(limit: value),
+                  onComparisonChanged: _changeComparison,
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _ErrorCard(message: errorMessage),
+                ],
+                if (importResult != null &&
+                    !identical(importResult, _dismissedImportResult)) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  SalesImportBanner(
+                    result: importResult,
+                    onDismiss: () =>
+                        setState(() => _dismissedImportResult = importResult),
+                  ),
+                ],
+                if (returnImportResult != null &&
+                    !identical(
+                      returnImportResult,
+                      _dismissedReturnImportResult,
+                    )) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  SalesImportBanner(
+                    result: returnImportResult,
+                    onDismiss: () => setState(
+                      () => _dismissedReturnImportResult = returnImportResult,
+                    ),
+                  ),
+                ],
+                if (targetImportResult != null &&
+                    !identical(
+                      targetImportResult,
+                      _dismissedTargetImportResult,
+                    )) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _SalesTargetImportBanner(
+                    result: targetImportResult,
+                    onDismiss: () => setState(
+                      () => _dismissedTargetImportResult = targetImportResult,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                if (analytics == null)
+                  isLoading
+                      ? const _LoadingView()
+                      : Column(
+                          children: [
+                            SalesEmptyStateCard(
+                              title:
+                                  'Belum ada data ${formatMonthLong(_month)}',
+                              message: errorMessage != null
+                                  ? 'Data gagal dimuat. Coba muat ulang periode ini.'
+                                  : 'Import laporan penjualan (.xlsx/.xls) untuk '
+                                        'periode ini agar tren, kanal, dan ranking '
+                                        'bisa dianalisis.',
+                              action:
+                                  widget.readOnly || !provider.isGlobalManager
+                                  ? null
+                                  : AppButton(
+                                      label: 'Import Penjualan',
+                                      icon: Icons.upload_file,
+                                      onPressed: () => _pickAndImport(context),
+                                    ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            _SupplierReturnCard(
+                              analytics: SalesAnalytics.fromSummary(
+                                const <String, dynamic>{},
+                                _month,
+                              ),
+                              limit: 10,
+                              canImport:
+                                  !widget.readOnly && provider.isGlobalManager,
+                              onImport: () => _pickAndImportReturns(context),
+                            ),
+                          ],
+                        )
+                else if (analytics.isEmpty)
+                  Column(
+                    children: [
+                      SalesEmptyStateCard(
+                        title:
+                            'Tidak ada penjualan di ${formatMonthLong(_month)}',
+                        message:
+                            'File untuk periode ini sudah diimport, tetapi belum ada '
+                            'baris penjualan yang tercatat. Periksa kembali isi file '
+                            'atau pilih periode lain.',
+                        action: widget.readOnly || !provider.isGlobalManager
+                            ? null
+                            : AppButton(
+                                label: 'Import ulang',
+                                icon: Icons.upload_file,
+                                variant: AppButtonVariant.outline,
+                                onPressed: () => _pickAndImport(context),
+                              ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _SupplierReturnCard(
+                        analytics: analytics,
+                        limit: limit,
+                        canImport: !widget.readOnly && provider.isGlobalManager,
+                        onImport: () => _pickAndImportReturns(context),
+                      ),
+                    ],
+                  )
+                else
+                  _AnalyticsBody(
+                    analytics: analytics,
+                    comparison: provider.importedSalesComparison != null
+                        ? SalesComparison.fromMap(
+                            provider.importedSalesComparison!,
+                            months: comparisonMonths,
+                          )
+                        : null,
+                    comparisonMonths: comparisonMonths,
+                    comparisonDetail: provider.importedSalesComparisonDetail,
+                    comparisonLoading: comparisonLoading,
+                    comparisonLabel: _comparisonLabel(comparisonMonths),
+                    limit: limit,
+                    allBranches:
+                        provider.isGlobalManager &&
+                        provider.importedSalesBranchFilter == null,
+                    branchOptions: provider.branchOptions,
+                    branchOptionsLoading: provider.branchOptionsLoading,
+                    branchOptionsError: provider.branchOptionsError,
+                    onRetryBranches: provider.loadBranchOptions,
+                    repository: provider.repository,
+                    month: _month,
+                    canImportReturns:
+                        !widget.readOnly && provider.isGlobalManager,
+                    onImportReturns: () => _pickAndImportReturns(context),
+                    productStock: provider.productStockSummary,
+                  ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+            ),
           ),
         );
       },

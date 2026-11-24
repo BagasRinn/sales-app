@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system.dart';
+import '../../core/page_capture.dart';
 import '../../core/responsive.dart';
 import '../../data/models/inventory_tracker.dart';
 import '../widgets/analytics/sales_analytics_models.dart';
@@ -32,6 +33,11 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   int _visibleCount = 100;
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
+  // Tombol "Ambil Gambar": saat capture, semua baris yang lolos filter
+  // dirender penuh, tabel dilepas dari scroll horizontal, lalu halaman
+  // dirasterisasi jadi satu PNG dan diunduh.
+  final GlobalKey _captureKey = GlobalKey();
+  bool _capturing = false;
 
   @override
   void dispose() {
@@ -93,6 +99,46 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     _load(provider);
   }
 
+  /// Render semua baris yang lolos filter, rasterisasi halaman jadi satu PNG
+  /// (termasuk bagian di bawah lipatan layar), unduh, lalu kembalikan tabel ke
+  /// mode hemat baris.
+  Future<void> _capture(AdminProvider provider) async {
+    final data = provider.inventoryTracker;
+    if (data == null || _capturing) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _capturing = true;
+      _visibleCount = _filteredRows(data).length;
+    });
+    try {
+      // Dua endOfFrame: pertama membangun ulang halaman dengan semua baris,
+      // kedua memastikan frame tersebut benar-benar selesai dirasterisasi.
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      await captureFullPage(
+        boundaryKey: _captureKey,
+        filename: 'stok-by-$_dimensionParam-$_monthKey.png',
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Gambar halaman berhasil diunduh.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengambil gambar: $error'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _capturing = false;
+          _visibleCount = 100;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Consumer<AdminProvider>(
     builder: (context, provider, _) {
@@ -116,52 +162,61 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         });
       }
       final responsive = Responsive.of(MediaQuery.sizeOf(context).width);
+      Widget page = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_pageTitle, style: AppTextStyles.headlineSmall),
+          const SizedBox(height: 6),
+          Text(
+            _isSku
+                ? 'Analisa nilai stok produk. Penjualan dan retur digabung menurut Mother SKU.'
+                : 'Analisa nilai stok supplier berdasarkan penjualan tiga bulan sebelumnya.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSubtle,
+            ),
+          ),
+          const SizedBox(height: 18),
+          _toolbar(context, provider, data),
+          const SizedBox(height: AppSpacing.md),
+          if (provider.inventoryTrackerLoading && data == null)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(48),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (provider.inventoryTrackerError != null && data == null)
+            _message(provider.inventoryTrackerError!, true)
+          else if (data == null || data.rows.isEmpty)
+            _message('Belum ada data untuk periode/cabang ini.', false)
+          else ...[
+            _summary(data),
+            const SizedBox(height: 18),
+            if (!data.stockSnapshotAvailable)
+              _message('Snapshot GOOD AMOUNT bulan ini belum diimpor.', false),
+            if (!data.salesHistoryAvailable)
+              _message(
+                'Belum ada riwayat penjualan pada tiga bulan sebelumnya.',
+                false,
+              ),
+            _table(data),
+          ],
+        ],
+      );
+      if (_capturing) {
+        // Selama capture konten dibungkus SizedBox selebar tabel minimum
+        // (+16 longgar untuk margin Card) lalu diperkecil pas lebar halaman
+        // oleh FittedBox, sehingga semua kolom masuk gambar meskipun layar
+        // lebih sempit dari tabel.
+        page = FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: _minTableWidth + 16, child: page),
+        );
+      }
       return SingleChildScrollView(
         padding: EdgeInsets.all(responsive.contentPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_pageTitle, style: AppTextStyles.headlineSmall),
-            const SizedBox(height: 6),
-            Text(
-              _isSku
-                  ? 'Analisa nilai stok produk. Penjualan dan retur digabung menurut Mother SKU.'
-                  : 'Analisa nilai stok supplier berdasarkan penjualan tiga bulan sebelumnya.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSubtle,
-              ),
-            ),
-            const SizedBox(height: 18),
-            _toolbar(context, provider, data),
-            const SizedBox(height: AppSpacing.md),
-            if (provider.inventoryTrackerLoading && data == null)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(48),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (provider.inventoryTrackerError != null && data == null)
-              _message(provider.inventoryTrackerError!, true)
-            else if (data == null || data.rows.isEmpty)
-              _message('Belum ada data untuk periode/cabang ini.', false)
-            else ...[
-              _summary(data),
-              const SizedBox(height: 18),
-              if (!data.stockSnapshotAvailable)
-                _message(
-                  'Snapshot GOOD AMOUNT bulan ini belum diimpor.',
-                  false,
-                ),
-              if (!data.salesHistoryAvailable)
-                _message(
-                  'Belum ada riwayat penjualan pada tiga bulan sebelumnya.',
-                  false,
-                ),
-              _table(data),
-            ],
-          ],
-        ),
+        child: RepaintBoundary(key: _captureKey, child: page),
       );
     },
   );
@@ -232,6 +287,16 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
               setState(() => _supplier = value);
               _load(provider);
             },
+          ),
+        if (data != null &&
+            data.rows.isNotEmpty &&
+            !provider.inventoryTrackerLoading &&
+            !_capturing)
+          AppButton(
+            label: 'Ambil Gambar',
+            icon: Icons.photo_camera_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => _capture(provider),
           ),
       ],
     ),
@@ -471,7 +536,10 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         Card(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final fits = constraints.maxWidth >= _minTableWidth;
+              // Saat capture, tabel sengaja dilepas dari scroll horizontal
+              // (halaman diperkecil oleh FittedBox di build) supaya semua
+              // kolom ikut masuk gambar.
+              final fits = _capturing || constraints.maxWidth >= _minTableWidth;
               final table = Table(
                 columnWidths: const {
                   0: FlexColumnWidth(),
