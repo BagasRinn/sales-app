@@ -975,7 +975,7 @@ class InventoryTrackerRow(BaseModel):
     sales_month_1: int = 0
     sales_month_2: int = 0
     sales_month_3: int = 0
-    ap3m: int = 0
+    ap3m: int = 0  # rata-rata penjualan net 3 bulan sebelumnya (rupiah, dibulatkan)
     average_per_week: float = 0
     week_of_inventory: Optional[float] = None
     sales_current_month: int = 0

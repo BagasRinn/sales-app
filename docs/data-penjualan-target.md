@@ -64,9 +64,10 @@ tombol **Import Data Produk** di Dashboard, bukan dari stok operasional pada men
 Sinkronisasi. Setiap baris snapshot wajib memiliki `Supplier` agar dapat
 diagregasikan.
 
-Untuk bulan `M`, `AP3M` adalah penjualan net pada tiga bulan kalender sebelum
-`M`, `Average per week = AP3M / 4`, dan `Week of Inventory = Stock /
-Average per week`. Penjualan bulan `M` ditampilkan terpisah. Status inventory
+Untuk bulan `M`, `AP3M` adalah rata-rata penjualan net pada tiga bulan
+kalender sebelum `M` (bulan tanpa transaksi dihitung 0, hasil dibulatkan ke
+rupiah terdekat). `Average per week = AP3M / 4`, dan `Week of Inventory =
+Stock / Average per week`. Penjualan bulan `M` ditampilkan terpisah. Status inventory
 adalah `Habis` jika Stock <= 0, `Tidak ada riwayat` jika tidak ada average
 mingguan, `Aman` untuk 0 sampai 6 minggu, dan `Overstock` jika lebih dari 6
 minggu. Manager dapat memilih semua cabang atau satu cabang; supervisor hanya

@@ -1,6 +1,6 @@
 """Daily and period order reports - Excel export untuk admin & manager."""
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 import re
 from typing import List, Optional
@@ -222,7 +222,13 @@ def get_inventory_tracker(
     rows = []
     for item in items:
         monthly = [sales_map.get((item, period), 0) for period in all_months]
-        ap3m = sum(monthly[:3])
+        # AP3M = rata-rata penjualan net 3 bulan sebelum bulan laporan, bukan jumlah.
+        # Bulan tanpa transaksi dihitung 0. Avg/Week tetap AP3M / 4.
+        ap3m = int(
+            (Decimal(sum(monthly[:3])) / Decimal(3)).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
         average_per_week = ap3m / 4
         stock = stock_map.get(item, 0)
         weeks = stock / average_per_week if average_per_week > 0 else None
