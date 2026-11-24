@@ -2006,15 +2006,28 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
     );
 
     return AppCard(
-      title: widget.title,
-      subtitle: 'Top ${widget.limit} berdasarkan omzet',
-      trailing: _buildModeChips(),
-      child: SalesRankingPairList(
-        leftEntries: leftEntries,
-        rightEntries: rightEntries,
-        leftHeader: widget.comparisonLabel ?? 'Bulan sebelumnya',
-        rightHeader: 'Bulan ini',
-        maxItems: widget.limit,
+      // Header sticky perlu paint keluar dari batas atas kartu saat kartu
+      // sedang melewati viewport. Bentuk/border kartu tetap utuh; isi ranking
+      // sendiri tidak meluap secara horizontal.
+      clipBehavior: Clip.none,
+      child: AppStickyHeader(
+        header: _buildHeaderBlock(
+          widget.comparisonLabel ?? 'Bulan sebelumnya',
+          'Bulan ini',
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
+          child: SalesRankingPairList(
+            leftEntries: leftEntries,
+            rightEntries: rightEntries,
+            maxItems: widget.limit,
+          ),
+        ),
       ),
     );
   }
@@ -2053,10 +2066,66 @@ class _MetricRankingCardState extends State<_MetricRankingCard> {
       widget.targets != null,
     );
     return AppCard(
-      title: widget.title,
-      subtitle: 'Top ${widget.limit} berdasarkan omzet',
-      trailing: _buildModeChips(),
-      child: SalesRankingList(entries: entries, maxItems: widget.limit),
+      clipBehavior: Clip.none,
+      child: AppStickyHeader(
+        header: _buildHeaderBlock(null, null),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
+          child: SalesRankingList(entries: entries, maxItems: widget.limit),
+        ),
+      ),
+    );
+  }
+
+  /// Blok header kartu untuk [AppStickyHeader]: gaya sama dengan header
+  /// [AppCard] (judul + subtitle + chip mode) plus judul kolom pembanding.
+  /// Judul kolom diangkat ke blok ini agar ikut menempel saat scroll, bukan
+  /// menggulung di bawah header yang sedang pin.
+  Widget _buildHeaderBlock(String? leftHeader, String? rightHeader) {
+    final hasColumns = leftHeader != null || rightHeader != null;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        hasColumns ? AppSpacing.xs : AppSpacing.md,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title, style: AppTextStyles.h2),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Top ${widget.limit} berdasarkan omzet',
+                      style: AppTextStyles.caption,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _buildModeChips(),
+            ],
+          ),
+          if (hasColumns) ...[
+            const SizedBox(height: AppSpacing.md),
+            SalesRankingColumnHeader(left: leftHeader, right: rightHeader),
+          ],
+        ],
+      ),
     );
   }
 }

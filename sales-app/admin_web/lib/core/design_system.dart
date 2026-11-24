@@ -8,6 +8,7 @@ export 'design_system/app_tokens.dart';
 export 'design_system/app_theme.dart';
 export 'design_system/app_responsive.dart';
 export 'design_system/widgets/app_card.dart';
+export 'design_system/widgets/app_sticky_header.dart';
 export 'design_system/widgets/app_stat_card.dart';
 export 'design_system/widgets/app_button.dart';
 export 'design_system/widgets/app_input.dart';

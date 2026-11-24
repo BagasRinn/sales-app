@@ -14,6 +14,7 @@ class AppCard extends StatelessWidget {
   final Color? color;
   final Color? borderColor;
   final double? elevation;
+  final Clip clipBehavior;
   final VoidCallback? onTap;
 
   const AppCard({
@@ -27,6 +28,7 @@ class AppCard extends StatelessWidget {
     this.color,
     this.borderColor,
     this.elevation,
+    this.clipBehavior = Clip.antiAlias,
     this.onTap,
   });
 
@@ -49,7 +51,7 @@ class AppCard extends StatelessWidget {
 
     return Container(
       margin: margin,
-      clipBehavior: Clip.antiAlias,
+      clipBehavior: clipBehavior,
       decoration: BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: AppRadius.lg,

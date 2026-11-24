@@ -1655,6 +1655,55 @@ class SalesRankingList extends StatelessWidget {
   }
 }
 
+/// Baris judul kolom pasangan ranking (mis. "Bulan sebelumnya | Bulan ini").
+/// Dipisah publik supaya header sticky kartu Pareto memakai visual yang sama
+/// dengan daftar pasangan di bawahnya.
+class SalesRankingColumnHeader extends StatelessWidget {
+  const SalesRankingColumnHeader({
+    super.key,
+    this.left,
+    this.right,
+  });
+
+  final String? left;
+  final String? right;
+
+  @override
+  Widget build(BuildContext context) {
+    if (left == null && right == null) return const SizedBox.shrink();
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _headerCell(left)),
+          const VerticalDivider(width: 1),
+          Expanded(child: _headerCell(right)),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCell(String? label) {
+    if (label == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.caption.copyWith(
+          color: AppColors.onPrimaryMuted,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 /// Dua daftar ranking berdampingan dengan baris yang selalu sejajar.
 ///
 /// Setiap baris adalah satu pasangan (kiri, kanan) yang dirender dalam satu
@@ -1716,18 +1765,10 @@ class SalesRankingPairList extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (leftHeader != null || rightHeader != null)
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _headerCell(leftHeader)),
-                const VerticalDivider(width: 1),
-                Expanded(child: _headerCell(rightHeader)),
-              ],
-            ),
-          ),
-        const SizedBox(height: AppSpacing.xs),
+        if (leftHeader != null || rightHeader != null) ...[
+          SalesRankingColumnHeader(left: leftHeader, right: rightHeader),
+          const SizedBox(height: AppSpacing.xs),
+        ],
         for (var i = 0; i < rows.length; i++)
           IntrinsicHeight(
             child: Row(
@@ -1754,26 +1795,6 @@ class SalesRankingPairList extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _headerCell(String? label) {
-    if (label == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        0,
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.caption.copyWith(
-          color: AppColors.onPrimaryMuted,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
     );
   }
 
