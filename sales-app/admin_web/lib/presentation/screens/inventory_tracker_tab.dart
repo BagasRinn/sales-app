@@ -124,7 +124,9 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
             Text(_pageTitle, style: AppTextStyles.headlineSmall),
             const SizedBox(height: 6),
             Text(
-              'Analisa nilai stok ${_isSku ? 'produk' : 'supplier'} berdasarkan penjualan tiga bulan sebelumnya.',
+              _isSku
+                  ? 'Analisa nilai stok produk. Penjualan dan retur digabung menurut Mother SKU.'
+                  : 'Analisa nilai stok supplier berdasarkan penjualan tiga bulan sebelumnya.',
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.textSubtle,
               ),

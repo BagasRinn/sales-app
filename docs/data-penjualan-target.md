@@ -70,7 +70,10 @@ rupiah terdekat). `Average per week = AP3M / 4`, dan `Week of Inventory =
 Stock / Average per week`. Penjualan bulan `M` ditampilkan terpisah. Status inventory
 adalah `Habis` jika Stock <= 0, `Tidak ada riwayat` jika tidak ada average
 mingguan, `Aman` untuk 0 sampai 6 minggu, dan `Overstock` jika lebih dari 6
-minggu. Manager dapat memilih semua cabang atau satu cabang; supervisor hanya
+minggu. Pada **Stok By SKU**, penjualan, retur, dan snapshot stok digabung
+menurut Mother SKU (jika kosong, menurut kode barang, lalu nama). Nama yang
+tampil adalah nama penjualan yang paling sering, bukan ejaan di baris retur.
+Manager dapat memilih semua cabang atau satu cabang; supervisor hanya
 dapat melihat cabangnya sendiri.
 
 Realisasi omzet NET (penjualan dikurangi retur) pada periode yang dipilih

@@ -44,6 +44,59 @@ from app.schemas.schemas import (
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
+def _sku_group_expr(model):
+    """Kunci produk Stok By SKU: Mother SKU, lalu kode barang, lalu nama.
+
+    Penjualan, retur, dan snapshot stok harus jatuh ke kunci yang sama.
+    Mengelompokkan lewat nama membuat retur jadi baris sendiri bila ejaan
+    nama produknya tidak identik dengan penjualan.
+    """
+    return func.coalesce(
+        func.nullif(func.trim(model.mother_sku), ""),
+        func.nullif(func.trim(model.product_kode), ""),
+        func.nullif(func.trim(model.product_nama), ""),
+    )
+
+
+def inventory_sku_key(value: Optional[str]) -> str:
+    """Samakan kapital dan spasi supaya Mother SKU dari file berbeda tetap menyatu."""
+    return " ".join((value or "").upper().split())
+
+
+def choose_sku_display_name(key: str, votes_by_source: dict[str, dict[str, int]]) -> str:
+    """Nama baris SKU: nama penjualan yang paling sering, lalu stok, lalu retur.
+
+    Nama yang sama dengan kunci Mother SKU diabaikan bila ada nama produk asli.
+    """
+
+    def best(pool: dict[str, int]) -> str:
+        return min(pool, key=lambda name: (-pool[name], name.lower()))
+
+    real_pools: list[dict[str, int]] = []
+    any_pools: list[dict[str, int]] = []
+    for source in ("sales", "stock", "return"):
+        cleaned = {
+            " ".join(name.split()): count
+            for name, count in (votes_by_source.get(source) or {}).items()
+            if name and str(name).strip() and count > 0
+        }
+        if not cleaned:
+            continue
+        any_pools.append(cleaned)
+        real = {
+            name: count
+            for name, count in cleaned.items()
+            if inventory_sku_key(name) != key
+        }
+        if real:
+            real_pools.append(real)
+    if real_pools:
+        return best(real_pools[0])
+    if any_pools:
+        return best(any_pools[0])
+    return key
+
+
 @router.get("/inventory-tracker", response_model=InventoryTrackerResponse)
 def get_inventory_tracker(
     month: Optional[str] = Query(None, description="Bulan laporan (YYYY-MM)"),
@@ -69,45 +122,43 @@ def get_inventory_tracker(
     all_months = previous_months + [normalized]
 
     is_sku = dimension == "sku"
-    # Snapshot GOOD AMOUNT sering menyimpan product_nama kosong (nama produk
-    # ada di product_kode hasil coalesce mother_sku/kode_barang), jadi dimensi
-    # SKU memakai coalesce(product_nama, product_kode).
-    stock_dim_col = (
-        func.coalesce(
-            func.nullif(func.trim(ImportedProductStock.product_nama), ""),
-            ImportedProductStock.product_kode,
-        )
-        if is_sku
-        else ImportedProductStock.supplier
-    )
-    sales_dim_col = (
-        func.coalesce(
-            func.nullif(func.trim(ImportedSale.product_nama), ""),
-            ImportedSale.product_kode,
-        )
-        if is_sku
-        else ImportedSale.supplier
-    )
-    return_dim_col = (
-        func.coalesce(
-            func.nullif(func.trim(ImportedReturn.product_nama), ""),
-            ImportedReturn.product_kode,
-        )
-        if is_sku
-        else ImportedReturn.supplier
-    )
+    # Stok By SKU menggabungkan penjualan, retur, dan snapshot lewat Mother SKU
+    # (fallback kode barang, baru nama). Stok By Supplier tetap per supplier.
+    stock_dim_col = _sku_group_expr(ImportedProductStock) if is_sku else ImportedProductStock.supplier
+    sales_dim_col = _sku_group_expr(ImportedSale) if is_sku else ImportedSale.supplier
+    return_dim_col = _sku_group_expr(ImportedReturn) if is_sku else ImportedReturn.supplier
 
     def group_key(value: Optional[str]) -> str:
         if is_sku:
-            return " ".join((value or "").upper().split())
+            return inventory_sku_key(value)
         normalized_name = re.sub(r"[^A-Z0-9 ]+", " ", (value or "").upper())
         parts = [part for part in normalized_name.split() if part not in {"PT", "CV", "TBK", "UD"}]
         return " ".join(parts)
 
-    stock_query = db.query(
-        stock_dim_col,
-        func.coalesce(func.sum(ImportedProductStock.good_amount), 0),
-    ).filter(
+    # Nama tampilan SKU dihitung terpisah dari kunci Mother SKU.
+    name_votes: dict[str, dict[str, dict[str, int]]] = {
+        "sales": {},
+        "stock": {},
+        "return": {},
+    }
+
+    def note_name(source: str, raw_key: Optional[str], raw_name: Optional[str], votes: int) -> None:
+        if not is_sku or votes <= 0:
+            return
+        key = group_key(raw_key)
+        name = " ".join((raw_name or "").split())
+        if not key or not name:
+            return
+        bucket = name_votes[source].setdefault(key, {})
+        bucket[name] = bucket.get(name, 0) + votes
+
+    stock_name_col = func.nullif(func.trim(ImportedProductStock.product_nama), "")
+    stock_columns = (
+        [stock_dim_col, stock_name_col, func.coalesce(func.sum(ImportedProductStock.good_amount), 0), func.count()]
+        if is_sku
+        else [stock_dim_col, func.coalesce(func.sum(ImportedProductStock.good_amount), 0)]
+    )
+    stock_query = db.query(*stock_columns).filter(
         ImportedProductStock.month == normalized,
         stock_dim_col.isnot(None),
         func.trim(stock_dim_col) != "",
@@ -118,31 +169,36 @@ def get_inventory_tracker(
         stock_query = stock_query.filter(ImportedProductStock.divisi == division)
     if supplier and is_sku:
         stock_query = stock_query.filter(ImportedProductStock.supplier == supplier)
+    stock_group = [stock_dim_col, stock_name_col] if is_sku else [stock_dim_col]
     stock_map = {}
-    for value, amount in stock_query.group_by(stock_dim_col).all():
+    stock_names = {}
+    for row in stock_query.group_by(*stock_group).all():
+        value = row[0]
+        amount = row[2] if is_sku else row[1]
         key = group_key(value)
         stock_map[key] = stock_map.get(key, 0) + int(amount or 0)
-    stock_names = {}
-    stock_names_query = db.query(stock_dim_col).filter(
-        ImportedProductStock.month == normalized,
-        stock_dim_col.isnot(None),
-        func.trim(stock_dim_col) != "",
-    )
-    if scope != "GLOBAL":
-        stock_names_query = stock_names_query.filter(ImportedProductStock.branch == scope)
-    if division:
-        stock_names_query = stock_names_query.filter(ImportedProductStock.divisi == division)
-    if supplier and is_sku:
-        stock_names_query = stock_names_query.filter(ImportedProductStock.supplier == supplier)
-    for value, in stock_names_query.distinct().all():
-        key = group_key(value)
-        stock_names.setdefault(key, (value or "").strip())
+        if is_sku:
+            note_name("stock", value, row[1], int(row[3] or 0))
+        else:
+            stock_names.setdefault(key, (value or "").strip())
 
-    sales_query = db.query(
-        sales_dim_col,
-        ImportedSale.sale_date,
-        func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
-    ).filter(
+    sales_name_col = func.nullif(func.trim(ImportedSale.product_nama), "")
+    sales_columns = (
+        [
+            sales_dim_col,
+            sales_name_col,
+            ImportedSale.sale_date,
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
+            func.count(),
+        ]
+        if is_sku
+        else [
+            sales_dim_col,
+            ImportedSale.sale_date,
+            func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
+        ]
+    )
+    sales_query = db.query(*sales_columns).filter(
         ImportedSale.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
         ImportedSale.sale_date < end.date(),
         sales_dim_col.isnot(None),
@@ -154,20 +210,41 @@ def get_inventory_tracker(
         sales_query = sales_query.filter(ImportedSale.divisi == division)
     if supplier and is_sku:
         sales_query = sales_query.filter(ImportedSale.supplier == supplier)
+    sales_group = (
+        [sales_dim_col, sales_name_col, ImportedSale.sale_date]
+        if is_sku
+        else [sales_dim_col, ImportedSale.sale_date]
+    )
     sales_map = {}
-    for value, sale_date, revenue in sales_query.group_by(sales_dim_col, ImportedSale.sale_date).all():
+    for row in sales_query.group_by(*sales_group).all():
+        value, sale_date = row[0], row[2] if is_sku else row[1]
+        revenue = row[3] if is_sku else row[2]
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
         key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) + int(revenue or 0)
+        if is_sku:
+            note_name("sales", value, row[1], int(row[4] or 0))
 
-    # Returns share the same dimension and reduce net sales.
-    return_query = db.query(
-        return_dim_col,
-        ImportedReturn.sale_date,
-        func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
-    ).filter(
+    # Retur memakai kunci Mother SKU yang sama, lalu mengurangi penjualan net.
+    return_name_col = func.nullif(func.trim(ImportedReturn.product_nama), "")
+    return_columns = (
+        [
+            return_dim_col,
+            return_name_col,
+            ImportedReturn.sale_date,
+            func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
+            func.count(),
+        ]
+        if is_sku
+        else [
+            return_dim_col,
+            ImportedReturn.sale_date,
+            func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
+        ]
+    )
+    return_query = db.query(*return_columns).filter(
         ImportedReturn.sale_date >= datetime.strptime(previous_months[0], "%Y-%m").date(),
         ImportedReturn.sale_date < end.date(),
         return_dim_col.isnot(None),
@@ -179,12 +256,21 @@ def get_inventory_tracker(
         return_query = return_query.filter(ImportedReturn.divisi == division)
     if supplier and is_sku:
         return_query = return_query.filter(ImportedReturn.supplier == supplier)
-    for value, sale_date, revenue in return_query.group_by(return_dim_col, ImportedReturn.sale_date).all():
+    return_group = (
+        [return_dim_col, return_name_col, ImportedReturn.sale_date]
+        if is_sku
+        else [return_dim_col, ImportedReturn.sale_date]
+    )
+    for row in return_query.group_by(*return_group).all():
+        value, sale_date = row[0], row[2] if is_sku else row[1]
+        revenue = row[3] if is_sku else row[2]
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
         key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) - int(revenue or 0)
+        if is_sku:
+            note_name("return", value, row[1], int(row[4] or 0))
 
     divisions_query = db.query(ImportedSale.divisi).filter(
         ImportedSale.divisi.isnot(None), func.trim(ImportedSale.divisi) != ""
@@ -240,9 +326,17 @@ def get_inventory_tracker(
             status = "Aman"
         else:
             status = "Overstock"
+        label = (
+            choose_sku_display_name(
+                item,
+                {source: buckets.get(item, {}) for source, buckets in name_votes.items()},
+            )
+            if is_sku
+            else stock_names.get(item, item)
+        )
         rows.append(InventoryTrackerRow(
-            name=stock_names.get(item, item),
-            supplier_name=stock_names.get(item, item),
+            name=label,
+            supplier_name=label,
             stock=stock,
             sales_month_1=monthly[0],
             sales_month_2=monthly[1],
