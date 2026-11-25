@@ -1,5 +1,8 @@
 """Penggabungan Stok By SKU memakai Mother SKU, bukan nama produk."""
 
+import ast
+from pathlib import Path
+
 from sqlalchemy import Column, Integer, String, create_engine, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -101,3 +104,37 @@ def test_sale_and_return_collapse_to_one_mother_sku():
 
     assert merged == {"SKUPALM15": 400, "C1": 30, "MOMOGI4X10": 100}
     session.close()
+
+
+def test_month_variable_not_shadowed_in_inventory_tracker():
+    """Header bulan Stok By SKU pernah menampilkan nama produk.
+
+    Loop pelabelan dulu menimpa variabel bulan `normalized` dengan kunci SKU,
+    sehingga respons `month` berisi misalnya "YUMMYGUMMYSATE1X12" dan kolom
+    bulan berjalan di tabel ikut menampilkan nama produk. Guard ini memastikan
+    variabel bulan `report_month` hanya diisi sekali (dari parse_month) dan
+    tidak pernah ditimpa di loop mana pun. Kalau butuh variabel serupa di
+    loop, pakai nama lain (mis. label_key).
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "api"
+        / "endpoints"
+        / "reports.py"
+    )
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    fn = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "get_inventory_tracker"
+    )
+    stores = [
+        node.id
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+    ]
+    assert stores.count("report_month") == 1, (
+        "Variabel bulan report_month tidak boleh ditimpa di tengah "
+        "get_inventory_tracker; pakai nama variabel lain di loop."
+    )

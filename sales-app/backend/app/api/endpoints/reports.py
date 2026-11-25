@@ -134,10 +134,10 @@ def get_inventory_tracker(
 
     from app.services.sales_import_versions import months_before, parse_month, resolve_scope
 
-    normalized, start, end = parse_month(month)
+    report_month, start, end = parse_month(month)
     scope = resolve_scope(current_user, branch)
-    previous_months = months_before(normalized, 3)
-    all_months = previous_months + [normalized]
+    previous_months = months_before(report_month, 3)
+    all_months = previous_months + [report_month]
 
     is_sku = dimension == "sku"
     # Stok By SKU menggabungkan penjualan, retur, dan snapshot lewat Mother SKU
@@ -187,7 +187,7 @@ def get_inventory_tracker(
         else [stock_dim_col, func.coalesce(func.sum(ImportedProductStock.good_amount), 0)]
     )
     stock_query = db.query(*stock_columns).filter(
-        ImportedProductStock.month == normalized,
+        ImportedProductStock.month == report_month,
         stock_dim_col.isnot(None),
         func.trim(stock_dim_col) != "",
     )
@@ -309,7 +309,7 @@ def get_inventory_tracker(
     stock_divisions_query = db.query(ImportedProductStock.divisi).filter(
         ImportedProductStock.divisi.isnot(None),
         func.trim(ImportedProductStock.divisi) != "",
-        ImportedProductStock.month == normalized,
+        ImportedProductStock.month == report_month,
     )
     if scope != "GLOBAL":
         stock_divisions_query = stock_divisions_query.filter(ImportedProductStock.branch == scope)
@@ -317,7 +317,7 @@ def get_inventory_tracker(
     suppliers_query = db.query(ImportedProductStock.supplier).filter(
         ImportedProductStock.supplier.isnot(None),
         func.trim(ImportedProductStock.supplier) != "",
-        ImportedProductStock.month == normalized,
+        ImportedProductStock.month == report_month,
     )
     if scope != "GLOBAL":
         suppliers_query = suppliers_query.filter(ImportedProductStock.branch == scope)
@@ -363,8 +363,8 @@ def get_inventory_tracker(
         # bisa dibedakan di tabel.
         label_counts: dict[str, int] = {}
         for label in labels.values():
-            normalized = inventory_sku_key(label)
-            label_counts[normalized] = label_counts.get(normalized, 0) + 1
+            label_key = inventory_sku_key(label)
+            label_counts[label_key] = label_counts.get(label_key, 0) + 1
         for item, label in list(labels.items()):
             if label_counts.get(inventory_sku_key(label), 0) > 1:
                 suffix = raw_spellings.get(item) or item
@@ -415,7 +415,7 @@ def get_inventory_tracker(
         )
     )
     return InventoryTrackerResponse(
-        month=normalized,
+        month=report_month,
         previous_months=previous_months,
         scope=scope,
         dimension=dimension,
