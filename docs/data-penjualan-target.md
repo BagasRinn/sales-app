@@ -71,9 +71,14 @@ Stock / Average per week`. Penjualan bulan `M` ditampilkan terpisah. Status inve
 adalah `Habis` jika Stock <= 0, `Tidak ada riwayat` jika tidak ada average
 mingguan, `Aman` untuk 0 sampai 6 minggu, dan `Overstock` jika lebih dari 6
 minggu. Pada **Stok By SKU**, penjualan, retur, dan snapshot stok digabung
-menurut Mother SKU (jika kosong, menurut kode barang, lalu nama). Nama yang
-tampil adalah nama penjualan yang paling sering, bukan ejaan di baris retur.
-Manager dapat memilih semua cabang atau satu cabang; supervisor hanya
+menurut Mother SKU (jika kosong, menurut kode barang, lalu nama). Mother SKU
+dinormalisasi ke huruf dan angka saja supaya ejaan berbeda di file laporan
+tiap cabang tetap menyatu, misalnya `MOMOGI BINTANG COKLAT ( 4 X 10 )` dan
+`MOMOGI BINTANG COKLAT 4 X 10`. Nama yang tampil adalah nama penjualan yang
+paling sering, bukan ejaan di baris retur. Kalau nama produk tidak tersedia
+sama sekali, ejaan Mother SKU mentah dipakai sebagai label. Dua produk berbeda
+yang memakai nama mirip diberi akhiran Mother SKU agar tetap dapat dibedakan di
+tabel. Manager dapat memilih semua cabang atau satu cabang; supervisor hanya
 dapat melihat cabangnya sendiri.
 
 Realisasi omzet NET (penjualan dikurangi retur) pada periode yang dipilih

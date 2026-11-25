@@ -59,19 +59,37 @@ def _sku_group_expr(model):
 
 
 def inventory_sku_key(value: Optional[str]) -> str:
-    """Samakan kapital dan spasi supaya Mother SKU dari file berbeda tetap menyatu."""
-    return " ".join((value or "").upper().split())
+    """Kunci produk Stok By SKU: huruf besar, hanya huruf dan angka.
+
+    Mother SKU untuk produk yang sama ditulis dengan format berbeda di file
+    laporan tiap cabang, misalnya "MOMOGI BINTANG COKLAT ( 4 X 10 )" vs
+    "MOMOGI BINTANG COKLAT 4 X 10", atau "P BALING2 CANDY 30/24" vs
+    "P. BALING2 CANDY 30/24". Kalau spasi dan tanda baca ikut dihitung, satu
+    produk terpecah jadi beberapa baris dengan nama yang tampak kembar.
+    Karena itu yang dipertahankan hanya huruf dan angka.
+    """
+    return "".join(
+        char for char in (value or "").upper() if char.isascii() and char.isalnum()
+    )
 
 
-def choose_sku_display_name(key: str, votes_by_source: dict[str, dict[str, int]]) -> str:
+def choose_sku_display_name(
+    key: str,
+    votes_by_source: dict[str, dict[str, int]],
+    fallback: Optional[str] = None,
+) -> str:
     """Nama baris SKU: nama penjualan yang paling sering, lalu stok, lalu retur.
 
     Nama yang sama dengan kunci Mother SKU diabaikan bila ada nama produk asli.
+    `fallback` dipakai bila tidak ada nama sama sekali (mis. produk yang hanya
+    ada di snapshot stok): ejaan Mother SKU mentah yang paling sering, supaya
+    label tetap terbaca — bukan kunci kanonik tanpa spasi.
     """
 
     def best(pool: dict[str, int]) -> str:
         return min(pool, key=lambda name: (-pool[name], name.lower()))
 
+    canonical_key = inventory_sku_key(key)
     real_pools: list[dict[str, int]] = []
     any_pools: list[dict[str, int]] = []
     for source in ("sales", "stock", "return"):
@@ -86,7 +104,7 @@ def choose_sku_display_name(key: str, votes_by_source: dict[str, dict[str, int]]
         real = {
             name: count
             for name, count in cleaned.items()
-            if inventory_sku_key(name) != key
+            if inventory_sku_key(name) != canonical_key
         }
         if real:
             real_pools.append(real)
@@ -94,7 +112,7 @@ def choose_sku_display_name(key: str, votes_by_source: dict[str, dict[str, int]]
         return best(real_pools[0])
     if any_pools:
         return best(any_pools[0])
-    return key
+    return fallback or key
 
 
 @router.get("/inventory-tracker", response_model=InventoryTrackerResponse)
@@ -141,13 +159,23 @@ def get_inventory_tracker(
         "stock": {},
         "return": {},
     }
+    # Ejaan mentah Mother SKU per kunci kanonik. dipakai sebagai label cadangan
+    # saat tidak ada nama produk sama sekali (mis. baris hanya ada di snapshot
+    # stok), supaya label tetap terbaca dan bukan kunci tanpa spasi.
+    raw_key_votes: dict[str, dict[str, int]] = {}
 
     def note_name(source: str, raw_key: Optional[str], raw_name: Optional[str], votes: int) -> None:
         if not is_sku or votes <= 0:
             return
         key = group_key(raw_key)
+        if not key:
+            return
+        spelling = " ".join((raw_key or "").split())
+        if spelling:
+            raw_bucket = raw_key_votes.setdefault(key, {})
+            raw_bucket[spelling] = raw_bucket.get(spelling, 0) + votes
         name = " ".join((raw_name or "").split())
-        if not key or not name:
+        if not name:
             return
         bucket = name_votes[source].setdefault(key, {})
         bucket[name] = bucket.get(name, 0) + votes
@@ -305,6 +333,43 @@ def get_inventory_tracker(
         sales_suppliers_query = sales_suppliers_query.filter(ImportedSale.divisi == division)
     supplier_options.update(value.strip() for (value,) in sales_suppliers_query.distinct().all() if value and value.strip())
     items = sorted(set(stock_map) | {key[0] for key in sales_map})
+
+    # Label baris dihitung lebih dulu supaya nama yang sama dari dua Mother SKU
+    # berbeda bisa dibedakan. Contohnya "DENEX WAFER ROLL 40GR STRAWBERRY" dan
+    # "DENEX WAFER ROLL STRAWBERRRY 40GR" (typo di satu cabang) menghasilkan
+    # nama produk yang sama, padahal datanya memang terpisah.
+    labels: dict[str, str] = {}
+    raw_spellings: dict[str, str] = {}
+    for item in items:
+        if not is_sku:
+            labels[item] = stock_names.get(item, item)
+            continue
+        raw_bucket = raw_key_votes.get(item) or {}
+        spelling = (
+            min(raw_bucket, key=lambda value: (-raw_bucket[value], value))
+            if raw_bucket
+            else ""
+        )
+        raw_spellings[item] = spelling
+        labels[item] = choose_sku_display_name(
+            item,
+            {source: buckets.get(item, {}) for source, buckets in name_votes.items()},
+            fallback=spelling or None,
+        )
+    if is_sku:
+        # Dua produk berbeda bisa memakai nama yang mirip, misalnya Mother SKU
+        # "P SIKAT GIGI 30/20" dan "SIKAT GIGI BARU ( 20 X 30 )". Nama yang
+        # mirip setelah normalisasi diberi akhiran Mother SKU supaya tetap
+        # bisa dibedakan di tabel.
+        label_counts: dict[str, int] = {}
+        for label in labels.values():
+            normalized = inventory_sku_key(label)
+            label_counts[normalized] = label_counts.get(normalized, 0) + 1
+        for item, label in list(labels.items()):
+            if label_counts.get(inventory_sku_key(label), 0) > 1:
+                suffix = raw_spellings.get(item) or item
+                labels[item] = f"{label} [{suffix}]"
+
     rows = []
     for item in items:
         monthly = [sales_map.get((item, period), 0) for period in all_months]
@@ -326,14 +391,7 @@ def get_inventory_tracker(
             status = "Aman"
         else:
             status = "Overstock"
-        label = (
-            choose_sku_display_name(
-                item,
-                {source: buckets.get(item, {}) for source, buckets in name_votes.items()},
-            )
-            if is_sku
-            else stock_names.get(item, item)
-        )
+        label = labels[item]
         rows.append(InventoryTrackerRow(
             name=label,
             supplier_name=label,

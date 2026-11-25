@@ -26,9 +26,23 @@ def test_sku_key_ignores_case_and_extra_spaces():
     assert inventory_sku_key(None) == ""
 
 
+def test_sku_key_ignores_punctuation_and_spacing():
+    # Satu produk yang sama ditulis berbeda format di tiap file laporan.
+    assert inventory_sku_key("MOMOGI BINTANG COKLAT ( 4 X 10 )") == inventory_sku_key(
+        "MOMOGI BINTANG COKLAT 4 X 10"
+    )
+    assert inventory_sku_key("P BALING2 CANDY 30/24") == inventory_sku_key(
+        "P. BALING2 CANDY 30/24"
+    )
+    # Urutan angka tetap dibedakan karena bisa jadi produk berbeda.
+    assert inventory_sku_key("KRESEK HD DUO 40 HITAM I 50 LEMBAR") != inventory_sku_key(
+        "KRESEK HD DUO 50 HITAM I 40 LEMBAR"
+    )
+
+
 def test_display_name_prefers_common_sales_name_over_return_spelling():
     name = choose_sku_display_name(
-        "SKU-PALM15",
+        "SKUPALM15",
         {
             "sales": {"Palm 15 Liter": 2, "SKU-PALM15": 1},
             "stock": {"PALM 15": 4},
@@ -41,12 +55,25 @@ def test_display_name_prefers_common_sales_name_over_return_spelling():
 def test_display_name_falls_back_to_stock_then_key():
     assert (
         choose_sku_display_name(
-            "SKU-A",
+            "SKUA",
             {"sales": {}, "stock": {"Produk A": 1}, "return": {"Retur A": 5}},
         )
         == "Produk A"
     )
-    assert choose_sku_display_name("SKU-A", {}) == "SKU-A"
+    assert choose_sku_display_name("SKUA", {}) == "SKUA"
+
+
+def test_display_name_uses_raw_mother_sku_when_no_product_name():
+    # Produk yang hanya ada di snapshot stok tidak punya nama produk, jadi
+    # ejaan Mother SKU mentah dipakai supaya label tetap terbaca.
+    assert (
+        choose_sku_display_name(
+            "FILMAPROF18LJRC",
+            {"sales": {}, "stock": {}, "return": {}},
+            fallback="FILMA PROF 18L JRC",
+        )
+        == "FILMA PROF 18L JRC"
+    )
 
 
 def test_sale_and_return_collapse_to_one_mother_sku():
@@ -59,6 +86,9 @@ def test_sale_and_return_collapse_to_one_mother_sku():
             _SkuRow(mother_sku="SKU-PALM15", product_kode="B", product_nama="Palm Retur", amount=-100),
             _SkuRow(mother_sku=None, product_kode="C1", product_nama="Tanpa Induk", amount=40),
             _SkuRow(mother_sku="", product_kode="C1", product_nama="Tanpa Induk Retur", amount=-10),
+            # Ejaan Mother SKU berbeda format untuk produk yang sama.
+            _SkuRow(mother_sku="MOMOGI ( 4 X 10 )", product_kode="D", product_nama="Momogi", amount=70),
+            _SkuRow(mother_sku="MOMOGI 4 X 10", product_kode="E", product_nama="Momogi", amount=30),
         ]
     )
     session.commit()
@@ -69,5 +99,5 @@ def test_sale_and_return_collapse_to_one_mother_sku():
         key = inventory_sku_key(raw_key)
         merged[key] = merged.get(key, 0) + int(amount or 0)
 
-    assert merged == {"SKU-PALM15": 400, "C1": 30}
+    assert merged == {"SKUPALM15": 400, "C1": 30, "MOMOGI4X10": 100}
     session.close()
