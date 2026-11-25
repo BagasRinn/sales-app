@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_exception.dart';
-import '../../core/auth_storage.dart';
+import '../../core/auth_session.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive_dialog.dart';
 import '../../core/session_navigation.dart';
@@ -76,10 +76,11 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
           backgroundColor: AppColors.success,
         ),
       );
-      // Clear stored tokens — sama pattern dengan logout di dashboard_screen.
-      // Best-effort: kalau gagal, setOnUnauthorized callback di api_service
-      // akan tetap menendang user ke login saat request berikutnya 401.
-      await AuthStorage().clearTokens();
+      // Server menaikkan token_version → SEMUA sesi (termasuk refresh token
+      // di cookie httpOnly ini) langsung ditolak. Cukup bersihkan sesi
+      // in-memory; best-effort: request berikutnya yang 401 tetap menendang
+      // user ke login via setOnUnauthorized.
+      AuthSession.instance.clear();
       if (!mounted) return;
       // Lewat root navigator: dialog ini bisa dibuka dari halaman mana pun,
       // jadi seluruh stack (dialog + dashboard) harus dibersihkan.

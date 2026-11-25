@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/auth_storage.dart';
+import '../../core/auth_session.dart';
 import '../../core/branch.dart';
 import '../../core/datetime_utils.dart';
 import '../../core/design_system.dart';
@@ -73,7 +73,6 @@ class _NavSpec {
 
 class DashboardScreen extends StatefulWidget {
   final String accessToken;
-  final String refreshToken;
   final String username;
   final String nama;
   final String role;
@@ -83,7 +82,6 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.accessToken,
-    required this.refreshToken,
     required this.username,
     required this.nama,
     required this.role,
@@ -103,21 +101,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _apiService = ApiService();
-    _apiService.setTokens(
-      access: widget.accessToken,
-      refresh: widget.refreshToken,
-    );
+    // Access token dari sesi in-memory (hasil login / boot refresh). Header
+    // Authorization dipasang AuthInterceptor per-request, jadi setelah silent
+    // refresh semua request otomatis memakai token terbaru.
+    _apiService.setTokens(access: widget.accessToken);
     _repo = AdminRepository(_apiService);
-    _repo.setTokens(widget.accessToken, widget.refreshToken);
-    AuthStorage().saveTokens(
-      accessToken: widget.accessToken,
-      refreshToken: widget.refreshToken,
-      username: widget.username,
-      nama: widget.nama.isEmpty ? null : widget.nama,
-      role: widget.role,
-      branch: widget.branch,
-      branchNama: widget.branchNama,
-    );
+    _repo.setTokens(widget.accessToken);
+    // Tidak ada yang perlu dipersist: refresh token ada di cookie httpOnly
+    // server, access token + identitas cukup hidup di AuthSession (memori).
   }
 
   @override
@@ -175,8 +166,15 @@ class _DashboardContentState extends State<_DashboardContent>
   static const Duration _idleTimeout = Duration(minutes: 15);
   static const Duration _idleCheckInterval = Duration(seconds: 30);
 
+  // Silent refresh: access token berumur 30 menit. Cek tiap 5 menit dan
+  // refresh saat sisa umur < 6 menit, sehingga tidak ada request yang sempat
+  // gagal 401 dan sesi user aktif tidak pernah terputus.
+  static const Duration _refreshCheckInterval = Duration(minutes: 5);
+  static const Duration _refreshBeforeExpiry = Duration(minutes: 6);
+
   DateTime _lastActivity = DateTime.now();
   Timer? _idleTimer;
+  Timer? _refreshTimer;
 
   bool get _isGlobalManager => widget.role == 'MANAGER';
 
@@ -407,10 +405,12 @@ class _DashboardContentState extends State<_DashboardContent>
     // dipanggil setelah widget dispose (context tidak boleh dipakai post-dispose).
     _apiService.setOnUnauthorized(_handleUnauthorized);
 
-    // Check token expiry on startup â€” redirect to login if expired
+    // Check token expiry on startup — redirect to login if expired.
+    // Jalur normal: boot sudah silent-refresh sebelum dashboard tampil, jadi
+    // ini hanya terjadi pada clock skew ekstrem / token rusak.
     if (JwtUtils.isExpired(_apiService.accessToken)) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await AuthStorage().clearTokens();
+        AuthSession.instance.clear();
         if (!mounted) return;
         _pushLogin();
       });
@@ -442,11 +442,17 @@ class _DashboardContentState extends State<_DashboardContent>
       // activity "load" dari internal tidak dihitung interaksi user.
       _lastActivity = DateTime.now();
       _idleTimer = Timer.periodic(_idleCheckInterval, (_) => _checkIdle());
+      _refreshTimer = Timer.periodic(
+        _refreshCheckInterval,
+        (_) => _maybeSilentRefresh(),
+      );
     });
   }
 
   void _handleUnauthorized() async {
-    await AuthStorage().clearTokens();
+    // Interceptor sudah mencoba silent refresh via cookie dan gagal — sesi
+    // memang habis di server. Cukup bersihkan state lokal.
+    AuthSession.instance.clear();
     if (!mounted) return;
     _pushLogin();
   }
@@ -465,6 +471,9 @@ class _DashboardContentState extends State<_DashboardContent>
     // (inactive/hidden = tab di background, resumed = tab aktif).
     if (lifecycleState == AppLifecycleState.resumed) {
       _recordActivity();
+      // Timer di background tab di-throttle browser — pulihkan sesi langsung
+      // saat tab aktif kembali dan token mendekati kedaluwarsa.
+      _maybeSilentRefresh();
     }
   }
 
@@ -472,12 +481,30 @@ class _DashboardContentState extends State<_DashboardContent>
     _lastActivity = DateTime.now();
   }
 
+  /// Refresh sesi bila access token mendekati kedaluwarsa (sliding session).
+  /// Cookie httpOnly terkirim otomatis; token baru menggantikan yang lama
+  /// di AuthSession dan dipakai request berikutnya oleh AuthInterceptor.
+  void _maybeSilentRefresh() {
+    if (!mounted) return;
+    final payload = JwtUtils.decodePayload(AuthSession.instance.accessToken);
+    final exp = payload?['exp'];
+    if (exp is! num) return;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+    if (expiresAt.difference(DateTime.now()) <= _refreshBeforeExpiry) {
+      _apiService.refreshSession();
+    }
+  }
+
   void _checkIdle() {
     if (!mounted) return;
     final idle = DateTime.now().difference(_lastActivity);
     if (idle > _idleTimeout) {
       _idleTimer?.cancel();
-      AuthStorage().clearTokens();
+      // Sesi dianggap ditinggal: bereskan cookie di server (best-effort),
+      // hapus sesi in-memory, lalu kembali ke login. Tanpa cookie, silent
+      // refresh berikutnya pasti gagal.
+      _apiService.logoutServer();
+      AuthSession.instance.clear();
       _pushLogin();
     }
   }
@@ -485,6 +512,7 @@ class _DashboardContentState extends State<_DashboardContent>
   @override
   void dispose() {
     _idleTimer?.cancel();
+    _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _apiService.setOnUnauthorized(null);
     super.dispose();
@@ -662,7 +690,10 @@ class _DashboardContentState extends State<_DashboardContent>
           context.read<AdminProvider>().adminRepository,
         ),
         onLogout: () async {
-          await AuthStorage().clearTokens();
+          // Logout manual: hapus cookie sesi di server (best-effort) lalu
+          // bersihkan sesi in-memory sebelum pindah ke layar login.
+          await _apiService.logoutServer();
+          AuthSession.instance.clear();
           if (!context.mounted) return;
           // Ganti seluruh stack lewat root navigator supaya drawer (kalau
           // terbuka) ikut ter-pop.

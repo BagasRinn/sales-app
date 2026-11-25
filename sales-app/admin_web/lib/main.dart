@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
-import 'core/auth_storage.dart';
+import 'core/auth_session.dart';
 import 'core/navigator_key.dart';
 import 'core/session_navigation.dart';
+import 'data/repositories/api_service.dart';
 import 'presentation/screens/login_screen.dart';
 // Dashboard + semua tab-nya dipisah ke chunk sendiri (deferred): layar login
 // tidak perlu mengunduh ±2,9 MB kode yang belum tentu dipakai. Chunk ini baru
@@ -16,12 +17,12 @@ void main() {
   // membentuk siklus), jadi pembuat layar login didaftarkan dari sini.
   registerLoginScreen(() => const LoginScreen());
   // Jangan await apa pun sebelum runApp: frame pertama (boot screen) harus
-  // tampil secepat mungkin. Baca storage & data locale dilakukan di dalam
+  // tampil secepat mungkin. Pemulihan sesi & data locale dilakukan di dalam
   // AdminApp supaya tidak menahan first paint.
   runApp(const AdminApp());
 }
 
-/// Hasil inisialisasi awal: token sesi (kalau ada) setelah storage dibaca.
+/// Hasil inisialisasi awal: data sesi setelah silent refresh (kalau ada).
 class _InitialState {
   final Map<String, String?>? tokens;
 
@@ -40,22 +41,31 @@ class _AdminAppState extends State<AdminApp> {
 
   /// Menyiapkan data yang dibutuhkan layar pertama. Dijalankan setelah frame
   /// boot tampil, bukan sebelum runApp.
+  ///
+  /// Sesi dipulihkan lewat silent refresh (cookie httpOnly → access token
+  /// baru). Tidak ada token yang dibaca dari storage browser — setelah
+  /// reload, satu-satunya jalur sesi adalah cookie milik server.
   static Future<_InitialState> _initialize() async {
-    Map<String, String?>? tokens;
+    await initializeDateFormatting('id_ID', null).catchError((Object _) {});
 
-    await Future.wait<void>([
-      // Locale data intl wajib siap sebelum DateFormat/NumberFormat dipakai.
-      // Tanpa ini, `intl` throw LocaleDataException di release mode.
-      initializeDateFormatting('id_ID', null).catchError((Object _) {}),
-      Future<void>(() async {
-        try {
-          tokens = await AuthStorage().getTokens();
-        } catch (_) {
-          // Storage diblokir/rusak: anggap belum login, jangan gagalkan boot.
-          tokens = null;
-        }
-      }),
-    ]);
+    Map<String, String?>? tokens;
+    try {
+      final restored = await ApiService().refreshSession();
+      if (restored && AuthSession.instance.hasSession) {
+        final session = AuthSession.instance;
+        tokens = <String, String?>{
+          'access_token': session.accessToken,
+          'username': session.username,
+          'nama': session.nama,
+          'role': session.role,
+          'branch': session.branch,
+          'branch_nama': session.branchNama,
+        };
+      }
+    } catch (_) {
+      // Jaringan bermasalah: anggap belum login, jangan gagalkan boot.
+      tokens = null;
+    }
 
     return _InitialState(tokens);
   }
@@ -77,10 +87,11 @@ class _AdminAppState extends State<AdminApp> {
           return _DashboardLoader(
             builder: () => dashboard_ui.DashboardScreen(
               accessToken: state.tokens!['access_token']!,
-              refreshToken: state.tokens!['refresh_token'] ?? '',
               username: state.tokens!['username'] ?? 'admin',
               nama: state.tokens!['nama'] ?? '',
               role: state.tokens!['role'] ?? 'ADMIN',
+              branch: state.tokens!['branch'],
+              branchNama: state.tokens!['branch_nama'],
             ),
           );
         },

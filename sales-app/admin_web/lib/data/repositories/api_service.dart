@@ -3,12 +3,12 @@ import 'package:intl/intl.dart';
 import '../../core/config.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth_interceptor.dart';
+import '../../core/auth_session.dart';
+import '../../core/http_credentials.dart';
 
 class ApiService {
   late final Dio _dio;
   final AuthInterceptor _authInterceptor = AuthInterceptor();
-
-  String? _refreshToken;
 
   /// Expose internal Dio — dipakai caller yang butuh kontrol penuh
   /// (mis. download binary dengan ResponseType.bytes).
@@ -31,6 +31,12 @@ class ApiService {
       ),
     );
     _dio.interceptors.add(_authInterceptor);
+    // Web: cookie httpOnly (refresh token) ikut setiap request.
+    // No-op di platform non-web (stub).
+    enableWebCredentials(_dio);
+    // Interceptor 401 memanggil silent refresh lalu replay request.
+    _authInterceptor.refreshSession = refreshSession;
+    _authInterceptor.dio = _dio;
   }
 
   // Import-excel endpoints can run for minutes on big files; the default
@@ -38,28 +44,85 @@ class ApiService {
   // keeps short timeouts on regular JSON calls.
   static const Duration _importReceiveTimeout = Duration(seconds: 180);
 
+  /// Kompatibilitas pemanggil lama: token hidup di [AuthSession] (memori),
+  /// header Authorization dipasang AuthInterceptor per-request.
+  /// [refresh] diabaikan — refresh token kini di cookie httpOnly server.
   void setTokens({String? access, String? refresh}) {
-    _dio.options.headers['Authorization'] = access != null
-        ? 'Bearer $access'
-        : null;
-    _refreshToken = refresh;
+    if (access != null) AuthSession.instance.accessToken = access;
   }
 
-  void clearTokens() {
-    _dio.options.headers.remove('Authorization');
-    _refreshToken = null;
-  }
+  void clearTokens() => AuthSession.instance.clear();
 
   /// Register a callback to be called when the server returns 401.
   void setOnUnauthorized(void Function()? callback) {
     _authInterceptor.onUnauthorized = callback;
   }
 
-  bool get hasToken => _dio.options.headers['Authorization'] != null;
-  String? get accessToken => _dio.options.headers['Authorization']
-      ?.toString()
-      .replaceFirst('Bearer ', '');
-  String? get refreshToken => _refreshToken;
+  bool get hasToken => AuthSession.instance.hasSession;
+  String? get accessToken => AuthSession.instance.accessToken;
+
+  /// Silent refresh: tukar cookie httpOnly menjadi access token baru.
+  ///
+  /// Dipakai (1) saat boot untuk memulihkan sesi tanpa login ulang, (2) oleh
+  /// interceptor saat 401, (3) timer periodic di dashboard sebelum token
+  /// habis. Pakai Dio terpisah tanpa interceptor supaya 401 dari /auth/refresh
+  /// tidak memicu interceptor (menghindari loop refresh).
+  Future<bool> refreshSession() async {
+    final raw = Dio(
+      BaseOptions(
+        baseUrl: AppConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
+    enableWebCredentials(raw);
+    try {
+      final resp = await raw.post<dynamic>(
+        '/auth/refresh',
+        data: const <String, dynamic>{},
+        options: Options(
+          // 401/403 = sesi memang habis — bukan kegagalan jaringan.
+          validateStatus: (code) => code != null && code < 500,
+        ),
+      );
+      if (resp.statusCode != 200) return false;
+      final data = resp.data;
+      if (data is! Map || data['access_token'] == null) return false;
+      AuthSession.instance.applyLogin(Map<String, dynamic>.from(data));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Bereskan cookie sesi di server (best-effort).
+  ///
+  /// Juga pakai Dio terpisah tanpa interceptor: logout boleh dipanggil saat
+  /// sesi sudah tidak valid, dan 401 di sini tidak boleh memicu alur
+  /// refresh/logout berantai.
+  Future<void> logoutServer() async {
+    final raw = Dio(
+      BaseOptions(
+        baseUrl: AppConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {'Content-Type': 'application/json'},
+      ),
+    );
+    enableWebCredentials(raw);
+    try {
+      await raw.post<dynamic>(
+        '/auth/logout',
+        data: const <String, dynamic>{},
+        options: Options(
+          validateStatus: (code) => code != null && code < 500,
+        ),
+      );
+    } catch (_) {
+      // Best-effort: kegagalan jaringan tidak boleh menghalangi logout lokal.
+    }
+  }
 
   Future<dynamic> get(
     String endpoint, {

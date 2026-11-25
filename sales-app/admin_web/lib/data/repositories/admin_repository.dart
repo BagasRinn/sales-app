@@ -31,12 +31,14 @@ class AdminRepository {
   Future<void> login(String username, String password) async {
     final resp = await _api.post(
       '/auth/login',
-      body: {'username': username, 'password': password},
+      body: {
+        'username': username,
+        'password': password,
+        // client=web: refresh token dikirim via cookie httpOnly, bukan body.
+        'client': 'web',
+      },
     );
-    _api.setTokens(
-      access: resp['access_token'],
-      refresh: resp['refresh_token'],
-    );
+    _api.setTokens(access: resp['access_token']);
     // Returns full auth response for caller to extract branch/role
     return resp;
   }
@@ -48,17 +50,21 @@ class AdminRepository {
   ) async {
     final resp = await _api.post(
       '/auth/login',
-      body: {'username': username, 'password': password},
+      body: {
+        'username': username,
+        'password': password,
+        // client=web: refresh token dikirim via cookie httpOnly, bukan body.
+        'client': 'web',
+      },
     );
-    _api.setTokens(
-      access: resp['access_token'],
-      refresh: resp['refresh_token'],
-    );
+    _api.setTokens(access: resp['access_token']);
     return resp as Map<String, dynamic>;
   }
 
-  void setTokens(String access, String refresh) =>
-      _api.setTokens(access: access, refresh: refresh);
+  /// Set access token sesi in-memory (header Authorization dipasang
+  /// AuthInterceptor per-request). Refresh token ada di cookie httpOnly
+  /// server — tidak ada parameter untuk itu.
+  void setTokens(String access) => _api.setTokens(access: access);
   void clearTokens() => _api.clearTokens();
   bool get hasToken => _api.hasToken;
 

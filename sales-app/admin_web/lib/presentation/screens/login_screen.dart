@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/api_exception.dart';
-import '../../core/auth_storage.dart';
+import '../../core/auth_session.dart';
 import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../data/repositories/api_service.dart';
@@ -43,6 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = await api.post('/auth/login', body: {
         'username': _usernameController.text.trim(),
         'password': _passwordController.text,
+        // client=web: backend menyimpan refresh token di cookie httpOnly dan
+        // TIDAK mengirimnya di body — XSS tidak bisa mencuri sesi 7 hari.
+        'client': 'web',
       });
 
       if (data is! Map) {
@@ -53,10 +56,9 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       final accessToken = data['access_token'];
-      final refreshToken = data['refresh_token'];
       final role = data['role']?.toString();
 
-      if (accessToken == null || refreshToken == null) {
+      if (accessToken == null) {
         setState(() {
           _error = 'Token tidak ditemukan dalam respons';
           _isLoading = false;
@@ -73,17 +75,11 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final branch = data['branch']?.toString();
-      final branchNama = data['branch_nama']?.toString();
-
-      await AuthStorage().saveTokens(
-        accessToken: accessToken.toString(),
-        refreshToken: refreshToken.toString(),
-        username: _usernameController.text.trim(),
-        nama: data['nama']?.toString(),
-        role: role,
-        branch: branch,
-        branchNama: branchNama,
+      // Sesi in-memory — tanpa localStorage. Identitas (username/role/branch)
+      // ikut diisi dari response login; refresh token ada di cookie httpOnly.
+      AuthSession.instance.applyLogin(
+        Map<String, dynamic>.from(data),
+        fallbackUsername: _usernameController.text.trim(),
       );
 
       if (!mounted) return;
@@ -96,13 +92,12 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => dashboard_ui.DashboardScreen(
-            accessToken: accessToken.toString(),
-            refreshToken: refreshToken.toString(),
-            username: _usernameController.text.trim(),
-            nama: data['nama']?.toString() ?? '',
-            role: role ?? 'ADMIN',
-            branch: branch,
-            branchNama: branchNama,
+            accessToken: AuthSession.instance.accessToken!,
+            username: AuthSession.instance.username,
+            nama: AuthSession.instance.nama,
+            role: AuthSession.instance.role,
+            branch: AuthSession.instance.branch,
+            branchNama: AuthSession.instance.branchNama,
           ),
         ),
       );

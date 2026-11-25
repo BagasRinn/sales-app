@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime, timezone
@@ -6,6 +8,13 @@ from datetime import datetime, timezone
 from app.models.database import get_db
 from app.models.models import User
 from app.schemas.schemas import UserCreate, UserLogin, Token, RefreshTokenRequest, ChangePasswordRequest
+from app.core.cookies import (
+    REFRESH_COOKIE_NAME,
+    apply_refresh_cookie,
+    clear_session_cookies,
+    extract_refresh_token,
+    verify_csrf_origin,
+)
 from app.core.security import (
     get_password_hash,
     verify_password,
@@ -65,7 +74,16 @@ def register(
 
 
 @router.post("/login", response_model=Token)
-def login(user: UserLogin, db: Session = Depends(get_db)):
+def login(
+    user: UserLogin,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    # Anti login-CSRF: bila request datang dari browser (ada Origin), origin
+    # harus diizinkan. Request tanpa Origin (mobile/curl) tetap dilayani.
+    verify_csrf_origin(request)
+
     db_user = db.query(User).filter(User.username == user.username).first()
 
     if not db_user or not verify_password(user.password, db_user.password_hash):
@@ -79,6 +97,24 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Akun nonaktif. Hubungi manager.",
+        )
+
+    # Admin web hanya untuk peran pengelola. Ditegakkan di server (bukan hanya
+    # UI) supaya cookie sesi tidak pernah dibuat untuk akun SALES — kalau
+    # dicek di frontend saja, silent refresh berikutnya akan memulihkan sesi
+    # yang tadi ditolak.
+    is_web_client = (user.client or "").strip().lower() == "web"
+    if is_web_client and (db_user.role or "").upper() not in (
+        "ADMIN",
+        "SUPERVISOR",
+        "MANAGER",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Hanya admin, supervisor, dan manager yang boleh "
+                "mengakses dashboard ini."
+            ),
         )
 
     access_token = create_access_token(
@@ -101,9 +137,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         }
     )
 
+    # Sesi admin web: refresh token dikirim via cookie httpOnly agar tidak
+    # bisa dibaca JavaScript (XSS tidak dapat mengeksfiltrasi sesi 7 hari).
+    # Hanya client web yang menerima cookie; mobile tetap memakai body dan
+    # tidak pernah mendapat ambient credential.
+    if is_web_client:
+        apply_refresh_cookie(response, refresh_token)
+
     branch_nama = branch_constants.get_branch_nama(db_user.branch)
 
-    return {
+    payload = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
@@ -114,11 +157,43 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         "branch_nama": branch_nama,
         "is_active": db_user.is_active,
     }
+    if is_web_client:
+        # Browser tidak boleh menerima refresh token di body — cookie di atas
+        # satu-satunya jalur sesi panjang untuk admin web.
+        payload["refresh_token"] = None
+
+    return payload
 
 
 @router.post("/refresh", response_model=Token)
-def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
-    payload = decode_token(body.refresh_token)
+def refresh(
+    request: Request,
+    response: Response,
+    body: Optional[RefreshTokenRequest] = None,
+    db: Session = Depends(get_db),
+):
+    """Perbarui access token.
+
+    Dual-mode: admin web mengirim refresh token lewat cookie httpOnly
+    (rotasi — refresh token baru ditulis ke cookie dan TIDAK dikirim di
+    body); mobile mengirimnya di body seperti sebelumnya dan tidak menerima
+    refresh baru (perilaku lama dipertahankan).
+    """
+    raw_token, source = extract_refresh_token(
+        request, body.refresh_token if body is not None else None
+    )
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token tidak ditemukan",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if source == "cookie":
+        # Cookie membawa ambient credential → wajib origin admin web yang sah.
+        verify_csrf_origin(request, require_origin=True)
+
+    payload = decode_token(raw_token)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -184,6 +259,22 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
 
     branch_nama = branch_constants.get_branch_nama(db_user.branch)
 
+    if source == "cookie":
+        # Rotasi + sliding session: refresh token lama diganti JWT baru dan
+        # cookie di-renew. User aktif tidak pernah ter-logout; token bocor
+        # berumur maksimal satu interval refresh. Token baru hanya lewat
+        # cookie — body tetap tanpa refresh token untuk mode web.
+        new_refresh_token = create_refresh_token(
+            data={
+                "sub": str(db_user.id),
+                "username": db_user.username,
+                "role": db_user.role,
+                "branch": db_user.branch,
+                "token_version": db_user.token_version or 0,
+            }
+        )
+        apply_refresh_cookie(response, new_refresh_token)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -194,6 +285,35 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
         "branch_nama": branch_nama,
         "is_active": db_user.is_active,
     }
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    """Hapus cookie sesi admin web.
+
+    Tanpa require_auth: dipanggil juga saat access token sudah kedaluwarsa
+    supaya cookie tetap bersih. Request ber-cookie wajib berasal dari origin
+    admin web yang sah (anti-CSRF) agar halaman lain tidak bisa memaksa
+    logout korban.
+    """
+    if request.cookies.get(REFRESH_COOKIE_NAME) is not None:
+        verify_csrf_origin(request, require_origin=True)
+    clear_session_cookies(response)
+    return {"detail": "Logout berhasil"}
+
+
+@router.get("/me")
+def me(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_auth),
+):
+    """Identitas user yang sedang login (untuk UI admin web).
+
+    UI tidak perlu menyimpan username/role/branch di storage browser —
+    cukup ambil dari sini setelah silent refresh.
+    """
+    branch_nama = branch_constants.get_branch_nama(current_user.get("branch"))
+    return {**current_user, "branch_nama": branch_nama}
 
 
 @router.post("/change-password")

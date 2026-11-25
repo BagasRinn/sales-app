@@ -136,6 +136,9 @@ class UserResponse(BaseSchema):
 class UserLogin(BaseSchema):
     username: str
     password: str
+    # "web" = admin browser: refresh token TIDAK dikirim di response body
+    # (hanya lewat cookie httpOnly). Nilai lain/kosong = client mobile.
+    client: Optional[str] = None
 
 
 class Token(BaseSchema):
@@ -151,7 +154,9 @@ class Token(BaseSchema):
 
 
 class RefreshTokenRequest(BaseSchema):
-    refresh_token: str
+    # Opsional: admin web mengirim refresh lewat cookie httpOnly, jadi body
+    # boleh kosong ({}). Mobile tetap mengirim token di field ini.
+    refresh_token: Optional[str] = None
 
 
 # ==================== PRODUCTS ====================
