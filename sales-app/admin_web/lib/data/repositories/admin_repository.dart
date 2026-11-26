@@ -11,6 +11,7 @@ import '../models/customer_submission.dart';
 import '../models/sales_user.dart';
 import '../models/sales_assignment.dart';
 import '../models/user_item.dart';
+import '../models/user_presence.dart';
 import '../models/sales_attendance.dart';
 import '../models/wa_session_status.dart';
 import '../models/sales_performance.dart';
@@ -851,6 +852,13 @@ class AdminRepository {
     return (data as List)
         .map((e) => UserItem.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Status online + last seen semua user aktif — khusus MANAGER global
+  /// (backend menolak role lain dengan 403). Dipakai halaman Status Online.
+  Future<UserPresenceResponse> getUserPresence() async {
+    final data = await _api.get('/users/presence');
+    return UserPresenceResponse.fromJson(data as Map<String, dynamic>);
   }
 
   Future<UserItem> createUser({

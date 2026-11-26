@@ -10,6 +10,7 @@ import '../../data/models/customer_submission.dart';
 import '../../data/models/sales_user.dart';
 import '../../data/models/sales_assignment.dart';
 import '../../data/models/user_item.dart';
+import '../../data/models/user_presence.dart';
 import '../../data/models/sales_attendance.dart';
 import '../../data/models/wa_session_status.dart';
 import '../../data/models/sales_performance.dart';
@@ -1135,6 +1136,44 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     _userSearchDebounceTimer = Timer(_searchDebounceDuration, () {
       loadUsers(search: query);
     });
+  }
+
+  // ===== Status Online (presence) — khusus MANAGER global =====
+  // Halaman Status Online mem-poll tiap 30 detik selama aktif. Silent reload
+  // tidak menimpa loading/error supaya indikator "diperbarui X detik lalu"
+  // tetap halus tanpa kedip.
+  UserPresenceResponse? _userPresence;
+  bool _userPresenceLoading = false;
+  bool _userPresenceLoadedOnce = false;
+  String? _userPresenceError;
+  DateTime? _userPresenceCacheTime;
+
+  UserPresenceResponse? get userPresence => _userPresence;
+  bool get userPresenceLoading => _userPresenceLoading;
+  bool get userPresenceLoadedOnce => _userPresenceLoadedOnce;
+  String? get userPresenceError => _userPresenceError;
+  DateTime? get userPresenceCacheTime => _userPresenceCacheTime;
+
+  Future<void> loadUserPresence({bool forceRefresh = false, bool silent = false}) async {
+    if (silent) {
+      _userPresenceCacheTime = DateTime.now();
+    } else {
+      _userPresenceLoading = true;
+      notifyListeners();
+    }
+    try {
+      _userPresence = await _repo.getUserPresence();
+      _userPresenceLoadedOnce = true;
+      _userPresenceError = null;
+      _userPresenceCacheTime = DateTime.now();
+    } catch (e) {
+      if (!silent || !_userPresenceLoadedOnce) {
+        _userPresenceError = e is ApiException ? e.message : e.toString();
+      }
+    } finally {
+      _userPresenceLoading = false;
+      notifyListeners();
+    }
   }
 
   // ===== Absensi kunjungan outlet (integrasi WhatsApp) =====

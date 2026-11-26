@@ -29,6 +29,7 @@ import 'suppliers_tab.dart';
 import 'imported_sales_tab.dart';
 import 'supplier_performance_pivot_tab.dart';
 import 'inventory_tracker_tab.dart';
+import 'user_presence_tab.dart';
 import '../../core/config.dart';
 
 /// Identitas halaman di dashboard Admin Web. Dipakai agar pemilihan halaman
@@ -47,6 +48,7 @@ enum _DashboardPage {
   supplierPerformance,
   inventoryTracker,
   inventoryTrackerSku,
+  userPresence,
   penugasan,
   bulletins,
   importedSales,
@@ -215,6 +217,16 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Stok By SKU',
           group: utama,
         ),
+      // Presence hanya relevan untuk MANAGER global (endpoint di-gate 403
+      // untuk role lain di server).
+      if (_isGlobalManager)
+        const _NavSpec(
+          page: _DashboardPage.userPresence,
+          icon: Icons.wifi_tethering_outlined,
+          selectedIcon: Icons.wifi_tethering,
+          label: 'Status Online',
+          group: utama,
+        ),
       // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
       // bentrok dengan menu Dashboard di atas.
       const _NavSpec(
@@ -376,6 +388,8 @@ class _DashboardContentState extends State<_DashboardContent>
         return 16;
       case _DashboardPage.inventoryTrackerSku:
         return 17;
+      case _DashboardPage.userPresence:
+        return 18;
       case _DashboardPage.penugasan:
         return 9;
       case _DashboardPage.bulletins:
@@ -611,6 +625,9 @@ class _DashboardContentState extends State<_DashboardContent>
           key: ValueKey('inventory-tracker-sku'),
           dimension: InventoryTrackerDimension.sku,
         );
+      case _DashboardPage.userPresence:
+        if (_isGlobalManager) return const UserPresenceTab();
+        break;
       case _DashboardPage.penugasan:
         return const PenugasanSalesTab(); // MANAGER & SUPERVISOR
       case _DashboardPage.bulletins:
