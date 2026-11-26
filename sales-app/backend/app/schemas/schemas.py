@@ -141,6 +141,30 @@ class UserLogin(BaseSchema):
     client: Optional[str] = None
 
 
+class UserPresenceItem(BaseSchema):
+    """Satu baris halaman Status Online (khusus MANAGER global).
+
+    `is_online` dihitung server saat request (threshold 5 menit) supaya
+    semua client melihat status yang konsisten.
+    """
+    user_id: UUID
+    username: str
+    nama: Optional[str] = None
+    role: str
+    branch: Optional[str] = None
+    branch_nama: Optional[str] = None
+    is_online: bool = False
+    last_seen_at: Optional[datetime] = None  # null = belum pernah terlihat
+
+
+class UserPresenceResponse(BaseSchema):
+    online_count: int = 0
+    offline_count: int = 0
+    total_users: int = 0
+    server_time: Optional[datetime] = None  # acuan hitung last_seen di client
+    users: List[UserPresenceItem] = []
+
+
 class Token(BaseSchema):
     access_token: str
     refresh_token: Optional[str] = None

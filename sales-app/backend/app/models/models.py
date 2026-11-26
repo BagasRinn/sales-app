@@ -28,6 +28,10 @@ class User(Base):
     # Nomor WhatsApp untuk integrasi absensi grup (format 628...).
     # Nullable: akun lama/manager/supervisor boleh belum punya nomor.
     whatsapp_number = Column(String(30), nullable=True)
+    # Presence untuk halaman Status Online (MANAGER): waktu request
+    # terautentikasi terakhir. Di-update throttled dari get_current_user;
+    # null = belum pernah terlihat online. Lihat app/core/presence.py.
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)

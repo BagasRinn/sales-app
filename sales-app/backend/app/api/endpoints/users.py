@@ -13,9 +13,12 @@ from app.schemas.schemas import (
     UserUpdate,
     UserResponse,
     SalesUserResponse,
+    UserPresenceItem,
+    UserPresenceResponse,
 )
 from app.core.security import (
     require_supervisor_or_manager_global,
+    require_manager_global,
     get_password_hash,
     apply_branch_filter,
     assert_can_manage_role,
@@ -81,6 +84,62 @@ def list_sales_users(
     )
     query = apply_branch_filter(query, User, current_user)
     return query.order_by(User.username).limit(limit).all()
+
+
+@router.get("/presence", response_model=UserPresenceResponse)
+def list_user_presence(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUser = Depends(require_manager_global),
+):
+    """Status online & last seen semua user aktif - KHUSUS MANAGER global.
+
+    Data berasal dari tracking pasif ``users.last_seen_at`` (throttled) yang
+    di-update setiap request terautentikasi. ``is_online`` dihitung di server
+    dengan threshold 5 menit (lihat app/core/presence.py); ``server_time``
+    dikirim sebagai acuan format "X menit lalu" di client.
+    """
+    from app.core.presence import is_online, utc_now
+
+    now = utc_now()
+    query = _exclude_deleted(db.query(User)).filter(User.is_active.is_(True))
+    users = query.order_by(User.username).all()
+
+    items: list[UserPresenceItem] = []
+    online_count = 0
+    for u in users:
+        online = is_online(u.last_seen_at, now)
+        if online:
+            online_count += 1
+        items.append(
+            UserPresenceItem(
+                user_id=u.id,
+                username=u.username,
+                nama=u.nama,
+                role=u.role,
+                branch=u.branch,
+                branch_nama=branch_constants.get_branch_nama(u.branch),
+                is_online=online,
+                last_seen_at=u.last_seen_at,
+            )
+        )
+
+    # Online dulu, lalu last_seen terbaru, lalu nama — baris yang perlu
+    # ditindaklanjuti (baru saja aktif) muncul di atas.
+    items.sort(
+        key=lambda item: (
+            not item.is_online,
+            -(item.last_seen_at.timestamp() if item.last_seen_at else 0),
+            (item.nama or item.username).lower(),
+        )
+    )
+
+    return UserPresenceResponse(
+        online_count=online_count,
+        offline_count=len(items) - online_count,
+        total_users=len(items),
+        server_time=now,
+        users=items,
+    )
 
 
 @router.get("", response_model=List[UserResponse])

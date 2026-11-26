@@ -329,6 +329,25 @@ def _ensure_sales_attendance() -> None:
         logger.warning("[STARTUP] Could not ensure sales attendance schema: %s", e)
 
 
+def _ensure_user_presence() -> None:
+    """Kolom presence ``users.last_seen_at`` untuk halaman Status Online.
+
+    Proyek ini tidak memakai Alembic: kolom baru diterapkan lewat DDL
+    idempotent di startup. Nullable tanpa backfill — akun lama dianggap
+    "belum pernah terlihat" sampai request pertamanya setelah deploy.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE users "
+                "ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ"
+            ))
+    except Exception as e:  # pragma: no cover - startup must not fail hard
+        logger.warning("[STARTUP] Could not ensure user presence column: %s", e)
+
+
 def _demo_seed_allowed() -> bool:
     """Demo user seeding hanya boleh jalan di lingkungan non-produksi.
 
@@ -360,6 +379,7 @@ async def lifespan(app: FastAPI):
     _ensure_imported_returns()
     _ensure_imported_product_stocks()
     _ensure_sales_attendance()
+    _ensure_user_presence()
     # Load branch labels/names from DB into in-memory cache. Falls back to
     # hardcoded constants if the branches table doesn't exist yet (pre-migration).
     from app.core import branch as branch_constants

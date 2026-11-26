@@ -141,7 +141,10 @@ def get_current_user(
             detail="Sesi sudah tidak valid (password telah diubah)",
         )
 
-    return {
+    # Bangun dict dulu: db.commit() di presence touch di bawah meng-expire
+    # objek ORM (expire_on_commit default), jadi akses atribut sesudahnya
+    # akan memicu SELECT ulang yang tidak perlu.
+    user_info = {
         "user_id": user_id,
         "username": payload.get("username"),
         # role + branch from DB row (authoritative), not from JWT payload.
@@ -151,6 +154,29 @@ def get_current_user(
         "branch": user.branch,
         "nama": user.nama,
     }
+
+    # Presence tracking (Status Online / Last Seen): tulis throttled —
+    # maksimal 1× per PRESENCE_TOUCH_INTERVAL per user — memakai row yang
+    # sudah dibaca di atas, jadi tidak ada query SELECT tambahan per request.
+    # Kegagalan tracking TIDAK BOLEH menggagalkan request: rollback + log,
+    # lalu lanjut seperti biasa.
+    from app.core.presence import should_touch_last_seen, utc_now
+
+    if should_touch_last_seen(user.last_seen_at):
+        try:
+            db.query(User).filter(User.id == user.id).update(
+                {"last_seen_at": utc_now()}, synchronize_session=False
+            )
+            db.commit()
+        except Exception:  # pragma: no cover - tracking never blocks auth
+            db.rollback()
+            logger.warning(
+                "[PRESENCE] Gagal update last_seen_at untuk user %s",
+                user_id,
+                exc_info=True,
+            )
+
+    return user_info
 
 
 def require_auth(current_user: dict = Depends(get_current_user)) -> dict:
