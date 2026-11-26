@@ -8,7 +8,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.api.endpoints.reports import (
     _sku_group_expr,
-    choose_sku_display_name,
+    choose_sku_label,
     inventory_sku_key,
 )
 
@@ -43,40 +43,25 @@ def test_sku_key_ignores_punctuation_and_spacing():
     )
 
 
-def test_display_name_prefers_common_sales_name_over_return_spelling():
-    name = choose_sku_display_name(
-        "SKUPALM15",
-        {
-            "sales": {"Palm 15 Liter": 2, "SKU-PALM15": 1},
-            "stock": {"PALM 15": 4},
-            "return": {"Palm 15 Liter (retur)": 3},
-        },
-    )
-    assert name == "Palm 15 Liter"
-
-
-def test_display_name_falls_back_to_stock_then_key():
+def test_label_uses_most_common_mother_sku_spelling():
+    # Label baris memakai ejaan Mother SKU mentah yang paling sering muncul,
+    # bukan nama produk — konsisten dengan kunci penggabungannya.
     assert (
-        choose_sku_display_name(
-            "SKUA",
-            {"sales": {}, "stock": {"Produk A": 1}, "return": {"Retur A": 5}},
-        )
-        == "Produk A"
+        choose_sku_label("MOMOGI4X10", {"MOMOGI ( 4 X 10 )": 7, "MOMOGI 4 X 10": 2})
+        == "MOMOGI ( 4 X 10 )"
     )
-    assert choose_sku_display_name("SKUA", {}) == "SKUA"
 
 
-def test_display_name_uses_raw_mother_sku_when_no_product_name():
-    # Produk yang hanya ada di snapshot stok tidak punya nama produk, jadi
-    # ejaan Mother SKU mentah dipakai supaya label tetap terbaca.
+def test_label_breaks_vote_ties_alphabetically():
+    # Seri suara dipecah alfabetis supaya label stabil antar-request.
     assert (
-        choose_sku_display_name(
-            "FILMAPROF18LJRC",
-            {"sales": {}, "stock": {}, "return": {}},
-            fallback="FILMA PROF 18L JRC",
-        )
-        == "FILMA PROF 18L JRC"
+        choose_sku_label("SKUPALM15", {"SKU-PALM15 A": 1, "SKU-PALM15 B": 1})
+        == "SKU-PALM15 A"
     )
+
+
+def test_label_falls_back_to_canonical_key_without_spellings():
+    assert choose_sku_label("FILMAPROF18LJRC", {}) == "FILMAPROF18LJRC"
 
 
 def test_sale_and_return_collapse_to_one_mother_sku():

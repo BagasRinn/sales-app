@@ -47,7 +47,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
 
   bool get _isSku => widget.dimension == InventoryTrackerDimension.sku;
   String get _pageTitle => _isSku ? 'Stok By SKU' : 'Stok By Supplier';
-  String get _firstColumnTitle => _isSku ? 'Nama Produk' : 'Supplier';
+  String get _firstColumnTitle => _isSku ? 'Mother SKU' : 'Supplier';
   String get _dimensionParam => _isSku ? 'sku' : 'supplier';
 
   String _monthLabel(String value) {

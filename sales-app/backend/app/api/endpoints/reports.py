@@ -73,46 +73,18 @@ def inventory_sku_key(value: Optional[str]) -> str:
     )
 
 
-def choose_sku_display_name(
-    key: str,
-    votes_by_source: dict[str, dict[str, int]],
-    fallback: Optional[str] = None,
-) -> str:
-    """Nama baris SKU: nama penjualan yang paling sering, lalu stok, lalu retur.
+def choose_sku_label(item: str, raw_bucket: dict[str, int]) -> str:
+    """Label baris Stok By SKU: ejaan Mother SKU mentah yang paling sering.
 
-    Nama yang sama dengan kunci Mother SKU diabaikan bila ada nama produk asli.
-    `fallback` dipakai bila tidak ada nama sama sekali (mis. produk yang hanya
-    ada di snapshot stok): ejaan Mother SKU mentah yang paling sering, supaya
-    label tetap terbaca — bukan kunci kanonik tanpa spasi.
+    Label sengaja memakai Mother SKU, bukan nama produk, supaya konsisten
+    dengan kunci penggabungan barisnya (penjualan, retur, dan stok jatuh ke
+    Mother SKU yang sama). Ejaan hanya dinormalisasi spasi; seri suara dipecah
+    secara alfabetis agar label stabil. `item` (kunci kanonik tanpa spasi)
+    dipakai bila tidak ada ejaan tercatat.
     """
-
-    def best(pool: dict[str, int]) -> str:
-        return min(pool, key=lambda name: (-pool[name], name.lower()))
-
-    canonical_key = inventory_sku_key(key)
-    real_pools: list[dict[str, int]] = []
-    any_pools: list[dict[str, int]] = []
-    for source in ("sales", "stock", "return"):
-        cleaned = {
-            " ".join(name.split()): count
-            for name, count in (votes_by_source.get(source) or {}).items()
-            if name and str(name).strip() and count > 0
-        }
-        if not cleaned:
-            continue
-        any_pools.append(cleaned)
-        real = {
-            name: count
-            for name, count in cleaned.items()
-            if inventory_sku_key(name) != canonical_key
-        }
-        if real:
-            real_pools.append(real)
-    if real_pools:
-        return best(real_pools[0])
-    if any_pools:
-        return best(any_pools[0])
-    return fallback or key
+    if not raw_bucket:
+        return item
+    return min(raw_bucket, key=lambda spelling: (-raw_bucket[spelling], spelling))
 
 
 @router.get("/inventory-tracker", response_model=InventoryTrackerResponse)
@@ -153,18 +125,12 @@ def get_inventory_tracker(
         parts = [part for part in normalized_name.split() if part not in {"PT", "CV", "TBK", "UD"}]
         return " ".join(parts)
 
-    # Nama tampilan SKU dihitung terpisah dari kunci Mother SKU.
-    name_votes: dict[str, dict[str, dict[str, int]]] = {
-        "sales": {},
-        "stock": {},
-        "return": {},
-    }
-    # Ejaan mentah Mother SKU per kunci kanonik. dipakai sebagai label cadangan
-    # saat tidak ada nama produk sama sekali (mis. baris hanya ada di snapshot
-    # stok), supaya label tetap terbaca dan bukan kunci tanpa spasi.
+    # Ejaan mentah Mother SKU per kunci kanonik: label baris memakai Mother
+    # SKU (ejaan yang paling sering muncul), bukan nama produk, supaya label
+    # konsisten dengan kunci penggabungan penjualan, retur, dan stoknya.
     raw_key_votes: dict[str, dict[str, int]] = {}
 
-    def note_name(source: str, raw_key: Optional[str], raw_name: Optional[str], votes: int) -> None:
+    def note_key_spelling(raw_key: Optional[str], votes: int) -> None:
         if not is_sku or votes <= 0:
             return
         key = group_key(raw_key)
@@ -174,15 +140,13 @@ def get_inventory_tracker(
         if spelling:
             raw_bucket = raw_key_votes.setdefault(key, {})
             raw_bucket[spelling] = raw_bucket.get(spelling, 0) + votes
-        name = " ".join((raw_name or "").split())
-        if not name:
-            return
-        bucket = name_votes[source].setdefault(key, {})
-        bucket[name] = bucket.get(name, 0) + votes
 
-    stock_name_col = func.nullif(func.trim(ImportedProductStock.product_nama), "")
     stock_columns = (
-        [stock_dim_col, stock_name_col, func.coalesce(func.sum(ImportedProductStock.good_amount), 0), func.count()]
+        [
+            stock_dim_col,
+            func.coalesce(func.sum(ImportedProductStock.good_amount), 0),
+            func.count(),
+        ]
         if is_sku
         else [stock_dim_col, func.coalesce(func.sum(ImportedProductStock.good_amount), 0)]
     )
@@ -197,24 +161,22 @@ def get_inventory_tracker(
         stock_query = stock_query.filter(ImportedProductStock.divisi == division)
     if supplier and is_sku:
         stock_query = stock_query.filter(ImportedProductStock.supplier == supplier)
-    stock_group = [stock_dim_col, stock_name_col] if is_sku else [stock_dim_col]
+    stock_group = [stock_dim_col]
     stock_map = {}
     stock_names = {}
     for row in stock_query.group_by(*stock_group).all():
         value = row[0]
-        amount = row[2] if is_sku else row[1]
+        amount = row[1]
         key = group_key(value)
         stock_map[key] = stock_map.get(key, 0) + int(amount or 0)
         if is_sku:
-            note_name("stock", value, row[1], int(row[3] or 0))
+            note_key_spelling(value, int(row[2] or 0))
         else:
             stock_names.setdefault(key, (value or "").strip())
 
-    sales_name_col = func.nullif(func.trim(ImportedSale.product_nama), "")
     sales_columns = (
         [
             sales_dim_col,
-            sales_name_col,
             ImportedSale.sale_date,
             func.coalesce(func.sum(ImportedSale.total_amount), 0).label("revenue"),
             func.count(),
@@ -238,29 +200,23 @@ def get_inventory_tracker(
         sales_query = sales_query.filter(ImportedSale.divisi == division)
     if supplier and is_sku:
         sales_query = sales_query.filter(ImportedSale.supplier == supplier)
-    sales_group = (
-        [sales_dim_col, sales_name_col, ImportedSale.sale_date]
-        if is_sku
-        else [sales_dim_col, ImportedSale.sale_date]
-    )
+    sales_group = [sales_dim_col, ImportedSale.sale_date]
     sales_map = {}
     for row in sales_query.group_by(*sales_group).all():
-        value, sale_date = row[0], row[2] if is_sku else row[1]
-        revenue = row[3] if is_sku else row[2]
+        value, sale_date = row[0], row[1]
+        revenue = row[2]
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
         key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) + int(revenue or 0)
         if is_sku:
-            note_name("sales", value, row[1], int(row[4] or 0))
+            note_key_spelling(value, int(row[3] or 0))
 
     # Retur memakai kunci Mother SKU yang sama, lalu mengurangi penjualan net.
-    return_name_col = func.nullif(func.trim(ImportedReturn.product_nama), "")
     return_columns = (
         [
             return_dim_col,
-            return_name_col,
             ImportedReturn.sale_date,
             func.coalesce(func.sum(ImportedReturn.revenue), 0).label("revenue"),
             func.count(),
@@ -284,21 +240,17 @@ def get_inventory_tracker(
         return_query = return_query.filter(ImportedReturn.divisi == division)
     if supplier and is_sku:
         return_query = return_query.filter(ImportedReturn.supplier == supplier)
-    return_group = (
-        [return_dim_col, return_name_col, ImportedReturn.sale_date]
-        if is_sku
-        else [return_dim_col, ImportedReturn.sale_date]
-    )
+    return_group = [return_dim_col, ImportedReturn.sale_date]
     for row in return_query.group_by(*return_group).all():
-        value, sale_date = row[0], row[2] if is_sku else row[1]
-        revenue = row[3] if is_sku else row[2]
+        value, sale_date = row[0], row[1]
+        revenue = row[2]
         period = sale_date.strftime("%Y-%m")
         if period not in all_months:
             continue
         key = (group_key(value), period)
         sales_map[key] = sales_map.get(key, 0) - int(revenue or 0)
         if is_sku:
-            note_name("return", value, row[1], int(row[4] or 0))
+            note_key_spelling(value, int(row[3] or 0))
 
     divisions_query = db.query(ImportedSale.divisi).filter(
         ImportedSale.divisi.isnot(None), func.trim(ImportedSale.divisi) != ""
@@ -334,41 +286,15 @@ def get_inventory_tracker(
     supplier_options.update(value.strip() for (value,) in sales_suppliers_query.distinct().all() if value and value.strip())
     items = sorted(set(stock_map) | {key[0] for key in sales_map})
 
-    # Label baris dihitung lebih dulu supaya nama yang sama dari dua Mother SKU
-    # berbeda bisa dibedakan. Contohnya "DENEX WAFER ROLL 40GR STRAWBERRY" dan
-    # "DENEX WAFER ROLL STRAWBERRRY 40GR" (typo di satu cabang) menghasilkan
-    # nama produk yang sama, padahal datanya memang terpisah.
+    # Label baris Stok By SKU: ejaan Mother SKU mentah yang paling sering
+    # muncul (bukan nama produk), supaya label konsisten dengan kunci
+    # penggabungan barisnya. Mode supplier tetap memakai nama supplier.
     labels: dict[str, str] = {}
-    raw_spellings: dict[str, str] = {}
     for item in items:
         if not is_sku:
             labels[item] = stock_names.get(item, item)
             continue
-        raw_bucket = raw_key_votes.get(item) or {}
-        spelling = (
-            min(raw_bucket, key=lambda value: (-raw_bucket[value], value))
-            if raw_bucket
-            else ""
-        )
-        raw_spellings[item] = spelling
-        labels[item] = choose_sku_display_name(
-            item,
-            {source: buckets.get(item, {}) for source, buckets in name_votes.items()},
-            fallback=spelling or None,
-        )
-    if is_sku:
-        # Dua produk berbeda bisa memakai nama yang mirip, misalnya Mother SKU
-        # "P SIKAT GIGI 30/20" dan "SIKAT GIGI BARU ( 20 X 30 )". Nama yang
-        # mirip setelah normalisasi diberi akhiran Mother SKU supaya tetap
-        # bisa dibedakan di tabel.
-        label_counts: dict[str, int] = {}
-        for label in labels.values():
-            label_key = inventory_sku_key(label)
-            label_counts[label_key] = label_counts.get(label_key, 0) + 1
-        for item, label in list(labels.items()):
-            if label_counts.get(inventory_sku_key(label), 0) > 1:
-                suffix = raw_spellings.get(item) or item
-                labels[item] = f"{label} [{suffix}]"
+        labels[item] = choose_sku_label(item, raw_key_votes.get(item) or {})
 
     rows = []
     for item in items:
