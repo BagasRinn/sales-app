@@ -217,16 +217,6 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Stok By SKU',
           group: utama,
         ),
-      // Presence hanya relevan untuk MANAGER global (endpoint di-gate 403
-      // untuk role lain di server).
-      if (_isGlobalManager)
-        const _NavSpec(
-          page: _DashboardPage.userPresence,
-          icon: Icons.wifi_tethering_outlined,
-          selectedIcon: Icons.wifi_tethering,
-          label: 'Status Online',
-          group: utama,
-        ),
       // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
       // bentrok dengan menu Dashboard di atas.
       const _NavSpec(
@@ -327,6 +317,16 @@ class _DashboardContentState extends State<_DashboardContent>
           icon: Icons.campaign_outlined,
           selectedIcon: Icons.campaign,
           label: 'Bulletin',
+          group: manajemen,
+        ),
+      // Presence supervisor: MANAGER memantau keaktifan supervisor dalam
+      // monitoring kinerja cabang (endpoint di-gate 403 untuk role lain).
+      if (_isGlobalManager)
+        const _NavSpec(
+          page: _DashboardPage.userPresence,
+          icon: Icons.wifi_tethering_outlined,
+          selectedIcon: Icons.wifi_tethering,
+          label: 'Status Online',
           group: manajemen,
         ),
       ],
