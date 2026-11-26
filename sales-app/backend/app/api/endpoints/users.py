@@ -91,17 +91,23 @@ def list_user_presence(
     db: Session = Depends(get_db),
     _current_user: CurrentUser = Depends(require_manager_global),
 ):
-    """Status online & last seen semua user aktif - KHUSUS MANAGER global.
+    """Status online & last seen SUPERVISOR - KHUSUS MANAGER global.
 
-    Data berasal dari tracking pasif ``users.last_seen_at`` (throttled) yang
-    di-update setiap request terautentikasi. ``is_online`` dihitung di server
-    dengan threshold 5 menit (lihat app/core/presence.py); ``server_time``
-    dikirim sebagai acuan format "X menit lalu" di client.
+    MANAGER memantau keaktifan supervisor dalam monitoring kinerja cabang,
+    jadi hanya user ber-role SUPERVISOR yang dikembalikan. Data berasal dari
+    tracking pasif ``users.last_seen_at`` (throttled) yang di-update setiap
+    request terautentikasi. ``is_online`` dihitung di server dengan threshold
+    5 menit (lihat app/core/presence.py); ``server_time`` dikirim sebagai
+    acuan format "X menit lalu" di client.
     """
     from app.core.presence import is_online, utc_now
 
     now = utc_now()
-    query = _exclude_deleted(db.query(User)).filter(User.is_active.is_(True))
+    query = (
+        _exclude_deleted(db.query(User))
+        .filter(User.is_active.is_(True))
+        .filter(User.role == "SUPERVISOR")
+    )
     users = query.order_by(User.username).all()
 
     items: list[UserPresenceItem] = []

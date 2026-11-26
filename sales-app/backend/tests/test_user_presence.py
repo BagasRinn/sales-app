@@ -96,6 +96,35 @@ def test_presence_endpoint_restricted_to_global_manager():
     )
 
 
+def test_presence_endpoint_only_returns_supervisors():
+    """Endpoint presence hanya menampilkan SUPERVISOR.
+
+    MANAGER memantau keaktifan supervisor (monitoring kinerja cabang), bukan
+    seluruh user. Kalau filter role ini hilang, halaman Status Online kembali
+    menampilkan semua user.
+    """
+    tree = _load_source(Path("api") / "endpoints" / "users.py")
+    fn = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "list_user_presence"
+    )
+    has_supervisor_filter = any(
+        isinstance(cmp, ast.Compare)
+        and isinstance(cmp.left, ast.Attribute)
+        and cmp.left.attr == "role"
+        and any(
+            isinstance(comp, ast.Constant) and comp.value == "SUPERVISOR"
+            for comp in cmp.comparators
+        )
+        for cmp in ast.walk(fn)
+    )
+    assert has_supervisor_filter, (
+        "Query presence harus memfilter User.role == 'SUPERVISOR' — "
+        "MANAGER hanya memantau supervisor."
+    )
+
+
 def test_presence_tracking_never_breaks_auth():
     """Touch last_seen di get_current_user harus dibungkus try/except.
 
