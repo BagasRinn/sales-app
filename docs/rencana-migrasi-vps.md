@@ -571,7 +571,7 @@ api.domain.com {
 DATABASE_URL=postgresql+psycopg://sales_app:GANTI_PASSWORD_KUAT@db:5432/sales
 
 SECRET_KEY=SALIN_DARI_RAILWAY
-CORS_ORIGINS=https://sales-admin-web.web.app,https://sales-order-web.web.app
+CORS_ORIGINS=https://admin.madsalesapp.my.id,https://sales-admin-web.web.app,https://sales-order-web.web.app
 ENVIRONMENT=production
 SEED_DEMO_USERS=false
 RUN_SCHEDULER=true

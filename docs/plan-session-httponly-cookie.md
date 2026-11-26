@@ -43,6 +43,9 @@ Alasan memilih pola ini (bukan semua token di cookie):
 - **Skenario A — satu domain induk** (`app.domain.com` + `api.domain.com`): `SameSite=Lax` → CSRF praktis beres. Rekomendasi jangka panjang.
 - **Skenario B — domain induk berbeda** (kondisi deploy sekarang): wajib `SameSite=None; Secure` + **validasi header `Origin`**. Cookie domain API tidak bisa dibaca JS di origin admin web (Firebase Hosting), jadi double-submit cookie tidak andal; `Origin` dikirim browser dan tidak bisa dipalsukan JS, lalu dicocokkan dengan `CORS_ORIGINS` (atau host API untuk deploy same-origin).
   - Catatan: browser yang memblokir third-party cookie (Safari/Firefox) dapat menolak cookie lintas-site ini. Untuk jaminan penuh di semua browser, jangka panjang pindahkan admin web ke subdomain domain yang sama dengan API (Skenario A) — mis. `admin.domain.com` + `api.domain.com`.
+  - **Sudah diterapkan**: admin web dilayani di `https://admin.madsalesapp.my.id` (custom domain Firebase Hosting) sehingga satu site dengan `https://api.madsalesapp.my.id`. Cookie jadi first-party dan tetap jalan di Chrome iOS/Safari/Brave. `sales-admin-web.web.app` dipertahankan sebagai alias transisi; origin baru ditambahkan ke `CORS_ORIGINS`.
+    - DNS: `admin` → CNAME `sales-admin-web.web.app` (dikelola di `dnama.id`). Sertifikat TLS diterbitkan otomatis oleh Firebase Hosting.
+    - Gejala bila belum dipindah: login 200 dan `Set-Cookie` terkirim, tetapi request `/auth/refresh` **tanpa** header `Cookie` → 401 → user dilempar ke halaman login. Terlihat di Chrome iOS dan Brave; Chrome desktop masih lolos karena pengecualian storage access.
 
 Konfigurasi via env: `COOKIE_SAMESITE` (default `none` saat production, `lax` saat dev), `COOKIE_SECURE` (default ikut `ENVIRONMENT`), `COOKIE_DOMAIN` (default host-only).
 
