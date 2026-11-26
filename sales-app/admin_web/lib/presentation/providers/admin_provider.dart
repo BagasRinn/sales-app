@@ -2423,6 +2423,28 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Tutup banner hasil import di tab Data Penjualan. State dismiss disimpan
+  /// di provider, bukan di State tab, karena tab dibuat ulang setiap kali
+  /// user pindah halaman di dashboard — kalau dismiss hanya di State lokal,
+  /// banner muncul lagi saat user kembali ke tab ini.
+  void dismissSalesImportResult() {
+    if (_salesImportResult == null) return;
+    _salesImportResult = null;
+    notifyListeners();
+  }
+
+  void dismissSalesReturnImportResult() {
+    if (_salesReturnImportResult == null) return;
+    _salesReturnImportResult = null;
+    notifyListeners();
+  }
+
+  void dismissSalesTargetImportResult() {
+    if (_salesTargetImportResult == null) return;
+    _salesTargetImportResult = null;
+    notifyListeners();
+  }
+
   Future<List<SyncError>> getSyncErrors() async {
     return await _repo.getSyncErrors();
   }

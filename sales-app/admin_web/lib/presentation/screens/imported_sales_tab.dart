@@ -37,9 +37,6 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   bool _importingReturn = false;
   bool _importingTarget = false;
   bool _importingStock = false;
-  Map<String, dynamic>? _dismissedImportResult;
-  Map<String, dynamic>? _dismissedReturnImportResult;
-  Map<String, dynamic>? _dismissedTargetImportResult;
   // Tombol "Ambil Gambar": halaman dirasterisasi penuh (termasuk bagian di
   // bawah lipatan layar) jadi satu PNG lalu diunduh.
   final GlobalKey _captureKey = GlobalKey();
@@ -644,39 +641,27 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
                   const SizedBox(height: AppSpacing.md),
                   _ErrorCard(message: errorMessage),
                 ],
-                if (importResult != null &&
-                    !identical(importResult, _dismissedImportResult)) ...[
+                if (importResult != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   SalesImportBanner(
                     result: importResult,
-                    onDismiss: () =>
-                        setState(() => _dismissedImportResult = importResult),
+                    // Dismiss disimpan di provider supaya banner tidak
+                    // muncul lagi setelah user pindah halaman dan kembali.
+                    onDismiss: provider.dismissSalesImportResult,
                   ),
                 ],
-                if (returnImportResult != null &&
-                    !identical(
-                      returnImportResult,
-                      _dismissedReturnImportResult,
-                    )) ...[
+                if (returnImportResult != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   SalesImportBanner(
                     result: returnImportResult,
-                    onDismiss: () => setState(
-                      () => _dismissedReturnImportResult = returnImportResult,
-                    ),
+                    onDismiss: provider.dismissSalesReturnImportResult,
                   ),
                 ],
-                if (targetImportResult != null &&
-                    !identical(
-                      targetImportResult,
-                      _dismissedTargetImportResult,
-                    )) ...[
+                if (targetImportResult != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   _SalesTargetImportBanner(
                     result: targetImportResult,
-                    onDismiss: () => setState(
-                      () => _dismissedTargetImportResult = targetImportResult,
-                    ),
+                    onDismiss: provider.dismissSalesTargetImportResult,
                   ),
                 ],
                 const SizedBox(height: AppSpacing.md),
