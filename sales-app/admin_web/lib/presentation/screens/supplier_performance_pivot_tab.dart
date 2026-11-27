@@ -20,7 +20,6 @@ class _SupplierPerformancePivotTabState
   late DateTime _from;
   late DateTime _to;
   String _branch = '';
-  String _metric = 'value';
   bool _initialized = false;
 
   @override
@@ -165,13 +164,8 @@ class _SupplierPerformancePivotTabState
               _message(provider.supplierSalesPivotError!, isError: true)
             else if (pivot == null || pivot.rows.isEmpty)
               _message('Belum ada data penjualan untuk periode ini.')
-            else ...[
-              _summaryCards(pivot, responsive.contentPadding),
-              const SizedBox(height: 18),
-              _buildMetricPicker(),
-              const SizedBox(height: 12),
+            else
               _supplierCards(pivot),
-            ],
           ],
         ),
       );
@@ -192,68 +186,6 @@ class _SupplierPerformancePivotTabState
         color: isError ? AppColors.danger : AppColors.textSecondary,
       ),
     ),
-  );
-
-  Widget _summaryCards(SupplierSalesPivot pivot, double padding) {
-    final suppliers = pivot.rows.map((r) => r.supplier).toSet().length;
-    final topSales = pivot.columns.isEmpty ? null : pivot.columns.first;
-    final cards = [
-      _SummaryCard(
-        label: 'Total VALUES',
-        value: _format(pivot.total.value),
-        icon: Icons.payments_outlined,
-      ),
-      _SummaryCard(
-        label: 'Total MARGIN',
-        value: _format(pivot.total.margin),
-        icon: Icons.trending_up,
-      ),
-      _SummaryCard(
-        label: 'Total QTY',
-        value: _format(pivot.total.qty),
-        icon: Icons.inventory_2_outlined,
-      ),
-      _SummaryCard(
-        label: 'Principal',
-        value: '$suppliers',
-        icon: Icons.business_outlined,
-      ),
-      _SummaryCard(
-        label: 'Top Sales',
-        value: topSales?.name ?? '-',
-        subtitle: topSales == null ? null : _format(topSales.total.value),
-        icon: Icons.person_outline,
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth > 1250
-            ? 5
-            : constraints.maxWidth > 820
-            ? 3
-            : 2;
-        final gap = 10.0;
-        final cardWidth =
-            (constraints.maxWidth - gap * (columns - 1)) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: cards
-              .map((card) => SizedBox(width: cardWidth, child: card))
-              .toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildMetricPicker() => SegmentedButton<String>(
-    segments: const [
-      ButtonSegment(value: 'value', label: Text('VALUES')),
-      ButtonSegment(value: 'margin', label: Text('MARGIN')),
-      ButtonSegment(value: 'qty', label: Text('QTY')),
-    ],
-    selected: {_metric},
-    onSelectionChanged: (value) => setState(() => _metric = value.first),
   );
 
   Widget _supplierCards(SupplierSalesPivot pivot) {
@@ -318,9 +250,9 @@ class _SupplierPerformancePivotTabState
                       for (final column in columns)
                         MapEntry(
                           column.name,
-                          row.cells[column.name]?.forMetric(_metric) ?? 0,
+                          row.cells[column.name]?.value ?? 0,
                         ),
-                      MapEntry('TOTAL', row.total.forMetric(_metric)),
+                      MapEntry('TOTAL', row.total.value),
                     ];
                     return Wrap(
                       spacing: gap,
@@ -384,67 +316,4 @@ class _SupplierPerformancePivotTabState
   }
 
   String _format(int amount) => NumberFormat('#,##0', 'id_ID').format(amount);
-}
-
-class _SummaryCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? subtitle;
-  final IconData icon;
-
-  const _SummaryCard({
-    required this.label,
-    required this.value,
-    this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 108),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 17, color: AppColors.primary),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSubtle,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        if (subtitle != null)
-          Text(
-            subtitle!,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSubtle),
-          ),
-      ],
-    ),
-  );
 }
