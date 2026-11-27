@@ -92,7 +92,7 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _importedSalesVersion = 0;
   int _importedSalesLimit = 10;
   int _importedSalesRangeMonths = 1;
-  int _importedSalesComparisonMonths = 1;
+  int _importedSalesComparisonMonths = 3;
 
   /// Rata-rata omzet N bulan sebelum bulan terpilih (payload pembanding).
   Map<String, dynamic>? _importedSalesComparison;
@@ -441,10 +441,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
       _importedSalesBranchFilter = null;
       if (role == 'MANAGER' || role == 'SUPERVISOR') {
         _importedSalesLimit = 50;
-        _importedSalesComparisonMonths = 6;
+        _importedSalesComparisonMonths = 3;
       } else {
         _importedSalesLimit = 10;
-        _importedSalesComparisonMonths = 1;
+        _importedSalesComparisonMonths = 3;
       }
       invalidateImportedSalesCache(clearSummary: true);
     }
@@ -1154,7 +1154,10 @@ class AdminProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get userPresenceError => _userPresenceError;
   DateTime? get userPresenceCacheTime => _userPresenceCacheTime;
 
-  Future<void> loadUserPresence({bool forceRefresh = false, bool silent = false}) async {
+  Future<void> loadUserPresence({
+    bool forceRefresh = false,
+    bool silent = false,
+  }) async {
     if (silent) {
       _userPresenceCacheTime = DateTime.now();
     } else {

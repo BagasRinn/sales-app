@@ -3,7 +3,14 @@ import 'package:flutter/material.dart';
 import '../app_colors.dart';
 import '../app_tokens.dart';
 
-enum AppButtonVariant { primary, secondary, outline, ghost, danger }
+enum AppButtonVariant {
+  primary,
+  secondary,
+  outline,
+  ghost,
+  danger,
+  dangerOutline,
+}
 
 /// Tombol standar. API kompatibel dengan tombol lama: cukup pindahkan
 /// `onPressed` + kondisi loading apa adanya.
@@ -38,9 +45,21 @@ class AppButton extends StatelessWidget {
           side: const BorderSide(color: AppColors.inputBorder),
         );
       case AppButtonVariant.ghost:
-        return (bg: Colors.transparent, fg: AppColors.textSecondary, side: null);
+        return (
+          bg: Colors.transparent,
+          fg: AppColors.textSecondary,
+          side: null,
+        );
       case AppButtonVariant.danger:
         return (bg: AppColors.danger, fg: AppColors.onPrimary, side: null);
+      case AppButtonVariant.dangerOutline:
+        // Merah lembut: latar pink sangat muda + teks merah gelap, untuk
+        // aksi destruktif yang menonjol tanpa terlalu mencolok.
+        return (
+          bg: AppColors.dangerSoft,
+          fg: AppColors.dangerText,
+          side: const BorderSide(color: AppColors.errorBorder),
+        );
     }
   }
 

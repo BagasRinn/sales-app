@@ -482,139 +482,165 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppPageHeader(
-                  title: 'Data Penjualan',
-                  subtitle:
-                      'Analisis omzet, tren harian, kanal, dan performa dari laporan Excel.',
-                  actions: [
-                    if (analytics != null && !_capturing)
-                      AppButton(
-                        label: 'Ambil Gambar',
-                        icon: Icons.photo_camera_outlined,
-                        variant: AppButtonVariant.outline,
-                        onPressed: _captureAnalytics,
-                      ),
-                    if (!widget.readOnly && provider.isGlobalManager)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Grup import: aksi penambahan data (baris atas).
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              AppButton(
-                                label: _importing
-                                    ? 'Mengimport...'
-                                    : 'Import Penjualan',
-                                icon: Icons.upload_file,
-                                variant: AppButtonVariant.outline,
-                                isLoading: _importing,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _pickAndImport(context),
-                              ),
-                              AppButton(
-                                label: _importingReturn
-                                    ? 'Mengimport...'
-                                    : 'Import Retur',
-                                icon: Icons.assignment_return_outlined,
-                                variant: AppButtonVariant.outline,
-                                isLoading: _importingReturn,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _pickAndImportReturns(context),
-                              ),
-                              AppButton(
-                                label: _importingTarget
-                                    ? 'Mengimport...'
-                                    : 'Import Target',
-                                icon: Icons.flag_outlined,
-                                variant: AppButtonVariant.outline,
-                                isLoading: _importingTarget,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _pickAndImportTargets(context),
-                              ),
-                              AppButton(
-                                label: _importingStock
-                                    ? 'Mengimport...'
-                                    : 'Import Data Produk',
-                                icon: Icons.inventory_2_outlined,
-                                variant: AppButtonVariant.outline,
-                                isLoading: _importingStock,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _pickAndImportProductStock(context),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          // Grup hapus: aksi destruktif di baris bawah, tidak
-                          // bersebelahan dengan tombol import.
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              AppButton(
-                                label: 'Hapus bulan',
-                                icon: Icons.delete_outline,
-                                variant: AppButtonVariant.danger,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _confirmDeleteMonth(
-                                        context,
-                                        provider,
-                                      ),
-                              ),
-                              AppButton(
-                                label: 'Hapus retur',
-                                icon: Icons.delete_sweep_outlined,
-                                variant: AppButtonVariant.danger,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _confirmDeleteReturnsMonth(
-                                        context,
-                                        provider,
-                                      ),
-                              ),
-                              AppButton(
-                                label: 'Hapus target',
-                                icon: Icons.remove_circle_outline,
-                                variant: AppButtonVariant.danger,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _confirmDeleteTargets(
-                                        context,
-                                        provider,
-                                      ),
-                              ),
-                              AppButton(
-                                label: 'Hapus Data Produk',
-                                icon: Icons.inventory_outlined,
-                                variant: AppButtonVariant.danger,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () => _confirmDeleteProductStock(
-                                        context,
-                                        provider,
-                                      ),
-                              ),
-                              AppButton(
-                                label: 'Hapus semua',
-                                icon: Icons.delete_forever_outlined,
-                                variant: AppButtonVariant.danger,
-                                onPressed: _isImporting
-                                    ? null
-                                    : () =>
-                                          _confirmDeleteAll(context, provider),
-                              ),
-                            ],
+                // Header: tombol upload (baris 1) dan delete (baris 2) di
+                // kiri atas, "Ambil Gambar" tetap di kanan atas, lalu judul
+                // "Data Penjualan" memanjang penuh di bawah baris tombol.
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: !widget.readOnly && provider.isGlobalManager
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Baris 1: aksi upload (import data).
+                                    Wrap(
+                                      spacing: AppSpacing.sm,
+                                      runSpacing: AppSpacing.sm,
+                                      children: [
+                                        AppButton(
+                                          label: _importing
+                                              ? 'Mengimport...'
+                                              : 'Upload Sales',
+                                          variant: AppButtonVariant.outline,
+                                          isLoading: _importing,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _pickAndImport(context),
+                                        ),
+                                        AppButton(
+                                          label: _importingReturn
+                                              ? 'Mengimport...'
+                                              : 'Upload Return',
+                                          variant: AppButtonVariant.outline,
+                                          isLoading: _importingReturn,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _pickAndImportReturns(
+                                                  context,
+                                                ),
+                                        ),
+                                        AppButton(
+                                          label: _importingStock
+                                              ? 'Mengimport...'
+                                              : 'Upload Stock',
+                                          variant: AppButtonVariant.outline,
+                                          isLoading: _importingStock,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () =>
+                                                    _pickAndImportProductStock(
+                                                      context,
+                                                    ),
+                                        ),
+                                        AppButton(
+                                          label: _importingTarget
+                                              ? 'Mengimport...'
+                                              : 'Upload Target',
+                                          variant: AppButtonVariant.outline,
+                                          isLoading: _importingTarget,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _pickAndImportTargets(
+                                                  context,
+                                                ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    // Baris 2: aksi delete (destruktif),
+                                    // dipisah agar tidak bersebelahan dengan
+                                    // tombol upload.
+                                    Wrap(
+                                      spacing: AppSpacing.sm,
+                                      runSpacing: AppSpacing.sm,
+                                      children: [
+                                        AppButton(
+                                          label: 'Delete Sales',
+                                          variant:
+                                              AppButtonVariant.dangerOutline,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _confirmDeleteMonth(
+                                                  context,
+                                                  provider,
+                                                ),
+                                        ),
+                                        AppButton(
+                                          label: 'Delete Return',
+                                          variant:
+                                              AppButtonVariant.dangerOutline,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () =>
+                                                    _confirmDeleteReturnsMonth(
+                                                      context,
+                                                      provider,
+                                                    ),
+                                        ),
+                                        AppButton(
+                                          label: 'Delete Stock',
+                                          variant:
+                                              AppButtonVariant.dangerOutline,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () =>
+                                                    _confirmDeleteProductStock(
+                                                      context,
+                                                      provider,
+                                                    ),
+                                        ),
+                                        AppButton(
+                                          label: 'Delete Target',
+                                          variant:
+                                              AppButtonVariant.dangerOutline,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _confirmDeleteTargets(
+                                                  context,
+                                                  provider,
+                                                ),
+                                        ),
+                                        AppButton(
+                                          label: 'Delete All',
+                                          variant:
+                                              AppButtonVariant.dangerOutline,
+                                          onPressed: _isImporting
+                                              ? null
+                                              : () => _confirmDeleteAll(
+                                                  context,
+                                                  provider,
+                                                ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        if (analytics != null && !_capturing) ...[
+                          const SizedBox(width: AppSpacing.md),
+                          AppButton(
+                            label: 'Ambil Gambar',
+                            icon: Icons.photo_camera_outlined,
+                            variant: AppButtonVariant.outline,
+                            onPressed: _captureAnalytics,
                           ),
                         ],
-                      ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    // Judul & subtitle memanjang penuh di bawah baris tombol.
+                    Text('Data Penjualan', style: AppTextStyles.h1),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Analisis omzet, tren harian, kanal, dan performa dari '
+                      'laporan Excel.',
+                      style: AppTextStyles.bodyMuted,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),

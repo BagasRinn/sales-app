@@ -254,8 +254,7 @@ class _HeroMetric extends StatelessWidget {
   }
 }
 
-/// Blok pembanding: rata-rata omzet N bulan sebelumnya + persentase bulan
-/// ini menuju rata-rata itu. Angka ditampilkan penuh (tanpa disingkat ke M/jt).
+/// Blok pembanding: rata-rata omzet N bulan sebelumnya + persentase bulan ini menuju rata-rata itu.
 class _ComparisonBlock extends StatelessWidget {
   const _ComparisonBlock({required this.analytics, required this.comparison});
 
