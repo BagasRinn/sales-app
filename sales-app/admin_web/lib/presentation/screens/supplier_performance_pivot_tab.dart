@@ -6,6 +6,7 @@ import '../../core/design_system.dart';
 import '../../core/responsive.dart';
 import '../../data/models/supplier_sales_pivot.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/period_filter_bar.dart';
 
 class SupplierPerformancePivotTab extends StatefulWidget {
   const SupplierPerformancePivotTab({super.key});
@@ -17,61 +18,44 @@ class SupplierPerformancePivotTab extends StatefulWidget {
 
 class _SupplierPerformancePivotTabState
     extends State<SupplierPerformancePivotTab> {
-  late DateTime _from;
-  late DateTime _to;
-  String _branch = '';
+  DateTime _month = DateTime.now();
   bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _from = DateTime(now.year, now.month, 1);
-    _to = DateTime(now.year, now.month + 1, 0);
+    _month = DateTime(now.year, now.month);
   }
 
   void _load(AdminProvider provider) {
+    final start = DateTime(_month.year, _month.month, 1);
+    final end = DateTime(_month.year, _month.month + 1, 0);
     provider.loadSupplierSalesPivot(
-      from: _from,
-      to: _to,
-      branch: provider.isManager && _branch.isNotEmpty ? _branch : null,
+      from: start,
+      to: end,
+      branch: provider.isManager && provider.importedSalesBranchFilter != null
+          ? provider.importedSalesBranchFilter
+          : null,
     );
     if (provider.isManager && provider.branchOptions.isEmpty) {
       provider.loadBranchOptions();
     }
   }
 
-  Future<void> _pickMonth(AdminProvider provider) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _from,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDatePickerMode: DatePickerMode.year,
-      helpText: 'Pilih bulan',
-    );
-    if (picked == null) return;
-    setState(() {
-      _from = DateTime(picked.year, picked.month, 1);
-      _to = DateTime(picked.year, picked.month + 1, 0);
-    });
-    _load(provider);
+  void _changeMonth(DateTime next) {
+    final normalized = DateTime(next.year, next.month);
+    if (normalized == _month) return;
+    setState(() => _month = normalized);
+    _load(context.read<AdminProvider>());
   }
 
-  Future<void> _pickRange(AdminProvider provider) async {
-    final picked = await showDateRangePicker(
+  Future<void> _pickMonth() async {
+    final picked = await showDialog<DateTime>(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: _from, end: _to),
-      helpText: 'Pilih rentang tanggal',
+      builder: (_) => MonthPickerDialog(initial: _month),
     );
-    if (picked == null) return;
-    setState(() {
-      _from = picked.start;
-      _to = picked.end;
-    });
-    _load(provider);
+    if (picked != null) _changeMonth(picked);
   }
 
   @override
@@ -102,55 +86,20 @@ class _SupplierPerformancePivotTabState
                 color: AppColors.textSubtle,
               ),
             ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => _pickMonth(provider),
-                  icon: const Icon(Icons.calendar_month_outlined),
-                  label: Text(DateFormat('MMMM yyyy', 'id_ID').format(_from)),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _pickRange(provider),
-                  icon: const Icon(Icons.date_range_outlined),
-                  label: const Text('Rentang tanggal'),
-                ),
-                if (provider.isManager)
-                  SizedBox(
-                    width: 220,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _branch,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Cabang',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('Semua cabang'),
-                        ),
-                        ...provider.branchOptions.map(
-                          (branch) => DropdownMenuItem(
-                            value: branch.code,
-                            child: Text(
-                              branch.nama,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setState(() => _branch = value ?? '');
-                        _load(provider);
-                      },
-                    ),
-                  ),
-              ],
+            const SizedBox(height: 16),
+            PeriodFilterBar(
+              month: _month,
+              enabled: !provider.supplierSalesPivotLoading,
+              showBranchFilter: provider.isManager,
+              branchOptions: provider.branchOptions,
+              selectedBranch: provider.importedSalesBranchFilter,
+              onBranchChanged: (value) =>
+                  provider.setImportedSalesBranchFilter(value),
+              onPrevious: () =>
+                  _changeMonth(DateTime(_month.year, _month.month - 1)),
+              onNext: () =>
+                  _changeMonth(DateTime(_month.year, _month.month + 1)),
+              onPick: () => _pickMonth(),
             ),
             const SizedBox(height: 18),
             if (provider.supplierSalesPivotLoading && pivot == null)
