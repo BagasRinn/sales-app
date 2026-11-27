@@ -12,6 +12,7 @@ import '../widgets/analytics/sales_analytics_models.dart';
 import '../widgets/analytics/sales_cards.dart';
 import '../widgets/analytics/sales_charts.dart';
 import '../widgets/import_progress.dart';
+import '../widgets/period_filter_bar.dart';
 
 /// Data Penjualan: an analytics view over the imported Excel report.
 ///
@@ -147,7 +148,7 @@ class _ImportedSalesTabState extends State<ImportedSalesTab> {
   Future<void> _pickMonth() async {
     final picked = await showDialog<DateTime>(
       context: context,
-      builder: (_) => _MonthPickerDialog(initial: _month),
+      builder: (_) => MonthPickerDialog(initial: _month),
     );
     if (picked != null) await _changeMonth(picked);
   }
@@ -2392,56 +2393,12 @@ class _PeriodToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final monthSelector = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _SquareIconButton(
-          icon: Icons.chevron_left,
-          tooltip: 'Bulan sebelumnya',
-          onPressed: loading ? null : onPrevious,
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Material(
-          color: AppColors.surface,
-          borderRadius: AppRadius.md,
-          child: InkWell(
-            onTap: loading ? null : onPick,
-            borderRadius: AppRadius.md,
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.md,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.calendar_month_outlined,
-                    size: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(formatMonthLong(month), style: AppTextStyles.h3),
-                  const SizedBox(width: AppSpacing.xs),
-                  const Icon(
-                    Icons.arrow_drop_down,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        _SquareIconButton(
-          icon: Icons.chevron_right,
-          tooltip: 'Bulan berikutnya',
-          onPressed: loading ? null : onNext,
-        ),
-      ],
+    final monthSelector = MonthNavSelector(
+      month: month,
+      enabled: !loading,
+      onPrevious: onPrevious,
+      onNext: onNext,
+      onPick: onPick,
     );
 
     final scopeSelector = Wrap(
@@ -2450,7 +2407,7 @@ class _PeriodToolbar extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (showBranchFilter)
-          _BranchSelector(
+          BranchFilterDropdown(
             options: branchOptions,
             selected: selectedBranch,
             enabled: !loading,
@@ -2527,146 +2484,6 @@ class _PeriodToolbar extends StatelessWidget {
     );
   }
 }
-
-class _BranchSelector extends StatelessWidget {
-  const _BranchSelector({
-    required this.options,
-    required this.selected,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  final List<BranchOption> options;
-  final String? selected;
-  final bool enabled;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = (selected == null || selected!.isEmpty) ? '' : selected!;
-    final known = value.isEmpty || options.any((b) => b.code == value);
-
-    return Tooltip(
-      message: 'Filter cabang',
-      child: Container(
-        width: 194,
-        height: 40,
-        padding: const EdgeInsets.only(left: 10, right: 4),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.md,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.account_balance_outlined,
-              size: 16,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: value,
-                  isDense: true,
-                  isExpanded: true,
-                  borderRadius: AppRadius.md,
-                  menuMaxHeight: 320,
-                  iconSize: 18,
-                  style: AppTextStyles.h3,
-                  items: [
-                    const DropdownMenuItem(
-                      value: '',
-                      child: Text(
-                        'Semua cabang',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    // Keep the current selection visible even if the branch
-                    // list failed to load or the branch became inactive.
-                    if (!known)
-                      DropdownMenuItem(
-                        value: value,
-                        child: Text(
-                          value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ...options.map(
-                      (b) => DropdownMenuItem(
-                        value: b.code,
-                        child: Text(
-                          b.nama.isEmpty ? b.code : b.nama,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: enabled
-                      ? (next) => onChanged(
-                          next == null || next.isEmpty ? null : next,
-                        )
-                      : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SquareIconButton extends StatelessWidget {
-  const _SquareIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: AppRadius.md,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: AppRadius.md,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.md,
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: onPressed == null
-                  ? AppColors.textMuted
-                  : AppColors.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Small pieces
-// ---------------------------------------------------------------------------
 
 class _SplitLayout extends StatelessWidget {
   const _SplitLayout({
@@ -2841,129 +2658,6 @@ class _SalesTargetImportBanner extends StatelessWidget {
             visualDensity: VisualDensity.compact,
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Month picker
-// ---------------------------------------------------------------------------
-
-class _MonthPickerDialog extends StatefulWidget {
-  const _MonthPickerDialog({required this.initial});
-
-  final DateTime initial;
-
-  @override
-  State<_MonthPickerDialog> createState() => _MonthPickerDialogState();
-}
-
-class _MonthPickerDialogState extends State<_MonthPickerDialog> {
-  late int _year;
-
-  @override
-  void initState() {
-    super.initState();
-    _year = widget.initial.year;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
-      title: Row(
-        children: [
-          const Expanded(child: Text('Pilih periode', style: AppTextStyles.h2)),
-          IconButton(
-            tooltip: 'Tahun sebelumnya',
-            onPressed: () => setState(() => _year--),
-            icon: const Icon(Icons.chevron_left, size: 20),
-          ),
-          Text('$_year', style: AppTextStyles.h3),
-          IconButton(
-            tooltip: 'Tahun berikutnya',
-            onPressed: () => setState(() => _year++),
-            icon: const Icon(Icons.chevron_right, size: 20),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 300,
-        child: GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: AppSpacing.sm,
-          crossAxisSpacing: AppSpacing.sm,
-          childAspectRatio: 1.9,
-          children: [
-            for (var month = 1; month <= 12; month++)
-              _MonthCell(
-                label: formatMonthLong(DateTime(_year, month)).split(' ').first,
-                selected:
-                    widget.initial.year == _year &&
-                    widget.initial.month == month,
-                onTap: () => Navigator.of(context).pop(DateTime(_year, month)),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            final now = DateTime.now();
-            Navigator.of(context).pop(DateTime(now.year, now.month));
-          },
-          child: const Text('Bulan ini'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Batal'),
-        ),
-      ],
-    );
-  }
-}
-
-class _MonthCell extends StatelessWidget {
-  const _MonthCell({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primary : AppColors.surfaceMuted,
-      borderRadius: AppRadius.md,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.md,
-        child: Center(
-          child: Text(
-            label,
-            style: AppTextStyles.label.copyWith(
-              color: selected ? AppColors.onPrimary : AppColors.textPrimary,
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../data/models/sales_performance.dart';
 import '../../data/models/sales_target.dart';
 import '../../data/models/supplier_performance.dart';
 import '../providers/admin_provider.dart';
+import '../widgets/period_filter_bar.dart';
 import '../widgets/supplier_target_edit_dialog.dart';
 
 String _fmt(int amount) => NumberFormat.currency(
@@ -31,7 +32,6 @@ class _PerformanceTabState extends State<PerformanceTab> {
   // Default: bulan berjalan (WITA)
   late DateTime _fromDate;
   late DateTime _toDate;
-  bool _useCustomRange = false;
 
   // Pagination: KPI per Supplier
   int _supplierPage = 1;
@@ -79,40 +79,24 @@ class _PerformanceTabState extends State<PerformanceTab> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
   Future<void> _pickMonth() async {
-    final picked = await showDatePicker(
+    final picked = await showDialog<DateTime>(
       context: context,
-      initialDate: _fromDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Pilih bulan',
-      initialDatePickerMode: DatePickerMode.year,
+      builder: (_) => MonthPickerDialog(initial: _fromDate),
     );
-    if (picked != null) {
-      setState(() {
-        _useCustomRange = false;
-        _fromDate = DateTime(picked.year, picked.month, 1);
-        _toDate = DateTime(picked.year, picked.month + 1, 0);
-      });
-      _loadData();
-    }
+    if (picked != null) _changeMonth(picked);
   }
 
-  Future<void> _pickCustomRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Pilih rentang tanggal',
-      initialDateRange: DateTimeRange(start: _fromDate, end: _toDate),
-    );
-    if (picked != null) {
-      setState(() {
-        _useCustomRange = true;
-        _fromDate = picked.start;
-        _toDate = picked.end;
-      });
-      _loadData();
+  void _changeMonth(DateTime next) {
+    final normalized = DateTime(next.year, next.month);
+    if (normalized.year == _fromDate.year &&
+        normalized.month == _fromDate.month) {
+      return;
     }
+    setState(() {
+      _fromDate = normalized;
+      _toDate = DateTime(normalized.year, normalized.month + 1, 0);
+    });
+    _loadData();
   }
 
   @override
@@ -151,16 +135,6 @@ class _PerformanceTabState extends State<PerformanceTab> {
                 children: [
                   // Section: Period Filter + Sort
                   _buildPeriodFilterSection(provider),
-                  if (_useCustomRange) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'KPI per Supplier dihitung per bulan — memakai '
-                      '${DateFormat('MMMM yyyy', 'id_ID').format(_fromDate)}.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 24),
 
                   // Section 1: KPI per Supplier — revenue & target with auto-rollover
@@ -224,92 +198,20 @@ class _PerformanceTabState extends State<PerformanceTab> {
   }
 
   Widget _buildPeriodFilterSection(AdminProvider provider) {
-    final monthLabel = DateFormat('MMMM yyyy', 'id_ID').format(_fromDate);
-    final rangeLabel =
-        '${DateFormat('dd MMM yyyy', 'id_ID').format(_fromDate)} - '
-        '${DateFormat('dd MMM yyyy', 'id_ID').format(_toDate)}';
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        // Branch scope — MANAGER only (dropdown). Other roles are locked to
-        // their own branch by the backend.
-        if (provider.isManager)
-          SizedBox(
-            width: 220,
-            child: DropdownButtonFormField<String>(
-              initialValue: _branchFilter,
-              isDense: true,
-              isExpanded: true,
-              iconSize: 18,
-              selectedItemBuilder: (context) => [
-                const Text(
-                  'Semua Cabang',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                ...provider.branchOptions.map(
-                  (b) => Text(
-                    b.nama,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Cabang',
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 8,
-                ),
-              ),
-              items: [
-                const DropdownMenuItem(value: '', child: Text('Semua Cabang')),
-                ...provider.branchOptions.map(
-                  (b) => DropdownMenuItem(
-                    value: b.code,
-                    child: Text(b.nama, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-              ],
-              onChanged: (value) {
-                setState(() => _branchFilter = value ?? '');
-                _loadData();
-              },
-            ),
-          ),
-        // Monthly picker
-        OutlinedButton.icon(
-          onPressed: _pickMonth,
-          icon: const Icon(Icons.calendar_month, size: 18),
-          label: Text(_useCustomRange ? rangeLabel : monthLabel),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primaryLight,
-            backgroundColor: AppColors.primaryLight.withValues(alpha: 0.08),
-            side: BorderSide(
-              color: AppColors.primaryLight.withValues(alpha: 0.4),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-        ),
-        // Custom range toggle
-        TextButton.icon(
-          onPressed: _pickCustomRange,
-          icon: const Icon(Icons.date_range, size: 18),
-          label: const Text('Custom Range'),
-          style: TextButton.styleFrom(
-            foregroundColor: _useCustomRange
-                ? Colors.white
-                : AppColors.textMuted,
-            backgroundColor: _useCustomRange ? AppColors.primaryLight : null,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-        ),
-      ],
+    return PeriodFilterBar(
+      month: _fromDate,
+      enabled: !provider.performanceLoading,
+      showBranchFilter: provider.isManager,
+      branchOptions: provider.branchOptions,
+      selectedBranch: _branchFilter.isEmpty ? null : _branchFilter,
+      onBranchChanged: (value) {
+        setState(() => _branchFilter = value ?? '');
+        _loadData();
+      },
+      onPrevious: () =>
+          _changeMonth(DateTime(_fromDate.year, _fromDate.month - 1)),
+      onNext: () => _changeMonth(DateTime(_fromDate.year, _fromDate.month + 1)),
+      onPick: _pickMonth,
     );
   }
 
