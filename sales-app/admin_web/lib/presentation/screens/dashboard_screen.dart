@@ -216,6 +216,15 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Stok By SKU',
           group: utama,
         ),
+      // Performa Supplier ditempatkan tepat di bawah Stok By SKU.
+      if (widget.role != 'ADMIN')
+        const _NavSpec(
+          page: _DashboardPage.supplierPerformance,
+          icon: Icons.table_chart_outlined,
+          selectedIcon: Icons.table_chart,
+          label: 'Performa Supplier',
+          group: utama,
+        ),
       // Ringkasan sistem (stats) memakai label "Sales Order" supaya tidak
       // bentrok dengan menu Dashboard di atas.
       const _NavSpec(
@@ -298,13 +307,6 @@ class _DashboardContentState extends State<_DashboardContent>
           group: manajemen,
         ),
         const _NavSpec(
-          page: _DashboardPage.supplierPerformance,
-          icon: Icons.table_chart_outlined,
-          selectedIcon: Icons.table_chart,
-          label: 'Performa Supplier',
-          group: manajemen,
-        ),
-        const _NavSpec(
           page: _DashboardPage.penugasan,
           icon: Icons.assignment_ind_outlined,
           selectedIcon: Icons.assignment_ind,
@@ -318,16 +320,16 @@ class _DashboardContentState extends State<_DashboardContent>
           label: 'Bulletin',
           group: manajemen,
         ),
-      // Presence supervisor: MANAGER memantau keaktifan supervisor dalam
-      // monitoring kinerja cabang (endpoint di-gate 403 untuk role lain).
-      if (_isGlobalManager)
-        const _NavSpec(
-          page: _DashboardPage.userPresence,
-          icon: Icons.wifi_tethering_outlined,
-          selectedIcon: Icons.wifi_tethering,
-          label: 'Status Online',
-          group: manajemen,
-        ),
+        // Presence supervisor: MANAGER memantau keaktifan supervisor dalam
+        // monitoring kinerja cabang (endpoint di-gate 403 untuk role lain).
+        if (_isGlobalManager)
+          const _NavSpec(
+            page: _DashboardPage.userPresence,
+            icon: Icons.wifi_tethering_outlined,
+            selectedIcon: Icons.wifi_tethering,
+            label: 'Status Online',
+            group: manajemen,
+          ),
       ],
       if (_isGlobalManager)
         const _NavSpec(
