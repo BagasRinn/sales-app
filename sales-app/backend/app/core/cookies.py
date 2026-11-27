@@ -43,8 +43,12 @@ COOKIE_SECURE = (
 COOKIE_DOMAIN = (os.getenv("COOKIE_DOMAIN") or "").strip() or None
 COOKIE_PATH = os.getenv("COOKIE_PATH", "/api/v1/auth")
 
-# Selaras dengan masa hidup refresh token JWT di security.py.
-REFRESH_COOKIE_MAX_AGE = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+# Selaras dengan masa hidup refresh token JWT untuk admin web (sliding
+# session): sesi bertahan selama user membuka minimal sekali per hari.
+# Melewati >24 jam tanpa login → cookie kedaluwarsa → login ulang. Mobile
+# tidak memakai cookie dan tetap memakai REFRESH_TOKEN_EXPIRE_DAYS (7 hari).
+WEB_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("WEB_REFRESH_TOKEN_EXPIRE_DAYS", "1"))
+REFRESH_COOKIE_MAX_AGE = WEB_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
 
 def _cookie_kwargs() -> dict:

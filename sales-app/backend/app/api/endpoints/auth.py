@@ -10,6 +10,7 @@ from app.models.models import User
 from app.schemas.schemas import UserCreate, UserLogin, Token, RefreshTokenRequest, ChangePasswordRequest
 from app.core.cookies import (
     REFRESH_COOKIE_NAME,
+    WEB_REFRESH_TOKEN_EXPIRE_DAYS,
     apply_refresh_cookie,
     clear_session_cookies,
     extract_refresh_token,
@@ -24,6 +25,7 @@ from app.core.security import (
     require_auth,
     require_manager_global,
     resolve_new_user_branch,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     VALID_ROLES,
 )
 from app.core import branch as branch_constants
@@ -134,13 +136,22 @@ def login(
             "role": db_user.role,
             "branch": db_user.branch,
             "token_version": db_user.token_version or 0,
-        }
+        },
+        # Admin web: sliding session 24 jam — cookie berputar setiap
+        # /auth/refresh sehingga user yang rutin membuka dashboard tidak
+        # pernah login ulang; >24 jam tanpa aktivitas → login lagi.
+        # Mobile tetap default (7 hari) agar tidak terdampak.
+        expires_days=(
+            WEB_REFRESH_TOKEN_EXPIRE_DAYS
+            if is_web_client
+            else REFRESH_TOKEN_EXPIRE_DAYS
+        ),
     )
 
     # Sesi admin web: refresh token dikirim via cookie httpOnly agar tidak
-    # bisa dibaca JavaScript (XSS tidak dapat mengeksfiltrasi sesi 7 hari).
-    # Hanya client web yang menerima cookie; mobile tetap memakai body dan
-    # tidak pernah mendapat ambient credential.
+    # bisa dibaca JavaScript (XSS tidak dapat mengeksfiltrasi kredensial
+    # jangka panjang). Hanya client web yang menerima cookie; mobile tetap
+    # memakai body dan tidak pernah mendapat ambient credential.
     if is_web_client:
         apply_refresh_cookie(response, refresh_token)
 
@@ -271,7 +282,9 @@ def refresh(
                 "role": db_user.role,
                 "branch": db_user.branch,
                 "token_version": db_user.token_version or 0,
-            }
+            },
+            # Sliding session admin web: setiap refresh mengulang 24 jam.
+            expires_days=WEB_REFRESH_TOKEN_EXPIRE_DAYS,
         )
         apply_refresh_cookie(response, new_refresh_token)
 

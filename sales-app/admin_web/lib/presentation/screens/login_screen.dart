@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth_session.dart';
 import '../../core/design_system.dart';
+import '../../core/navigator_key.dart';
 import '../../core/responsive.dart';
 import '../../data/repositories/api_service.dart';
 // Dashboard (+ seluruh tab-nya) sengaja di-defer: chunk-nya baru diunduh
@@ -31,6 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    // Submit bisa terpanggil dua kali (mis. Enter dan klik tombol hampir
+    // bersamaan). Jangan membuat dua sesi/dua route dashboard paralel.
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -40,13 +44,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final api = ApiService();
-      final data = await api.post('/auth/login', body: {
-        'username': _usernameController.text.trim(),
-        'password': _passwordController.text,
-        // client=web: backend menyimpan refresh token di cookie httpOnly dan
-        // TIDAK mengirimnya di body — XSS tidak bisa mencuri sesi 7 hari.
-        'client': 'web',
-      });
+      final data = await api.post(
+        '/auth/login',
+        body: {
+          'username': _usernameController.text.trim(),
+          'password': _passwordController.text,
+          // client=web: backend menyimpan refresh token di cookie httpOnly dan
+          // TIDAK mengirimnya di body — XSS tidak bisa mencuri sesi 7 hari.
+          'client': 'web',
+        },
+      );
 
       if (data is! Map) {
         setState(() {
@@ -69,7 +76,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // ADMIN, SUPERVISOR, and MANAGER (global) can login to admin web
       if (role != 'ADMIN' && role != 'SUPERVISOR' && role != 'MANAGER') {
         setState(() {
-          _error = 'Hanya admin, supervisor, dan manager yang boleh mengakses dashboard ini.';
+          _error =
+              'Hanya admin, supervisor, dan manager yang boleh mengakses dashboard ini.';
           _isLoading = false;
         });
         return;
@@ -89,7 +97,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await dashboard_ui.loadLibrary();
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      // Pakai root navigator, bukan navigator dari context LoginScreen.
+      // Pada web, route login masih bisa berada dalam fase transisi ketika
+      // deferred chunk selesai; root navigator memastikan route dashboard
+      // benar-benar menggantikan login dan tidak tertinggal di stack.
+      final navigator = rootNavigatorKey.currentState;
+      if (navigator == null || !AuthSession.instance.hasSession) {
+        throw StateError('Navigator atau sesi login tidak siap');
+      }
+      navigator.pushReplacement(
         MaterialPageRoute(
           builder: (_) => dashboard_ui.DashboardScreen(
             accessToken: AuthSession.instance.accessToken!,
@@ -102,9 +118,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Error: ${e.toString()}');
+      if (mounted) setState(() => _error = 'Error: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -150,7 +166,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text('Admin Dashboard', style: AppTextStyles.displayMedium),
+                    const Text(
+                      'Admin Dashboard',
+                      style: AppTextStyles.displayMedium,
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'Sistem Manajemen Order Distribusi',
@@ -174,17 +193,24 @@ class _LoginScreenState extends State<LoginScreen> {
                           AppInput(
                             controller: _usernameController,
                             label: 'Username',
-                            prefixIcon: const Icon(Icons.person_outline, size: 18),
+                            prefixIcon: const Icon(
+                              Icons.person_outline,
+                              size: 18,
+                            ),
                             textInputAction: TextInputAction.next,
-                            validator: (v) =>
-                                v == null || v.isEmpty ? 'Username wajib diisi' : null,
+                            validator: (v) => v == null || v.isEmpty
+                                ? 'Username wajib diisi'
+                                : null,
                           ),
                           const SizedBox(height: AppSpacing.md),
                           AppInput(
                             controller: _passwordController,
                             label: 'Password',
                             obscureText: _obscurePassword,
-                            prefixIcon: const Icon(Icons.lock_outline, size: 18),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline,
+                              size: 18,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -193,7 +219,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 18,
                               ),
                               onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword),
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
                             ),
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _login(),
@@ -209,13 +236,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: AppColors.dangerSoft,
                                 borderRadius: AppRadius.md,
                                 border: Border.all(
-                                  color: AppColors.dangerText.withValues(alpha: 0.3),
+                                  color: AppColors.dangerText.withValues(
+                                    alpha: 0.3,
+                                  ),
                                 ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.error_outline,
-                                      color: AppColors.dangerText, size: 18),
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: AppColors.dangerText,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Text(

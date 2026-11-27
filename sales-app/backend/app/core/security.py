@@ -60,9 +60,15 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: dict, expires_days: int = REFRESH_TOKEN_EXPIRE_DAYS) -> str:
+    """Buat refresh token JWT.
+
+    ``expires_days`` bisa dipisah per client: admin web memakai sliding
+    session pendek (lihat ``cookies.WEB_REFRESH_TOKEN_EXPIRE_DAYS``),
+    mobile tetap memakai default ``REFRESH_TOKEN_EXPIRE_DAYS``.
+    """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=expires_days)
     to_encode.update({
         "exp": expire,
         "type": "refresh",

@@ -164,9 +164,10 @@ class _DashboardContentState extends State<_DashboardContent>
   late final ApiService _apiService;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  //idle auto-logout
-  static const Duration _idleTimeout = Duration(minutes: 15);
-  static const Duration _idleCheckInterval = Duration(seconds: 30);
+  // Tidak ada idle auto-logout: dashboard boleh ditinggal berapa lama pun,
+  // tab tetap terbuka. Kepertahanan sesi diurus cookie httpOnly 24 jam
+  // sliding di server — hanya >24 jam tanpa aktivitas login yang memaksa
+  // login ulang, dan tombol Logout yang benar-benar mengakhiri sesi.
 
   // Silent refresh: access token berumur 30 menit. Cek tiap 5 menit dan
   // refresh saat sisa umur < 6 menit, sehingga tidak ada request yang sempat
@@ -174,8 +175,6 @@ class _DashboardContentState extends State<_DashboardContent>
   static const Duration _refreshCheckInterval = Duration(minutes: 5);
   static const Duration _refreshBeforeExpiry = Duration(minutes: 6);
 
-  DateTime _lastActivity = DateTime.now();
-  Timer? _idleTimer;
   Timer? _refreshTimer;
 
   bool get _isGlobalManager => widget.role == 'MANAGER';
@@ -452,10 +451,7 @@ class _DashboardContentState extends State<_DashboardContent>
       if (widget.role == 'MANAGER' || widget.role == 'SUPERVISOR') {
         _adminProvider.loadSalesPerformanceDashboard();
       }
-      // Idle timer baru mulai setelah load pertama selesai supaya
-      // activity "load" dari internal tidak dihitung interaksi user.
-      _lastActivity = DateTime.now();
-      _idleTimer = Timer.periodic(_idleCheckInterval, (_) => _checkIdle());
+      // Tidak ada idle timer — hanya silent refresh yang berjalan periodik.
       _refreshTimer = Timer.periodic(
         _refreshCheckInterval,
         (_) => _maybeSilentRefresh(),
@@ -484,15 +480,12 @@ class _DashboardContentState extends State<_DashboardContent>
     // Di web, lifecycle state dipakai untuk tab focus events
     // (inactive/hidden = tab di background, resumed = tab aktif).
     if (lifecycleState == AppLifecycleState.resumed) {
-      _recordActivity();
+      // Tab kembali aktif: pastikan access token masih segar. (Tidak ada
+      // idle tracking — user boleh meninggalkan tab selamanya.)
       // Timer di background tab di-throttle browser — pulihkan sesi langsung
       // saat tab aktif kembali dan token mendekati kedaluwarsa.
       _maybeSilentRefresh();
     }
-  }
-
-  void _recordActivity() {
-    _lastActivity = DateTime.now();
   }
 
   /// Refresh sesi bila access token mendekati kedaluwarsa (sliding session).
@@ -509,23 +502,8 @@ class _DashboardContentState extends State<_DashboardContent>
     }
   }
 
-  void _checkIdle() {
-    if (!mounted) return;
-    final idle = DateTime.now().difference(_lastActivity);
-    if (idle > _idleTimeout) {
-      _idleTimer?.cancel();
-      // Sesi dianggap ditinggal: bereskan cookie di server (best-effort),
-      // hapus sesi in-memory, lalu kembali ke login. Tanpa cookie, silent
-      // refresh berikutnya pasti gagal.
-      _apiService.logoutServer();
-      AuthSession.instance.clear();
-      _pushLogin();
-    }
-  }
-
   @override
   void dispose() {
-    _idleTimer?.cancel();
     _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _apiService.setOnUnauthorized(null);
@@ -665,59 +643,47 @@ class _DashboardContentState extends State<_DashboardContent>
     final hasNewPending = context.watch<AdminProvider>().hasNewPending;
     final navItems = _navItems(hasNewPending: hasNewPending);
 
-    // Listener (translucent) di paling luar: setiap pointer event di dashboard
-    // dianggap aktivitas user. Tanpa throttle Timer._checkIdle sudah jalan
-    // setiap 30 detik, jadi tidak perlu debounce di sisi Listener.
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => _recordActivity(),
-      // Track any pointer movement (touch scroll, mouse hover, drag). Tanpa
-      // gate buttons != 0 supaya touch scroll di mobile ikut dihitung sebagai
-      // aktivitas — kalau gate tetap, mobile user yang cuma scroll list
-      // panjang akan ke-logout. Hover di desktop tetap aman karena pointer
-      // event jarang firing saat idle (tidak ada device input aktif).
-      onPointerMove: (_) => _recordActivity(),
-      onPointerSignal: (_) => _recordActivity(),
-      child: AppShell(
-        scaffoldKey: _scaffoldKey,
-        title: navItems[_selectedIndex.clamp(0, navItems.length - 1)].label,
-        titleTrailing: null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-            onPressed: () => context.read<AdminProvider>().refresh(),
-          ),
-        ],
-        brandTitle: widget.branchNama?.trim().isNotEmpty == true
-            ? widget.branchNama!.trim()
-            : BranchLabel.display(widget.branch) ?? 'Sales Order',
-        brandSubtitle: widget.role == 'MANAGER'
-            ? 'Global Manager'
-            : widget.role == 'SUPERVISOR'
-            ? 'Supervisor Cabang'
-            : 'Admin Panel',
-        items: navItems,
-        selectedIndex: _selectedIndex.clamp(0, navItems.length - 1),
-        onIndexSelected: _onNavTap,
-        userName: widget.nama.isNotEmpty ? widget.nama : widget.username,
-        roleLabel: widget.role == 'MANAGER' ? 'Manager' : 'Administrator',
-        onChangePassword: () => ChangePasswordDialog.show(
-          context,
-          context.read<AdminProvider>().adminRepository,
+    // Tidak ada lagi pelacakan aktivitas: Listener idle dulu dipasang di
+    // sini untuk timer auto-logout, yang kini dihapus sepenuhnya.
+    return AppShell(
+      scaffoldKey: _scaffoldKey,
+      title: navItems[_selectedIndex.clamp(0, navItems.length - 1)].label,
+      titleTrailing: null,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Refresh',
+          onPressed: () => context.read<AdminProvider>().refresh(),
         ),
-        onLogout: () async {
-          // Logout manual: hapus cookie sesi di server (best-effort) lalu
-          // bersihkan sesi in-memory sebelum pindah ke layar login.
-          await _apiService.logoutServer();
-          AuthSession.instance.clear();
-          if (!context.mounted) return;
-          // Ganti seluruh stack lewat root navigator supaya drawer (kalau
-          // terbuka) ikut ter-pop.
-          showLoginScreen();
-        },
-        body: _buildBody(),
+      ],
+      brandTitle: widget.branchNama?.trim().isNotEmpty == true
+          ? widget.branchNama!.trim()
+          : BranchLabel.display(widget.branch) ?? 'Sales Order',
+      brandSubtitle: widget.role == 'MANAGER'
+          ? 'Global Manager'
+          : widget.role == 'SUPERVISOR'
+          ? 'Supervisor Cabang'
+          : 'Admin Panel',
+      items: navItems,
+      selectedIndex: _selectedIndex.clamp(0, navItems.length - 1),
+      onIndexSelected: _onNavTap,
+      userName: widget.nama.isNotEmpty ? widget.nama : widget.username,
+      roleLabel: widget.role == 'MANAGER' ? 'Manager' : 'Administrator',
+      onChangePassword: () => ChangePasswordDialog.show(
+        context,
+        context.read<AdminProvider>().adminRepository,
       ),
+      onLogout: () async {
+        // Logout manual: hapus cookie sesi di server (best-effort) lalu
+        // bersihkan sesi in-memory sebelum pindah ke layar login.
+        await _apiService.logoutServer();
+        AuthSession.instance.clear();
+        if (!context.mounted) return;
+        // Ganti seluruh stack lewat root navigator supaya drawer (kalau
+        // terbuka) ikut ter-pop.
+        showLoginScreen();
+      },
+      body: _buildBody(),
     );
   }
 }
