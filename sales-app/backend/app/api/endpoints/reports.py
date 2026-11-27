@@ -1492,24 +1492,67 @@ def get_supplier_sales_pivot(
         query = query.filter(ImportedSale.branch == scope_branch)
     grouped = query.group_by(supplier, channel, sales_name).all()
 
+    # Pivot memakai definisi omzet neto yang sama dengan Dashboard: nilai
+    # penjualan dikurangi retur pada supplier × divisi × sales yang sama.
+    # Tanpa ini total pivot lebih besar dari kartu Dashboard setiap kali ada
+    # retur (mis. SMART ( MI ) Nov 2026: 4.080.261.425 vs 3.950.245.585).
+    ret_supplier = func.coalesce(func.nullif(func.trim(ImportedReturn.supplier), ""), "-")
+    ret_channel = func.coalesce(func.nullif(func.trim(ImportedReturn.divisi), ""), "-")
+    ret_sales_name = func.coalesce(func.nullif(func.trim(ImportedReturn.sales_nama), ""), "-")
+    returns_query = db.query(
+        ret_supplier.label("supplier"),
+        ret_channel.label("channel"),
+        ret_sales_name.label("sales_name"),
+        func.coalesce(func.sum(ImportedReturn.revenue), 0).label("value"),
+        func.coalesce(func.sum(ImportedReturn.margin), 0).label("margin"),
+    ).filter(ImportedReturn.sale_date >= start, ImportedReturn.sale_date <= end)
+    returns_query = apply_branch_filter(returns_query, ImportedReturn, current_user)
+    if scope_branch:
+        returns_query = returns_query.filter(ImportedReturn.branch == scope_branch)
+    returned = returns_query.group_by(ret_supplier, ret_channel, ret_sales_name).all()
+
     rows_by_key = {}
+
+    def row_for(supplier_name: str, channel_name: str) -> dict:
+        return rows_by_key.setdefault(
+            (supplier_name, channel_name),
+            {
+                "supplier": supplier_name,
+                "channel": channel_name,
+                "cells": {},
+                "total": {"value": 0, "margin": 0, "qty": 0},
+            },
+        )
+
+    for record in grouped:
+        row = row_for(record.supplier, record.channel)
+        row["cells"][record.sales_name] = {
+            "value": int(record.value or 0),
+            "margin": int(record.margin or 0),
+            "qty": int(record.qty or 0),
+        }
+
+    # Sel retur tanpa penjualan yang cocok tetap dibuat (nilai negatif) supaya
+    # total supplier tidak kehilangan retur karena ejaan nama sales berbeda.
+    for record in returned:
+        row = row_for(record.supplier, record.channel)
+        cell = row["cells"].setdefault(
+            record.sales_name, {"value": 0, "margin": 0, "qty": 0}
+        )
+        cell["value"] -= int(record.value or 0)
+        cell["margin"] -= int(record.margin or 0)
+
     column_totals = {}
     grand_total = {"value": 0, "margin": 0, "qty": 0}
-    for record in grouped:
-        row_key = (record.supplier, record.channel)
-        row = rows_by_key.setdefault(row_key, {
-            "supplier": record.supplier,
-            "channel": record.channel,
-            "cells": {},
-            "total": {"value": 0, "margin": 0, "qty": 0},
-        })
-        cell = {"value": int(record.value or 0), "margin": int(record.margin or 0), "qty": int(record.qty or 0)}
-        row["cells"][record.sales_name] = cell
-        col = column_totals.setdefault(record.sales_name, {"value": 0, "margin": 0, "qty": 0})
-        for metric, amount in cell.items():
-            row["total"][metric] += amount
-            col[metric] += amount
-            grand_total[metric] += amount
+    for row in rows_by_key.values():
+        for sales_key, cell in row["cells"].items():
+            col = column_totals.setdefault(
+                sales_key, {"value": 0, "margin": 0, "qty": 0}
+            )
+            for metric, amount in cell.items():
+                row["total"][metric] += amount
+                col[metric] += amount
+                grand_total[metric] += amount
 
     columns = [{"nama": name, "total": totals} for name, totals in column_totals.items()]
     columns.sort(key=lambda item: (-item["total"]["value"], item["nama"].casefold()))

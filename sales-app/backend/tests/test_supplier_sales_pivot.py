@@ -61,6 +61,7 @@ def _seed():
 
 def _cleanup():
     with engine.begin() as conn:
+        conn.execute(text("DELETE FROM imported_returns WHERE import_log_id IN (SELECT id FROM import_logs WHERE file_name LIKE 'TEST-SSP-%')"))
         conn.execute(text("DELETE FROM imported_sales WHERE import_log_id IN (SELECT id FROM import_logs WHERE file_name LIKE 'TEST-SSP-%')"))
         conn.execute(text("DELETE FROM import_logs WHERE file_name LIKE 'TEST-SSP-%'"))
         conn.execute(text("DELETE FROM users WHERE username LIKE 'TEST-SSP-%'"))
@@ -95,5 +96,53 @@ def test_supervisor_cannot_request_other_branch():
             headers=headers,
         )
         assert response.status_code == 403
+    finally:
+        _cleanup()
+
+
+def _seed_sale_and_return():
+    """Satu penjualan + satu retur pada supplier/divisi/sales yang sama."""
+    _cleanup()
+    log_id = str(uuid.uuid4())
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO import_logs (id, import_type, file_name) VALUES (:id, 'SALES', :name)"),
+            {"id": log_id, "name": f"{PREFIX}{log_id}"},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO imported_sales "
+                "(id, import_log_id, branch, sale_date, supplier, divisi, sales_nama, total_amount, margin, qty) "
+                "VALUES (:id, :log, 'BANJARMASIN', :day, :supplier, 'Mix', :sales, 1000, 100, 2)"
+            ),
+            {"id": str(uuid.uuid4()), "log": log_id, "day": DATE_FROM,
+             "supplier": f"{PREFIX}Supplier A", "sales": f"{PREFIX}Ayu"},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO imported_returns "
+                "(id, import_log_id, branch, sale_date, supplier, divisi, sales_nama, revenue, margin) "
+                "VALUES (:id, :log, 'BANJARMASIN', :day, :supplier, 'Mix', :sales, 300, 30)"
+            ),
+            {"id": str(uuid.uuid4()), "log": log_id, "day": DATE_FROM,
+             "supplier": f"{PREFIX}Supplier A", "sales": f"{PREFIX}Ayu"},
+        )
+
+
+def test_pivot_nets_returns_like_dashboard():
+    """Omzet pivot harus neto (penjualan − retur), sama dengan Dashboard."""
+    _seed_sale_and_return()
+    headers = _token("MANAGER", None)
+    try:
+        response = TestClient(app).get(
+            f"{API}/reports/supplier-sales-pivot?from={DATE_FROM}&to={DATE_TO}&branch=BANJARMASIN",
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["total"] == {"value": 700, "margin": 70, "qty": 2}
+        supplier_a = next(row for row in data["rows"] if row["supplier"] == f"{PREFIX}Supplier A")
+        assert supplier_a["cells"][f"{PREFIX}Ayu"] == {"value": 700, "margin": 70, "qty": 2}
+        assert supplier_a["total"] == {"value": 700, "margin": 70, "qty": 2}
     finally:
         _cleanup()
