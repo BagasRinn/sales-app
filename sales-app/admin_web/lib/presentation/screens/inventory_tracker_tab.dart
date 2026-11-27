@@ -309,7 +309,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
       onTap: () => _pickMonth(provider),
       borderRadius: AppRadius.md,
       child: Container(
-        height: 40,
+        height: 34,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         decoration: BoxDecoration(
           borderRadius: AppRadius.md,
@@ -349,7 +349,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     message: tooltip,
     child: Container(
       width: width,
-      height: 40,
+      height: 34,
       padding: const EdgeInsets.only(left: 10, right: 4),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -674,13 +674,13 @@ class _SquareIconButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: AppRadius.md,
         child: Container(
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             borderRadius: AppRadius.md,
             border: Border.all(color: AppColors.border),
           ),
-          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+          child: Icon(icon, size: 18, color: AppColors.textSecondary),
         ),
       ),
     ),
