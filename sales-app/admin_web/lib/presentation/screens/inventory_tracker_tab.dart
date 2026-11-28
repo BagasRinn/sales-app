@@ -38,10 +38,14 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   // dirasterisasi jadi satu PNG dan diunduh.
   final GlobalKey _captureKey = GlobalKey();
   bool _capturing = false;
+  // Offset scroll horizontal tabel dipakai untuk menggeser header sticky
+  // supaya judul kolom tetap sejajar saat tabel lebih lebar dari layar.
+  final ScrollController _tableScrollController = ScrollController();
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tableScrollController.dispose();
     super.dispose();
   }
 
@@ -555,20 +559,57 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
         AppCard(
           clipBehavior: Clip.none,
           child: AppStickyHeader(
-            header: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(),
-                1: FixedColumnWidth(_colWidthNum),
-                2: FixedColumnWidth(_colWidthNum),
-                3: FixedColumnWidth(_colWidthNum),
-                4: FixedColumnWidth(_colWidthNum),
-                5: FixedColumnWidth(_colWidthNum),
-                6: FixedColumnWidth(_colWidthNum),
-                7: FixedColumnWidth(_colWidthNum),
-                8: FixedColumnWidth(_colWidthSmall),
+            header: LayoutBuilder(
+              builder: (context, constraints) {
+                // Lebar tabel header harus sama dengan body: saat layar
+                // sempit body memakai lebar minimum dan bisa digeser
+                // horizontal, jadi header ikut digeser dengan offset yang
+                // sama (bukan scroll sendiri) agar kolom tetap sejajar.
+                final tableWidth = constraints.maxWidth < _minTableWidth
+                    ? _minTableWidth
+                    : constraints.maxWidth;
+                // Clamp ke sisa overflow supaya header tidak ikut bergeser
+                // ketika tabel sudah muat (mis. setelah jendela diperlebar).
+                final maxOffset = (tableWidth - constraints.maxWidth).clamp(
+                  0.0,
+                  double.infinity,
+                );
+                return ClipRect(
+                  child: AnimatedBuilder(
+                    animation: _tableScrollController,
+                    builder: (context, child) {
+                      final scrolled = _tableScrollController.hasClients
+                          ? _tableScrollController.offset
+                          : 0.0;
+                      return Transform.translate(
+                        offset: Offset(-scrolled.clamp(0.0, maxOffset), 0),
+                        child: child,
+                      );
+                    },
+                    child: OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minWidth: tableWidth,
+                      maxWidth: tableWidth,
+                      child: Table(
+                        columnWidths: const {
+                          0: FlexColumnWidth(),
+                          1: FixedColumnWidth(_colWidthNum),
+                          2: FixedColumnWidth(_colWidthNum),
+                          3: FixedColumnWidth(_colWidthNum),
+                          4: FixedColumnWidth(_colWidthNum),
+                          5: FixedColumnWidth(_colWidthNum),
+                          6: FixedColumnWidth(_colWidthNum),
+                          7: FixedColumnWidth(_colWidthNum),
+                          8: FixedColumnWidth(_colWidthSmall),
+                        },
+                        defaultVerticalAlignment:
+                            TableCellVerticalAlignment.middle,
+                        children: [headerRow],
+                      ),
+                    ),
+                  ),
+                );
               },
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              children: [headerRow],
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -595,6 +636,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
                 final content = fits
                     ? table
                     : SingleChildScrollView(
+                        controller: _tableScrollController,
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(width: _minTableWidth, child: table),
                       );
