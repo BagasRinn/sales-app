@@ -146,7 +146,7 @@ class _SupplierPerformancePivotTabState
             margin: const EdgeInsets.only(bottom: 12),
             clipBehavior: Clip.none,
             child: AppStickyHeader(
-              header: _buildSupplierCardHeader(row, columns),
+              header: _buildSupplierCardHeader(row),
               child: _buildSupplierCardBody(row, columns),
             ),
           ),
@@ -154,96 +154,45 @@ class _SupplierPerformancePivotTabState
     );
   }
 
-  Widget _buildSupplierCardHeader(
-    SupplierSalesPivotRow row,
-    List<SupplierSalesPivotColumn> columns,
-  ) {
+  Widget _buildSupplierCardHeader(SupplierSalesPivotRow row) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final count = constraints.maxWidth < 420 ? 1 : 2;
-          final gap = 8.0;
-          final itemWidth = (constraints.maxWidth - gap * (count - 1)) / count;
-          final labels = [for (final column in columns) column.name, 'TOTAL'];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      row.supplier,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+              Expanded(
+                child: Text(
+                  row.supplier,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      row.channel,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  row.channel,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
+                ),
               ),
-              const Divider(height: 22),
-              Wrap(
-                spacing: gap,
-                runSpacing: 8,
-                children: [
-                  for (final label in labels)
-                    SizedBox(
-                      width: itemWidth,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 9,
-                        ),
-                        decoration: BoxDecoration(
-                          color: label == 'TOTAL'
-                              ? AppColors.primarySoft
-                              : AppColors.surfaceMuted,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: label == 'TOTAL'
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: label == 'TOTAL'
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
             ],
-          );
-        },
+          ),
+          const Divider(height: 22),
+        ],
       ),
     );
   }
@@ -277,21 +226,43 @@ class _SupplierPerformancePivotTabState
                     vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: isTotal ? AppColors.primarySoft : AppColors.surface,
+                    color: isTotal
+                        ? AppColors.primarySoft
+                        : AppColors.surfaceMuted,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      entry.value == 0 ? '-' : _format(entry.value),
-                      maxLines: 1,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: isTotal ? FontWeight.w700 : FontWeight.w600,
-                        color: AppColors.textPrimary,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isTotal
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isTotal
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Text(
+                        entry.value == 0 ? '-' : _format(entry.value),
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isTotal
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
