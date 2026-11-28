@@ -552,68 +552,72 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        AppStickyHeader(
-          header: Table(
-            columnWidths: const {
-              0: FlexColumnWidth(),
-              1: FixedColumnWidth(_colWidthNum),
-              2: FixedColumnWidth(_colWidthNum),
-              3: FixedColumnWidth(_colWidthNum),
-              4: FixedColumnWidth(_colWidthNum),
-              5: FixedColumnWidth(_colWidthNum),
-              6: FixedColumnWidth(_colWidthNum),
-              7: FixedColumnWidth(_colWidthNum),
-              8: FixedColumnWidth(_colWidthSmall),
-            },
-            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-            children: [headerRow],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final fits = _capturing || constraints.maxWidth >= _minTableWidth;
-              final table = Table(
-                columnWidths: const {
-                  0: FlexColumnWidth(),
-                  1: FixedColumnWidth(_colWidthNum),
-                  2: FixedColumnWidth(_colWidthNum),
-                  3: FixedColumnWidth(_colWidthNum),
-                  4: FixedColumnWidth(_colWidthNum),
-                  5: FixedColumnWidth(_colWidthNum),
-                  6: FixedColumnWidth(_colWidthNum),
-                  7: FixedColumnWidth(_colWidthNum),
-                  8: FixedColumnWidth(_colWidthSmall),
-                },
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                border: const TableBorder(
-                  horizontalInside: BorderSide(color: AppColors.border),
-                ),
-                children: bodyRows,
-              );
-              final content = fits
-                  ? table
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SizedBox(width: _minTableWidth, child: table),
-                    );
-              if (!hasMore) return content;
-              return Column(
-                children: [
-                  content,
-                  Padding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          setState(() => _visibleCount += _visibleStep),
-                      icon: const Icon(Icons.expand_more, size: 18),
-                      label: Text(
-                        'Tampilkan $_visibleStep baris lagi '
-                        '(${filtered.length - visible.length} tersisa)',
+        AppCard(
+          clipBehavior: Clip.none,
+          child: AppStickyHeader(
+            header: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(),
+                1: FixedColumnWidth(_colWidthNum),
+                2: FixedColumnWidth(_colWidthNum),
+                3: FixedColumnWidth(_colWidthNum),
+                4: FixedColumnWidth(_colWidthNum),
+                5: FixedColumnWidth(_colWidthNum),
+                6: FixedColumnWidth(_colWidthNum),
+                7: FixedColumnWidth(_colWidthNum),
+                8: FixedColumnWidth(_colWidthSmall),
+              },
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [headerRow],
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final fits =
+                    _capturing || constraints.maxWidth >= _minTableWidth;
+                final table = Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(),
+                    1: FixedColumnWidth(_colWidthNum),
+                    2: FixedColumnWidth(_colWidthNum),
+                    3: FixedColumnWidth(_colWidthNum),
+                    4: FixedColumnWidth(_colWidthNum),
+                    5: FixedColumnWidth(_colWidthNum),
+                    6: FixedColumnWidth(_colWidthNum),
+                    7: FixedColumnWidth(_colWidthNum),
+                    8: FixedColumnWidth(_colWidthSmall),
+                  },
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: AppColors.border),
+                  ),
+                  children: bodyRows,
+                );
+                final content = fits
+                    ? table
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(width: _minTableWidth, child: table),
+                      );
+                if (!hasMore) return content;
+                return Column(
+                  children: [
+                    content,
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            setState(() => _visibleCount += _visibleStep),
+                        icon: const Icon(Icons.expand_more, size: 18),
+                        label: Text(
+                          'Tampilkan $_visibleStep baris lagi '
+                          '(${filtered.length - visible.length} tersisa)',
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ],
