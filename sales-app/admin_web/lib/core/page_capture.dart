@@ -73,8 +73,11 @@ Future<void> captureFullPage({
     pixelRatio = needed;
   }
 
-  // Rasterisasi per potongan supaya tiap `toImage` kecil.
-  final layer = boundary.debugLayer;
+  // Rasterisasi per potongan supaya tiap `toImage` kecil. Pakai getter
+  // `layer` (bukan `debugLayer`) karena `debugLayer` selalu null di build
+  // release — penyebab tombol "Ambil Gambar" gagal di web produksi.
+  // ignore: invalid_use_of_protected_member
+  final layer = boundary.layer;
   if (layer is! OffsetLayer) {
     throw StateError('Layer halaman belum tersedia.');
   }
