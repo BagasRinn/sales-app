@@ -93,8 +93,10 @@ class _SupplierPerformancePivotTabState
               showBranchFilter: provider.isManager,
               branchOptions: provider.branchOptions,
               selectedBranch: provider.importedSalesBranchFilter,
-              onBranchChanged: (value) =>
-                  provider.setImportedSalesBranchFilter(value),
+              onBranchChanged: (value) {
+                provider.setImportedSalesBranchFilter(value);
+                _load(provider);
+              },
               onPrevious: () =>
                   _changeMonth(DateTime(_month.year, _month.month - 1)),
               onNext: () =>
