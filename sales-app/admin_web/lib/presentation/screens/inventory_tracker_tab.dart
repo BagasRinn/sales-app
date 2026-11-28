@@ -38,15 +38,49 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
   // dirasterisasi jadi satu PNG dan diunduh.
   final GlobalKey _captureKey = GlobalKey();
   bool _capturing = false;
-  // Offset scroll horizontal tabel dipakai untuk menggeser header sticky
-  // supaya judul kolom tetap sejajar saat tabel lebih lebar dari layar.
+  // Tabel lebih lebar dari layar digulir horizontal di bagian body; offset
+  // body disalin ke header sticky supaya judul kolom tetap sejajar isinya.
   final ScrollController _tableScrollController = ScrollController();
+  final ScrollController _headerScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _tableScrollController.addListener(_syncHeaderScroll);
+    _headerScrollController.addListener(_syncBodyScroll);
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month, 1);
+  }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _tableScrollController.removeListener(_syncHeaderScroll);
+    _headerScrollController.removeListener(_syncBodyScroll);
     _tableScrollController.dispose();
+    _headerScrollController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _syncHeaderScroll() =>
+      _syncScroll(_tableScrollController, _headerScrollController);
+
+  void _syncBodyScroll() =>
+      _syncScroll(_headerScrollController, _tableScrollController);
+
+  /// Salin offset [source] ke [target], dibatasi rentang target. Pergeseran
+  /// di-skip kalau selisihnya nyaris nol supaya sinkronisasi dua arah tidak
+  /// saling memicu terus.
+  void _syncScroll(ScrollController source, ScrollController target) {
+    if (!source.hasClients || !target.hasClients) return;
+    final targetPosition = target.position;
+    final value = source.offset.clamp(
+      targetPosition.minScrollExtent,
+      targetPosition.maxScrollExtent,
+    );
+    if ((targetPosition.pixels - value).abs() > 0.5) {
+      target.jumpTo(value);
+    }
   }
 
   bool get _isSku => widget.dimension == InventoryTrackerDimension.sku;
@@ -59,13 +93,6 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     if (parts.length != 2) return value;
     final parsed = DateTime.tryParse('${parts[0]}-${parts[1]}-01');
     return parsed == null ? value : formatMonthLong(parsed);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    _month = DateTime(now.year, now.month, 1);
   }
 
   String get _monthKey =>
@@ -561,35 +588,23 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
           child: AppStickyHeader(
             header: LayoutBuilder(
               builder: (context, constraints) {
-                // Lebar tabel header harus sama dengan body: saat layar
-                // sempit body memakai lebar minimum dan bisa digeser
-                // horizontal, jadi header ikut digeser dengan offset yang
-                // sama (bukan scroll sendiri) agar kolom tetap sejajar.
+                // Header dan body memakai lebar tabel yang sama. Saat layar
+                // sempit body punya scroll horizontal sendiri, lalu listener
+                // di controller menggeser header dengan offset yang sama
+                // supaya judul kolom tetap sejajar dengan isinya.
                 final tableWidth = constraints.maxWidth < _minTableWidth
                     ? _minTableWidth
                     : constraints.maxWidth;
-                // Clamp ke sisa overflow supaya header tidak ikut bergeser
-                // ketika tabel sudah muat (mis. setelah jendela diperlebar).
-                final maxOffset = (tableWidth - constraints.maxWidth).clamp(
-                  0.0,
-                  double.infinity,
-                );
-                return ClipRect(
-                  child: AnimatedBuilder(
-                    animation: _tableScrollController,
-                    builder: (context, child) {
-                      final scrolled = _tableScrollController.hasClients
-                          ? _tableScrollController.offset
-                          : 0.0;
-                      return Transform.translate(
-                        offset: Offset(-scrolled.clamp(0.0, maxOffset), 0),
-                        child: child,
-                      );
-                    },
-                    child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      minWidth: tableWidth,
-                      maxWidth: tableWidth,
+                return ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    controller: _headerScrollController,
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: SizedBox(
+                      width: tableWidth,
                       child: Table(
                         columnWidths: const {
                           0: FlexColumnWidth(),
