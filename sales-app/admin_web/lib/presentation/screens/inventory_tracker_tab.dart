@@ -474,6 +474,25 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
     final filtered = _filteredRows(data);
     final visible = filtered.take(_visibleCount).toList();
     final hasMore = filtered.length > visible.length;
+
+    final headerRow = TableRow(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      children: [
+        _col(_firstColumnTitle, endAlign: false),
+        _col(_monthLabel(data.month)),
+        _col('Stock'),
+        ...data.previousMonths.map((m) => _col(_monthLabel(m))),
+        _col('AP3M'),
+        _col('Avg / Week'),
+        _col('Week of Inventory'),
+      ],
+    );
+
+    final bodyRows = visible.map(_row).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -484,7 +503,7 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
           children: [
             SizedBox(
               width: 260,
-              height: 40,
+              height: 34,
               child: TextField(
                 controller: _searchController,
                 onChanged: (v) => setState(() {
@@ -533,49 +552,42 @@ class _InventoryTrackerTabState extends State<InventoryTrackerTab> {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        Card(
+        AppStickyHeader(
+          header: Table(
+            columnWidths: const {
+              0: FlexColumnWidth(),
+              1: FixedColumnWidth(_colWidthNum),
+              2: FixedColumnWidth(_colWidthNum),
+              3: FixedColumnWidth(_colWidthNum),
+              4: FixedColumnWidth(_colWidthNum),
+              5: FixedColumnWidth(_colWidthNum),
+              6: FixedColumnWidth(_colWidthNum),
+              7: FixedColumnWidth(_colWidthNum),
+              8: FixedColumnWidth(_colWidthSmall),
+            },
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: [headerRow],
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Saat capture, tabel sengaja dilepas dari scroll horizontal
-              // (halaman diperkecil oleh FittedBox di build) supaya semua
-              // kolom ikut masuk gambar.
               final fits = _capturing || constraints.maxWidth >= _minTableWidth;
               final table = Table(
                 columnWidths: const {
                   0: FlexColumnWidth(),
-                  1: FixedColumnWidth(_colWidthNum), // bulan berjalan
-                  2: FixedColumnWidth(_colWidthNum), // Stock
+                  1: FixedColumnWidth(_colWidthNum),
+                  2: FixedColumnWidth(_colWidthNum),
                   3: FixedColumnWidth(_colWidthNum),
                   4: FixedColumnWidth(_colWidthNum),
                   5: FixedColumnWidth(_colWidthNum),
-                  6: FixedColumnWidth(_colWidthNum), // AP3M
-                  7: FixedColumnWidth(_colWidthNum), // Avg / Week
-                  8: FixedColumnWidth(_colWidthSmall), // Week of Inventory
+                  6: FixedColumnWidth(_colWidthNum),
+                  7: FixedColumnWidth(_colWidthNum),
+                  8: FixedColumnWidth(_colWidthSmall),
                 },
                 defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 border: const TableBorder(
                   horizontalInside: BorderSide(color: AppColors.border),
                 ),
-                children: [
-                  TableRow(
-                    decoration: const BoxDecoration(
-                      color: AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(12),
-                      ),
-                    ),
-                    children: [
-                      _col(_firstColumnTitle, endAlign: false),
-                      _col(_monthLabel(data.month)),
-                      _col('Stock'),
-                      ...data.previousMonths.map((m) => _col(_monthLabel(m))),
-                      _col('AP3M'),
-                      _col('Avg / Week'),
-                      _col('Week of Inventory'),
-                    ],
-                  ),
-                  ...visible.map(_row),
-                ],
+                children: bodyRows,
               );
               final content = fits
                   ? table

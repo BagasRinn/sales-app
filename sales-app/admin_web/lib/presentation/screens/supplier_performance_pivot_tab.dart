@@ -142,125 +142,190 @@ class _SupplierPerformancePivotTabState
     return Column(
       children: [
         for (final row in pivot.rows)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          AppStickyHeader(
+            header: _buildSupplierCardHeader(row, columns),
+            child: _buildSupplierCardBody(row, columns),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSupplierCardHeader(
+    SupplierSalesPivotRow row,
+    List<SupplierSalesPivotColumn> columns,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = constraints.maxWidth < 420 ? 1 : 2;
+        final gap = 8.0;
+        final itemWidth = (constraints.maxWidth - gap * (count - 1)) / count;
+        final entries = [
+          for (final column in columns)
+            MapEntry(column.name, row.cells[column.name]?.value ?? 0),
+          MapEntry('TOTAL', row.total.value),
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
+                Expanded(
+                  child: Text(
+                    row.supplier,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    row.channel,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 22),
+            Wrap(
+              spacing: gap,
+              runSpacing: 8,
+              children: entries.map((entry) {
+                final isTotal = entry.key == 'TOTAL';
+                return SizedBox(
+                  width: itemWidth,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isTotal
+                          ? AppColors.primarySoft
+                          : AppColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.key,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isTotal
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isTotal
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          entry.value == 0 ? '-' : _format(entry.value),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isTotal
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSupplierCardBody(
+    SupplierSalesPivotRow row,
+    List<SupplierSalesPivotColumn> columns,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = constraints.maxWidth < 420 ? 1 : 2;
+        final gap = 8.0;
+        final itemWidth = (constraints.maxWidth - gap * (count - 1)) / count;
+        final entries = [
+          for (final column in columns)
+            MapEntry(column.name, row.cells[column.name]?.value ?? 0),
+          MapEntry('TOTAL', row.total.value),
+        ];
+        return Wrap(
+          spacing: gap,
+          runSpacing: 8,
+          children: entries.map((entry) {
+            final isTotal = entry.key == 'TOTAL';
+            return SizedBox(
+              width: itemWidth,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: isTotal ? AppColors.primarySoft : AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
                   children: [
+                    // Label placeholder (invisible, for alignment)
                     Expanded(
                       child: Text(
-                        row.supplier,
-                        maxLines: 2,
+                        entry.key,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isTotal
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: Colors.transparent,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        row.channel,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    const SizedBox(width: 6),
+                    Text(
+                      entry.value == 0 ? '-' : _format(entry.value),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isTotal ? FontWeight.w700 : FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],
                 ),
-                const Divider(height: 22),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final count = constraints.maxWidth < 420 ? 1 : 2;
-                    final gap = 8.0;
-                    final itemWidth =
-                        (constraints.maxWidth - gap * (count - 1)) / count;
-                    final entries = [
-                      for (final column in columns)
-                        MapEntry(
-                          column.name,
-                          row.cells[column.name]?.value ?? 0,
-                        ),
-                      MapEntry('TOTAL', row.total.value),
-                    ];
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: 8,
-                      children: entries.map((entry) {
-                        final isTotal = entry.key == 'TOTAL';
-                        return Container(
-                          width: itemWidth,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 9,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isTotal
-                                ? AppColors.primarySoft
-                                : AppColors.surfaceMuted,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  entry.key,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: isTotal
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isTotal
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                entry.value == 0 ? '-' : _format(entry.value),
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: isTotal
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-      ],
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
